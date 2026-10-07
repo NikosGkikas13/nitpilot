@@ -1918,7 +1918,7 @@ Rules from the spec covered here:
 - **§9.4:** at most one active job per participant.
 - **§13:** `auto.review: false` makes the job a draft.
 
-- [ ] **Step 1: Add `run` and `commandsOf` to the test builders**
+- [x] **Step 1: Add `run` and `commandsOf` to the test builders**
 
 Append to `apps/server/src/engine/test-builders.ts`:
 ```ts
@@ -1937,7 +1937,7 @@ export function commandsOf<T extends Command['type']>(out: DecideOutput, type: T
 ```
 Move the two new `import` lines to the top of the file with the other imports.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/engine/lifecycle.test.ts`:
 ```ts
@@ -2092,12 +2092,12 @@ describe('decide()', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm run test -w apps/server -- src/engine/lifecycle.test.ts`
 Expected: FAIL, `Failed to resolve import "./decide"`.
 
-- [ ] **Step 4: Write `jobs.ts`**
+- [x] **Step 4: Write `jobs.ts`**
 
 `apps/server/src/engine/jobs.ts`:
 ```ts
@@ -2178,7 +2178,7 @@ export function startReview(ctx: Ctx, reviewer: ParticipantState, opts: { manual
 }
 ```
 
-- [ ] **Step 5: Write `points.ts`**
+- [x] **Step 5: Write `points.ts`**
 
 `apps/server/src/engine/points.ts`:
 ```ts
@@ -2244,7 +2244,7 @@ export function escalatePoints(ctx: Ctx, points: PointState[], reason: Escalatio
 }
 ```
 
-- [ ] **Step 6: Write `advance.ts`**
+- [x] **Step 6: Write `advance.ts`**
 
 `apps/server/src/engine/advance.ts`:
 ```ts
@@ -2328,7 +2328,7 @@ function enterEscalated(ctx: Ctx): void {
 }
 ```
 
-- [ ] **Step 7: Write `lifecycle.ts`**
+- [x] **Step 7: Write `lifecycle.ts`**
 
 `apps/server/src/engine/lifecycle.ts`:
 ```ts
@@ -2417,7 +2417,7 @@ function startReviewsOrAdvance(ctx: Ctx): void {
 }
 ```
 
-- [ ] **Step 8: Write `decide.ts`**
+- [x] **Step 8: Write `decide.ts`**
 
 `apps/server/src/engine/decide.ts`:
 ```ts
@@ -2487,12 +2487,12 @@ function hasAgentToAgentPoints(ctx: Ctx): boolean {
 }
 ```
 
-- [ ] **Step 9: Run the tests to see them pass**
+- [x] **Step 9: Run the tests to see them pass**
 
 Run: `npm run test -w apps/server -- src/engine && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (all lifecycle tests), with no type or lint errors.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/server/src/engine

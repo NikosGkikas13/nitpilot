@@ -1,5 +1,6 @@
 import { DEFAULT_RULES, type JobResult, type JobType, type NewPoint, type Role, type TeamRules } from '@nitpilot/protocol';
-import type { ChatState, JobView, ParticipantState, Person, PointState } from './types';
+import { decide } from './decide';
+import type { ChatState, Command, DecideOutput, DomainEvent, JobView, ParticipantState, Person, PointState } from './types';
 
 // Builders for engine tests. Each returns a fresh object; pass overrides for what a test cares about.
 
@@ -114,4 +115,14 @@ export function result(over: Partial<JobResult> = {}): JobResult {
 
 export function rulesWith(over: Partial<TeamRules> = {}): TeamRules {
   return { ...DEFAULT_RULES, ...over };
+}
+
+/** Run one event through decide() with default rules unless overridden. */
+export function run(chat: ChatState, event: DomainEvent, opts: { rules?: Partial<TeamRules>; now?: Date } = {}): DecideOutput {
+  return decide({ chat, rules: rulesWith(opts.rules), event, now: opts.now ?? T0 });
+}
+
+/** The commands of one type, typed: `commandsOf(out, 'enqueue_job')[0].jobType`. */
+export function commandsOf<T extends Command['type']>(out: DecideOutput, type: T): Extract<Command, { type: T }>[] {
+  return out.commands.filter((c): c is Extract<Command, { type: T }> => c.type === type);
 }
