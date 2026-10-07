@@ -2,17 +2,17 @@ import type { MyChatsResponse } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { makeChat, makeRepo, makeUser } from '../../../test/db';
 import { fakeFetch } from '../../../test/fake-fetch';
+import { testApp } from '../../../test/app';
 import { sessionCookieFor } from '../../../test/http';
 import { startCliLogin } from '../../auth/cli-login';
 import { prisma } from '../../lib/prisma';
 import { generateToken } from '../../lib/tokens';
 import { GithubClient } from '../../platform/github/client';
-import { createApp } from '../app';
 
 type LoginStart = { deviceCode: string; userCode: string; verifyUrl: string };
 
 const ORIGIN = { origin: 'http://localhost:8787' };
-const app = () => createApp({ github: new GithubClient(fakeFetch({})) });
+const app = () => testApp({ github: new GithubClient(fakeFetch({})) });
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
   return app().request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });

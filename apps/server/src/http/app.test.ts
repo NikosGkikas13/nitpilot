@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { fakeFetch } from '../../test/fake-fetch';
 import { GithubClient } from '../platform/github/client';
-import { createApp } from './app';
 import { HttpError, onError } from './errors';
+import { testApp } from '../../test/app';
 
 describe('createApp', () => {
   it('answers the health check', async () => {
-    const res = await createApp({ github: new GithubClient(fakeFetch({})) }).request('/healthz');
+    const res = await testApp({ github: new GithubClient(fakeFetch({})) }).request('/healthz');
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true });
   });

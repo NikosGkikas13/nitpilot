@@ -2,12 +2,12 @@ import { BRAND } from '@nitpilot/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ghId } from '../../../test/db';
 import { fakeFetch } from '../../../test/fake-fetch';
+import { testApp } from '../../../test/app';
 import { cookieHeader, sessionCookieFor } from '../../../test/http';
 import { decrypt } from '../../lib/crypto';
 import { prisma } from '../../lib/prisma';
 import { pkceChallenge } from '../../auth/github-oauth';
 import { GithubClient } from '../../platform/github/client';
-import { createApp } from '../app';
 import { safeNext } from './auth';
 
 afterEach(() => vi.unstubAllEnvs());
@@ -20,7 +20,7 @@ function githubFake(user: { id: string; login: string }) {
 }
 
 /** Start a sign-in and return the cookie plus the state the server saved. */
-async function startLogin(app: ReturnType<typeof createApp>, next = '/cli/approve?code=WDJB-MJHT') {
+async function startLogin(app: ReturnType<typeof testApp>, next = '/cli/approve?code=WDJB-MJHT') {
   const res = await app.request(`/auth/github/login?next=${encodeURIComponent(next)}`);
   const cookie = cookieHeader(res);
   const saved = JSON.parse(decrypt(decodeURIComponent(cookie.split(`${BRAND.oauthCookie}=`)[1]!)));
@@ -29,7 +29,7 @@ async function startLogin(app: ReturnType<typeof createApp>, next = '/cli/approv
 
 describe('GitHub sign-in', () => {
   it('redirects to GitHub with a PKCE challenge that matches the saved verifier', async () => {
-    const app = createApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
     const { res, saved } = await startLogin(app);
     expect(res.status).toBe(302);
     const url = new URL(res.headers.get('location')!);
@@ -41,7 +41,7 @@ describe('GitHub sign-in', () => {
 
   it('signs in on the callback: saves the user, encrypts the tokens and starts a session', async () => {
     const githubId = ghId();
-    const app = createApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
+    const app = testApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
     const { cookie, saved } = await startLogin(app);
 
     const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
@@ -57,7 +57,7 @@ describe('GitHub sign-in', () => {
   });
 
   it('rejects a callback whose state does not match', async () => {
-    const app = createApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
     const { cookie } = await startLogin(app);
     const res = await app.request('/auth/github/callback?code=abc&state=forged', { headers: { cookie } });
     expect(res.status).toBe(400);
@@ -65,7 +65,7 @@ describe('GitHub sign-in', () => {
 
   it('keeps people outside ALLOWED_LOGINS out', async () => {
     vi.stubEnv('ALLOWED_LOGINS', 'leo');
-    const app = createApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
     const { cookie, saved } = await startLogin(app);
     const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
     expect(res.status).toBe(403);
@@ -74,7 +74,7 @@ describe('GitHub sign-in', () => {
   it('signs out only from our own pages', async () => {
     const user = await prisma.user.create({ data: { githubId: ghId(), login: 'maya' } });
     const cookie = await sessionCookieFor(user.id);
-    const app = createApp({ github: new GithubClient(fakeFetch({})) });
+    const app = testApp({ github: new GithubClient(fakeFetch({})) });
 
     expect((await app.request('/auth/logout', { method: 'POST', headers: { cookie } })).status).toBe(403);
     const res = await app.request('/auth/logout', { method: 'POST', headers: { cookie, origin: 'http://localhost:8787' } });
@@ -84,7 +84,7 @@ describe('GitHub sign-in', () => {
 
   it('shows who is signed in on the home page', async () => {
     const user = await prisma.user.create({ data: { githubId: ghId(), login: 'maya-home' } });
-    const app = createApp({ github: new GithubClient(fakeFetch({})) });
+    const app = testApp({ github: new GithubClient(fakeFetch({})) });
     const res = await app.request('/', { headers: { cookie: await sessionCookieFor(user.id) } });
     expect(await res.text()).toContain('@maya-home');
   });

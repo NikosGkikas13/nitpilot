@@ -6382,7 +6382,7 @@ At the end of this milestone, a real GitHub webhook reaches the server, is store
 
 Deliveries are processed **one at a time, in arrival order** (a `SerialQueue`). That keeps ordering simple and is plenty fast for one server.
 
-- [ ] **Step 1: Write the test helpers**
+- [x] **Step 1: Write the test helpers**
 
 `apps/server/test/app.ts`:
 ```ts
@@ -6432,7 +6432,7 @@ export async function sendWebhook(app: Hono, event: string, payload: unknown, op
 
 In `apps/server/src/http/app.test.ts`, `apps/server/src/http/routes/auth.db.test.ts` and `apps/server/src/http/routes/cli.db.test.ts`, replace every `createApp({ github: X })` with `testApp({ github: X })`. Import it with `import { testApp } from '<relative path>/test/app';` and remove the now-unused `createApp` import. In `auth.db.test.ts`, change the `startLogin` parameter type to `ReturnType<typeof testApp>`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/http/routes/webhooks.db.test.ts`:
 ```ts
@@ -6574,12 +6574,12 @@ describe('createIngest', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm run test:db -w apps/server`
 Expected: FAIL, `Failed to resolve import "../src/ingest/process"`.
 
-- [ ] **Step 4: Write the queue, recording and processing**
+- [x] **Step 4: Write the queue, recording and processing**
 
 `apps/server/src/lib/serial-queue.ts`:
 ```ts
@@ -6667,7 +6667,7 @@ export function createIngest(handle: DeliveryHandler): Ingest {
 }
 ```
 
-- [ ] **Step 5: Write the webhook route and mount it**
+- [x] **Step 5: Write the webhook route and mount it**
 
 `apps/server/src/http/routes/webhooks.ts`:
 ```ts
@@ -6743,12 +6743,12 @@ In `apps/server/src/main.ts`:
 ```
 - Add `clearInterval(purge);` as the first line of `shutdown`.
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (webhook route 5, ingest 5, plus everything earlier).
 
-- [ ] **Step 7: Write the explainer**
+- [x] **Step 7: Write the explainer**
 
 `docs/why/webhooks.md`:
 ```markdown
@@ -6775,7 +6775,7 @@ Every delivery has a JSON body (the PR, the comment, …) and headers:
 It's the difference between `setInterval(fetchUpdates, 5000)` and a WebSocket push: the server tells you instead of you asking. The signature check is like validating a JWT before trusting its claims.
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/server docs/why/webhooks.md
