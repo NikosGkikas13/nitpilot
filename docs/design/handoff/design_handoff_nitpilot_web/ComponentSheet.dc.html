@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;600&family=Martian+Mono:wght@400;500;600&family=Hanken+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Fragment+Mono&display=swap" rel="stylesheet"><style>
+body{margin:0}
+@keyframes np-ping{0%{transform:scale(1);opacity:.55}70%,100%{transform:scale(2.6);opacity:0}}
+@keyframes np-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style></helmet>
+<div style="{{ rootStyle }}">
+  <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:20px">
+    <span style="font-size:20px; font-weight:600; letter-spacing:-0.02em">Components</span>
+    <span style="font-family:var(--mono); font-size:12px; color:var(--fg3); text-transform:uppercase; letter-spacing:0.1em">{{ themeName }}</span>
+  </div>
+
+  <section style="padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); margin-bottom:16px; display:flex; flex-direction:column; gap:16px">
+    <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Point card · severity × status</div>
+    <div style="display:grid; grid-template-columns:90px repeat(4, minmax(0,1fr)); gap:8px; align-items:center">
+      <span></span>
+      <sc-for list="{{ statusCols }}" as="c" hint-placeholder-count="4"><span style="font-size:12px; color:var(--fg3)">{{ c }}</span></sc-for>
+      <sc-for list="{{ matrix }}" as="row" hint-placeholder-count="4">
+        <div style="display:contents">
+          <span style="font-size:12px; color:var(--fg3)">{{ row.label }}</span>
+          <sc-for list="{{ row.cells }}" as="m" hint-placeholder-count="4">
+            <div style="display:flex; flex-wrap:wrap; min-width:0; align-items:center; gap:8px; padding:8px 10px; border:1px solid {{ m.border }}; border-radius:var(--r-card); background:var(--surface)">
+              <span style="display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px 0 7px; border-radius:var(--r-chip); background:{{ m.sevBg }}; color:{{ m.sevFg }}; font-size:12px; font-weight:600">
+                <span aria-hidden="true" style="display:inline-flex; align-items:flex-end; gap:1.5px; height:10px"><span style="width:2.5px; height:4px; border-radius:1px; background:{{ m.b1 }}"></span><span style="width:2.5px; height:6px; border-radius:1px; background:{{ m.b2 }}"></span><span style="width:2.5px; height:8px; border-radius:1px; background:{{ m.b3 }}"></span><span style="width:2.5px; height:10px; border-radius:1px; background:{{ m.b4 }}"></span></span>{{ m.sev }}</span>
+              <span style="flex:1"></span>
+              <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:{{ m.stFg }}">
+                <sc-if value="{{ m.isOpen }}"><span style="width:10px; height:10px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+                <sc-if value="{{ m.isAddressed }}"><span style="width:10px; height:10px; border-radius:var(--r-round); border:1.5px solid var(--acc); box-sizing:border-box; background:linear-gradient(90deg, var(--acc) 50%, transparent 50%)"></span></sc-if>
+                <sc-if value="{{ m.isResolved }}"><span style="width:12px; height:12px; border-radius:var(--r-round); background:var(--ok); color:#fff; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700">✓</span></sc-if>
+                <sc-if value="{{ m.isEscalated }}"><span style="width:8px; height:8px; background:var(--red); transform:rotate(45deg); margin:0 1px"></span></sc-if>
+                {{ m.st }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; align-items:start">
+      <div style="display:flex; flex-direction:column; gap:6px"><span style="font-size:12px; color:var(--fg3)">Blocker · escalated, with thread</span><dc-import name="PointCard" point="{{ pBlocker }}" hint-size="100%,380px"></dc-import></div>
+      <div style="display:flex; flex-direction:column; gap:6px"><span style="font-size:12px; color:var(--fg3)">Major · addressed</span><dc-import name="PointCard" point="{{ pMajor }}" hint-size="100%,330px"></dc-import></div>
+      <div style="display:flex; flex-direction:column; gap:10px">
+        <div style="display:flex; flex-direction:column; gap:6px"><span style="font-size:12px; color:var(--fg3)">Minor · open, no snippet lines</span><dc-import name="PointCard" point="{{ pMinor }}" hint-size="100%,250px"></dc-import></div>
+        <div style="display:flex; flex-direction:column; gap:6px"><span style="font-size:12px; color:var(--fg3)">Resolved · collapsed (default)</span><dc-import name="PointCard" point="{{ pNit }}" hint-size="100%,40px"></dc-import><dc-import name="PointCard" point="{{ pNit2 }}" hint-size="100%,40px"></dc-import></div>
+      </div>
+    </div>
+  </section>
+
+  <div style="columns:3; column-gap:16px">
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Status pill</div>
+      <sc-for list="{{ pills }}" as="p" hint-placeholder-count="7">
+        <div style="display:flex; align-items:center; gap:12px">
+          <span style="flex:none; width:150px"><span style="display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 7px; border-radius:var(--r-chip); background:{{ p.bg }}; color:{{ p.fg }}; font-size:11.5px; font-weight:500; text-decoration:{{ p.deco }}">
+            <sc-if value="{{ p.gPing }}">{{ p.ping }}</sc-if>
+            <sc-if value="{{ p.gDot }}"><span style="width:6px; height:6px; border-radius:var(--r-round); background:var(--acc)"></span></sc-if>
+            <sc-if value="{{ p.gDiamond }}"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if>
+            <sc-if value="{{ p.gRing }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid currentColor; box-sizing:border-box"></span></sc-if>
+            <sc-if value="{{ p.gCheck }}"><span style="font-size:10px; font-weight:700">✓</span></sc-if>
+            {{ p.label }}</span></span>
+          <span style="font-size:12px; color:var(--fg3); line-height:1.35">{{ p.when }}</span>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Tabs with count badges</div>
+      <div style="display:flex; gap:18px; border-bottom:var(--bw) solid var(--b1)">
+        <span style="display:flex; align-items:center; gap:7px; height:40px; border-bottom:2px solid var(--fg1); margin-bottom:-1px; font-size:13.5px; font-weight:500">To review<span style="min-width:18px; height:18px; padding:0 5px; box-sizing:border-box; border-radius:var(--r-round); background:var(--acc); color:var(--on-acc); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center">2</span></span>
+        <span style="display:flex; align-items:center; height:40px; font-size:13.5px; font-weight:500; color:var(--fg3)">Mine</span>
+      </div>
+      <div style="display:flex; gap:18px; border-bottom:var(--bw) solid var(--b1)">
+        <span style="display:flex; align-items:center; height:40px; font-size:13.5px; font-weight:500; color:var(--fg3)">To review</span>
+        <span style="display:flex; align-items:center; gap:7px; height:40px; border-bottom:2px solid var(--fg1); margin-bottom:-1px; font-size:13.5px; font-weight:500">Mine<span style="min-width:18px; height:18px; padding:0 5px; box-sizing:border-box; border-radius:var(--r-round); background:var(--acc); color:var(--on-acc); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center">1</span></span>
+      </div>
+      <span style="font-size:12px; color:var(--fg3)">Badges count only items that need you. Zero hides the badge.</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:14px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Avatar · agent badge · presence</div>
+      <div style="display:flex; align-items:flex-end; gap:18px">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="width:38px; height:38px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">LP</span><span style="font-size:11.5px; color:var(--fg3)">Leo</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="position:relative; width:38px; height:38px"><span style="width:38px; height:38px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">LP</span><span style="position:absolute; right:-3px; bottom:-3px; width:15px; height:15px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:5px; height:5px; background:var(--surface); transform:rotate(45deg)"></span></span></span><span style="font-size:11.5px; color:var(--fg3)">Leo's agent</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="position:relative; width:28px; height:28px"><span style="width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">MC</span><span style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--surface); transform:rotate(45deg)"></span></span></span><span style="font-size:11.5px; color:var(--fg3)">28</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="position:relative; width:22px; height:22px"><span style="width:22px; height:22px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:9.5px; font-weight:600; display:flex; align-items:center; justify-content:center">MC</span><span style="position:absolute; right:-3px; bottom:-3px; width:11px; height:11px; border-radius:3px; background:var(--fg1); box-shadow:0 0 0 1.5px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:3.5px; height:3.5px; background:var(--surface); transform:rotate(45deg)"></span></span></span><span style="font-size:11.5px; color:var(--fg3)">22</span></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--fg2)">
+        <span style="display:flex; align-items:center; gap:8px"><span style="width:7px; height:7px; border-radius:var(--r-round); background:var(--ok)"></span>Leo's agent · online</span>
+        <span style="display:flex; align-items:center; gap:8px">{{ ping }}Leo's agent · reviewing</span>
+        <span style="display:flex; align-items:center; gap:8px"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span>Your agent · offline since 18:04</span>
+      </div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Auto switch</div>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center">
+        <span style="display:inline-flex; align-items:center; gap:8px; height:30px; padding:0 5px 0 11px; border:var(--bw) solid var(--b1); border-radius:var(--r-round); font-size:12.5px; font-weight:500">Auto-fix<span style="position:relative; width:30px; height:18px; border-radius:var(--r-round); background:var(--acc)"><span style="position:absolute; top:2px; left:14px; width:14px; height:14px; border-radius:var(--r-round); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></span></span>
+        <span style="display:inline-flex; align-items:center; gap:8px; height:30px; padding:0 5px 0 11px; border:var(--bw) solid var(--b1); border-radius:var(--r-round); font-size:12.5px; font-weight:500">Auto-review<span style="position:relative; width:30px; height:18px; border-radius:var(--r-round); background:var(--b1)"><span style="position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:var(--r-round); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></span></span>
+        <span style="display:inline-flex; align-items:center; gap:8px; height:30px; padding:0 5px 0 11px; border:var(--bw) solid var(--b1); border-radius:var(--r-round); font-size:12.5px; font-weight:500; color:var(--fg3)">Auto-review<span style="position:relative; width:30px; height:18px; border-radius:var(--r-round); background:var(--muted)"><span style="position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:var(--r-round); background:var(--b1)"></span></span></span>
+        <span style="display:inline-flex; align-items:center; gap:8px; height:30px; padding:0 5px 0 11px; border:1px solid var(--acc); border-radius:var(--r-round); font-size:12.5px; font-weight:500; outline:2px solid var(--acc); outline-offset:2px">Auto-fix<span style="position:relative; width:30px; height:18px; border-radius:var(--r-round); background:var(--acc)"><span style="position:absolute; top:2px; left:14px; width:14px; height:14px; border-radius:var(--r-round); background:#fff"></span></span></span>
+      </div>
+      <div style="align-self:flex-start; max-width:250px; padding:8px 10px; border-radius:var(--r-ctl); background:var(--fg1); color:var(--bg); font-size:12px; line-height:1.45">Off for PRs from outside contributors. Your team set this in .nitpilot.yml.</div>
+      <span style="font-size:12px; color:var(--fg3)">On · off · disabled by team (tooltip) · focus</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:10px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Round indicator</div>
+      <sc-for list="{{ roundsDemo }}" as="rd" hint-placeholder-count="3">
+        <span style="display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg2)"><span style="display:inline-flex; gap:2px"><sc-for list="{{ rd.pips }}" as="pp" hint-placeholder-count="3"><span style="width:10px; height:4px; border-radius:2px; background:{{ pp }}"></span></sc-for></span>{{ rd.label }}</span>
+      </sc-for>
+      <span style="font-size:12px; color:var(--fg3)">The last allowed round turns amber. Hitting the limit escalates.</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:4px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3); margin-bottom:8px">Inbox row</div>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+        <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px">
+          <span style="font-size:11.5px; color:var(--fg3)">{{ r.state }}</span>
+          <div style="display:flex; gap:12px; padding:11px 10px; border-radius:var(--r-card); background:{{ r.bg }}; box-shadow:{{ r.ring }}">
+            <span style="flex:none; position:relative; width:38px; height:38px"><span style="width:38px; height:38px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ r.initials }}</span><sc-if value="{{ r.agent }}"><span style="position:absolute; right:-3px; bottom:-3px; width:15px; height:15px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:5px; height:5px; background:var(--surface); transform:rotate(45deg)"></span></span></sc-if></span>
+            <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+              <span style="display:flex; gap:8px; font-family:var(--mono); font-size:11.5px; color:var(--fg3)"><span style="flex:1">{{ r.ref }}</span><span style="font-family:var(--sans); font-size:12px">{{ r.time }}</span></span>
+              <span style="display:flex; align-items:center; gap:8px"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:{{ r.weight }}; color:{{ r.titleFg }}">{{ r.title }}</span><sc-if value="{{ r.unread }}"><span style="width:8px; height:8px; border-radius:var(--r-round); background:var(--acc)"></span></sc-if></span>
+              <span style="display:flex; align-items:center; gap:8px; min-width:0"><span style="flex:none; display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 7px; border-radius:var(--r-chip); background:{{ r.pillBg }}; color:{{ r.pillFg }}; font-size:11.5px; font-weight:500; text-decoration:{{ r.deco }}"><sc-if value="{{ r.gDiamond }}"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if><sc-if value="{{ r.gCheck }}"><span style="font-size:10px; font-weight:700">✓</span></sc-if><sc-if value="{{ r.gPing }}">{{ ping }}</sc-if>{{ r.pill }}</span><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--fg3)">{{ r.last }}</span><span style="font-family:var(--mono); font-size:11px; color:var(--fg3)">{{ r.round }}</span></span>
+            </span>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Code snippet · diff</div>
+      <div style="border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); overflow:hidden; background:var(--code); font-family:var(--mono); font-size:12px; line-height:20px">
+        <div style="display:flex; gap:8px; padding:6px 10px; border-bottom:var(--bw) solid var(--b1); background:var(--surface); font-size:11.5px; color:var(--fg3)"><span style="flex:1">src/orders/list.ts</span><span style="color:var(--ok-fg)">+3</span><span style="color:var(--red-fg)">−1</span></div>
+        <div style="padding:6px 0; overflow-x:auto">
+          <sc-for list="{{ diff }}" as="d" hint-placeholder-count="5">
+            <div style="display:flex; min-width:max-content; background:{{ d.bg }}"><span style="flex:none; width:40px; padding-right:8px; box-sizing:border-box; text-align:right; color:var(--fg4)">{{ d.n }}</span><span style="flex:none; width:16px; color:{{ d.signFg }}">{{ d.sign }}</span><span style="white-space:pre; padding-right:14px; color:var(--fg1)">{{ d.code }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <span style="font-size:12px; color:var(--fg3)">Point snippets mark referenced lines with a diamond in the gutter. Draft fixes use +/− with sign glyphs, not color alone.</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:4px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3); margin-bottom:6px">Reply · outcome row</div>
+      <sc-for list="{{ replies }}" as="r" hint-placeholder-count="5">
+        <div style="display:flex; gap:10px; padding:8px 0; border-top:1px solid var(--b2)">
+          <span style="flex:none; position:relative; width:22px; height:22px"><span style="width:22px; height:22px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:9.5px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ r.initials }}</span><sc-if value="{{ r.agent }}"><span style="position:absolute; right:-3px; bottom:-3px; width:11px; height:11px; border-radius:3px; background:var(--fg1); box-shadow:0 0 0 1.5px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:3.5px; height:3.5px; background:var(--surface); transform:rotate(45deg)"></span></span></sc-if></span>
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+            <div style="display:flex; gap:8px; align-items:center; font-size:12.5px"><span style="font-weight:600">{{ r.name }}</span><span style="font-weight:500; color:{{ r.fg }}">{{ r.tag }}</span><sc-if value="{{ r.commit }}"><a href="#" style="font-family:var(--mono); font-size:11.5px; color:var(--acc-text); text-decoration:underline; text-underline-offset:2px">{{ r.commit }}</a></sc-if></div>
+            <sc-if value="{{ r.text }}"><div style="font-size:13px; line-height:1.45; color:var(--fg2)">{{ r.text }}</div></sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--bg); display:flex; flex-direction:column; gap:14px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Messages · system · progress</div>
+      <div style="display:flex; align-items:flex-end; gap:8px">
+        <span style="flex:none; position:relative; width:28px; height:28px"><span style="width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">LP</span><span style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--bg); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--bg); transform:rotate(45deg)"></span></span></span>
+        <div style="display:flex; flex-direction:column; gap:4px"><span style="font-size:11.5px; color:var(--fg3); padding:0 6px">Leo's agent · Gemini CLI · 14:03</span><div style="padding:9px 13px; border-radius:14px 14px 14px 4px; background:var(--surface); border:var(--bw) solid var(--b1); font-size:14px; line-height:1.45">Reviewed 6 files and raised 3 points.<div style="margin-top:6px; font-family:var(--mono); font-size:12px; color:var(--fg3)">1 major · 1 minor · 1 nit</div></div></div>
+      </div>
+      <div dir="rtl" style="display:flex; align-items:flex-end; gap:8px">
+        <span style="flex:none; width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">MC</span>
+        <div dir="ltr" style="display:flex; flex-direction:column; gap:4px; align-items:flex-end"><span style="font-size:11.5px; color:var(--fg3); padding:0 6px">You · to the agents · 14:06</span><div style="padding:9px 13px; border-radius:14px 14px 4px 14px; background:var(--bubble); border:1px solid var(--acc-line); font-size:14px; line-height:1.45">Skip naming nitpicks on this one.</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; padding:4px 0">
+        <sc-for list="{{ sysLines }}" as="l" hint-placeholder-count="5">
+          <div style="display:flex; align-items:center; justify-content:center; gap:7px; font-size:12px; color:var(--fg3)">
+            <sc-if value="{{ l.gDiamond }}"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if>
+            <sc-if value="{{ l.gCheck }}"><span style="color:var(--ok-fg); font-weight:700; font-size:11px">✓</span></sc-if>
+            <sc-if value="{{ l.gRing }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+            {{ l.text }}</div>
+        </sc-for>
+      </div>
+      <div style="align-self:flex-start; display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:var(--r-round); border:var(--bw) solid var(--b1); background:var(--surface); font-size:13px; color:var(--fg2)">{{ ping }}Leo's agent is reviewing… reading<span style="font-family:var(--mono); font-size:12px; color:var(--fg1)">src/db/client.ts</span></div>
+      <span style="font-size:12px; color:var(--fg3)">Progress: one pinging dot; the file name updates in place. Reduced motion stops the ping.</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--bg); display:flex; flex-direction:column; gap:14px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Draft · only visible to you</div>
+      <div style="border:1.5px dashed var(--fg4); border-radius:var(--r-input); padding:12px 14px; display:flex; flex-direction:column; gap:10px">
+        <div style="display:flex; align-items:center; gap:8px"><span style="font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Draft · reviewer</span><span style="flex:1"></span><span style="font-size:11.5px; color:var(--fg3)">Not sent</span></div>
+        <div style="font-size:13.5px; font-weight:500">Your agent wants to raise 2 points</div>
+        <div style="display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; align-items:center; gap:8px; font-size:13px"><span style="font-size:11.5px; font-weight:600; color:var(--warn-fg); background:var(--warn-tint); padding:1px 6px; border-radius:4px">Major</span><span style="flex:1; min-width:0">Retry delay ignores Retry-After</span><span style="font-family:var(--mono); font-size:11.5px; color:var(--fg3)">retry.ts:31</span></div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:13px"><span style="font-size:11.5px; font-weight:600; color:var(--fg2); background:var(--muted); padding:1px 6px; border-radius:4px">Nit</span><span style="flex:1; min-width:0">Magic number 5 for max attempts</span><span style="font-family:var(--mono); font-size:11.5px; color:var(--fg3)">retry.ts:8</span></div>
+        </div>
+        <div style="display:flex; gap:8px"><button type="button" style="height:30px; padding:0 14px; border:0; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font:inherit; font-size:12.5px; font-weight:600">Send</button><button type="button" style="height:30px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font:inherit; font-size:12.5px; font-weight:500">Discard</button><button type="button" style="height:30px; padding:0 8px; border:0; background:transparent; color:var(--acc-text); font:inherit; font-size:12.5px">Edit</button></div>
+      </div>
+      <div style="border:1.5px dashed var(--fg4); border-radius:var(--r-input); padding:12px 14px; display:flex; flex-direction:column; gap:10px">
+        <div style="display:flex; align-items:center; gap:8px"><span style="font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Draft · author</span><span style="flex:1"></span><span style="font-size:11.5px; color:var(--fg3)">Not pushed</span></div>
+        <div style="font-size:13.5px; font-weight:500">Your agent wants to push fixes for P1 and P3</div>
+        <div style="display:flex; flex-direction:column; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); font-family:var(--mono); font-size:11.5px">
+          <div style="display:flex; gap:8px; padding:6px 10px"><span style="flex:1; color:var(--fg2)">src/orders/cursor.ts</span><span style="color:var(--ok-fg)">+9</span><span style="color:var(--red-fg)">−2</span></div>
+          <div style="display:flex; gap:8px; padding:6px 10px; border-top:1px solid var(--b2)"><span style="flex:1; color:var(--fg2)">test/orders.test.ts</span><span style="color:var(--ok-fg)">+14</span><span style="color:var(--red-fg)">−0</span></div>
+        </div>
+        <div style="display:flex; gap:8px"><button type="button" style="height:30px; padding:0 14px; border:0; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font:inherit; font-size:12.5px; font-weight:600">Push 2 commits</button><button type="button" style="height:30px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font:inherit; font-size:12.5px; font-weight:500">Discard</button></div>
+      </div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:10px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Banners</div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:var(--r-card); background:var(--ok-tint)"><span style="width:18px; height:18px; border-radius:var(--r-round); background:var(--ok); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span><div style="flex:1; min-width:140px; display:flex; flex-direction:column"><span style="font-size:13px; font-weight:600">Ready for your approval</span><span style="font-size:12px; color:var(--fg2)">2 rounds · 3 points resolved</span></div><span style="display:inline-flex; align-items:center; height:30px; padding:0 12px; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font-size:12.5px; font-weight:600">Approve on GitHub ↗</span></div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:var(--r-card); background:var(--ok-tint)"><span style="width:18px; height:18px; border-radius:var(--r-round); background:var(--ok); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span><div style="flex:1; min-width:140px; display:flex; flex-direction:column"><span style="font-size:13px; font-weight:600">Waiting for Leo's approval</span><span style="font-size:12px; color:var(--fg2)">Author view</span></div></div>
+      <div style="display:flex; flex-direction:column; gap:8px; padding:10px 12px; border-radius:var(--r-card); background:var(--red-tint); border:1px solid var(--red-line)"><div style="display:flex; align-items:center; gap:10px"><span style="width:9px; height:9px; background:var(--red); transform:rotate(45deg); margin:0 4px"></span><span style="font-size:13px; font-weight:600">Needs a human decision</span></div><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 9px; border:1px solid var(--red-line); border-radius:var(--r-ctl); background:var(--surface)"><span style="font-family:var(--mono); font-size:12px; font-weight:600; color:var(--red-fg)">P1</span><span style="flex:1; min-width:120px; font-size:12.5px">Refresh token stays valid after rotation</span><span style="height:26px; padding:0 10px; border-radius:var(--r-chip); background:var(--fg1); color:var(--bg); font-size:12px; font-weight:500; display:inline-flex; align-items:center">Resolve</span><span style="height:26px; padding:0 10px; border-radius:var(--r-chip); border:var(--bw) solid var(--b1); font-size:12px; font-weight:500; display:inline-flex; align-items:center">Continue</span></div></div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:var(--r-card); background:var(--muted)"><span style="width:12px; height:12px; border-radius:var(--r-round); border:2px solid var(--fg3); box-sizing:border-box; margin:0 3px"></span><div style="flex:1; display:flex; flex-direction:column"><span style="font-size:13px; font-weight:600">Waiting for Leo's agent</span><span style="font-size:12px; color:var(--fg2)">Offline since 18:04</span></div></div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:var(--r-card); background:var(--warn-tint)"><span style="width:16px; height:16px; border-radius:4px; background:var(--warn); color:#1a1205; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">!</span><div style="flex:1; min-width:140px; display:flex; flex-direction:column"><span style="font-size:13px; font-weight:600">Your agent couldn't finish</span><span style="font-size:12px; color:var(--fg2)">Gemini quota reached</span></div><span style="height:30px; padding:0 12px; border-radius:var(--r-ctl); border:var(--bw) solid var(--b1); background:var(--surface); font-size:12.5px; font-weight:500; display:inline-flex; align-items:center">Retry</span></div>
+      <span style="font-size:12px; color:var(--fg3)">Failed is amber, not red. Red is reserved for escalations and blockers.</span>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Composer</div>
+      <div style="display:flex; align-items:center; gap:8px; padding:5px 5px 5px 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-input); background:var(--bg)"><span style="flex:1; font-size:14px; color:var(--fg3)">Message the agents…</span><span style="height:32px; padding:0 14px; border-radius:var(--r-ctl); background:var(--muted); color:var(--fg3); font-size:13px; font-weight:600; display:flex; align-items:center">Send</span></div>
+      <div style="display:flex; align-items:center; gap:8px; padding:5px 5px 5px 12px; border:1px solid var(--acc); border-radius:var(--r-input); background:var(--bg)"><span style="flex:1; font-size:14px">Keep the public SDK names stable</span><span style="height:32px; padding:0 14px; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font-size:13px; font-weight:600; display:flex; align-items:center">Send</span></div>
+      <span style="font-size:11.5px; color:var(--fg3)">Notes are included in the agents' next round</span>
+      <div style="text-align:center; font-size:12.5px; color:var(--fg3); padding:8px; border-top:1px solid var(--b2)">This PR was merged yesterday. The chat is read-only.</div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:12px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Copyable command</div>
+      <div style="display:flex; align-items:center; gap:10px; height:40px; padding:0 6px 0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--code); font-family:var(--mono); font-size:13px"><span style="color:var(--fg3)">$</span><span style="flex:1">npx nitpilot login</span><span style="height:28px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-chip); background:var(--surface); font-family:var(--sans); font-size:12px; font-weight:500; display:flex; align-items:center">Copy</span></div>
+      <div style="display:flex; align-items:center; gap:10px; height:40px; padding:0 6px 0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--code); font-family:var(--mono); font-size:13px"><span style="color:var(--fg3)">$</span><span style="flex:1">nitpilot repos add</span><span style="height:28px; padding:0 10px; border-radius:var(--r-chip); background:var(--ok-tint); color:var(--ok-fg); font-family:var(--sans); font-size:12px; font-weight:500; display:flex; align-items:center; gap:4px">✓ Copied</span></div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:4px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3); margin-bottom:8px">Onboarding checklist item</div>
+      <div style="display:flex; gap:12px; padding:10px 0"><span style="flex:none; width:20px; height:20px; border-radius:var(--r-round); background:var(--ok); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span><div style="display:flex; flex-direction:column; gap:2px"><span style="font-size:14px; font-weight:500; color:var(--fg3); text-decoration:line-through">Sign in with GitHub</span><span style="font-size:12.5px; color:var(--fg3)">Done · @mayachen</span></div></div>
+      <div style="display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--b2)"><span style="flex:none; width:20px; height:20px">{{ spinner }}</span><div style="flex:1; display:flex; flex-direction:column; gap:6px"><span style="font-size:14px; font-weight:600">Connect your computer</span><span style="font-size:12.5px; color:var(--fg2)">Waiting for your terminal…</span></div></div>
+      <div style="display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--b2)"><span style="flex:none; width:20px; height:20px; border-radius:var(--r-round); border:1.5px solid var(--b1); box-sizing:border-box; font-size:11px; color:var(--fg3); display:flex; align-items:center; justify-content:center">4</span><div style="display:flex; flex-direction:column; gap:2px"><span style="font-size:14px; font-weight:500">Link a repo</span><span style="font-size:12.5px; color:var(--fg3)">Inside your clone, run nitpilot repos add</span></div></div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:4px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3); margin-bottom:8px">Device row</div>
+      <div style="display:flex; align-items:center; gap:12px; padding:10px 0"><span style="flex:none; width:32px; height:24px; border:1.5px solid var(--fg3); border-radius:4px; box-sizing:border-box"></span><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:14px; font-weight:500">Maya's MacBook Pro <span style="font-size:11.5px; font-weight:500; color:var(--acc-text); background:var(--acc-tint); padding:1px 6px; border-radius:4px; margin-left:4px">This device</span></span><span style="font-size:12.5px; color:var(--fg3)">Claude Code v2.1 · last seen 18:04</span></div><span style="font-size:12.5px; color:var(--fg3)">—</span></div>
+      <div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--b2)"><span style="flex:none; width:32px; height:24px; border:1.5px solid var(--fg3); border-radius:4px; box-sizing:border-box"></span><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:14px; font-weight:500">maya-linux-desk</span><span style="font-size:12.5px; color:var(--fg3)">Gemini CLI · last seen 3 days ago</span></div><span style="height:30px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); color:var(--red-fg); font-size:12.5px; font-weight:500; display:flex; align-items:center">Revoke</span></div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:16px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Empty states</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:24px 12px; border:1px solid var(--b2); border-radius:var(--r-card); text-align:center"><span style="width:10px; height:10px; background:var(--b1); transform:rotate(45deg); margin-bottom:6px"></span><span style="font-size:14px; font-weight:500">All quiet.</span><span style="font-size:13px; color:var(--fg3)">Nitpilot will ping you when you're needed.</span></div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:20px 12px; border:1px solid var(--b2); border-radius:var(--r-card); text-align:center"><span style="font-size:14px; font-weight:500">No matches</span><span style="font-size:13px; color:var(--fg3)">No pull requests match “coupon”.</span></div>
+    </section>
+
+    <section style="break-inside:avoid; margin-bottom:16px; padding:18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:10px">
+      <div style="font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Toast</div>
+      <div style="align-self:flex-start; padding:9px 14px; border-radius:var(--r-card); background:var(--fg1); color:var(--bg); font-size:13px">Sent. Included in the agents' next round.</div>
+      <div style="align-self:flex-start; display:flex; align-items:center; gap:14px; padding:9px 10px 9px 14px; border-radius:var(--r-card); background:var(--fg1); color:var(--bg); font-size:13px">Auto-fix off: work waits as drafts<span style="font-weight:600; color:var(--acc-line)">Undo</span></div>
+      <div style="align-self:flex-start; display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:var(--r-card); background:var(--fg1); color:var(--bg); font-size:13px"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span>GitHub sign-in expired. Reconnect GitHub.</div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:2200},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;skin&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;soft&quot;,&quot;classic&quot;],&quot;default&quot;:&quot;soft&quot;,&quot;tsType&quot;:&quot;'soft'|'classic'&quot;}}">
+const T = {
+  light: { '--bg': '#fafafa', '--side': '#ffffff', '--surface': '#ffffff', '--muted': '#f4f4f5', '--hover': '#f4f4f5', '--fg1': '#18181b', '--fg2': '#52525b', '--fg3': '#71717a', '--fg4': '#a1a1aa', '--b1': '#e4e4e7', '--b2': '#f0f0f2', '--acc': '#1857C6', '--on-acc': '#ffffff', '--acc-tint': '#eef3fc', '--acc-text': '#1650b5', '--acc-line': '#c9d8f3', '--ok': '#10b981', '--ok-fg': '#047857', '--ok-tint': '#e9f7f1', '--warn': '#f59e0b', '--warn-fg': '#b45309', '--warn-tint': '#fdf4e3', '--red': '#dc2626', '--red-fg': '#b91c1c', '--red-tint': '#fdf0f0', '--red-line': '#f3c9c9', '--code': '#fbfbfb', '--hl': '#eaf0fb', '--bubble': '#eef3fc', '--sel': '#f0f0f2', '--add': '#e9f7f1', '--del': '#fdf0f0' },
+  dark: { '--bg': '#09090b', '--side': '#0f0f12', '--surface': '#18181b', '--muted': '#27272a', '--hover': '#1c1c20', '--fg1': '#f4f4f5', '--fg2': '#d4d4d8', '--fg3': '#a1a1aa', '--fg4': '#71717a', '--b1': '#3f3f46', '--b2': '#27272a', '--acc': '#5B8DEF', '--on-acc': '#0a0f1c', '--acc-tint': '#17233b', '--acc-text': '#93B5F6', '--acc-line': '#2b416b', '--ok': '#10b981', '--ok-fg': '#34d399', '--ok-tint': '#0f261e', '--warn': '#f59e0b', '--warn-fg': '#fbbf24', '--warn-tint': '#2a2110', '--red': '#ef4444', '--red-fg': '#f87171', '--red-tint': '#2a1416', '--red-line': '#5a2427', '--code': '#111114', '--hl': '#17233b', '--bubble': '#17233b', '--sel': '#1f1f24', '--add': '#0f261e', '--del': '#2a1416' },
+};
+const SOFT_SHAPE = { '--sans': "'Bricolage Grotesque', system-ui, sans-serif", '--mono': "'Fragment Mono', ui-monospace, monospace", '--display': "'Bricolage Grotesque', system-ui, sans-serif", '--dw': '700', '--dscale': '1.1', '--r-card': '16px', '--r-ctl': '12px', '--r-chip': '99px', '--r-input': '18px', '--r-round': '99px', '--r-bub': '20px', '--r-tail': '6px', '--bw': '1px' };
+const SOFT = {
+  light: { '--bg': '#eef2ee', '--side': '#f7f9f6', '--surface': '#ffffff', '--muted': '#e8ede7', '--hover': '#eef2ed', '--fg1': '#16201b', '--fg2': '#44514a', '--fg3': '#5f6c65', '--fg4': '#9aa59f', '--b1': '#dfe6df', '--b2': '#edf1ec', '--acc': '#16707f', '--on-acc': '#ffffff', '--acc-tint': '#e0f0f2', '--acc-text': '#0f6170', '--acc-line': '#b7dbe0', '--ok': '#2f9e5b', '--ok-fg': '#1f7444', '--ok-tint': '#e3f3e8', '--warn': '#e09a1a', '--warn-fg': '#93600a', '--warn-tint': '#fbf0d9', '--red': '#d6453a', '--red-fg': '#b3322a', '--red-tint': '#fbe9e6', '--red-line': '#f1c6c0', '--code': '#f7f9f6', '--hl': '#e0f0f2', '--bubble': '#dcefef', '--sel': '#e6ece6', '--add': '#e3f3e8', '--del': '#fbe9e6', '--sh-card': '0 1px 2px rgba(16,32,24,.05), 0 6px 20px rgba(16,32,24,.06)' },
+  dark: { '--bg': '#0f1412', '--side': '#121815', '--surface': '#18201c', '--muted': '#222b26', '--hover': '#1c2420', '--fg1': '#e8efea', '--fg2': '#bfcac3', '--fg3': '#93a198', '--fg4': '#5f6c65', '--b1': '#2b3630', '--b2': '#1f2823', '--acc': '#5cc3d1', '--on-acc': '#06191c', '--acc-tint': '#13292c', '--acc-text': '#86d6e1', '--acc-line': '#245055', '--ok': '#3fbf74', '--ok-fg': '#62d293', '--ok-tint': '#13261b', '--warn': '#efaa34', '--warn-fg': '#f3bf62', '--warn-tint': '#2a2213', '--red': '#ef5e52', '--red-fg': '#ff8579', '--red-tint': '#2b1715', '--red-line': '#5a2a25', '--code': '#121815', '--hl': '#13292c', '--bubble': '#13292c', '--sel': '#202925', '--add': '#13261b', '--del': '#2b1715', '--sh-card': 'none' },
+};
+const SEV = [['blocker', 'Blocker', 4, 'var(--red)', 'var(--red-fg)', 'var(--red-tint)'], ['major', 'Major', 3, 'var(--warn)', 'var(--warn-fg)', 'var(--warn-tint)'], ['minor', 'Minor', 2, 'var(--fg2)', 'var(--fg2)', 'var(--muted)'], ['nit', 'Nit', 1, 'var(--fg3)', 'var(--fg2)', 'var(--muted)']];
+const ST = [['open', 'Open', 'var(--fg2)'], ['addressed', 'Addressed', 'var(--acc-text)'], ['resolved', 'Resolved', 'var(--ok-fg)'], ['escalated', 'Escalated', 'var(--red-fg)']];
+function ping(color) {
+  return React.createElement('span', { 'aria-hidden': true, style: { position: 'relative', display: 'inline-block', flex: 'none', width: 7, height: 7, borderRadius: 99, background: color } },
+    React.createElement('span', { style: { position: 'absolute', inset: 0, borderRadius: 99, background: color, animation: 'np-ping 1.6s cubic-bezier(0,0,.2,1) infinite' } }));
+}
+const SN1 = { start: 47, hl: [48], code: ['export function parseCursor(raw: string) {', '  const [ts, id] = Buffer.from(raw, "base64url").toString().split(":");', '  return { ts: new Date(Number(ts)), id };'] };
+class Component extends DCLogic {
+  renderVals() {
+    const theme = this.props.theme || 'light';
+    const soft = (this.props.skin || 'soft') === 'soft';
+    const matrix = SEV.map(([k, label, n, fill, fg, bg]) => ({ label, cells: ST.map(([sk, sl, sfg]) => ({
+      sev: label, sevFg: fg, sevBg: bg, b1: 1 <= n ? fill : 'var(--b1)', b2: 2 <= n ? fill : 'var(--b1)', b3: 3 <= n ? fill : 'var(--b1)', b4: 4 <= n ? fill : 'var(--b1)',
+      st: sl, stFg: sfg, isOpen: sk === 'open', isAddressed: sk === 'addressed', isResolved: sk === 'resolved', isEscalated: sk === 'escalated',
+      border: sk === 'escalated' ? 'var(--red-line)' : 'var(--b1)' })) }));
+    const pills = [
+      { label: 'Leo\u2019s agent working', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ping', when: 'An agent is running. Says whose.' },
+      { label: 'Waiting', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ring', when: 'Agent queued or offline' },
+      { label: 'Their turn', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ring', when: 'Waiting for the other human' },
+      { label: 'Needs you', fg: 'var(--acc-text)', bg: 'var(--acc-tint)', g: 'dot', when: 'Manual review, drafts, failure' },
+      { label: 'Needs you', fg: 'var(--red-fg)', bg: 'var(--red-tint)', g: 'diamond', when: 'Escalation only' },
+      { label: 'Ready', fg: 'var(--ok-fg)', bg: 'var(--ok-tint)', g: 'check', when: 'Waiting for approval on GitHub' },
+      { label: 'Merged', fg: 'var(--fg3)', bg: 'transparent', g: 'none', when: 'Merged or closed', deco: 'line-through' },
+    ].map(p => ({ ...p, deco: p.deco || 'none', gPing: p.g === 'ping', gDot: p.g === 'dot', gDiamond: p.g === 'diamond', gRing: p.g === 'ring', gCheck: p.g === 'check', ping: ping('var(--acc)') }));
+    const pip = (cur, max) => Array.from({ length: max }, (_, i) => i < cur ? (cur >= max ? 'var(--warn)' : 'var(--acc)') : 'var(--b1)');
+    const rows = [
+      { state: 'Default', ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', agent: true, pill: 'Ready', pillFg: 'var(--ok-fg)', pillBg: 'var(--ok-tint)', gCheck: true, last: "Ready for Leo's approval", round: '2/3', bg: 'transparent', ring: 'none', weight: 500, titleFg: 'var(--fg1)' },
+      { state: 'Unread · needs you (escalated)', ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', agent: true, unread: true, pill: 'Needs you', pillFg: 'var(--red-fg)', pillBg: 'var(--red-tint)', gDiamond: true, last: 'P1 needs a human decision', round: '2/3', bg: 'transparent', ring: 'none', weight: 600, titleFg: 'var(--fg1)' },
+      { state: 'Selected · agent working', ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', agent: true, pill: "Leo's agent working", pillFg: 'var(--fg2)', pillBg: 'var(--muted)', gPing: true, last: 'reading src/db/client.ts', round: '1/3', bg: 'var(--sel)', ring: 'none', weight: 500, titleFg: 'var(--fg1)' },
+      { state: 'Keyboard focus (j/k) · closed', ref: 'acme/shop-api #136', time: 'Yesterday', title: 'Remove legacy coupon endpoint', initials: 'LP', pill: 'Merged', pillFg: 'var(--fg3)', pillBg: 'transparent', deco: 'line-through', last: 'Merged by Leo Park', round: '1/3', bg: 'transparent', ring: 'inset 0 0 0 2px var(--acc)', weight: 500, titleFg: 'var(--fg3)' },
+    ].map(r => ({ unread: false, agent: false, gCheck: false, gDiamond: false, gPing: false, deco: 'none', ...r }));
+    const diff = [
+      { n: 47, sign: ' ', code: 'export function parseCursor(raw: string) {' },
+      { n: 48, sign: '+', code: '  if (!raw) return null;' },
+      { n: 49, sign: '−', code: '  const [ts, id] = Buffer.from(raw, "base64url").toString().split(":");' },
+      { n: 49, sign: '+', code: '  const [ts, id] = decode(raw);' },
+      { n: 50, sign: '+', code: '  if (!ts || !id) return null;' },
+    ].map(d => ({ ...d, bg: d.sign === '+' ? 'var(--add)' : d.sign === '−' ? 'var(--del)' : 'transparent', signFg: d.sign === '+' ? 'var(--ok-fg)' : 'var(--red-fg)' }));
+    const replies = [
+      { name: 'Your agent', initials: 'MC', agent: true, tag: 'Fixed in', fg: 'var(--ok-fg)', commit: 'a1b2c3d', text: 'Return null for empty or invalid cursors and treat it as the first page.' },
+      { name: 'Your agent', initials: 'MC', agent: true, tag: 'Declined', fg: 'var(--fg2)', text: 'fetchAll is part of the public SDK; renaming it would be a breaking change.' },
+      { name: "Leo's agent", initials: 'LP', agent: true, tag: 'Resolved', fg: 'var(--ok-fg)', text: '' },
+      { name: "Sam's agent", initials: 'SO', agent: true, tag: 'Answered', fg: 'var(--acc-text)', text: 'The old token is also rejected by the rotation check.' },
+      { name: 'Your agent', initials: 'MC', agent: true, tag: 'Kept open', fg: 'var(--warn-fg)', text: 'That check reads the same cache, so the window stays open.' },
+      { name: 'Leo Park', initials: 'LP', agent: false, tag: '', fg: 'var(--fg2)', text: 'Fine by me, ship it.' },
+    ].map(r => ({ commit: '', ...r }));
+    const sysLines = [
+      { text: 'Round 2 started · 14:10' }, { text: 'Your agent pushed 2 commits · 14:09' }, { text: "Leo's agent is offline since 18:04", g: 'ring' }, { text: 'Escalated: P1 · 16:40', g: 'diamond' }, { text: 'Ready for approval · 14:13', g: 'check' },
+    ].map(l => ({ ...l, gDiamond: l.g === 'diamond', gCheck: l.g === 'check', gRing: l.g === 'ring' }));
+    const base = { file: 'src/orders/list.ts', line: '48', snippet: SN1 };
+    return {
+      rootStyle: { ...(soft ? { ...SOFT_SHAPE, ...SOFT[theme] } : { ...T[theme], '--sans': 'Geist, ui-sans-serif, system-ui, sans-serif', '--mono': "'Geist Mono', ui-monospace, monospace", '--display': 'Geist, ui-sans-serif, system-ui, sans-serif', '--dw': '600', '--dscale': '1', '--r-card': '8px', '--r-ctl': '6px', '--r-chip': '5px', '--r-input': '10px', '--r-round': '99px', '--r-bub': '14px', '--r-tail': '4px', '--bw': '1px', '--sh-card': 'none' }), boxSizing: 'border-box', width: '100%', maxWidth: 1280, padding: 28, background: 'var(--bg)', color: 'var(--fg1)', fontFamily: 'var(--sans)', fontSize: 14, lineHeight: 1.4, colorScheme: theme },
+      themeName: theme === 'dark' ? 'Dark' : 'Light',
+      statusCols: ST.map(s => s[1]), matrix, pills, rows, diff, replies, sysLines,
+      ping: ping('var(--acc)'),
+      spinner: React.createElement('span', { 'aria-label': 'Waiting', style: { display: 'block', width: 20, height: 20, borderRadius: 99, border: '2px solid var(--b1)', borderTopColor: 'var(--acc)', boxSizing: 'border-box', animation: 'np-spin 0.9s linear infinite' } }),
+      roundsDemo: [[1, 3], [2, 3], [3, 3]].map(([c, m]) => ({ pips: pip(c, m), label: c >= m ? `Round ${c} of ${m} · last round` : `Round ${c} of ${m}` })),
+      pBlocker: { id: 'P1', severity: 'blocker', category: 'security', status: 'escalated', file: 'src/auth/session.ts', line: '112', title: 'Refresh token stays valid after rotation, which opens a short replay window', body: 'The new token is stored before the old one is revoked, and revokeToken isn\u2019t awaited.',
+        snippet: { start: 110, hl: [112], code: ['  const next = await issueRefreshToken(session.userId);', '  await store.set(session.id, next);', '  revokeToken(session.refreshToken);'] },
+        thread: [{ name: "Sam's agent", initials: 'SO', agent: true, kind: 'answered', text: 'The old token is also rejected by the rotation check.', time: '16:30' }, { name: 'Your agent', initials: 'MC', agent: true, kind: 'kept', text: 'That check reads the same cache, so the window stays open.', time: '16:39' }] },
+      pMajor: { ...base, id: 'P1', severity: 'major', category: 'bug', status: 'addressed', title: 'parseCursor throws on an empty cursor', body: 'An empty cursor decodes to "", so new Date(Number("")) is an Invalid Date.',
+        thread: [{ name: 'Your agent', initials: 'MC', agent: true, kind: 'fixed', commit: 'a1b2c3d', text: 'Return null for empty or invalid cursors.', time: '14:08' }] },
+      pMinor: { id: 'P3', severity: 'minor', category: 'tests', status: 'open', file: 'test/orders.test.ts', line: '', title: 'No test for the last page (nextCursor should be null)', body: 'Nothing asserts that nextCursor is null once the last page is reached.', thread: [] },
+      pNit: { id: 'P2', severity: 'nit', category: 'style', status: 'resolved', file: 'src/orders/list.ts', line: '12', title: 'Rename fetchAll → fetchPage', outcome: 'Declined', body: '', thread: [] },
+      pNit2: { id: 'P3', severity: 'minor', category: 'tests', status: 'resolved', file: 'test/orders.test.ts', line: '', title: 'No test for the last page', outcome: 'Fixed · d4e5f6a', body: '', thread: [] },
+    };
+  }
+}
+</script>
+</body>
+</html>

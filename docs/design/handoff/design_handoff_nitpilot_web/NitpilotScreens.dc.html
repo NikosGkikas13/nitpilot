@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Fragment+Mono&display=swap" rel="stylesheet"><style>
+html,body{margin:0;height:100%}
+a{color:var(--acc-text,#0f6170);text-decoration:none}
+a:hover{color:var(--fg1,#16201b)}
+:focus-visible{outline:2px solid var(--acc,#16707f);outline-offset:2px}
+@keyframes np-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style></helmet>
+<div style="{{ rootStyle }}">
+
+<sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+  <div style="min-height:100%; display:flex; flex-direction:column">
+    <nav style="box-sizing:border-box; width:100%; max-width:1160px; margin:0 auto; display:flex; align-items:center; gap:16px; padding:20px 24px">
+      <span aria-label="nitpilot" style="position:relative; font-family:var(--mono); font-size:22px; line-height:1">nıtpilot<span aria-hidden="true" style="position:absolute; left:0.9em; top:-0.04em; width:6px; height:6px; margin-left:-3px; background:var(--acc); transform:rotate(45deg)"></span></span>
+      <span style="flex:1"></span>
+      <a href="#" style="font-size:14px; font-weight:500; color:var(--fg2)">Docs</a>
+      <a href="#" style="font-size:14px; font-weight:500; color:var(--fg2)">GitHub ↗</a>
+    </nav>
+    <main style="box-sizing:border-box; width:100%; max-width:1160px; margin:0 auto; padding:clamp(20px, 4cqw, 56px) 24px 32px; display:flex; flex-wrap:wrap; gap:48px; align-items:center">
+      <div style="flex:1 1 440px; min-width:0; display:flex; flex-direction:column; gap:20px">
+        <span style="align-self:flex-start; display:inline-flex; align-items:center; gap:8px; height:28px; padding:0 12px; border-radius:99px; background:var(--surface); border:1px solid var(--b1); font-size:13px; color:var(--fg2)"><span style="width:6px; height:6px; background:var(--acc); transform:rotate(45deg)"></span>For Claude Code and Gemini CLI</span>
+        <h1 style="margin:0; font-size:clamp(34px, 4.6cqw, 60px); font-weight:700; line-height:1.02; letter-spacing:-0.035em; text-wrap:balance">Your agents review each other's PRs the moment they open.</h1>
+        <p style="margin:0; font-size:clamp(17px, 1.6cqw, 20px); line-height:1.45; color:var(--fg2); max-width:30em; text-wrap:pretty">You only hear about it when there's a decision to make.</p>
+        <div style="display:flex; flex-direction:column; gap:12px; align-items:flex-start">
+          <a href="#" style="display:inline-flex; align-items:center; gap:10px; height:52px; padding:0 22px; border-radius:14px; background:var(--fg1); color:var(--bg); font-size:16px; font-weight:600">Sign in with GitHub <span>→</span></a>
+          <span style="font-family:var(--mono); font-size:12.5px; color:var(--fg3)">Free for public repos · Open source · Self-host for private repos</span>
+        </div>
+      </div>
+      <div aria-hidden="true" style="flex:1 1 380px; min-width:0; max-width:520px; padding:14px; border-radius:22px; background:var(--surface); box-shadow:var(--sh-card); border:1px solid var(--b1); display:flex; flex-direction:column; gap:4px">
+        <sc-for list="{{ heroRows }}" as="r" hint-placeholder-count="3">
+          <div style="display:flex; gap:12px; padding:12px; border-radius:14px; background:{{ r.bg }}">
+            <span style="flex:none; position:relative; width:38px; height:38px"><span style="width:38px; height:38px; border-radius:99px; background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ r.initials }}</span><span style="position:absolute; right:-3px; bottom:-3px; width:15px; height:15px; border-radius:5px; background:var(--fg1); box-shadow:0 0 0 2px var(--surface); display:flex; align-items:center; justify-content:center"><span style="width:5px; height:5px; background:var(--surface); transform:rotate(45deg)"></span></span></span>
+            <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+              <span style="display:flex; font-family:var(--mono); font-size:11.5px; color:var(--fg3)"><span style="flex:1">{{ r.ref }}</span>{{ r.time }}</span>
+              <span style="font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.title }}</span>
+              <span style="display:flex; align-items:center; gap:8px"><span style="height:22px; padding:0 9px; border-radius:99px; background:{{ r.pillBg }}; color:{{ r.pillFg }}; font-size:12px; font-weight:600; display:inline-flex; align-items:center">{{ r.pill }}</span><span style="font-size:12.5px; color:var(--fg3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.last }}</span></span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </main>
+    <section aria-label="How it works" style="box-sizing:border-box; width:100%; max-width:1160px; margin:0 auto; padding:8px 24px 40px; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px">
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+        <div style="padding:20px; border-radius:18px; background:var(--surface); border:1px solid var(--b1); display:flex; flex-direction:column; gap:8px">
+          <span style="width:28px; height:28px; border-radius:99px; background:var(--acc-tint); color:var(--acc-text); font-family:var(--mono); font-size:13px; display:flex; align-items:center; justify-content:center">{{ st.n }}</span>
+          <span style="font-size:17px; font-weight:700; letter-spacing:-0.01em">{{ st.title }}</span>
+          <span style="font-size:14px; line-height:1.5; color:var(--fg2); text-wrap:pretty">{{ st.body }}</span>
+        </div>
+      </sc-for>
+    </section>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isOnboarding }}">
+  <div style="min-height:100%; display:flex; flex-direction:column">
+    <div style="display:flex; align-items:center; gap:12px; padding:18px 24px">
+      <span aria-label="nitpilot" style="position:relative; font-family:var(--mono); font-size:19px; line-height:1">nıtpilot<span aria-hidden="true" style="position:absolute; left:0.9em; top:-0.04em; width:5px; height:5px; margin-left:-2.5px; background:var(--acc); transform:rotate(45deg)"></span></span>
+      <span style="flex:1"></span>
+      <span style="width:32px; height:32px; border-radius:99px; background:var(--muted); color:var(--fg2); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center">MC</span>
+    </div>
+    <main style="box-sizing:border-box; width:100%; max-width:620px; margin:0 auto; padding:clamp(8px, 3cqw, 36px) 20px 40px; display:flex; flex-direction:column; gap:18px">
+      <div style="display:flex; flex-direction:column; gap:6px">
+        <h1 style="margin:0; font-size:clamp(26px, 2.6cqw, 34px); font-weight:700; letter-spacing:-0.025em">Set up Nitpilot</h1>
+        <p style="margin:0; font-size:15px; color:var(--fg2)">This list ticks itself off as each step completes.</p>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px"><div style="flex:1; height:6px; border-radius:99px; background:var(--muted); overflow:hidden"><div style="height:100%; width:{{ progW }}; border-radius:99px; background:var(--acc); transition:width 400ms"></div></div><span style="font-family:var(--mono); font-size:12.5px; color:var(--fg3)">{{ progLabel }}</span></div>
+      <ol style="list-style:none; margin:0; padding:6px 18px; border-radius:20px; background:var(--surface); border:1px solid var(--b1); box-shadow:var(--sh-card)">
+        <sc-for list="{{ checklist }}" as="c" hint-placeholder-count="5">
+          <li style="display:flex; gap:14px; padding:16px 0; border-top:1px solid {{ c.divider }}">
+            <span style="flex:none; width:26px; height:26px">
+              <sc-if value="{{ c.done }}"><span style="width:26px; height:26px; border-radius:99px; background:var(--ok); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span></sc-if>
+              <sc-if value="{{ c.waiting }}">{{ spinner }}</sc-if>
+              <sc-if value="{{ c.pending }}"><span style="width:26px; height:26px; border-radius:99px; border:1.5px solid var(--b1); box-sizing:border-box; color:var(--fg3); font-family:var(--mono); font-size:12px; display:flex; align-items:center; justify-content:center">{{ c.n }}</span></sc-if>
+            </span>
+            <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px">
+              <span style="font-size:15.5px; font-weight:{{ c.weight }}; color:{{ c.titleFg }}">{{ c.title }}</span>
+              <span style="font-size:13.5px; line-height:1.45; color:var(--fg2); text-wrap:pretty">{{ c.body }}</span>
+              <sc-if value="{{ c.cmd }}">
+                <div style="display:flex; align-items:center; gap:10px; height:44px; padding:0 6px 0 14px; border-radius:12px; background:var(--code); border:1px solid var(--b1); font-family:var(--mono); font-size:13.5px; opacity:{{ c.cmdOpacity }}"><span style="color:var(--fg3)">$</span><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ c.cmd }}</span><sc-if value="{{ c.active }}"><button type="button" onClick="{{ copyLogin }}" style="height:32px; padding:0 12px; border-radius:10px; border:1px solid var(--b1); background:var(--surface); color:var(--fg1); font:inherit; font-family:var(--sans); font-size:13px; font-weight:600; cursor:pointer">{{ copyLabel }}</button></sc-if></div>
+              </sc-if>
+              <sc-if value="{{ c.status }}"><span style="display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:500; color:{{ c.statusFg }}">{{ c.status }}</span></sc-if>
+              <sc-if value="{{ c.agents }}"><div style="display:flex; gap:8px; flex-wrap:wrap"><span style="height:30px; padding:0 12px; border-radius:99px; border:1px solid var(--b1); font-size:13px; display:inline-flex; align-items:center; color:var(--fg3)">Claude Code</span><span style="height:30px; padding:0 12px; border-radius:99px; border:1px solid var(--b1); font-size:13px; display:inline-flex; align-items:center; color:var(--fg3)">Gemini CLI</span><span style="font-size:12.5px; color:var(--fg3); align-self:center">detected automatically</span></div></sc-if>
+            </div>
+          </li>
+        </sc-for>
+      </ol>
+      <a href="#" style="align-self:center; font-size:14px; color:var(--fg3)">Skip for now</a>
+    </main>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isApprove }}">
+  <div style="min-height:100%; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; padding:20px">
+    <div style="align-self:stretch; display:flex; padding:0 4px 8px"><span aria-label="nitpilot" style="position:relative; font-family:var(--mono); font-size:19px; line-height:1">nıtpilot<span aria-hidden="true" style="position:absolute; left:0.9em; top:-0.04em; width:5px; height:5px; margin-left:-2.5px; background:var(--acc); transform:rotate(45deg)"></span></span></div>
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%">
+      <div style="box-sizing:border-box; width:100%; max-width:440px; padding:28px; border-radius:24px; background:var(--surface); border:1px solid var(--b1); box-shadow:var(--sh-card); display:flex; flex-direction:column; gap:18px">
+        <sc-if value="{{ apPending }}">
+          <div style="display:flex; flex-direction:column; gap:18px">
+            <span style="font-family:var(--mono); font-size:12px; color:var(--fg3)">Device login</span>
+            <div style="display:flex; flex-direction:column; gap:6px"><h1 style="margin:0; font-size:28px; font-weight:700; letter-spacing:-0.025em">Approve this device?</h1><p style="margin:0; font-size:14.5px; line-height:1.5; color:var(--fg2)">Check that this code matches the one in your terminal.</p></div>
+            <div aria-label="Code W D J B M J H T" style="padding:20px 12px; border-radius:16px; background:var(--code); border:1px solid var(--b1); text-align:center; font-family:var(--mono); font-size:clamp(30px, 9cqw, 38px); letter-spacing:0.14em; color:var(--fg1)">WDJB-MJHT</div>
+            <div style="display:flex; align-items:center; gap:12px"><span style="flex:none; width:40px; height:30px; border-radius:7px; border:2px solid var(--fg2); box-sizing:border-box"></span><div style="display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">Maya's MacBook Pro</span><span style="font-size:13px; color:var(--fg3)">macOS · nitpilot CLI 0.9 · requested 18:02</span></div></div>
+            <div style="display:flex; gap:10px"><button type="button" onClick="{{ approve }}" style="flex:1; height:48px; border:0; border-radius:14px; background:var(--acc); color:var(--on-acc); font:inherit; font-size:15px; font-weight:600; cursor:pointer">Approve</button><button type="button" onClick="{{ deny }}" style="flex:1; height:48px; border:1px solid var(--b1); border-radius:14px; background:var(--surface); color:var(--fg1); font:inherit; font-size:15px; font-weight:600; cursor:pointer">Deny</button></div>
+            <span style="font-size:12.5px; line-height:1.45; color:var(--fg3); text-align:center">Only approve if you just ran npx nitpilot login. The code expires in 9:41.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ apDone }}">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:14px; padding:12px 0; text-align:center">
+            <sc-if value="{{ apApproved }}"><span style="width:56px; height:56px; border-radius:99px; background:var(--ok-tint); color:var(--ok-fg); font-size:26px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span></sc-if>
+            <sc-if value="{{ apDenied }}"><span style="width:56px; height:56px; border-radius:99px; background:var(--muted); color:var(--fg2); font-size:24px; display:flex; align-items:center; justify-content:center">×</span></sc-if>
+            <sc-if value="{{ apExpired }}"><span style="width:56px; height:56px; border-radius:99px; border:2px solid var(--b1); box-sizing:border-box; display:flex; align-items:center; justify-content:center"><span style="width:12px; height:12px; border-radius:99px; border:2px solid var(--fg3); box-sizing:border-box"></span></span></sc-if>
+            <h1 style="margin:0; font-size:26px; font-weight:700; letter-spacing:-0.02em">{{ apTitle }}</h1>
+            <p style="margin:0; font-size:14.5px; line-height:1.5; color:var(--fg2); max-width:22em; text-wrap:pretty">{{ apBody }}</p>
+            <sc-if value="{{ apExpired }}"><div style="align-self:stretch; display:flex; align-items:center; gap:10px; height:44px; padding:0 14px; border-radius:12px; background:var(--code); border:1px solid var(--b1); font-family:var(--mono); font-size:13.5px; text-align:left"><span style="color:var(--fg3)">$</span>npx nitpilot login</div></sc-if>
+            <sc-if value="{{ apCanReset }}"><button type="button" onClick="{{ apReset }}" style="border:0; background:transparent; color:var(--fg3); font:inherit; font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px">Show the request again</button></sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isSettings }}">
+  <div style="min-height:100%; display:flex; flex-direction:column">
+    <div style="display:flex; align-items:center; gap:10px; padding:14px 20px; border-bottom:1px solid var(--b1); background:var(--side)">
+      <a href="NitpilotApp.dc.html" style="display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 8px; border-radius:10px; color:var(--acc-text); font-size:14.5px; font-weight:500">‹ Inbox</a>
+      <h1 style="margin:0; font-size:17px; font-weight:700; letter-spacing:-0.01em">Settings</h1>
+    </div>
+    <div style="box-sizing:border-box; width:100%; max-width:980px; margin:0 auto; display:flex; gap:40px; padding:clamp(16px, 2.6cqw, 32px) 20px 40px">
+      <sc-if value="{{ isDesktop }}">
+        <nav aria-label="Settings sections" style="flex:none; width:180px; display:flex; flex-direction:column; gap:2px; position:sticky; top:20px; align-self:flex-start">
+          <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5"><a href="#" style="height:36px; padding:0 12px; border-radius:10px; display:flex; align-items:center; font-size:14.5px; font-weight:500; background:{{ n.bg }}; color:{{ n.fg }}">{{ n.label }}</a></sc-for>
+        </nav>
+      </sc-if>
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:28px">
+        <section style="display:flex; flex-direction:column; gap:10px">
+          <h2 style="margin:0; font-size:16px; font-weight:700">Devices</h2>
+          <div style="border-radius:18px; background:var(--surface); border:1px solid var(--b1); padding:0 16px">
+            <div style="display:flex; align-items:center; gap:14px; padding:14px 0"><span style="flex:none; width:34px; height:26px; border-radius:6px; border:2px solid var(--fg2); box-sizing:border-box"></span><div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap">Maya's MacBook Pro<span style="height:20px; padding:0 8px; border-radius:99px; background:var(--acc-tint); color:var(--acc-text); font-size:11.5px; font-weight:600; display:inline-flex; align-items:center">This device</span></span><span style="font-size:13px; color:var(--fg3)">Last seen 18:04</span></div></div>
+            <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--b2)"><span style="flex:none; width:34px; height:26px; border-radius:6px; border:2px solid var(--fg3); box-sizing:border-box"></span><div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">maya-linux-desk</span><span style="font-size:13px; color:var(--fg3)">Last seen 3 days ago</span></div><button type="button" style="flex:none; height:36px; padding:0 14px; border-radius:12px; border:1px solid var(--b1); background:var(--surface); color:var(--red-fg); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer">Revoke</button></div>
+          </div>
+        </section>
+        <section style="display:flex; flex-direction:column; gap:10px">
+          <h2 style="margin:0; font-size:16px; font-weight:700">Agent</h2>
+          <div style="border-radius:18px; background:var(--surface); border:1px solid var(--b1); padding:0 16px">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 0"><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">Claude Code <span style="font-family:var(--mono); font-size:13px; font-weight:400; color:var(--fg3)">v2.1</span></span><span style="font-size:13px; color:var(--fg3)">Used on Maya's MacBook Pro</span></div><span style="height:26px; padding:0 10px; border-radius:99px; background:var(--ok-tint); color:var(--ok-fg); font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:5px">✓ Logged in</span></div>
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 0; border-top:1px solid var(--b2)"><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">Gemini CLI</span><span style="font-size:13px; color:var(--fg3)">Install it, then run <span style="font-family:var(--mono)">nitpilot start</span> again.</span></div><span style="height:26px; padding:0 10px; border-radius:99px; background:var(--warn-tint); color:var(--warn-fg); font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; gap:6px"><span style="font-weight:700">!</span> Not found</span></div>
+          </div>
+        </section>
+        <section style="display:flex; flex-direction:column; gap:10px">
+          <h2 style="margin:0; font-size:16px; font-weight:700">Notifications</h2>
+          <div style="border-radius:18px; background:var(--surface); border:1px solid var(--b1); padding:0 16px">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 0"><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">Push notifications</span><span style="font-size:13px; color:var(--fg3)">Only when you're needed: approvals, escalations, failures</span></div>
+              <button type="button" role="switch" aria-checked="{{ pushOn }}" aria-label="Push notifications" onClick="{{ togglePush }}" style="flex:none; position:relative; width:46px; height:28px; border:0; border-radius:99px; background:{{ pushTrack }}; cursor:pointer; padding:0"><span style="position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:99px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); transform:{{ pushX }}; transition:transform 150ms"></span></button></div>
+            <div style="margin:0 0 14px; padding:12px 14px; border-radius:14px; background:var(--acc-tint); display:flex; gap:12px; align-items:flex-start"><span style="flex:none; width:8px; height:8px; margin-top:6px; background:var(--acc); transform:rotate(45deg)"></span><span style="font-size:13.5px; line-height:1.5; color:var(--fg1)"><b>On iPhone?</b> Add Nitpilot to your Home Screen to get notifications. In Safari, tap Share, then Add to Home Screen.</span></div>
+          </div>
+        </section>
+        <section style="display:flex; flex-direction:column; gap:10px">
+          <h2 style="margin:0; font-size:16px; font-weight:700">Defaults for new chats</h2>
+          <div style="border-radius:18px; background:var(--surface); border:1px solid var(--b1); padding:0 16px">
+            <sc-for list="{{ defaults }}" as="d" hint-placeholder-count="2">
+              <div style="display:flex; align-items:center; gap:12px; padding:14px 0; border-top:1px solid {{ d.divider }}"><div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">{{ d.label }}</span><span style="font-size:13px; color:var(--fg3)">{{ d.hint }}</span></div>
+                <button type="button" role="switch" aria-checked="{{ d.on }}" aria-label="{{ d.label }}" onClick="{{ d.toggle }}" style="flex:none; position:relative; width:46px; height:28px; border:0; border-radius:99px; background:{{ d.track }}; cursor:pointer; padding:0"><span style="position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:99px; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); transform:{{ d.x }}; transition:transform 150ms"></span></button></div>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 0; border-top:1px solid var(--b2)">
+              <div style="flex:1 1 200px; display:flex; flex-direction:column; gap:8px"><span style="font-size:15px; font-weight:600">Daily job cap</span><span style="font-size:13px; color:var(--fg3)">Max {{ cap }} agent runs per day · {{ used }} used today</span><div style="height:6px; border-radius:99px; background:var(--muted); overflow:hidden"><div style="height:100%; width:{{ capW }}; background:var(--acc); border-radius:99px"></div></div></div>
+              <div style="flex:none; display:flex; align-items:center; border:1px solid var(--b1); border-radius:12px; overflow:hidden"><button type="button" onClick="{{ capDown }}" aria-label="Lower cap" style="width:44px; height:40px; border:0; background:var(--surface); color:var(--fg1); font:inherit; font-size:18px; cursor:pointer">−</button><span style="width:48px; text-align:center; font-family:var(--mono); font-size:15px">{{ cap }}</span><button type="button" onClick="{{ capUp }}" aria-label="Raise cap" style="width:44px; height:40px; border:0; background:var(--surface); color:var(--fg1); font:inherit; font-size:18px; cursor:pointer">+</button></div>
+            </div>
+          </div>
+        </section>
+        <section style="display:flex; flex-direction:column; gap:10px">
+          <h2 style="margin:0; font-size:16px; font-weight:700">Account</h2>
+          <div style="border-radius:18px; background:var(--surface); border:1px solid var(--b1); padding:14px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+            <span style="width:40px; height:40px; border-radius:99px; background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">MC</span>
+            <div style="flex:1; display:flex; flex-direction:column; gap:2px"><span style="font-size:15px; font-weight:600">Maya Chen</span><span style="font-family:var(--mono); font-size:13px; color:var(--fg3)">github.com/mayachen</span></div>
+            <button type="button" style="height:40px; padding:0 16px; border-radius:12px; border:1px solid var(--b1); background:var(--surface); color:var(--fg1); font:inherit; font-size:14px; font-weight:600; cursor:pointer">Sign out</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isPush }}">
+  <div style="position:relative; min-height:100%; height:100%; box-sizing:border-box; background:{{ pushBg }}; display:flex; flex-direction:column; align-items:{{ pushAlign }}; padding:{{ pushPad }}; gap:10px">
+    <sc-if value="{{ isPhone }}">
+      <div style="align-self:stretch; display:flex; flex-direction:column; align-items:center; gap:2px; padding:12px 0 22px; color:{{ lockFg }}"><span style="font-size:16px; font-weight:500">Wednesday 7 October</span><span style="font-size:84px; font-weight:600; line-height:1; letter-spacing:-0.03em">18:22</span></div>
+    </sc-if>
+    <sc-if value="{{ isDesktop }}">
+      <div style="position:absolute; inset:24px 420px 24px 24px; border-radius:16px; border:1px dashed var(--b1); background:repeating-linear-gradient(135deg, transparent 0 10px, var(--muted) 10px 11px); display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:13px; color:var(--fg3); background:var(--bg); padding:4px 10px; border-radius:8px">your editor</span></div>
+    </sc-if>
+    <sc-for list="{{ notes }}" as="nt" hint-placeholder-count="4">
+      <div style="position:relative; box-sizing:border-box; width:100%; max-width:380px; padding:12px 14px; border-radius:22px; background:{{ noteBg }}; box-shadow:0 8px 24px rgba(0,0,0,.12); display:flex; gap:12px; align-items:flex-start; color:{{ noteFg }}">
+        <span style="flex:none; position:relative; width:38px; height:38px; border-radius:10px; background:#16707f; display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:26px; line-height:1; color:#fff; margin-top:-3px">n</span><span style="position:absolute; right:7px; top:7px; width:5px; height:5px; background:#a8e3ea; transform:rotate(45deg)"></span></span>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px">
+          <div style="display:flex; gap:8px; font-size:13px"><span style="flex:1; font-weight:600">{{ nt.title }}</span><span style="opacity:.6">{{ nt.time }}</span></div>
+          <span style="font-size:14px; line-height:1.35">{{ nt.body }}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isInstall }}">
+  <div style="position:relative; height:100%; box-sizing:border-box">
+    <div style="position:absolute; inset:0; background:repeating-linear-gradient(135deg, transparent 0 10px, var(--muted) 10px 11px); display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:13px; color:var(--fg3); background:var(--bg); padding:4px 10px; border-radius:8px">Nitpilot inbox behind the prompt</span></div>
+    <sc-if value="{{ isDesktop }}">
+      <div role="dialog" aria-label="Install Nitpilot" style="position:absolute; left:24px; bottom:24px; width:380px; padding:18px; border-radius:20px; background:var(--surface); border:1px solid var(--b1); box-shadow:0 12px 36px rgba(16,32,24,.16); display:flex; gap:14px">
+        <span style="flex:none; position:relative; width:52px; height:52px; border-radius:13px; background:#16707f; display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:36px; line-height:1; color:#fff; margin-top:-4px">n</span><span style="position:absolute; right:10px; top:10px; width:7px; height:7px; background:#a8e3ea; transform:rotate(45deg)"></span></span>
+        <div style="flex:1; display:flex; flex-direction:column; gap:10px"><div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:16px; font-weight:700">Install Nitpilot</span><span style="font-size:13.5px; line-height:1.45; color:var(--fg2)">Its own window next to your editor, with notifications when you're needed.</span></div><div style="display:flex; gap:8px"><button type="button" style="height:38px; padding:0 16px; border:0; border-radius:12px; background:var(--acc); color:var(--on-acc); font:inherit; font-size:14px; font-weight:600; cursor:pointer">Install</button><button type="button" style="height:38px; padding:0 14px; border:1px solid var(--b1); border-radius:12px; background:var(--surface); color:var(--fg1); font:inherit; font-size:14px; font-weight:600; cursor:pointer">Not now</button></div></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isPhone }}">
+      <div style="position:absolute; inset:0; background:rgba(0,0,0,.28)"></div>
+      <div role="dialog" aria-label="Add Nitpilot to your Home Screen" style="position:absolute; left:8px; right:8px; bottom:8px; padding:10px 20px 24px; border-radius:28px; background:var(--surface); display:flex; flex-direction:column; gap:16px">
+        <span style="align-self:center; width:36px; height:5px; border-radius:99px; background:var(--b1)"></span>
+        <div style="display:flex; gap:14px; align-items:center"><span style="flex:none; position:relative; width:56px; height:56px; border-radius:14px; background:#16707f; display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:38px; line-height:1; color:#fff; margin-top:-4px">n</span><span style="position:absolute; right:11px; top:11px; width:7px; height:7px; background:#a8e3ea; transform:rotate(45deg)"></span></span><div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:18px; font-weight:700; letter-spacing:-0.01em">Add Nitpilot to your Home Screen</span><span style="font-size:14px; line-height:1.4; color:var(--fg2)">On iPhone, notifications only work from the Home Screen app.</span></div></div>
+        <ol style="margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px">
+          <li style="display:flex; gap:12px; align-items:center; font-size:15px"><span style="flex:none; width:28px; height:28px; border-radius:99px; background:var(--acc-tint); color:var(--acc-text); font-family:var(--mono); font-size:13px; display:flex; align-items:center; justify-content:center">1</span><span>Tap <b>Share</b> in Safari's toolbar</span></li>
+          <li style="display:flex; gap:12px; align-items:center; font-size:15px"><span style="flex:none; width:28px; height:28px; border-radius:99px; background:var(--acc-tint); color:var(--acc-text); font-family:var(--mono); font-size:13px; display:flex; align-items:center; justify-content:center">2</span><span>Choose <b>Add to Home Screen</b></span></li>
+          <li style="display:flex; gap:12px; align-items:center; font-size:15px"><span style="flex:none; width:28px; height:28px; border-radius:99px; background:var(--acc-tint); color:var(--acc-text); font-family:var(--mono); font-size:13px; display:flex; align-items:center; justify-content:center">3</span><span>Open Nitpilot from there and allow notifications</span></li>
+        </ol>
+        <button type="button" style="height:48px; border:1px solid var(--b1); border-radius:14px; background:var(--surface); color:var(--fg1); font:inherit; font-size:15px; font-weight:600">Got it</button>
+        <span aria-hidden="true" style="align-self:center; width:12px; height:12px; background:var(--surface); transform:rotate(45deg); margin:-30px 0 -6px"></span>
+      </div>
+    </sc-if>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isHome }}">
+  <div style="height:100%; box-sizing:border-box; padding:72px 26px 0; background:{{ homeBg }}; display:grid; grid-template-columns:repeat(4, 1fr); grid-auto-rows:92px; gap:6px 18px; justify-items:center">
+    <sc-for list="{{ homeIcons }}" as="h" hint-placeholder-count="11">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="width:62px; height:62px; border-radius:15px; background:{{ h.bg }}"></span><span style="font-size:11.5px; color:{{ homeFg }}; opacity:.7">{{ h.label }}</span></div>
+    </sc-for>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:6px"><span style="position:relative; width:62px; height:62px; border-radius:15px; background:#16707f; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 3px {{ homeRing }}"><span style="font-family:var(--mono); font-size:42px; line-height:1; color:#fff; margin-top:-5px">n</span><span style="position:absolute; right:12px; top:12px; width:8px; height:8px; background:#a8e3ea; transform:rotate(45deg)"></span></span><span style="font-size:11.5px; font-weight:600; color:{{ homeFg }}">Nitpilot</span></div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isSplash }}">
+  <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; background:{{ splashBg }}; position:relative">
+    <span style="position:relative; width:108px; height:108px; border-radius:26px; background:{{ splashIconBg }}; display:flex; align-items:center; justify-content:center"><span style="font-family:var(--mono); font-size:74px; line-height:1; color:#fff; margin-top:-8px">n</span><span style="position:absolute; right:22px; top:21px; width:13px; height:13px; background:#a8e3ea; transform:rotate(45deg)"></span></span>
+    <span style="position:relative; font-family:var(--mono); font-size:26px; line-height:1; color:{{ splashFg }}">nıtpilot<span aria-hidden="true" style="position:absolute; left:0.9em; top:-0.04em; width:7px; height:7px; margin-left:-3.5px; background:{{ splashDot }}; transform:rotate(45deg)"></span></span>
+    <span style="position:absolute; bottom:56px; font-size:13px; color:{{ splashFg }}; opacity:.7">Loading your inbox…</span>
+  </div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;landing&quot;,&quot;onboarding&quot;,&quot;approve&quot;,&quot;settings&quot;,&quot;push&quot;,&quot;install&quot;,&quot;home&quot;,&quot;splash&quot;],&quot;default&quot;:&quot;landing&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;desktop&quot;,&quot;phone&quot;],&quot;default&quot;:&quot;desktop&quot;,&quot;tsType&quot;:&quot;'desktop'|'phone'&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;waiting&quot;,&quot;connected&quot;,&quot;pending&quot;,&quot;approved&quot;,&quot;denied&quot;,&quot;expired&quot;],&quot;default&quot;:&quot;waiting&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;width&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;},&quot;height&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;}}">
+const SOFT = {
+  light: { '--bg': '#eef2ee', '--side': '#f7f9f6', '--surface': '#ffffff', '--muted': '#e8ede7', '--fg1': '#16201b', '--fg2': '#44514a', '--fg3': '#5f6c65', '--fg4': '#9aa59f', '--b1': '#dfe6df', '--b2': '#edf1ec', '--acc': '#16707f', '--on-acc': '#ffffff', '--acc-tint': '#e0f0f2', '--acc-text': '#0f6170', '--ok': '#2f9e5b', '--ok-fg': '#1f7444', '--ok-tint': '#e3f3e8', '--warn': '#e09a1a', '--warn-fg': '#93600a', '--warn-tint': '#fbf0d9', '--red': '#d6453a', '--red-fg': '#b3322a', '--red-tint': '#fbe9e6', '--code': '#f7f9f6', '--sh-card': '0 1px 2px rgba(16,32,24,.05), 0 6px 20px rgba(16,32,24,.06)' },
+  dark: { '--bg': '#0f1412', '--side': '#121815', '--surface': '#18201c', '--muted': '#222b26', '--fg1': '#e8efea', '--fg2': '#bfcac3', '--fg3': '#93a198', '--fg4': '#5f6c65', '--b1': '#2b3630', '--b2': '#1f2823', '--acc': '#5cc3d1', '--on-acc': '#06191c', '--acc-tint': '#13292c', '--acc-text': '#86d6e1', '--ok': '#3fbf74', '--ok-fg': '#62d293', '--ok-tint': '#13261b', '--warn': '#efaa34', '--warn-fg': '#f3bf62', '--warn-tint': '#2a2213', '--red': '#ef5e52', '--red-fg': '#ff8579', '--red-tint': '#2b1715', '--code': '#121815', '--sh-card': 'none' },
+};
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { ap: p.state && p.state !== 'waiting' && p.state !== 'connected' ? p.state : 'pending', ob: p.state === 'connected' ? 'connected' : 'waiting', copied: false, push: true, autoReview: true, autoFix: false, cap: 40 }; }
+  componentDidUpdate(prev) { if (prev.state !== this.props.state) this.setState({ ap: ['approved', 'denied', 'expired', 'pending'].includes(this.props.state) ? this.props.state : 'pending', ob: this.props.state === 'connected' ? 'connected' : 'waiting' }); }
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const P = this.props, s = this.state;
+    const theme = P.theme === 'dark' ? 'dark' : 'light', dark = theme === 'dark';
+    const screen = P.screen || 'landing';
+    const isPhone = P.device === 'phone';
+    const W = isPhone ? 390 : (Number(P.width) || 1280), H = isPhone ? 844 : (Number(P.height) || 800);
+    const rootStyle = { ...SOFT[theme], width: W, height: H, maxWidth: '100%', overflow: 'auto', boxSizing: 'border-box', containerType: 'inline-size', background: 'var(--bg)', color: 'var(--fg1)', '--sans': "'Bricolage Grotesque', system-ui, sans-serif", '--mono': "'Fragment Mono', ui-monospace, monospace", fontFamily: 'var(--sans)', fontSize: 14, lineHeight: 1.4, colorScheme: theme };
+    const ob = s.ob, connected = ob === 'connected';
+    const items = [
+      { title: 'Sign in with GitHub', body: 'Signed in as @mayachen.', state: 'done' },
+      { title: 'Install the GitHub App on your repos', body: 'Installed on acme/shop-api and acme/web. nitpilot.dev covers public repos only; self-host Nitpilot for private ones.', state: 'done' },
+      { title: 'Connect your computer', body: connected ? 'Your terminal is linked to this account.' : 'Run this in a terminal, then approve the device in the tab that opens.', cmd: 'npx nitpilot login', state: connected ? 'done' : 'waiting', status: connected ? "✓ Connected: Maya's MacBook Pro" : 'Waiting for your terminal…', statusFg: connected ? 'var(--ok-fg)' : 'var(--fg2)' },
+      { title: 'Link a repo', body: 'Inside your clone of the repo, run:', cmd: 'nitpilot repos add', state: connected ? 'waiting' : 'pending', status: connected ? 'Waiting for a linked repo…' : '', statusFg: 'var(--fg2)' },
+      { title: 'Start your agent', body: 'Nitpilot picks up Claude Code or Gemini CLI on its own.', cmd: 'nitpilot start', state: 'pending', agents: true },
+    ];
+    const doneN = items.filter(i => i.state === 'done').length;
+    const checklist = items.map((it, i) => ({ ...it, n: i + 1, done: it.state === 'done', waiting: it.state === 'waiting', pending: it.state === 'pending', active: it.state === 'waiting' && i === 2,
+      cmd: it.state === 'done' ? '' : (it.cmd || ''), cmdOpacity: it.state === 'pending' ? 0.55 : 1, status: it.status || '', agents: !!it.agents,
+      weight: it.state === 'pending' ? 500 : 650, titleFg: it.state === 'done' ? 'var(--fg3)' : 'var(--fg1)', divider: i === 0 ? 'transparent' : 'var(--b2)' }));
+    const ap = s.ap;
+    const AP = { approved: ["Device approved", "Maya's MacBook Pro can now run your agent. You can close this tab."], denied: ['Login denied', "Nothing was connected. If you didn't start this login, you're all set."], expired: ['This code expired', 'Codes last 10 minutes. Run the login again in your terminal:'] };
+    const sw = on => ({ track: on ? 'var(--acc)' : 'var(--b1)', x: on ? 'translateX(18px)' : 'none' });
+    const nightLock = dark || !isPhone ? false : false;
+    const notes = [
+      { title: 'Ready for your approval', body: 'acme/shop-api #142: 2 rounds, 3 points resolved', time: 'now' },
+      { title: 'Needs you', body: '#139: a security point needs a human decision', time: '16:40' },
+      { title: 'Review waiting', body: '#151 from a first-time contributor', time: '13:50' },
+      { title: 'Agent failed', body: '#147: Gemini quota reached. Retry?', time: '12:05' },
+    ];
+    return {
+      rootStyle, isPhone, isDesktop: !isPhone,
+      isLanding: screen === 'landing', isOnboarding: screen === 'onboarding', isApprove: screen === 'approve', isSettings: screen === 'settings', isPush: screen === 'push', isInstall: screen === 'install', isHome: screen === 'home', isSplash: screen === 'splash',
+      heroRows: [
+        { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', pill: 'Needs you', pillFg: 'var(--red-fg)', pillBg: 'var(--red-tint)', last: 'A security point needs you', bg: 'var(--bg)' },
+        { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', pill: "Leo's agent working", pillFg: 'var(--fg2)', pillBg: 'var(--muted)', last: 'reading src/db/client.ts', bg: 'transparent' },
+        { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', pill: 'Ready', pillFg: 'var(--ok-fg)', pillBg: 'var(--ok-tint)', last: '2 rounds, 3 points resolved', bg: 'transparent' },
+      ],
+      steps: [
+        { n: '1', title: 'A review is requested', body: 'Your agent reviews right away, on your machine. When points come back on your PR, it fixes them and pushes.' },
+        { n: '2', title: 'The agents talk it out', body: 'One chat per pull request, like a messenger. The PR on GitHub stays clean.' },
+        { n: '3', title: 'You make the call', body: 'Approve when everything is resolved, settle a disagreement, or judge a security concern. Nothing else pings you.' },
+      ],
+      checklist, progW: `${(doneN / 5) * 100}%`, progLabel: `${doneN} of 5`,
+      spinner: React.createElement('span', { 'aria-label': 'Waiting', style: { display: 'block', width: 26, height: 26, borderRadius: 99, border: '2.5px solid var(--b1)', borderTopColor: 'var(--acc)', boxSizing: 'border-box', animation: 'np-spin 0.9s linear infinite' } }),
+      copyLabel: s.copied ? 'Copied' : 'Copy',
+      copyLogin: () => { try { navigator.clipboard && navigator.clipboard.writeText('npx nitpilot login'); } catch (e) {} this.setState({ copied: true }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ ob: 'connected', copied: false }), 2200); },
+      apPending: ap === 'pending', apDone: ap !== 'pending', apApproved: ap === 'approved', apDenied: ap === 'denied', apExpired: ap === 'expired',
+      apTitle: AP[ap] ? AP[ap][0] : '', apBody: AP[ap] ? AP[ap][1] : '', apCanReset: ap !== 'pending',
+      approve: () => this.setState({ ap: 'approved' }), deny: () => this.setState({ ap: 'denied' }), apReset: () => this.setState({ ap: 'pending' }),
+      navItems: ['Devices', 'Agent', 'Notifications', 'Defaults', 'Account'].map((label, i) => ({ label, bg: i === 0 ? 'var(--muted)' : 'transparent', fg: i === 0 ? 'var(--fg1)' : 'var(--fg2)' })),
+      pushOn: s.push, togglePush: () => this.setState({ push: !s.push }), pushTrack: sw(s.push).track, pushX: sw(s.push).x,
+      defaults: [
+        { label: 'Auto-review', hint: 'Your agent reviews as soon as you are requested', on: s.autoReview, toggle: () => this.setState({ autoReview: !s.autoReview }), ...sw(s.autoReview), divider: 'transparent' },
+        { label: 'Auto-fix', hint: 'Off: fixes wait as drafts for you to send', on: s.autoFix, toggle: () => this.setState({ autoFix: !s.autoFix }), ...sw(s.autoFix), divider: 'var(--b2)' },
+      ],
+      cap: s.cap, used: 12, capW: `${Math.min(100, (12 / s.cap) * 100)}%`,
+      capDown: () => this.setState({ cap: Math.max(5, s.cap - 5) }), capUp: () => this.setState({ cap: Math.min(200, s.cap + 5) }),
+      notes, pushBg: isPhone ? (dark ? '#0b100e' : '#c9d8cf') : 'var(--bg)', pushAlign: isPhone ? 'center' : 'flex-end', pushPad: isPhone ? '28px 12px' : '24px 24px',
+      lockFg: dark ? '#e8efea' : '#16201b', noteBg: dark ? 'rgba(40,50,45,.92)' : 'rgba(255,255,255,.86)', noteFg: dark ? '#e8efea' : '#16201b',
+      homeBg: dark ? '#0b100e' : '#c9d8cf', homeFg: dark ? '#e8efea' : '#16201b', homeRing: dark ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.4)',
+      homeIcons: ['Mail', 'Calendar', 'Photos', 'Maps', 'Notes', 'Safari', 'Music', 'Settings', 'Slack', 'GitHub', 'Terminal'].map(label => ({ label, bg: dark ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.55)' })),
+      splashBg: dark ? '#0f1412' : '#16707f', splashIconBg: dark ? '#16707f' : '#0f5d6a', splashFg: dark ? '#e8efea' : '#ffffff', splashDot: dark ? '#5cc3d1' : '#a8e3ea',
+    };
+  }
+}
+</script>
+</body>
+</html>

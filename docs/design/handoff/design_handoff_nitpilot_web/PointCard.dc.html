@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;600&family=Martian+Mono:wght@400;500;600&family=Hanken+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Fragment+Mono&display=swap" rel="stylesheet"></helmet>
+<sc-if value="{{ collapsed }}" hint-placeholder-val="{{ false }}">
+  <button type="button" onClick="{{ toggle }}" aria-expanded="false" aria-label="{{ aria }}" style="box-sizing:border-box; width:100%; display:flex; align-items:center; gap:10px; padding:9px 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); cursor:pointer; font-family:var(--sans); font-size:13px; line-height:1.3; color:var(--fg2); text-align:left" style-hover="background:var(--hover)">
+    <span style="flex:none; width:14px; height:14px; border-radius:var(--r-round); background:var(--ok); color:#fff; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700">✓</span>
+    <span style="flex:none; font-family:var(--mono); font-size:11.5px; color:var(--fg3)">{{ p.id }}</span>
+    <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg1)">{{ p.title }}</span>
+    <span style="flex:none; font-family:var(--mono); font-size:11.5px; color:var(--fg3)">{{ p.outcome }}</span>
+    <span style="flex:none; font-size:12px; color:var(--ok-fg); font-weight:500">Resolved</span>
+    <span style="flex:none; color:var(--fg3); font-size:12px">▾</span>
+  </button>
+</sc-if>
+<sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+  <article aria-label="{{ aria }}" style="box-sizing:border-box; width:100%; border:var(--bw) solid {{ cardBorder }}; border-radius:var(--r-card); box-shadow:var(--sh-card); background:var(--surface); overflow:hidden; font-family:var(--sans); color:var(--fg1)">
+    <div style="padding:12px 14px 0; display:flex; flex-direction:column; gap:8px">
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+        <span style="display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 8px 0 7px; border-radius:var(--r-chip); background:{{ sevBg }}; color:{{ sevFg }}; font-size:12px; font-weight:600">
+          <span aria-hidden="true" style="display:inline-flex; align-items:flex-end; gap:1.5px; height:10px">
+            <span style="width:2.5px; height:4px; border-radius:1px; background:{{ bar1 }}"></span>
+            <span style="width:2.5px; height:6px; border-radius:1px; background:{{ bar2 }}"></span>
+            <span style="width:2.5px; height:8px; border-radius:1px; background:{{ bar3 }}"></span>
+            <span style="width:2.5px; height:10px; border-radius:1px; background:{{ bar4 }}"></span>
+          </span>{{ sevLabel }}</span>
+        <span style="display:inline-flex; align-items:center; height:22px; padding:0 7px; border-radius:var(--r-chip); border:var(--bw) solid var(--b1); font-family:var(--mono); font-size:11.5px; color:var(--fg2)">{{ p.category }}</span>
+        <span style="font-family:var(--mono); font-size:11.5px; color:var(--fg3); padding:0 2px">{{ p.id }}</span>
+        <span style="flex:1"></span>
+        <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:{{ stFg }}">
+          <sc-if value="{{ isOpen }}"><span style="width:10px; height:10px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+          <sc-if value="{{ isAddressed }}"><span style="width:10px; height:10px; border-radius:var(--r-round); border:1.5px solid var(--acc); box-sizing:border-box; background:linear-gradient(90deg, var(--acc) 50%, transparent 50%)"></span></sc-if>
+          <sc-if value="{{ isResolved }}"><span style="width:12px; height:12px; border-radius:var(--r-round); background:var(--ok); color:#fff; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700">✓</span></sc-if>
+          <sc-if value="{{ isEscalated }}"><span style="width:8px; height:8px; background:var(--red); transform:rotate(45deg); margin:0 1px"></span></sc-if>
+          {{ stLabel }}</span>
+        <sc-if value="{{ canCollapse }}"><button type="button" onClick="{{ toggle }}" aria-expanded="true" aria-label="Collapse point" style="border:0; background:transparent; color:var(--fg3); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:4px" style-hover="color:var(--fg1)">▴</button></sc-if>
+      </div>
+      <a href="#" style="align-self:flex-start; font-family:var(--mono); font-size:12px; color:var(--acc-text); text-decoration:none">{{ fileRef }}</a>
+      <div style="font-size:14.5px; font-weight:600; line-height:1.35; letter-spacing:-0.005em; text-wrap:pretty">{{ p.title }}</div>
+      <div style="font-size:13.5px; line-height:1.5; color:var(--fg2); text-wrap:pretty">{{ p.body }}</div>
+    </div>
+    <sc-if value="{{ hasSnippet }}">
+      <div style="margin:12px 14px 14px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); overflow:hidden; background:var(--code)">
+        <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:var(--bw) solid var(--b1); font-family:var(--mono); font-size:11.5px; color:var(--fg3); background:var(--surface)">
+          <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ p.file }}</span>
+          <span>{{ lineRange }}</span>
+        </div>
+        <div style="overflow-x:auto; padding:6px 0; font-family:var(--mono); font-size:12px; line-height:20px">
+          <sc-for list="{{ lines }}" as="ln" hint-placeholder-count="3">
+            <div style="display:flex; min-width:max-content; background:{{ ln.bg }}">
+              <span style="flex:none; position:relative; width:46px; padding-right:12px; box-sizing:border-box; text-align:right; color:{{ ln.numColor }}; user-select:none">
+                <sc-if value="{{ ln.hl }}"><span style="position:absolute; left:9px; top:7px; width:6px; height:6px; background:var(--acc); transform:rotate(45deg)"></span></sc-if>{{ ln.n }}</span>
+              <span style="white-space:pre; padding-right:16px"><sc-for list="{{ ln.toks }}" as="tk" hint-placeholder-count="1"><span style="color:{{ tk.c }}">{{ tk.t }}</span></sc-for></span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ hasThread }}">
+      <div style="border-top:1px solid var(--b2); background:var(--bg); padding:4px 14px 6px; display:flex; flex-direction:column">
+        <sc-for list="{{ replies }}" as="r" hint-placeholder-count="2">
+          <div style="display:flex; gap:10px; padding:8px 0">
+            <span style="flex:none; position:relative; width:22px; height:22px">
+              <span style="width:22px; height:22px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:9.5px; font-weight:600; display:flex; align-items:center; justify-content:center; letter-spacing:0.02em">{{ r.initials }}</span>
+              <sc-if value="{{ r.agent }}"><span aria-hidden="true" style="position:absolute; right:-3px; bottom:-3px; width:11px; height:11px; border-radius:3px; background:var(--fg1); box-shadow:0 0 0 1.5px var(--bg); display:flex; align-items:center; justify-content:center"><span style="width:3.5px; height:3.5px; background:var(--bg); transform:rotate(45deg)"></span></span></sc-if>
+            </span>
+            <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px">
+                <span style="font-weight:600; color:var(--fg1)">{{ r.name }}</span>
+                <sc-if value="{{ r.hasTag }}"><span style="display:inline-flex; align-items:center; gap:5px; font-weight:500; color:{{ r.tagFg }}">{{ r.tag }}<sc-if value="{{ r.commit }}"><a href="#" style="font-family:var(--mono); font-size:11.5px; font-weight:500; color:var(--acc-text); text-decoration:underline; text-underline-offset:2px">{{ r.commit }}</a></sc-if></span></sc-if>
+                <span style="color:var(--fg3); font-size:11.5px">{{ r.time }}</span>
+              </div>
+              <sc-if value="{{ r.text }}"><div style="font-size:13px; line-height:1.45; color:var(--fg2); text-wrap:pretty">{{ r.text }}</div></sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </article>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:420},&quot;point&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Point&quot;},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onToggle&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const SEV = {
+  blocker: { label: 'Blocker', n: 4, fill: 'var(--red)', fg: 'var(--red-fg)', bg: 'var(--red-tint)' },
+  major: { label: 'Major', n: 3, fill: 'var(--warn)', fg: 'var(--warn-fg)', bg: 'var(--warn-tint)' },
+  minor: { label: 'Minor', n: 2, fill: 'var(--fg2)', fg: 'var(--fg2)', bg: 'var(--muted)' },
+  nit: { label: 'Nit', n: 1, fill: 'var(--fg3)', fg: 'var(--fg2)', bg: 'var(--muted)' },
+};
+const ST = {
+  open: { label: 'Open', fg: 'var(--fg2)' },
+  addressed: { label: 'Addressed', fg: 'var(--acc-text)' },
+  resolved: { label: 'Resolved', fg: 'var(--ok-fg)' },
+  escalated: { label: 'Escalated', fg: 'var(--red-fg)' },
+};
+const TAG = {
+  fixed: { label: 'Fixed in', fg: 'var(--ok-fg)' },
+  declined: { label: 'Declined', fg: 'var(--fg2)' },
+  resolved: { label: 'Resolved', fg: 'var(--ok-fg)' },
+  kept: { label: 'Kept open', fg: 'var(--warn-fg)' },
+  answered: { label: 'Answered', fg: 'var(--acc-text)' },
+  escalated: { label: 'Escalated', fg: 'var(--red-fg)' },
+};
+const RE = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(export|function|const|let|return|await|async|new|if|else|import|from|throw|null|true|false|describe|expect)\b|(\b\d+\b)/g;
+function tok(line) {
+  const out = []; let last = 0, m; RE.lastIndex = 0;
+  while ((m = RE.exec(line))) {
+    if (m.index > last) out.push({ t: line.slice(last, m.index), c: 'var(--fg1)' });
+    out.push({ t: m[0], c: m[1] ? 'var(--fg3)' : m[2] ? 'var(--ok-fg)' : m[3] ? 'var(--acc-text)' : 'var(--warn-fg)' });
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) out.push({ t: line.slice(last), c: 'var(--fg1)' });
+  if (!out.length) out.push({ t: ' ', c: 'var(--fg1)' });
+  return out;
+}
+const SAMPLE = {
+  id: 'P1', severity: 'major', category: 'bug', status: 'resolved', file: 'src/orders/list.ts', line: '48',
+  title: 'parseCursor throws on an empty cursor', outcome: 'Fixed · a1b2c3d',
+  body: 'An empty cursor decodes to "", so new Date(Number("")) is an Invalid Date that throws once it reaches the query builder. The first-page request sends cursor="" today.',
+  snippet: { start: 47, hl: [48], code: ['export function parseCursor(raw: string) {', '  const [ts, id] = Buffer.from(raw, "base64url").toString().split(":");', '  return { ts: new Date(Number(ts)), id };'] },
+  thread: [
+    { name: "Maya's agent", initials: 'MC', agent: true, kind: 'fixed', commit: 'a1b2c3d', text: 'Return null for empty or invalid cursors and treat it as the first page.', time: '14:08' },
+    { name: "Leo's agent", initials: 'LP', agent: true, kind: 'resolved', text: '', time: '14:12' },
+  ],
+};
+class Component extends DCLogic {
+  state = { open: null };
+  renderVals() {
+    const p = this.props.point || SAMPLE;
+    const controlled = typeof this.props.onToggle === 'function';
+    const dflt = this.props.open ?? (p.status !== 'resolved');
+    const open = p.status !== 'resolved' ? true : controlled ? !!this.props.open : (this.state.open ?? dflt);
+    const sev = SEV[p.severity] || SEV.nit;
+    const st = ST[p.status] || ST.open;
+    const sn = p.snippet;
+    const lines = sn ? sn.code.map((c, i) => {
+      const n = sn.start + i, hl = (sn.hl || []).includes(n);
+      return { n, hl, toks: tok(c), bg: hl ? 'var(--hl)' : 'transparent', numColor: hl ? 'var(--acc-text)' : 'var(--fg4)' };
+    }) : [];
+    const replies = (p.thread || []).map(r => {
+      const t = TAG[r.kind];
+      return { ...r, hasTag: !!t, tag: t ? t.label : '', tagFg: t ? t.fg : 'var(--fg2)', commit: r.commit || '', text: r.text || '', time: r.time || '' };
+    });
+    const bar = i => (i <= sev.n ? sev.fill : 'var(--b1)');
+    return {
+      p, collapsed: !open, expanded: open,
+      canCollapse: p.status === 'resolved',
+      toggle: () => { controlled ? this.props.onToggle() : this.setState({ open: !open }); },
+      aria: `${p.id}, ${sev.label} ${p.category} point, ${st.label}: ${p.title}`,
+      sevLabel: sev.label, sevFg: sev.fg, sevBg: sev.bg,
+      bar1: bar(1), bar2: bar(2), bar3: bar(3), bar4: bar(4),
+      stLabel: st.label, stFg: st.fg,
+      isOpen: p.status === 'open', isAddressed: p.status === 'addressed', isResolved: p.status === 'resolved', isEscalated: p.status === 'escalated',
+      cardBorder: p.status === 'escalated' ? 'var(--red-line)' : 'var(--b1)',
+      fileRef: p.line ? `${p.file}:${p.line}` : p.file,
+      lineRange: sn ? `L${sn.start}–${sn.start + sn.code.length - 1}` : '',
+      hasSnippet: !!sn, lines, hasThread: replies.length > 0, replies,
+    };
+  }
+}
+</script>
+</body>
+</html>

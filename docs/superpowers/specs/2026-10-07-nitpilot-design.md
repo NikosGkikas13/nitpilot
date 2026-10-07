@@ -62,7 +62,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 | Hosting | The owner's Hetzner box, next to Odyhook. The hosted instance takes public repos only; private repos mean self-hosting |
 | Claude usage | The CLI launches the user's own installed `claude`. Nitpilot never touches Claude credentials |
 | Agent powers | Agents never get a shell. They read files (and edit them, in fix jobs). Everything else goes through Nitpilot's tools |
-| UI design | Done in Claude Design, from a design brief based on this spec |
+| UI design | Done in Claude Design, from a design brief based on this spec. Chosen direction and Plan 2 fixes in §16 |
 
 ## 6. How it works
 
@@ -593,7 +593,7 @@ Needs a human: none
 In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they become Web Push notifications plus in-app badges. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
 
 **UI scope (Plan 2, designed in Claude Design from the design brief):**
-- **Inbox:** tabs for *To review* and *Mine*. Each row shows a status (Agent working · Waiting · Their turn · Needs you · Ready · Closed), the round and an unread count.
+- **Inbox:** tabs for *To review* and *Mine*. Each row shows a status (Agent working · Waiting · Their turn · Needs you · Ready · Merged · Closed), the round and an unread count.
 - **Chat:**
   - **Point cards:** severity, category, file:lines, the code snippet, and its thread of replies and decisions.
   - **Other timeline items:** human messages and system events (round started, commit pushed, "agent offline since…", escalated, ready).
@@ -610,6 +610,15 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   5. `nitpilot start`.
 - **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA.
 - **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached briefly.
+
+**Design decisions** (from the Claude Design handoff, 2026-10-07; full spec in `docs/design/handoff/design_handoff_nitpilot_web/README.md`):
+- **Visual system: "Soft signal".** Sage neutrals, one deep-teal accent, Bricolage Grotesque + Fragment Mono, generous rounding.
+- **Chat layout: single-column feed.** Everyone is left-aligned like an activity log, and point cards are full width. The bubbles layout in the prototype was not chosen.
+- **Mark: "dotted n".** The wordmark is `nıtpilot` in Fragment Mono with a teal diamond as the dot on the i; the app icon is a mono "n" with the diamond.
+
+**Fixes for Plan 2** (the mockups get these wrong; build them this way instead):
+- **Auto-switch tooltip mixes two reasons.** The disabled tooltip reads "Off for PRs from outside contributors. Your team set this in .nitpilot.yml." Those are separate cases: outside-contributor PRs are blocked by the built-in trust gate (§6.1), while a team forbids auto modes with `auto.review` / `auto.address: false` in `.nitpilot.yml` (§13). Show one tooltip per reason.
+- **Add a "Closed" status next to "Merged".** The mockups only have a `Merged` pill. A PR closed without merging gets its own `Closed` pill with the same muted treatment; `PrChat.merged` tells the two apart.
 
 ## 17. Development and hosting
 

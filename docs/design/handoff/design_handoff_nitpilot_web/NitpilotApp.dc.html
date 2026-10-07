@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;600&family=Martian+Mono:wght@400;500;600&family=Hanken+Grotesk:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Fragment+Mono&display=swap" rel="stylesheet"><style>
+html,body{margin:0;height:100%}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--acc-text,#1857C6);text-decoration:none}
+a:hover{color:var(--fg1,#0E3F9C)}
+:focus-visible{outline:2px solid var(--acc,#1857C6);outline-offset:2px}
+input::placeholder,textarea::placeholder{color:var(--fg3,#71717a)}
+@keyframes np-ping{0%{transform:scale(1);opacity:.55}70%,100%{transform:scale(2.6);opacity:0}}
+@keyframes np-breathe{0%,100%{opacity:.5}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style></helmet>
+<div style="{{ rootStyle }}" tabindex="-1" onKeyDown="{{ onKey }}">
+
+<sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+<aside aria-label="Inbox" style="width:{{ sideW }}; flex:none; display:flex; flex-direction:column; min-height:0; background:var(--side); border-right:var(--bw) solid var(--b1); position:relative">
+  <div style="flex:none; display:flex; align-items:center; gap:10px; padding:14px 16px 10px">
+    <sc-if value="{{ logoG }}"><span aria-label="nitpilot" style="position:relative; font-family:var(--mono); font-size:19px; line-height:1; color:var(--fg1)">nıtpilot<span aria-hidden="true" style="position:absolute; left:0.9em; top:-0.02em; width:5px; height:5px; margin-left:-2.5px; background:var(--acc); transform:rotate(45deg)"></span></span></sc-if><sc-if value="{{ logoC }}"><span aria-hidden="true" style="position:relative; width:22px; height:22px; border-radius:var(--r-ctl); background:var(--fg1); flex:none">
+      <span style="position:absolute; left:9px; top:6px; width:9px; height:2px; border-radius:1px; background:var(--side)"></span>
+      <span style="position:absolute; left:9px; top:10px; width:6px; height:2px; border-radius:1px; background:var(--acc)"></span>
+      <span style="position:absolute; left:9px; top:14px; width:8px; height:2px; border-radius:1px; background:var(--side)"></span>
+      <span style="position:absolute; left:4px; top:9px; width:4px; height:4px; background:var(--acc); transform:rotate(45deg)"></span>
+    </span>
+    <span style="font-family:var(--display); font-size:calc(16px * var(--dscale)); font-weight:var(--dw); letter-spacing:-0.03em">nitpilot</span></sc-if>
+    <span style="flex:1"></span>
+    <button type="button" onClick="{{ toggleTheme }}" aria-label="{{ themeLabel }}" title="{{ themeLabel }}" style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg2); cursor:pointer" style-hover="color:var(--fg1)">
+      <sc-if value="{{ isDark }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg></sc-if>
+      <sc-if value="{{ isLight }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></sc-if>
+    </button>
+    <button type="button" aria-label="Settings · Maya Chen" style="width:32px; height:32px; border-radius:var(--r-round); border:0; background:var(--muted); color:var(--fg2); font:inherit; font-size:11px; font-weight:600; cursor:pointer">MC</button>
+  </div>
+
+  <sc-if value="{{ agentOffline }}">
+    <div role="status" style="flex:none; margin:2px 12px 10px; padding:10px 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:6px">
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500"><span style="width:8px; height:8px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span>Your agent is offline</div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg2)">Run<button type="button" onClick="{{ copyStart }}" aria-label="Copy nitpilot start" style="display:inline-flex; align-items:center; gap:8px; height:24px; padding:0 8px; border:var(--bw) solid var(--b1); border-radius:var(--r-chip); background:var(--code); color:var(--fg1); font-family:var(--mono); font-size:12px; cursor:pointer">nitpilot start<span style="color:var(--fg3); font-family:var(--sans); font-size:11px">{{ copyLabel }}</span></button></div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ edgeGithub }}">
+    <div role="alert" style="flex:none; margin:2px 12px 10px; padding:10px 12px; border-radius:var(--r-card); background:var(--warn-tint); display:flex; align-items:center; gap:10px">
+      <span style="flex:none; width:16px; height:16px; border-radius:4px; background:var(--warn); color:#1a1205; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">!</span>
+      <span style="flex:1; min-width:0; font-size:13px; font-weight:500">GitHub sign-in expired</span>
+      <button type="button" onClick="{{ reconnect }}" style="flex:none; height:28px; padding:0 10px; border:0; border-radius:var(--r-ctl); background:var(--fg1); color:var(--bg); font:inherit; font-size:12.5px; font-weight:600; cursor:pointer">Reconnect</button>
+    </div>
+  </sc-if>
+  <div style="flex:none; display:flex; gap:8px; padding:0 12px 10px; position:relative">
+    <label style="flex:1; min-width:0; display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg3)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <input ref="{{ searchRef }}" value="{{ q }}" onChange="{{ onSearch }}" placeholder="Search pull requests" aria-label="Search pull requests" style="flex:1; min-width:0; border:0; outline:none; background:transparent; font:inherit; font-size:13.5px; color:var(--fg1)">
+      <sc-if value="{{ showSlashHint }}"><kbd style="font-family:var(--mono); font-size:11px; color:var(--fg3); border:var(--bw) solid var(--b1); border-radius:4px; padding:0 5px; line-height:17px">/</kbd></sc-if>
+    </label>
+    <button type="button" onClick="{{ toggleFilter }}" aria-expanded="{{ filterOpen }}" aria-label="Filter" style="flex:none; display:flex; align-items:center; gap:6px; height:34px; padding:0 10px; border:1px solid {{ filterBorder }}; border-radius:var(--r-ctl); background:var(--surface); color:var(--fg2); font:inherit; font-size:13px; cursor:pointer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>{{ filterLabel }}</button>
+    <sc-if value="{{ filterOpen }}">
+      <div role="menu" style="position:absolute; z-index:5; top:40px; right:12px; width:220px; padding:6px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); box-shadow:0 8px 24px rgba(0,0,0,.12); display:flex; flex-direction:column">
+        <div style="padding:6px 8px 4px; font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Repo</div>
+        <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; font-family:var(--mono); font-size:12px"><span style="width:14px; color:var(--acc-text)">✓</span>acme/shop-api</div>
+        <div style="height:1px; background:var(--b2); margin:4px 0"></div>
+        <div style="padding:6px 8px 4px; font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)">Status</div>
+        <sc-for list="{{ filterOpts }}" as="f" hint-placeholder-count="6">
+          <button type="button" role="menuitemcheckbox" aria-checked="{{ f.on }}" onClick="{{ f.toggle }}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:var(--r-chip); background:transparent; color:var(--fg1); font:inherit; font-size:13px; text-align:left; cursor:pointer" style-hover="background:var(--hover)"><span style="width:14px; color:var(--acc-text)">{{ f.mark }}</span>{{ f.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <div role="tablist" style="flex:none; display:flex; gap:18px; padding:0 16px; border-bottom:var(--bw) solid var(--b1)">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="2">
+      <button type="button" role="tab" aria-selected="{{ t.active }}" onClick="{{ t.pick }}" style="display:flex; align-items:center; gap:7px; height:40px; padding:0 2px; border:0; border-bottom:2px solid {{ t.line }}; margin-bottom:-1px; background:transparent; color:{{ t.fg }}; font:inherit; font-size:13.5px; font-weight:500; cursor:pointer">{{ t.label }}<sc-if value="{{ t.hasCount }}"><span aria-label="{{ t.countLabel }}" style="min-width:18px; height:18px; padding:0 5px; box-sizing:border-box; border-radius:var(--r-round); background:var(--acc); color:var(--on-acc); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums">{{ t.count }}</span></sc-if></button>
+    </sc-for>
+  </div>
+
+  <div role="listbox" aria-label="Pull requests" style="flex:1; min-height:0; overflow:auto; padding:6px 8px; display:flex; flex-direction:column; gap:2px">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+      <button type="button" role="option" aria-selected="{{ r.selected }}" onClick="{{ r.open }}" style="flex:none; width:100%; box-sizing:border-box; display:flex; gap:12px; padding:11px 10px; border:0; border-radius:var(--r-card); background:{{ r.bg }}; box-shadow:{{ r.ring }}; color:inherit; font:inherit; text-align:left; cursor:pointer" style-hover="background:var(--hover)">
+        <span style="flex:none; position:relative; width:38px; height:38px">
+          <span style="width:38px; height:38px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ r.initials }}</span>
+          <sc-if value="{{ r.agent }}"><span aria-label="{{ r.agentLabel }}" style="position:absolute; right:-3px; bottom:-3px; width:15px; height:15px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--side); display:flex; align-items:center; justify-content:center"><span style="width:5px; height:5px; background:var(--side); transform:rotate(45deg)"></span></span></sc-if>
+        </span>
+        <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+          <span style="display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px; color:var(--fg3)"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.ref }}</span><span style="font-family:var(--sans); font-size:12px">{{ r.time }}</span></span>
+          <span style="display:flex; align-items:center; gap:8px"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:{{ r.weight }}; color:{{ r.titleFg }}">{{ r.title }}</span><sc-if value="{{ r.unread }}"><span aria-label="Unread" style="flex:none; width:8px; height:8px; border-radius:var(--r-round); background:var(--acc)"></span></sc-if></span>
+          <span style="display:flex; align-items:center; gap:8px; min-width:0">
+            <span style="flex:none; display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 7px; border-radius:var(--r-chip); background:{{ r.pillBg }}; color:{{ r.pillFg }}; font-size:11.5px; font-weight:500; text-decoration:{{ r.pillDeco }}">
+              <sc-if value="{{ r.gPing }}">{{ r.ping }}</sc-if>
+              <sc-if value="{{ r.gDot }}"><span style="width:6px; height:6px; border-radius:var(--r-round); background:var(--acc)"></span></sc-if>
+              <sc-if value="{{ r.gDiamond }}"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if>
+              <sc-if value="{{ r.gRing }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid currentColor; box-sizing:border-box"></span></sc-if>
+              <sc-if value="{{ r.gCheck }}"><span style="font-size:10px; font-weight:700">✓</span></sc-if>
+              {{ r.pill }}</span>
+            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--fg3)">{{ r.last }}</span>
+            <span aria-label="{{ r.roundLabel }}" style="flex:none; font-family:var(--mono); font-size:11px; color:var(--fg3)">{{ r.round }}</span>
+          </span>
+        </span>
+      </button>
+    </sc-for>
+    <sc-if value="{{ listEmpty }}">
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:48px 24px; text-align:center">
+        <span aria-hidden="true" style="width:10px; height:10px; background:var(--b1); transform:rotate(45deg); margin-bottom:6px"></span>
+        <div style="font-size:14px; font-weight:500">{{ emptyTitle }}</div>
+        <div style="font-size:13px; color:var(--fg3); max-width:240px; text-wrap:pretty">{{ emptyBody }}</div>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ isDesktop }}">
+    <div style="flex:none; display:flex; gap:14px; padding:10px 16px; border-top:1px solid var(--b2); font-size:11.5px; color:var(--fg3)">
+      <span><kbd style="font-family:var(--mono)">j</kbd> <kbd style="font-family:var(--mono)">k</kbd> move</span><span><kbd style="font-family:var(--mono)">↵</kbd> open</span><span><kbd style="font-family:var(--mono)">/</kbd> search</span>
+    </div>
+  </sc-if>
+</aside>
+</sc-if>
+
+<sc-if value="{{ showChat }}" hint-placeholder-val="{{ true }}">
+<main aria-label="{{ chatLabel }}" style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:var(--bg); position:relative">
+
+  <sc-if value="{{ isDesktop }}">
+    <header style="flex:none; display:flex; flex-direction:column; gap:8px; padding:12px 20px 12px; background:var(--surface); border-bottom:var(--bw) solid var(--b1)">
+      <div style="display:flex; align-items:center; gap:10px; min-width:0">
+        <h1 style="margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--display); font-size:calc(16px * var(--dscale)); font-weight:var(--dw); letter-spacing:-0.01em">{{ pr.title }}</h1>
+        <span style="flex:none; height:22px; padding:0 8px; display:inline-flex; align-items:center; border-radius:var(--r-chip); background:var(--muted); color:var(--fg2); font-size:12px; font-weight:500">{{ pr.role }}</span>
+        <sc-if value="{{ showAuto }}">
+          <div style="flex:none; position:relative" onMouseEnter="{{ tipOn }}" onMouseLeave="{{ tipOff }}">
+            <button type="button" role="switch" aria-checked="{{ autoOn }}" aria-disabled="{{ autoDisabled }}" aria-label="{{ autoAria }}" onClick="{{ toggleAuto }}" onFocus="{{ tipOn }}" onBlur="{{ tipOff }}" style="display:inline-flex; align-items:center; gap:8px; height:30px; padding:0 5px 0 11px; border:var(--bw) solid var(--b1); border-radius:var(--r-round); background:var(--surface); color:{{ autoFg }}; font:inherit; font-size:12.5px; font-weight:500; cursor:{{ autoCursor }}">{{ autoLabel }}
+              <span style="position:relative; width:30px; height:18px; border-radius:var(--r-round); background:{{ autoTrack }}; transition:background-color 150ms"><span style="position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:var(--r-round); background:{{ autoKnob }}; box-shadow:0 1px 2px rgba(0,0,0,.25); transform:{{ autoX }}; transition:transform 150ms"></span></span>
+            </button>
+            <sc-if value="{{ tipVisible }}"><div role="tooltip" style="position:absolute; z-index:6; top:38px; right:0; width:250px; padding:8px 10px; border-radius:var(--r-ctl); background:var(--fg1); color:var(--bg); font-size:12px; line-height:1.45">{{ autoTip }}</div></sc-if>
+          </div>
+        </sc-if>
+        <a href="#" style="flex:none; display:inline-flex; align-items:center; gap:4px; height:30px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); color:var(--fg1); font-size:12.5px; font-weight:500">Open on GitHub <span style="color:var(--fg3)">↗</span></a>
+        <button type="button" onClick="{{ toggleDetails }}" aria-pressed="{{ detailsOn }}" aria-label="PR details" title="PR details" style="flex:none; width:30px; height:30px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:{{ detailsBtnBg }}; color:var(--fg2); cursor:pointer; display:flex; align-items:center; justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg></button>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--fg3)">
+        <span style="font-family:var(--mono); color:var(--fg2)">{{ pr.ref }}</span>
+        <span style="font-family:var(--mono)">{{ pr.branch }} <span style="color:var(--fg4)">→</span> {{ pr.base }}</span>
+        <span style="display:inline-flex; align-items:center; gap:6px"><span aria-hidden="true" style="display:inline-flex; gap:2px"><sc-for list="{{ pips }}" as="pp" hint-placeholder-count="3"><span style="width:10px; height:4px; border-radius:2px; background:{{ pp.c }}"></span></sc-for></span>{{ roundText }}</span>
+        <span style="display:inline-flex; align-items:center; gap:6px">
+          <sc-if value="{{ presOn }}"><span style="width:7px; height:7px; border-radius:var(--r-round); background:var(--ok)"></span></sc-if>
+          <sc-if value="{{ presOff }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+          <sc-if value="{{ presWork }}">{{ ping }}</sc-if>
+          {{ presText }}</span>
+      </div>
+    </header>
+  </sc-if>
+
+  <sc-if value="{{ isPhone }}">
+    <header style="flex:none; display:flex; flex-direction:column; gap:6px; padding:8px 12px 10px 4px; background:var(--surface); border-bottom:var(--bw) solid var(--b1)">
+      <div style="display:flex; align-items:center; gap:6px; min-width:0">
+        <button type="button" onClick="{{ back }}" aria-label="Back to inbox" style="flex:none; width:44px; height:44px; border:0; background:transparent; color:var(--acc-text); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 0 0 4px"><span aria-hidden="true" style="width:10px; height:10px; border-top:2px solid currentColor; border-left:2px solid currentColor; transform:rotate(-45deg)"></span></button>
+        <sc-if value="{{ headerCollapsed }}"><div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; font-weight:600">{{ pr.title }}</div></sc-if>
+        <sc-if value="{{ headerFull }}"><div style="flex:1; min-width:0; font-family:var(--mono); font-size:12px; color:var(--fg3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ pr.ref }}</div></sc-if>
+        <sc-if value="{{ showAuto }}">
+          <button type="button" role="switch" aria-checked="{{ autoOn }}" aria-disabled="{{ autoDisabled }}" aria-label="{{ autoAria }}" onClick="{{ toggleAuto }}" style="flex:none; display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 6px 0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-round); background:var(--surface); color:{{ autoFg }}; font:inherit; font-size:13px; font-weight:500; cursor:{{ autoCursor }}">{{ autoLabel }}
+            <span style="position:relative; width:34px; height:20px; border-radius:var(--r-round); background:{{ autoTrack }}; transition:background-color 150ms"><span style="position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:var(--r-round); background:{{ autoKnob }}; box-shadow:0 1px 2px rgba(0,0,0,.25); transform:{{ autoXp }}; transition:transform 150ms"></span></span>
+          </button>
+        </sc-if>
+      </div>
+      <sc-if value="{{ headerFull }}">
+        <div style="padding:0 4px 0 16px; display:flex; flex-direction:column; gap:6px">
+          <h1 style="margin:0; font-family:var(--display); font-size:calc(19px * var(--dscale)); font-weight:var(--dw); letter-spacing:-0.015em; line-height:1.2; text-wrap:pretty">{{ pr.title }}</h1>
+          <div style="font-family:var(--mono); font-size:11.5px; color:var(--fg3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ pr.branch }} → {{ pr.base }}</div>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--fg3)">
+            <span style="height:20px; padding:0 7px; display:inline-flex; align-items:center; border-radius:var(--r-chip); background:var(--muted); color:var(--fg2); font-weight:500">{{ pr.role }}</span>
+            <span style="display:inline-flex; align-items:center; gap:6px"><span aria-hidden="true" style="display:inline-flex; gap:2px"><sc-for list="{{ pips }}" as="pp" hint-placeholder-count="3"><span style="width:10px; height:4px; border-radius:2px; background:{{ pp.c }}"></span></sc-for></span>{{ roundText }}</span>
+            <span style="display:inline-flex; align-items:center; gap:6px">
+              <sc-if value="{{ presOn }}"><span style="width:7px; height:7px; border-radius:var(--r-round); background:var(--ok)"></span></sc-if>
+              <sc-if value="{{ presOff }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+              <sc-if value="{{ presWork }}">{{ ping }}</sc-if>
+              {{ presText }}</span>
+          </div>
+        </div>
+      </sc-if>
+    </header>
+  </sc-if>
+
+  <sc-if value="{{ bReadyAuthor }}">
+    <div role="status" style="flex:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 20px; background:var(--ok-tint); border-bottom:var(--bw) solid var(--b1)">
+      <span style="flex:none; width:18px; height:18px; border-radius:var(--r-round); background:var(--ok); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span>
+      <div style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:1px"><span style="font-size:13.5px; font-weight:600">{{ bannerTitle }}</span><span style="font-size:12.5px; color:var(--fg2)">{{ bannerSub }}</span></div>
+      <a href="#" style="flex:none; display:inline-flex; align-items:center; height:30px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font-size:12.5px; font-weight:500">View on GitHub ↗</a>
+    </div>
+  </sc-if>
+  <sc-if value="{{ bReadyReviewer }}">
+    <div role="status" style="flex:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 20px; background:var(--ok-tint); border-bottom:var(--bw) solid var(--b1)">
+      <span style="flex:none; width:18px; height:18px; border-radius:var(--r-round); background:var(--ok); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">✓</span>
+      <div style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:1px"><span style="font-size:13.5px; font-weight:600">{{ bannerTitle }}</span><span style="font-size:12.5px; color:var(--fg2)">{{ bannerSub }}</span></div>
+      <a href="#" onClick="{{ approve }}" style="flex:none; display:inline-flex; align-items:center; height:32px; padding:0 14px; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font-size:13px; font-weight:600">Approve on GitHub ↗</a>
+    </div>
+  </sc-if>
+  <sc-if value="{{ bEscalated }}">
+    <div role="alert" style="flex:none; display:flex; flex-direction:column; gap:8px; padding:12px 20px; background:var(--red-tint); border-bottom:1px solid var(--red-line)">
+      <div style="display:flex; align-items:center; gap:10px"><span style="flex:none; width:9px; height:9px; background:var(--red); transform:rotate(45deg); margin:0 4px"></span><span style="font-size:13.5px; font-weight:600">Needs a human decision</span><span style="font-size:12.5px; color:var(--fg2)">Security points always go to a person.</span></div>
+      <sc-for list="{{ escPoints }}" as="e" hint-placeholder-count="1">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--red-line); border-radius:var(--r-card); background:var(--surface)">
+          <span style="font-family:var(--mono); font-size:12px; color:var(--red-fg); font-weight:600">{{ e.id }}</span>
+          <span style="flex:1; min-width:160px; font-size:13px; line-height:1.35">{{ e.title }}</span>
+          <div style="display:flex; gap:6px">
+            <button type="button" onClick="{{ e.resolve }}" style="height:30px; padding:0 12px; border:0; border-radius:var(--r-ctl); background:var(--fg1); color:var(--bg); font:inherit; font-size:12.5px; font-weight:500; cursor:pointer">Resolve</button>
+            <button type="button" onClick="{{ e.cont }}" title="Let the agents keep going on this point" style="height:30px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font:inherit; font-size:12.5px; font-weight:500; cursor:pointer">Continue</button>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ bWaiting }}">
+    <div role="status" style="flex:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 20px; background:var(--muted); border-bottom:var(--bw) solid var(--b1)">
+      <span style="flex:none; width:12px; height:12px; border-radius:var(--r-round); border:2px solid var(--fg3); box-sizing:border-box; margin:0 3px"></span>
+      <div style="flex:1; min-width:180px; display:flex; flex-direction:column; gap:1px"><span style="font-size:13.5px; font-weight:600">{{ bannerTitle }}</span><span style="font-size:12.5px; color:var(--fg2)">{{ bannerSub }}</span></div>
+      <button type="button" onClick="{{ copyStart }}" style="flex:none; display:inline-flex; align-items:center; gap:10px; height:30px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font-family:var(--mono); font-size:12px; cursor:pointer"><span style="color:var(--fg3)">$</span>nitpilot start<span style="font-family:var(--sans); font-size:11.5px; color:var(--fg3)">{{ copyLabel }}</span></button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ edgeBanner }}">
+    <div role="status" style="flex:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 20px; background:{{ ebBg }}; border-bottom:var(--bw) solid var(--b1)">
+      <span style="flex:none; width:16px; height:16px; border-radius:4px; background:{{ ebGlyphBg }}; color:{{ ebGlyphFg }}; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center">{{ ebGlyph }}</span>
+      <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:1px"><span style="font-size:13.5px; font-weight:600">{{ ebTitle }}</span><span style="font-size:12.5px; color:var(--fg2); text-wrap:pretty">{{ ebBody }}</span></div>
+      <sc-if value="{{ ebCmd }}"><button type="button" onClick="{{ copyRepo }}" style="flex:none; display:inline-flex; align-items:center; gap:10px; height:30px; padding:0 10px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); background:var(--surface); color:var(--fg1); font-family:var(--mono); font-size:12px; cursor:pointer"><span style="color:var(--fg3)">$</span>{{ ebCmd }}<span style="font-family:var(--sans); font-size:11.5px; color:var(--fg3)">{{ copyLabel }}</span></button></sc-if>
+      <sc-if value="{{ ebAction }}"><a href="{{ ebHref }}" onClick="{{ ebClick }}" style="flex:none; display:inline-flex; align-items:center; height:30px; padding:0 12px; border-radius:var(--r-ctl); background:var(--fg1); color:var(--bg); font-size:12.5px; font-weight:600">{{ ebAction }}</a></sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ edgeRules }}">
+    <div style="flex:none; display:flex; justify-content:center; padding:10px 16px 0">
+      <span role="status" style="display:inline-flex; align-items:center; gap:8px; min-height:26px; padding:3px 6px 3px 10px; border-radius:var(--r-chip); background:var(--warn-tint); color:var(--warn-fg); font-size:12.5px; font-weight:500; flex-wrap:wrap; justify-content:center"><span style="font-weight:700">!</span><span><span style="font-family:var(--mono)">.nitpilot.yml</span> has an error, using defaults</span><a href="#" style="padding:0 6px; color:var(--warn-fg); text-decoration:underline; text-underline-offset:2px">Line 7</a></span>
+    </div>
+  </sc-if>
+  <div onScroll="{{ onScroll }}" style="flex:1; min-height:0; overflow:auto">
+    <sc-if value="{{ isBubbles }}" hint-placeholder-val="{{ true }}">
+      <div style="box-sizing:border-box; width:100%; max-width:780px; margin:0 auto; padding:{{ tlPad }}; display:flex; flex-direction:column; gap:10px">
+        <sc-for list="{{ timeline }}" as="it" hint-placeholder-count="6">
+          <div>
+            <sc-if value="{{ it.isSys }}">
+              <div style="display:flex; align-items:center; justify-content:center; gap:7px; padding:4px 0; font-size:12px; color:var(--fg3); text-align:center">
+                <sc-if value="{{ it.gDiamond }}"><span style="flex:none; width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if>
+                <sc-if value="{{ it.gCheck }}"><span style="flex:none; color:var(--ok-fg); font-weight:700; font-size:11px">✓</span></sc-if>
+                <sc-if value="{{ it.gRing }}"><span style="flex:none; width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+                <span>{{ it.text }}<sc-if value="{{ it.mono }}"> <span style="font-family:var(--mono); color:var(--fg2)">{{ it.mono }}</span></sc-if> · {{ it.time }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isMsg }}">
+              <div dir="{{ it.dir }}" style="display:flex; align-items:flex-end; gap:8px; padding-top:4px">
+                <span style="flex:none; position:relative; width:28px; height:28px">
+                  <span style="width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ it.initials }}</span>
+                  <sc-if value="{{ it.agent }}"><span aria-hidden="true" style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--bg); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--bg); transform:rotate(45deg)"></span></span></sc-if>
+                </span>
+                <div dir="ltr" style="max-width:min(520px, 80%); display:flex; flex-direction:column; gap:4px; align-items:{{ it.alignItems }}">
+                  <div style="font-size:11.5px; color:var(--fg3); padding:0 6px">{{ it.meta }}</div>
+                  <div style="padding:9px 13px; border-radius:{{ it.radius }}; background:{{ it.bubbleBg }}; border:1px solid {{ it.bubbleBorder }}; font-size:14px; line-height:1.45; text-wrap:pretty">{{ it.text }}<sc-if value="{{ it.counts }}"><div style="margin-top:6px; font-size:12px; color:var(--fg3); font-family:var(--mono)">{{ it.counts }}</div></sc-if></div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isPoint }}">
+              <div dir="{{ it.dir }}" style="display:flex; gap:8px">
+                <span style="flex:none; width:28px"></span>
+                <div dir="ltr" style="flex:1; min-width:0; max-width:600px">
+                  <dc-import name="PointCard" point="{{ it.point }}" open="{{ it.open }}" on-toggle="{{ it.toggle }}" hint-size="100%,44px"></dc-import>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isProgress }}">
+              <div dir="{{ it.dir }}" style="display:flex; align-items:center; gap:8px; padding-top:4px">
+                <span style="flex:none; position:relative; width:28px; height:28px">
+                  <span style="width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ it.initials }}</span>
+                  <span aria-hidden="true" style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--bg); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--bg); transform:rotate(45deg)"></span></span>
+                </span>
+                <div dir="ltr" role="status" aria-live="polite" style="min-width:0; display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:var(--r-round); border:var(--bw) solid var(--b1); background:var(--surface); font-size:13px; color:var(--fg2)">{{ ping }}<span style="white-space:nowrap">{{ it.text }}</span><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--mono); font-size:12px; color:var(--fg1)">{{ progFile }}</span></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isUntrusted }}">
+              <div style="max-width:440px; margin:6px auto; padding:16px 18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span>First-time contributor</div>
+                <div style="font-size:15px; font-weight:600; letter-spacing:-0.01em">Your agent hasn't started</div>
+                <div style="font-size:13.5px; line-height:1.5; color:var(--fg2); text-wrap:pretty">Nitpilot doesn't run agents automatically on PRs from outside contributors. Skim the diff, then start the review yourself.</div>
+                <div style="font-family:var(--mono); font-size:12px; color:var(--fg3)">3 files · <span style="color:var(--ok-fg)">+412</span> <span style="color:var(--red-fg)">−0</span> · locales/tr.json</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button type="button" onClick="{{ startReview }}" style="height:34px; padding:0 16px; border:0; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer">Review</button>
+                  <a href="#" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); color:var(--fg1); font-size:13px; font-weight:500">View diff on GitHub ↗</a>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFeed }}">
+      <div style="box-sizing:border-box; width:100%; max-width:780px; margin:0 auto; padding:{{ tlPad }}; display:flex; flex-direction:column; gap:14px">
+        <sc-for list="{{ timeline }}" as="it" hint-placeholder-count="6">
+          <div>
+            <sc-if value="{{ it.isSys }}">
+              <div style="display:flex; align-items:center; gap:12px; font-size:12px; color:var(--fg3)">
+                <span style="flex:none; width:28px; display:flex; justify-content:center">
+                  <sc-if value="{{ it.gDiamond }}"><span style="width:6px; height:6px; background:var(--red); transform:rotate(45deg)"></span></sc-if>
+                  <sc-if value="{{ it.gCheck }}"><span style="color:var(--ok-fg); font-weight:700; font-size:11px">✓</span></sc-if>
+                  <sc-if value="{{ it.gRing }}"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span></sc-if>
+                  <sc-if value="{{ it.gDot }}"><span style="width:5px; height:5px; border-radius:var(--r-round); background:var(--fg4)"></span></sc-if>
+                </span>
+                <span style="flex:1; min-width:0">{{ it.text }}<sc-if value="{{ it.mono }}"> <span style="font-family:var(--mono); color:var(--fg2)">{{ it.mono }}</span></sc-if></span>
+                <span style="flex:none; font-variant-numeric:tabular-nums">{{ it.time }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isMsg }}">
+              <div style="display:flex; gap:10px">
+                <span style="flex:none; position:relative; width:28px; height:28px">
+                  <span style="width:28px; height:28px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ it.initials }}</span>
+                  <sc-if value="{{ it.agent }}"><span aria-hidden="true" style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--bg); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--bg); transform:rotate(45deg)"></span></span></sc-if>
+                </span>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px">
+                  <div style="display:flex; align-items:baseline; gap:8px; font-size:12.5px"><span style="font-weight:600">{{ it.name }}</span><span style="color:var(--fg3)">{{ it.sub }}</span><span style="flex:1"></span><span style="color:var(--fg3); font-size:12px; font-variant-numeric:tabular-nums">{{ it.time }}</span></div>
+                  <sc-if value="{{ it.agent }}"><div style="font-size:14px; line-height:1.5; text-wrap:pretty">{{ it.text }}<sc-if value="{{ it.counts }}"> <span style="font-family:var(--mono); font-size:12px; color:var(--fg3)">{{ it.counts }}</span></sc-if></div></sc-if>
+                  <sc-if value="{{ it.human }}"><div style="align-self:flex-start; margin-top:2px; padding:8px 12px; border-radius:var(--r-card); background:{{ it.bubbleBg }}; border:1px solid {{ it.bubbleBorder }}; font-size:14px; line-height:1.45; text-wrap:pretty">{{ it.text }}</div></sc-if>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isPoint }}">
+              <div style="padding-left:38px; margin-top:-6px">
+                <dc-import name="PointCard" point="{{ it.point }}" open="{{ it.open }}" on-toggle="{{ it.toggle }}" hint-size="100%,44px"></dc-import>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isProgress }}">
+              <div role="status" aria-live="polite" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--fg2)">
+                <span style="flex:none; width:28px; display:flex; justify-content:center">{{ ping }}</span>
+                <span style="white-space:nowrap">{{ it.text }}</span><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--mono); font-size:12px; color:var(--fg1)">{{ progFile }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ it.isUntrusted }}">
+              <div style="margin-left:38px; padding:16px 18px; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:var(--fg3)"><span style="width:7px; height:7px; border-radius:var(--r-round); border:1.5px solid var(--fg3); box-sizing:border-box"></span>First-time contributor</div>
+                <div style="font-size:15px; font-weight:600; letter-spacing:-0.01em">Your agent hasn't started</div>
+                <div style="font-size:13.5px; line-height:1.5; color:var(--fg2); text-wrap:pretty">Nitpilot doesn't run agents automatically on PRs from outside contributors. Skim the diff, then start the review yourself.</div>
+                <div style="font-family:var(--mono); font-size:12px; color:var(--fg3)">3 files · <span style="color:var(--ok-fg)">+412</span> <span style="color:var(--red-fg)">−0</span> · locales/tr.json</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button type="button" onClick="{{ startReview }}" style="height:34px; padding:0 16px; border:0; border-radius:var(--r-ctl); background:var(--acc); color:var(--on-acc); font:inherit; font-size:13.5px; font-weight:600; cursor:pointer">Review</button>
+                  <a href="#" style="display:inline-flex; align-items:center; height:34px; padding:0 12px; border:var(--bw) solid var(--b1); border-radius:var(--r-ctl); color:var(--fg1); font-size:13px; font-weight:500">View diff on GitHub ↗</a>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ toast }}">
+    <div role="status" aria-live="polite" style="position:absolute; z-index:7; left:50%; bottom:96px; transform:translateX(-50%); max-width:calc(100% - 32px); padding:9px 14px; border-radius:var(--r-card); background:var(--fg1); color:var(--bg); font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ toast }}</div>
+  </sc-if>
+
+  <div style="flex:none; padding:{{ composerPad }}; border-top:var(--bw) solid var(--b1); background:var(--surface)">
+    <sc-if value="{{ composerOn }}">
+      <div style="box-sizing:border-box; width:100%; max-width:740px; margin:0 auto">
+        <div style="display:flex; align-items:flex-end; gap:8px; padding:5px 5px 5px 12px; border:1px solid {{ composerBorder }}; border-radius:var(--r-input); background:var(--bg)">
+          <textarea rows="1" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onComposerKey }}" onFocus="{{ cFocus }}" onBlur="{{ cBlur }}" placeholder="Message the agents…" aria-label="Message the agents" style="flex:1; min-width:0; resize:none; border:0; outline:none; background:transparent; color:var(--fg1); font:inherit; font-size:14px; line-height:20px; padding:6px 0; height:32px; box-sizing:border-box"></textarea>
+          <button type="button" onClick="{{ send }}" disabled="{{ cantSend }}" style="flex:none; height:32px; padding:0 14px; border:0; border-radius:var(--r-ctl); background:{{ sendBg }}; color:{{ sendFg }}; font:inherit; font-size:13px; font-weight:600; cursor:pointer">Send</button>
+        </div>
+        <div style="margin-top:6px; padding:0 2px; font-size:11.5px; color:var(--fg3)">{{ composerHint }}</div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ composerOff }}">
+      <div style="text-align:center; font-size:12.5px; color:var(--fg3); padding:6px 0">{{ composerOffText }}</div>
+    </sc-if>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ showDetails }}">
+<aside aria-label="PR details" style="width:300px; flex:none; min-height:0; overflow:auto; background:var(--side); border-left:var(--bw) solid var(--b1); padding:18px 18px 24px; box-sizing:border-box; display:flex; flex-direction:column; gap:22px">
+  <section style="display:flex; flex-direction:column; gap:8px">
+    <div style="display:flex; align-items:baseline; gap:8px"><h2 style="margin:0; font-size:13px; font-weight:600">Files changed</h2><span style="font-family:var(--mono); font-size:11.5px; color:var(--fg3)">{{ fileSum }}</span></div>
+    <div style="display:flex; flex-direction:column; border:var(--bw) solid var(--b1); border-radius:var(--r-card); background:var(--surface); overflow:hidden">
+      <sc-for list="{{ files }}" as="f" hint-placeholder-count="4">
+        <div style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-top:1px solid var(--b2); font-family:var(--mono); font-size:11.5px">
+          <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; color:var(--fg2)">{{ f.path }}</span>
+          <span style="flex:none; color:var(--ok-fg)">+{{ f.add }}</span><span style="flex:none; color:var(--red-fg)">−{{ f.del }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+  <section style="display:flex; flex-direction:column; gap:10px">
+    <h2 style="margin:0; font-size:13px; font-weight:600">Participants</h2>
+    <sc-for list="{{ people }}" as="u" hint-placeholder-count="2">
+      <div style="display:flex; align-items:center; gap:10px">
+        <span style="flex:none; position:relative; width:30px; height:30px">
+          <span style="width:30px; height:30px; border-radius:var(--r-round); background:var(--muted); color:var(--fg2); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center">{{ u.initials }}</span>
+          <sc-if value="{{ u.agent }}"><span aria-hidden="true" style="position:absolute; right:-3px; bottom:-3px; width:13px; height:13px; border-radius:4px; background:var(--fg1); box-shadow:0 0 0 2px var(--side); display:flex; align-items:center; justify-content:center"><span style="width:4px; height:4px; background:var(--side); transform:rotate(45deg)"></span></span></sc-if>
+        </span>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px">
+          <div style="display:flex; align-items:baseline; gap:6px; font-size:13px"><span style="font-weight:500">{{ u.name }}</span><span style="font-size:12px; color:var(--fg3)">{{ u.role }}</span></div>
+          <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--fg3)"><span style="width:6px; height:6px; border-radius:var(--r-round); background:{{ u.dot }}; border:1.5px solid {{ u.ring }}; box-sizing:content-box"></span>{{ u.status }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </section>
+  <section style="display:flex; flex-direction:column; gap:8px">
+    <div style="display:flex; align-items:baseline; gap:8px"><h2 style="margin:0; font-size:13px; font-weight:600">Team rules</h2><span style="font-family:var(--mono); font-size:11.5px; color:var(--fg3)">.nitpilot.yml</span></div>
+    <div style="display:flex; flex-direction:column; gap:6px; font-size:12.5px">
+      <div style="display:flex; justify-content:space-between; gap:8px"><span style="color:var(--fg3)">Max rounds</span><span style="font-family:var(--mono)">3</span></div>
+      <div style="display:flex; justify-content:space-between; gap:8px"><span style="color:var(--fg3)">Always escalate</span><span style="font-family:var(--mono)">security</span></div>
+      <div style="display:flex; justify-content:space-between; gap:8px"><span style="color:var(--fg3)">Auto modes</span><span>{{ rulesAuto }}</span></div>
+    </div>
+  </section>
+  <a href="#" style="font-size:12.5px; font-weight:500">Summary comment on GitHub ↗</a>
+</aside>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;skin&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;soft&quot;,&quot;classic&quot;,&quot;markup&quot;,&quot;cockpit&quot;],&quot;default&quot;:&quot;soft&quot;,&quot;tsType&quot;:&quot;'soft'|'classic'|'markup'|'cockpit'&quot;,&quot;section&quot;:&quot;Direction&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;feed&quot;,&quot;bubbles&quot;],&quot;default&quot;:&quot;feed&quot;,&quot;tsType&quot;:&quot;'feed'|'bubbles'&quot;,&quot;section&quot;:&quot;Direction&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Direction&quot;},&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;desktop&quot;,&quot;phone&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;'auto'|'desktop'|'phone'&quot;,&quot;section&quot;:&quot;Viewport&quot;},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;inbox&quot;,&quot;chat&quot;],&quot;default&quot;:&quot;inbox&quot;,&quot;tsType&quot;:&quot;'inbox'|'chat'&quot;,&quot;section&quot;:&quot;Viewport&quot;},&quot;startPr&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;142&quot;,&quot;139&quot;,&quot;151&quot;,&quot;147&quot;,&quot;144&quot;,&quot;136&quot;],&quot;default&quot;:&quot;142&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;edge&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;github&quot;,&quot;rules&quot;,&quot;cap&quot;,&quot;repo&quot;],&quot;default&quot;:&quot;none&quot;,&quot;tsType&quot;:&quot;'none'|'github'|'rules'|'cap'|'repo'&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;details&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;agentOnline&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;width&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;},&quot;height&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;}}">
+const T = {
+  light: { '--bg': '#fafafa', '--side': '#ffffff', '--surface': '#ffffff', '--muted': '#f4f4f5', '--hover': '#f4f4f5', '--fg1': '#18181b', '--fg2': '#52525b', '--fg3': '#71717a', '--fg4': '#a1a1aa', '--b1': '#e4e4e7', '--b2': '#f0f0f2', '--acc': '#1857C6', '--on-acc': '#ffffff', '--acc-tint': '#eef3fc', '--acc-text': '#1650b5', '--acc-line': '#c9d8f3', '--ok': '#10b981', '--ok-fg': '#047857', '--ok-tint': '#e9f7f1', '--warn': '#f59e0b', '--warn-fg': '#b45309', '--warn-tint': '#fdf4e3', '--red': '#dc2626', '--red-fg': '#b91c1c', '--red-tint': '#fdf0f0', '--red-line': '#f3c9c9', '--code': '#fbfbfb', '--hl': '#eaf0fb', '--bubble': '#eef3fc', '--sel': '#f0f0f2' },
+  dark: { '--bg': '#09090b', '--side': '#0f0f12', '--surface': '#18181b', '--muted': '#27272a', '--hover': '#1c1c20', '--fg1': '#f4f4f5', '--fg2': '#d4d4d8', '--fg3': '#a1a1aa', '--fg4': '#71717a', '--b1': '#3f3f46', '--b2': '#27272a', '--acc': '#5B8DEF', '--on-acc': '#0a0f1c', '--acc-tint': '#17233b', '--acc-text': '#93B5F6', '--acc-line': '#2b416b', '--ok': '#10b981', '--ok-fg': '#34d399', '--ok-tint': '#0f261e', '--warn': '#f59e0b', '--warn-fg': '#fbbf24', '--warn-tint': '#2a2110', '--red': '#ef4444', '--red-fg': '#f87171', '--red-tint': '#2a1416', '--red-line': '#5a2427', '--code': '#111114', '--hl': '#17233b', '--bubble': '#17233b', '--sel': '#1f1f24' },
+};
+const SANS = 'Geist, ui-sans-serif, system-ui, sans-serif';
+const SKINS = {
+  classic: { shape: { '--sans': SANS, '--mono': "'Geist Mono', ui-monospace, monospace", '--display': SANS, '--dw': '600', '--dscale': '1', '--r-card': '8px', '--r-ctl': '6px', '--r-chip': '5px', '--r-input': '10px', '--r-round': '99px', '--r-bub': '14px', '--r-tail': '4px', '--bw': '1px', '--sh-card': 'none' }, light: {}, dark: {} },
+  markup: { shape: { '--sans': "'Instrument Sans', system-ui, sans-serif", '--mono': "'JetBrains Mono', ui-monospace, monospace", '--display': "'Instrument Serif', Georgia, serif", '--dw': '400', '--dscale': '1.42', '--r-card': '2px', '--r-ctl': '2px', '--r-chip': '2px', '--r-input': '2px', '--r-round': '3px', '--r-bub': '3px', '--r-tail': '0px', '--bw': '1px' },
+    light: { '--bg': '#f2eee4', '--side': '#ebe6d9', '--surface': '#fbf9f3', '--muted': '#e5dfd0', '--hover': '#e7e1d2', '--fg1': '#1a1814', '--fg2': '#46423a', '--fg3': '#655f54', '--fg4': '#9c9688', '--b1': '#1a1814', '--b2': '#ddd6c6', '--acc': '#1a1814', '--on-acc': '#fbf9f3', '--acc-tint': '#f3e46a', '--acc-text': '#1a1814', '--acc-line': '#1a1814', '--ok': '#1f8a4c', '--ok-fg': '#17663a', '--ok-tint': '#dcead6', '--warn': '#d48a0b', '--warn-fg': '#8a5a00', '--warn-tint': '#f5e6c2', '--red': '#d22f22', '--red-fg': '#a8231a', '--red-tint': '#f5dbd3', '--red-line': '#d22f22', '--code': '#f7f4ec', '--hl': '#f3e46a', '--bubble': '#f3e46a', '--sel': '#e0d9c9', '--sh-card': '3px 3px 0 #1a1814' },
+    dark: { '--bg': '#141310', '--side': '#191814', '--surface': '#1f1e1a', '--muted': '#2b2924', '--hover': '#26241f', '--fg1': '#f0ebde', '--fg2': '#cec7b6', '--fg3': '#a39c8b', '--fg4': '#6f695d', '--b1': '#d9d3c4', '--b2': '#2f2d27', '--acc': '#f0ebde', '--on-acc': '#141310', '--acc-tint': '#3b3512', '--acc-text': '#f2e46c', '--acc-line': '#d9d3c4', '--ok': '#4fbf7f', '--ok-fg': '#6fd39a', '--ok-tint': '#17291e', '--warn': '#e8a531', '--warn-fg': '#f0bd5c', '--warn-tint': '#2c2412', '--red': '#f05a4a', '--red-fg': '#ff8073', '--red-tint': '#2e1714', '--red-line': '#f05a4a', '--code': '#191814', '--hl': '#3b3512', '--bubble': '#3b3512', '--sel': '#2b2924', '--sh-card': '3px 3px 0 #4a463d' } },
+  cockpit: { shape: { '--sans': "'Hanken Grotesk', system-ui, sans-serif", '--mono': "'JetBrains Mono', ui-monospace, monospace", '--display': "'Martian Mono', ui-monospace, monospace", '--dw': '500', '--dscale': '0.86', '--r-card': '4px', '--r-ctl': '3px', '--r-chip': '2px', '--r-input': '4px', '--r-round': '99px', '--r-bub': '6px', '--r-tail': '1px', '--bw': '1px', '--sh-card': 'none' },
+    light: { '--bg': '#eef1f4', '--side': '#f7f9fb', '--surface': '#ffffff', '--muted': '#e6ebf0', '--hover': '#edf1f5', '--fg1': '#0d1620', '--fg2': '#3c4a59', '--fg3': '#5b6a7a', '--fg4': '#98a5b3', '--b1': '#d3dbe3', '--b2': '#e8edf2', '--acc': '#a8239a', '--on-acc': '#ffffff', '--acc-tint': '#f8e6f5', '--acc-text': '#951f89', '--acc-line': '#e8b8e2', '--ok': '#0f9f6e', '--ok-fg': '#08714f', '--ok-tint': '#e1f4ec', '--warn': '#e19400', '--warn-fg': '#975f00', '--warn-tint': '#fbefd6', '--red': '#d92d2d', '--red-fg': '#b42222', '--red-tint': '#fbe8e8', '--red-line': '#f0c2c2', '--code': '#f7f9fb', '--hl': '#f8e6f5', '--bubble': '#f8e6f5', '--sel': '#e6ebf0' },
+    dark: { '--bg': '#0a0f14', '--side': '#0d131a', '--surface': '#111922', '--muted': '#18222d', '--hover': '#141d27', '--fg1': '#e3eaf1', '--fg2': '#b4c1ce', '--fg3': '#8595a6', '--fg4': '#55657a', '--b1': '#22303f', '--b2': '#18222d', '--acc': '#e15bd2', '--on-acc': '#16061a', '--acc-tint': '#2a1530', '--acc-text': '#f08fe6', '--acc-line': '#5a2a5e', '--ok': '#2fd39a', '--ok-fg': '#4fe0ad', '--ok-tint': '#0e2620', '--warn': '#ffb340', '--warn-fg': '#ffc466', '--warn-tint': '#2a2112', '--red': '#ff5a5a', '--red-fg': '#ff7f7f', '--red-tint': '#2c1418', '--red-line': '#5e2730', '--code': '#0c1219', '--hl': '#2a1530', '--bubble': '#24142b', '--sel': '#16202b' } },
+  soft: { shape: { '--sans': "'Bricolage Grotesque', system-ui, sans-serif", '--mono': "'Fragment Mono', ui-monospace, monospace", '--display': "'Bricolage Grotesque', system-ui, sans-serif", '--dw': '700', '--dscale': '1.1', '--r-card': '16px', '--r-ctl': '12px', '--r-chip': '99px', '--r-input': '18px', '--r-round': '99px', '--r-bub': '20px', '--r-tail': '6px', '--bw': '1px' },
+    light: { '--bg': '#eef2ee', '--side': '#f7f9f6', '--surface': '#ffffff', '--muted': '#e8ede7', '--hover': '#eef2ed', '--fg1': '#16201b', '--fg2': '#44514a', '--fg3': '#5f6c65', '--fg4': '#9aa59f', '--b1': '#dfe6df', '--b2': '#edf1ec', '--acc': '#16707f', '--on-acc': '#ffffff', '--acc-tint': '#e0f0f2', '--acc-text': '#0f6170', '--acc-line': '#b7dbe0', '--ok': '#2f9e5b', '--ok-fg': '#1f7444', '--ok-tint': '#e3f3e8', '--warn': '#e09a1a', '--warn-fg': '#93600a', '--warn-tint': '#fbf0d9', '--red': '#d6453a', '--red-fg': '#b3322a', '--red-tint': '#fbe9e6', '--red-line': '#f1c6c0', '--code': '#f7f9f6', '--hl': '#e0f0f2', '--bubble': '#dcefef', '--sel': '#e6ece6', '--sh-card': '0 1px 2px rgba(16,32,24,.05), 0 6px 20px rgba(16,32,24,.06)' },
+    dark: { '--bg': '#0f1412', '--side': '#121815', '--surface': '#18201c', '--muted': '#222b26', '--hover': '#1c2420', '--fg1': '#e8efea', '--fg2': '#bfcac3', '--fg3': '#93a198', '--fg4': '#5f6c65', '--b1': '#2b3630', '--b2': '#1f2823', '--acc': '#5cc3d1', '--on-acc': '#06191c', '--acc-tint': '#13292c', '--acc-text': '#86d6e1', '--acc-line': '#245055', '--ok': '#3fbf74', '--ok-fg': '#62d293', '--ok-tint': '#13261b', '--warn': '#efaa34', '--warn-fg': '#f3bf62', '--warn-tint': '#2a2213', '--red': '#ef5e52', '--red-fg': '#ff8579', '--red-tint': '#2b1715', '--red-line': '#5a2a25', '--code': '#121815', '--hl': '#13292c', '--bubble': '#13292c', '--sel': '#202925', '--sh-card': 'none' } },
+};
+const PPL = {
+  leo: { name: 'Leo Park', first: 'Leo', initials: 'LP', tool: 'Gemini CLI' },
+  sam: { name: 'Sam Okafor', first: 'Sam', initials: 'SO', tool: 'Claude Code' },
+  deniz: { name: '@deniz-dev', first: 'Deniz', initials: 'DE', tool: null },
+  jonas: { name: 'Jonas Weber', first: 'Jonas', initials: 'JW', tool: 'Gemini CLI' },
+};
+const PILL = {
+  escalated: { label: 'Needs you', fg: 'var(--red-fg)', bg: 'var(--red-tint)', g: 'diamond' },
+  needs: { label: 'Needs you', fg: 'var(--acc-text)', bg: 'var(--acc-tint)', g: 'dot' },
+  working: { label: 'Agent working', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ping' },
+  waiting: { label: 'Waiting', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ring' },
+  their: { label: 'Their turn', fg: 'var(--fg2)', bg: 'var(--muted)', g: 'ring' },
+  ready: { label: 'Ready', fg: 'var(--ok-fg)', bg: 'var(--ok-tint)', g: 'check' },
+  closed: { label: 'Merged', fg: 'var(--fg3)', bg: 'transparent', g: 'none' },
+};
+const sys = (text, time, g, mono) => ({ k: 'sys', text, time, g: g || 'dot', mono: mono || '' });
+const sum = (side, text, time, counts) => ({ k: 'msg', agent: true, side, text, time, counts: counts || '' });
+const hum = (side, text, time) => ({ k: 'msg', agent: false, side, text, time });
+const pt = (side, id) => ({ k: 'point', side, id });
+const POINTS = {
+  '142': [
+    { id: 'P1', severity: 'major', category: 'bug', status: 'resolved', file: 'src/orders/list.ts', line: '48', title: 'parseCursor throws on an empty cursor', outcome: 'Fixed · a1b2c3d',
+      body: 'An empty cursor decodes to "", so new Date(Number("")) is an Invalid Date that throws once it reaches the query builder. The first-page request sends cursor="" today.',
+      snippet: { start: 47, hl: [48], code: ['export function parseCursor(raw: string) {', '  const [ts, id] = Buffer.from(raw, "base64url").toString().split(":");', '  return { ts: new Date(Number(ts)), id };'] },
+      thread: [{ by: 'me', kind: 'fixed', commit: 'a1b2c3d', text: 'Return null for empty or invalid cursors and treat it as the first page.', time: '14:08' }, { by: 'them', kind: 'resolved', time: '14:12' }] },
+    { id: 'P2', severity: 'nit', category: 'style', status: 'resolved', file: 'src/orders/list.ts', line: '12', title: 'Rename fetchAll → fetchPage', outcome: 'Declined',
+      body: 'fetchAll returns one page at a time, so the name suggests it loads everything.',
+      snippet: { start: 11, hl: [12], code: ['// Re-exported from src/sdk/index.ts', 'export async function fetchAll(cursor?: string, limit = 50) {', '  const after = cursor ? parseCursor(cursor) : null;'] },
+      thread: [{ by: 'me', kind: 'declined', text: 'fetchAll is part of the public SDK; renaming it would be a breaking change.', time: '14:07' }, { by: 'them', kind: 'resolved', text: 'Agreed.', time: '14:11' }] },
+    { id: 'P3', severity: 'minor', category: 'tests', status: 'resolved', file: 'test/orders.test.ts', line: '', title: 'No test for the last page (nextCursor should be null)', outcome: 'Fixed · d4e5f6a',
+      body: 'The suite covers the first and next page, but nothing asserts that nextCursor is null once the last page is reached.',
+      snippet: { start: 31, hl: [], code: ['  it("returns the next page from a cursor", async () => {', '    const page = await fetchAll(first.nextCursor, 2);', '    expect(page.items).toHaveLength(2);'] },
+      thread: [{ by: 'me', kind: 'fixed', commit: 'd4e5f6a', text: 'Added "returns null nextCursor on last page".', time: '14:09' }, { by: 'them', kind: 'resolved', time: '14:12' }] },
+  ],
+  '139': [
+    { id: 'P1', severity: 'blocker', category: 'security', status: 'escalated', file: 'src/auth/session.ts', line: '112', title: 'Refresh token stays valid after rotation, which opens a short replay window',
+      body: 'The new token is stored before the old one is revoked, and revokeToken isn\u2019t awaited. A replayed old token still refreshes until revocation lands.',
+      snippet: { start: 110, hl: [112], code: ['  const next = await issueRefreshToken(session.userId);', '  await store.set(session.id, next);', '  revokeToken(session.refreshToken);', '  return next;'] },
+      thread: [{ by: 'them', kind: 'answered', text: 'The old token is also rejected by the rotation check in src/auth/middleware.ts:40, so a replay fails.', time: '16:30' }, { by: 'me', kind: 'kept', text: 'That check reads the same cache revokeToken writes to, so the window stays open until the write lands.', time: '16:39' }] },
+    { id: 'P2', severity: 'minor', category: 'tests', status: 'resolved', file: 'test/auth/session.test.ts', line: '', title: 'No test for two refreshes racing on one session', outcome: 'Fixed · 7c8d9e0',
+      body: 'Add a test that fires two refresh calls in parallel and asserts only one succeeds.',
+      thread: [{ by: 'them', kind: 'fixed', commit: '7c8d9e0', text: 'Added a concurrent refresh test.', time: '16:31' }, { by: 'me', kind: 'resolved', time: '16:33' }] },
+  ],
+};
+const PRS = {
+  '139': { num: 139, title: 'Fix race in session refresh', tab: 'review', role: 'Reviewer', other: PPL.sam, otherOn: true, status: 'escalated', round: [2, 3], last: 'P1 needs a human decision', time: '16:40', unread: true, branch: 'fix/session-refresh-race', presence: ["Sam's agent · online", 'on'],
+    files: [['src/auth/session.ts', 18, 6], ['src/auth/middleware.ts', 4, 1], ['src/auth/store.ts', 3, 3], ['test/auth/session.test.ts', 36, 0]],
+    timeline: [sys('Review requested by Sam Okafor', '16:20'), sys('Your agent started reviewing', '16:21'), sum('me', 'Reviewed 4 files and raised 2 points.', '16:24', '1 blocker · 1 minor'), pt('me', 'P1'), pt('me', 'P2'), sys("Sam's agent pushed 1 commit", '16:31', 'dot', '7c8d9e0'), sys('Round 2 started', '16:32'), sys('Escalated: P1 · security points always need a human', '16:40', 'diamond')] },
+  '151': { num: 151, title: 'Add Turkish translations', tab: 'review', role: 'Reviewer', other: PPL.deniz, otherOn: false, status: 'needs', round: [0, 3], last: 'First-time contributor', time: '13:50', unread: true, branch: 'deniz-dev:i18n/tr', presence: ['No agent · first-time contributor', 'none'],
+    files: [['locales/tr.json', 398, 0], ['locales/index.ts', 2, 0], ['docs/i18n.md', 12, 0]],
+    timeline: [sys('Opened by @deniz-dev · first-time contributor', '13:50'), { k: 'untrusted' }] },
+  '144': { num: 144, title: 'Refactor webhook retries', tab: 'review', role: 'Reviewer', other: PPL.jonas, otherOn: false, status: 'waiting', round: [1, 3], last: 'Your agent is offline', time: '18:11', unread: false, branch: 'refactor/webhook-retries', presence: ['Your agent · offline since 18:04', 'off'],
+    files: [['src/webhooks/retry.ts', 64, 41], ['src/webhooks/queue.ts', 12, 8], ['test/webhooks/retry.test.ts', 30, 4]],
+    timeline: [sys('Review requested by Jonas Weber', '18:11'), sys('Your agent is offline since 18:04 · review queued', '18:11', 'ring')] },
+  '147': { num: 147, title: 'Bump Prisma to 7.2', tab: 'mine', role: 'Author', other: PPL.leo, otherOn: true, status: 'working', round: [1, 3], last: 'reading src/db/client.ts', time: 'now', unread: false, branch: 'chore/prisma-7.2', presence: ["Leo's agent · reviewing", 'work'],
+    files: [['package.json', 2, 2], ['pnpm-lock.yaml', 88, 71], ['src/db/client.ts', 9, 4], ['prisma/schema.prisma', 3, 1]],
+    timeline: [sys('Review requested from Leo Park', '18:15'), sys("Leo's agent started reviewing", '18:19'), { k: 'progress', side: 'them', text: "Leo's agent is reviewing… reading" }] },
+  '142': { num: 142, title: 'Add cursor pagination to /orders', tab: 'mine', role: 'Author', other: PPL.leo, otherOn: true, status: 'ready', round: [2, 3], last: "Ready for Leo's approval", time: '14:13', unread: false, branch: 'feature/cursor-pagination', presence: ["Leo's agent · online", 'on'],
+    files: [['src/orders/list.ts', 38, 9], ['src/orders/cursor.ts', 22, 0], ['src/orders/routes.ts', 6, 2], ['src/sdk/index.ts', 2, 1], ['test/orders.test.ts', 41, 0], ['docs/api/orders.md', 14, 3]],
+    timeline: [sys("Leo's agent started reviewing", '14:02'), sum('them', 'Reviewed 6 files and raised 3 points.', '14:03', '1 major · 1 minor · 1 nit'), pt('them', 'P1'), pt('them', 'P2'), pt('them', 'P3'), hum('them', 'Skip naming nitpicks on this one.', '14:06'), sys('Your agent pushed 2 commits', '14:09', 'dot', 'a1b2c3d d4e5f6a'), sys('Round 2 started', '14:10'), sum('them', 'Re-reviewed 2 files. All 3 points resolved, nothing new.', '14:12'), sys("Ready for Leo's approval", '14:13', 'check')] },
+  '136': { num: 136, title: 'Remove legacy coupon endpoint', tab: 'mine', role: 'Author', other: PPL.leo, otherOn: false, status: 'closed', round: [1, 3], last: 'Merged by Leo Park', time: 'Yesterday', unread: false, branch: 'chore/remove-legacy-coupons', presence: ['Merged yesterday', 'none'],
+    files: [['src/coupons/legacy.ts', 0, 212], ['src/routes.ts', 1, 4], ['docs/api/coupons.md', 0, 38]],
+    timeline: [sys("Leo's agent started reviewing", 'Yesterday 11:18'), sum('them', 'Reviewed 3 files. No points raised.', 'Yesterday 11:20'), sys("Ready for Leo's approval", 'Yesterday 11:21', 'check'), sys('Merged by Leo Park', 'Yesterday 15:02', 'check')] },
+};
+const ORDER = { review: ['139', '151', '144'], mine: ['147', '142', '136'] };
+const PROG = ['src/db/client.ts', 'prisma/schema.prisma', 'src/db/migrations.ts', 'src/orders/repo.ts'];
+const FILTERS = [['needs', 'Needs you'], ['working', 'Agent working'], ['waiting', 'Waiting'], ['their', 'Their turn'], ['ready', 'Ready'], ['closed', 'Closed']];
+
+function ping(color) {
+  return React.createElement('span', { 'aria-hidden': true, style: { position: 'relative', display: 'inline-block', flex: 'none', width: 7, height: 7, borderRadius: 99, background: color } },
+    React.createElement('span', { style: { position: 'absolute', inset: 0, borderRadius: 99, background: color, animation: 'np-ping 1.6s cubic-bezier(0,0,.2,1) infinite' } }));
+}
+
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const sel = String(p.startPr || '142');
+    this.state = { sel, tab: (PRS[sel] || PRS['142']).tab, screen: p.screen || 'inbox', theme: null, q: '', filterOpen: false, sf: [], expanded: { '142:P1': true }, ov: {}, extra: {}, auto: { '151': false }, cont: {}, queued: {}, draft: '', cf: false, toast: '', cursor: null, kbd: false, collapsed: false, prog: 0, tip: false, details: p.details ?? true, copied: false, vw: typeof window !== 'undefined' ? window.innerWidth : 1280 };
+    this.searchRef = React.createRef();
+  }
+  componentDidMount() {
+    this.iv = setInterval(() => this.setState(s => ({ prog: (s.prog + 1) % PROG.length })), 2400);
+    this.onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this.onResize);
+  }
+  componentWillUnmount() { clearInterval(this.iv); clearTimeout(this.tt); window.removeEventListener('resize', this.onResize); }
+  componentDidUpdate(prev) {
+    if (prev.startPr !== this.props.startPr && this.props.startPr) { const sel = String(this.props.startPr); this.setState({ sel, tab: PRS[sel].tab }); }
+    if (prev.theme !== this.props.theme) this.setState({ theme: null });
+    if (prev.screen !== this.props.screen) this.setState({ screen: this.props.screen || 'inbox' });
+    if (prev.details !== this.props.details) this.setState({ details: this.props.details ?? true });
+  }
+  flash(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  points(id) {
+    return (POINTS[id] || []).map(p => ({ ...p, status: this.state.ov[`${id}:${p.id}`] || p.status }));
+  }
+  statusOf(id) {
+    const pr = PRS[id], s = this.state;
+    if (s.cont[id]) return 'working';
+    if (id === '151' && s.queued[id]) return 'waiting';
+    const pts = POINTS[id];
+    if (pts && pr.status === 'escalated') return this.points(id).some(p => p.status === 'escalated') ? 'escalated' : 'ready';
+    return pr.status;
+  }
+  lastOf(id) {
+    const st = this.statusOf(id), pr = PRS[id];
+    if (id === '139' && st === 'ready') return 'Ready for your approval';
+    if (id === '139' && st === 'working') return "Sam's agent is working on P1";
+    if (id === '151' && st === 'waiting') return 'Review queued';
+    return pr.last;
+  }
+  needsYou(id) { const st = this.statusOf(id); return st === 'escalated' || st === 'needs' || (st === 'ready' && PRS[id].role === 'Reviewer'); }
+  rowsFor(tab) {
+    const q = this.state.q.trim().toLowerCase(), sf = this.state.sf;
+    return ORDER[tab].filter(id => {
+      const pr = PRS[id], st = this.statusOf(id);
+      const key = st === 'escalated' ? 'needs' : st;
+      if (sf.length && !sf.includes(key)) return false;
+      if (q && !(`${pr.title} #${pr.num} acme/shop-api ${pr.other.name}`.toLowerCase().includes(q))) return false;
+      return true;
+    }).sort((a, b) => (this.needsYou(b) ? 1 : 0) - (this.needsYou(a) ? 1 : 0));
+  }
+  open(id) { this.setState(s => ({ sel: id, screen: 'chat', collapsed: false, filterOpen: false, tip: false, cursor: id, kbd: false })); }
+  onKey = e => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'textarea' || tag === 'input') { if (e.key === 'Escape') e.target.blur(); return; }
+    const ids = this.rowsFor(this.state.tab);
+    const cur = this.state.cursor ?? this.state.sel;
+    let i = ids.indexOf(cur);
+    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); i = Math.min(ids.length - 1, i + 1); this.setState({ cursor: ids[Math.max(0, i)], kbd: true }); }
+    else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); i = Math.max(0, i - 1); this.setState({ cursor: ids[i], kbd: true }); }
+    else if (e.key === 'Enter' && this.state.kbd && ids.includes(cur)) { this.open(cur); }
+    else if (e.key === '/') { e.preventDefault(); this.searchRef.current && this.searchRef.current.focus(); }
+    else if (e.key === 'Escape') { this.setState({ screen: 'inbox', filterOpen: false }); }
+  };
+  copy() { try { navigator.clipboard && navigator.clipboard.writeText('nitpilot start'); } catch (e) {} this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); }
+
+  renderVals() {
+    const s = this.state, P = this.props;
+    const id = PRS[s.sel] ? s.sel : '142';
+    const pr = PRS[id];
+    const theme = s.theme || P.theme || 'light';
+    const skin = SKINS[P.skin] ? P.skin : 'soft';
+    const layout = P.layout || 'feed';
+    const dev = P.device || 'auto';
+    const vw = Number(P.width) || s.vw;
+    const isPhone = dev === 'phone' || (dev === 'auto' && vw < 760);
+    const isDesktop = !isPhone;
+    const agentOffline = !P.agentOnline;
+    const W = dev === 'phone' ? '390px' : P.width ? `${P.width}px` : '100%';
+    const H = dev === 'phone' ? '844px' : P.height ? `${P.height}px` : '100vh';
+    const rootStyle = { ...T[theme], ...SKINS[skin].shape, ...SKINS[skin][theme], width: W, height: H, maxWidth: '100%', display: 'flex', overflow: 'hidden', position: 'relative', background: 'var(--bg)', color: 'var(--fg1)', fontFamily: 'var(--sans)', fontSize: 14, lineHeight: 1.4, outline: 'none', colorScheme: theme };
+    const me = { name: 'Your agent', initials: 'MC' };
+    const other = pr.other;
+    const who = (side, agent) => side === 'me' ? (agent ? { name: 'Your agent', initials: 'MC', sub: 'Claude Code' } : { name: 'You', initials: 'MC', sub: 'to the agents' })
+      : (agent ? { name: `${other.first}'s agent`, initials: other.initials, sub: other.tool || '' } : { name: other.name, initials: other.initials, sub: 'to the agents' });
+
+    // inbox
+    const ids = this.rowsFor(s.tab);
+    const cursor = s.kbd ? s.cursor : null;
+    const rows = ids.map(rid => {
+      const r = PRS[rid], st = this.statusOf(rid), pill = PILL[st];
+      const selected = isDesktop && rid === id;
+      const working = st === 'working';
+      const agentName = rid === '139' && working ? "Sam's agent" : `${r.other.first}'s agent`;
+      return {
+        ref: `acme/shop-api #${r.num}`, title: r.title, time: r.time, initials: r.other.initials,
+        agent: r.otherOn, agentLabel: `${r.other.first}'s agent is active`,
+        unread: r.unread && !(rid === id && s.screen === 'chat'),
+        pill: working ? `${agentName} working` : pill.label, pillFg: pill.fg, pillBg: pill.bg, pillDeco: st === 'closed' ? 'line-through' : 'none',
+        gPing: pill.g === 'ping', gDot: pill.g === 'dot', gDiamond: pill.g === 'diamond', gRing: pill.g === 'ring', gCheck: pill.g === 'check',
+        ping: ping('var(--acc)'),
+        last: this.lastOf(rid), round: r.round[0] ? `${r.round[0]}/${r.round[1]}` : '—', roundLabel: r.round[0] ? `Round ${r.round[0]} of ${r.round[1]}` : 'Not started',
+        titleFg: st === 'closed' ? 'var(--fg3)' : 'var(--fg1)', weight: r.unread ? 600 : 500,
+        selected, bg: selected ? 'var(--sel)' : 'transparent',
+        ring: cursor === rid ? 'inset 0 0 0 2px var(--acc)' : 'none',
+        open: () => this.open(rid),
+      };
+    });
+    const count = tab => ORDER[tab].filter(x => this.needsYou(x)).length;
+    const tabs = [['review', 'To review'], ['mine', 'Mine']].map(([k, label]) => {
+      const c = count(k), active = s.tab === k;
+      return { label, active, count: c, hasCount: c > 0, countLabel: `${c} need you`, fg: active ? 'var(--fg1)' : 'var(--fg3)', line: active ? 'var(--fg1)' : 'transparent', pick: () => this.setState({ tab: k, cursor: null, kbd: false }) };
+    });
+    const filtering = s.sf.length > 0;
+
+    // chat
+    const pts = this.points(id);
+    const base = (pr.timeline || []).concat(s.extra[id] || []);
+    const progFile = id === '139' ? 'src/auth/session.ts' : id === '151' ? 'locales/tr.json' : PROG[s.prog];
+    const timeline = base.filter(it => !(it.k === 'untrusted' && s.queued[id])).map(it => {
+      const f = { isSys: it.k === 'sys', isMsg: it.k === 'msg', isPoint: it.k === 'point', isProgress: it.k === 'progress', isUntrusted: it.k === 'untrusted' };
+      if (f.isSys) return { ...f, text: it.text, time: it.time, mono: it.mono, gDiamond: it.g === 'diamond', gCheck: it.g === 'check', gRing: it.g === 'ring', gDot: it.g === 'dot' };
+      const mine = it.side === 'me';
+      const base2 = { ...f, mine, dir: mine ? 'rtl' : 'ltr', alignItems: mine ? 'flex-end' : 'flex-start' };
+      if (f.isMsg) {
+        const w = who(it.side, it.agent);
+        return { ...base2, ...w, agent: it.agent, human: !it.agent, text: it.text, time: it.time, counts: it.counts || '',
+          meta: `${w.name}${w.sub ? ' · ' + w.sub : ''} · ${it.time}`,
+          bubbleBg: mine ? 'var(--bubble)' : 'var(--surface)', bubbleBorder: mine ? 'var(--acc-line)' : 'var(--b1)',
+          radius: mine ? 'var(--r-bub) var(--r-bub) var(--r-tail) var(--r-bub)' : 'var(--r-bub) var(--r-bub) var(--r-bub) var(--r-tail)' };
+      }
+      if (f.isPoint) {
+        const p = pts.find(x => x.id === it.id);
+        const key = `${id}:${p.id}`;
+        const thread = p.thread.map(r => ({ ...r, ...who(r.by, true) })).concat(s.ov[key] === 'resolved' && p.status === 'resolved' && (POINTS[id].find(x => x.id === p.id).status !== 'resolved') ? [{ name: 'You', initials: 'MC', agent: false, kind: 'resolved', text: 'Resolved by a human decision.', time: '18:22' }] : []);
+        return { ...base2, point: { ...p, thread }, open: !!s.expanded[key], toggle: () => this.setState(st => ({ expanded: { ...st.expanded, [key]: !st.expanded[key] } })) };
+      }
+      if (f.isProgress) { const w = who(it.side, true); return { ...base2, ...w, text: it.text }; }
+      return base2;
+    });
+
+    const st = this.statusOf(id);
+    const isReviewer = pr.role === 'Reviewer';
+    const escPoints = pts.filter(p => p.status === 'escalated').map(p => ({ id: p.id, title: p.title,
+      resolve: () => { if ((this.props.edge || 'none') === 'github') { this.flash('Reconnect GitHub to resolve as yourself.'); return; } this.setState(x => ({ ov: { ...x.ov, [`${id}:${p.id}`]: 'resolved' }, extra: { ...x.extra, [id]: (x.extra[id] || []).concat([sys(`You resolved ${p.id}`, '18:22', 'check')]) } })); this.flash(`${p.id} resolved. Ready for your approval.`); },
+      cont: () => { this.setState(x => ({ ov: { ...x.ov, [`${id}:${p.id}`]: 'open' }, cont: { ...x.cont, [id]: true }, extra: { ...x.extra, [id]: (x.extra[id] || []).concat([sys(`You let the agents continue on ${p.id}`, '18:22'), sys('Round 3 started', '18:22', 'dot', '· last round'), { k: 'progress', side: 'them', text: "Sam's agent is fixing P1… editing" }]) } })); this.flash(`Agents will keep going on ${p.id}.`); },
+    }));
+    const resolvedCount = pts.filter(p => p.status === 'resolved').length;
+    const bEscalated = escPoints.length > 0;
+    const bReadyAuthor = st === 'ready' && !isReviewer;
+    const bReadyReviewer = st === 'ready' && isReviewer;
+    const bWaiting = st === 'waiting';
+    const rounds = pr.round[0];
+    let bannerTitle = '', bannerSub = '';
+    if (bReadyAuthor) { bannerTitle = `Waiting for ${other.first}'s approval`; bannerSub = `${rounds} rounds · ${resolvedCount} points resolved`; }
+    if (bReadyReviewer) { bannerTitle = 'Ready for your approval'; bannerSub = `${rounds} rounds · ${resolvedCount} points resolved`; }
+    if (bWaiting) { bannerTitle = id === '151' ? 'Review queued for your agent' : 'Waiting for your agent'; bannerSub = id === '151' ? 'It starts as soon as your agent is back online.' : 'Offline since 18:04. Start it to begin the review.'; }
+
+    const autoDisabled = id === '151';
+    const autoOn = !autoDisabled && s.auto[id] !== false;
+    const autoLabel = isReviewer ? 'Auto-review' : 'Auto-fix';
+    const curRound = s.cont[id] ? 3 : rounds;
+    const pres = s.cont[id] ? ["Sam's agent · working", 'work'] : pr.presence;
+    const presText = isPhone && pres[0].length > 26 ? pres[0].replace(' · first-time contributor', '') : pres[0];
+
+    const isClosed = st === 'closed';
+    const edge = P.edge || 'none';
+    const EB = {
+      cap: { t: 'Daily agent cap reached', b: '40 of 40 agent runs used today. Agents pick up again at midnight, or raise the cap in Settings.', g: '!', gb: 'var(--warn)', gf: '#1a1205', bg: 'var(--warn-tint)', action: 'Raise cap', href: 'NitpilotScreens.dc.html' },
+      repo: { t: 'acme/shop-api isn\u2019t linked on this computer', b: 'Your agent can\u2019t review or fix this PR until the repo is linked. In your clone, run:', g: '', gb: 'transparent', gf: 'var(--fg3)', bg: 'var(--muted)', cmd: 'nitpilot repos add' },
+      github: { t: 'GitHub sign-in expired', b: 'Nitpilot can\u2019t approve, post or push as you until you reconnect. Agents keep working in the meantime.', g: '!', gb: 'var(--warn)', gf: '#1a1205', bg: 'var(--warn-tint)', action: 'Reconnect GitHub', href: '#' },
+    }[edge];
+    const blocked = edge === 'github';
+    const people = [
+      { name: 'Maya Chen', initials: 'MC', role: isReviewer ? 'Reviewer' : 'Author', agent: !agentOffline, status: agentOffline ? 'Claude Code · offline since 18:04' : 'Claude Code · online', dot: agentOffline ? 'transparent' : 'var(--ok)', ring: agentOffline ? 'var(--fg3)' : 'transparent' },
+      { name: other.name, initials: other.initials, role: isReviewer ? 'Author' : 'Reviewer', agent: pr.otherOn, status: other.tool ? `${other.tool} · ${pr.otherOn ? 'online' : 'offline'}` : 'No agent connected', dot: pr.otherOn ? 'var(--ok)' : 'transparent', ring: pr.otherOn ? 'transparent' : 'var(--fg3)' },
+    ];
+    const files = pr.files.map(([path, add, del]) => ({ path, add, del }));
+    const tot = files.reduce((a, f) => [a[0] + f.add, a[1] + f.del], [0, 0]);
+    const canSend = s.draft.trim().length > 0;
+
+    return {
+      rootStyle, onKey: this.onKey, isPhone, isDesktop, logoG: skin === 'soft', logoC: skin !== 'soft',
+      showList: isDesktop || s.screen !== 'chat', showChat: isDesktop || s.screen === 'chat',
+      showDetails: isDesktop && s.details && vw >= 1180,
+      sideW: isPhone ? '100%' : '360px',
+      isDark: theme === 'dark', isLight: theme !== 'dark', themeLabel: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+      toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
+      agentOffline, copyStart: () => this.copy(), copyLabel: s.copied ? 'Copied' : 'Copy',
+      searchRef: this.searchRef, q: s.q, onSearch: e => this.setState({ q: e.target.value, cursor: null }), showSlashHint: isDesktop && !s.q,
+      filterOpen: s.filterOpen, toggleFilter: () => this.setState({ filterOpen: !s.filterOpen }),
+      filterLabel: filtering ? `Filter · ${s.sf.length}` : 'Filter', filterBorder: filtering ? 'var(--acc)' : 'var(--b1)',
+      filterOpts: FILTERS.map(([k, label]) => ({ label, on: s.sf.includes(k), mark: s.sf.includes(k) ? '✓' : '', toggle: () => this.setState(x => ({ sf: x.sf.includes(k) ? x.sf.filter(y => y !== k) : x.sf.concat(k) })) })),
+      tabs, rows, listEmpty: rows.length === 0,
+      emptyTitle: s.q || filtering ? 'No matches' : 'All quiet.',
+      emptyBody: s.q ? `No pull requests match \u201c${s.q}\u201d.` : filtering ? 'Nothing in this tab matches the filter.' : "Nitpilot will ping you when you're needed.",
+      chatLabel: `PR chat: ${pr.title}`,
+      pr: { ...pr, ref: `acme/shop-api #${pr.num}`, base: 'main' },
+      showAuto: !isClosed, autoOn, autoDisabled, autoLabel,
+      autoAria: autoDisabled ? `${autoLabel}, off. Turned off by team rules for outside contributors.` : `${autoLabel} ${autoOn ? 'on' : 'off'}`,
+      autoFg: autoDisabled ? 'var(--fg3)' : 'var(--fg1)', autoCursor: autoDisabled ? 'not-allowed' : 'pointer',
+      autoTrack: autoDisabled ? 'var(--muted)' : autoOn ? 'var(--acc)' : 'var(--b1)', autoKnob: autoDisabled ? 'var(--b1)' : '#ffffff',
+      autoX: autoOn ? 'translateX(12px)' : 'none', autoXp: autoOn ? 'translateX(14px)' : 'none',
+      autoTip: autoDisabled ? 'Off for PRs from outside contributors. Your team set this in .nitpilot.yml.' : autoOn ? (isReviewer ? 'Your agent reviews each round as soon as it starts.' : 'Your agent fixes points and pushes without asking.') : 'Your agent\u2019s work waits as drafts for you to send.',
+      tipVisible: s.tip && isDesktop, tipOn: () => this.setState({ tip: true }), tipOff: () => this.setState({ tip: false }),
+      toggleAuto: () => { if (autoDisabled) { this.flash('Auto-review is off for outside contributors (team rule).'); return; } this.setState(x => ({ auto: { ...x.auto, [id]: !autoOn } })); this.flash(`${autoLabel} ${autoOn ? 'off: work waits as drafts' : 'on'}`); },
+      toggleDetails: () => this.setState({ details: !s.details }), detailsOn: s.details, detailsBtnBg: s.details ? 'var(--muted)' : 'var(--surface)',
+      pips: Array.from({ length: pr.round[1] }, (_, i) => ({ c: i < curRound ? (curRound >= pr.round[1] ? 'var(--warn)' : 'var(--acc)') : 'var(--b1)' })),
+      roundText: curRound ? `Round ${curRound} of ${pr.round[1]}` : 'Not started',
+      presOn: pres[1] === 'on', presOff: pres[1] === 'off', presWork: pres[1] === 'work', presText, ping: ping('var(--acc)'),
+      back: () => this.setState({ screen: 'inbox' }),
+      headerCollapsed: isPhone && s.collapsed, headerFull: isPhone && !s.collapsed,
+      onScroll: e => { if (!isPhone) return; const c = e.currentTarget.scrollTop > 48; if (c !== this.state.collapsed) this.setState({ collapsed: c }); },
+      bReadyAuthor, bReadyReviewer, bEscalated, bWaiting, bannerTitle, bannerSub, escPoints,
+      approve: e => { e.preventDefault(); this.flash(blocked ? 'Reconnect GitHub first.' : 'Opening the PR on GitHub…'); },
+      isBubbles: layout !== 'feed', isFeed: layout === 'feed', timeline, progFile,
+      tlPad: isPhone ? '16px 12px 20px' : '22px 24px 24px',
+      startReview: () => { if (agentOffline) { this.setState(x => ({ queued: { ...x.queued, [id]: true }, extra: { ...x.extra, [id]: (x.extra[id] || []).concat([sys('You started the review · queued until your agent is online', '18:22', 'ring')]) } })); this.flash('Review queued. Run nitpilot start.'); } else { this.setState(x => ({ queued: { ...x.queued, [id]: true }, extra: { ...x.extra, [id]: (x.extra[id] || []).concat([sys('You started the review', '18:22'), { k: 'progress', side: 'me', text: 'Your agent is reviewing… reading' }]) } })); } },
+      toast: s.toast,
+      composerOn: !isClosed && !blocked, composerOff: isClosed || blocked, composerOffText: blocked ? 'Reconnect GitHub to send notes as yourself.' : 'This PR was merged yesterday. The chat is read-only.',
+      edgeGithub: blocked, edgeRules: edge === 'rules', edgeBanner: !!EB,
+      ebTitle: EB ? EB.t : '', ebBody: EB ? EB.b : '', ebGlyph: EB ? EB.g : '', ebGlyphBg: EB ? EB.gb : '', ebGlyphFg: EB ? EB.gf : '', ebBg: EB ? EB.bg : '', ebCmd: EB && EB.cmd ? EB.cmd : '', ebAction: EB && EB.action ? EB.action : '', ebHref: EB && EB.href ? EB.href : '#',
+      ebClick: e => { if (edge === 'github') { e.preventDefault(); this.flash('Opening GitHub to reconnect…'); } },
+      reconnect: () => this.flash('Opening GitHub to reconnect…'),
+      copyRepo: () => { try { navigator.clipboard && navigator.clipboard.writeText('nitpilot repos add'); } catch (e) {} this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); }, composerPad: isPhone ? '8px 10px 14px' : '10px 20px 14px',
+      draft: s.draft, onDraft: e => this.setState({ draft: e.target.value }),
+      cFocus: () => this.setState({ cf: true }), cBlur: () => this.setState({ cf: false }), composerBorder: s.cf ? 'var(--acc)' : 'var(--b1)',
+      onComposerKey: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } },
+      send: () => this.send(), cantSend: !canSend, sendBg: canSend ? 'var(--acc)' : 'var(--muted)', sendFg: canSend ? 'var(--on-acc)' : 'var(--fg3)',
+      composerHint: isPhone ? "Included in the agents' next round." : "Notes are included in the agents' next round · ↵ send · ⇧↵ new line",
+      fileSum: `${files.length} · +${tot[0]} −${tot[1]}`, files, people, rulesAuto: id === '151' ? 'Off for outside PRs' : 'Allowed',
+    };
+  }
+  send() {
+    const text = this.state.draft.trim(); if (!text) return;
+    const id = this.state.sel;
+    this.setState(x => ({ draft: '', extra: { ...x.extra, [id]: (x.extra[id] || []).concat([hum('me', text, '18:22')]) } }));
+    this.flash("Sent. Included in the agents' next round.");
+  }
+}
+</script>
+</body>
+</html>
