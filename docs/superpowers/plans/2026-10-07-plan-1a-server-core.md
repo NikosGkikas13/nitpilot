@@ -2939,7 +2939,7 @@ Rules covered:
 - **§15:** debounce for loose comments while submitted reviews act at once; single-player reviewer re-review on push or author reply; approval stops agent rounds; bot ping-pong capped by `max_rounds`.
 - **Review Focus #3/#4:** duplicates, late timers, and a human push mid-address.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/engine/external.test.ts`:
 ```ts
@@ -3153,12 +3153,12 @@ describe('results after external activity', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test -w apps/server -- src/engine/external.test.ts`
 Expected: FAIL. `out.chat.points[0]` is `undefined`, because these events still hit `default`.
 
-- [ ] **Step 3: Write `external.ts`**
+- [x] **Step 3: Write `external.ts`**
 
 `apps/server/src/engine/external.ts`:
 ```ts
@@ -3367,7 +3367,7 @@ function githubPointContent(body: string, path: string | null, line: number | nu
 }
 ```
 
-- [ ] **Step 4: Route the events in `decide.ts`**
+- [x] **Step 4: Route the events in `decide.ts`**
 
 In `apps/server/src/engine/decide.ts`, add the import and the cases before `default`:
 ```ts
@@ -3385,12 +3385,12 @@ import {
     case 'timer': onTimer(ctx, event); break;
 ```
 
-- [ ] **Step 5: Run the tests to see them pass**
+- [x] **Step 5: Run the tests to see them pass**
 
 Run: `npm run test -w apps/server -- src/engine && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (external, results, lifecycle), with no type or lint errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/engine

@@ -1,5 +1,8 @@
 import { emit, type Ctx } from './context';
 import {
+  onCommentDeleted, onExternalComment, onHeadUpdated, onReviewSubmitted, onThreadResolved, onThreadUnresolved, onTimer,
+} from './external';
+import {
   onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrToDraft,
   onReviewRequestRemoved, onReviewRequested,
 } from './lifecycle';
@@ -32,6 +35,13 @@ export function decide(input: DecideInput): DecideOutput {
     case 'manual_review': onManualReview(ctx, event); break;
     case 'human_note': onHumanNote(ctx, event); break;
     case 'job_completed': onJobCompleted(ctx, event); break;
+    case 'external_comment': onExternalComment(ctx, event); break;
+    case 'external_comment_deleted': onCommentDeleted(ctx, event); break;
+    case 'external_review_submitted': onReviewSubmitted(ctx, event); break;
+    case 'thread_resolved': onThreadResolved(ctx, event); break;
+    case 'thread_unresolved': onThreadUnresolved(ctx, event); break;
+    case 'head_updated': onHeadUpdated(ctx, event); break;
+    case 'timer': onTimer(ctx, event); break;
     // Tasks 8–10 add the remaining event types and make this switch exhaustive.
     default: break;
   }
