@@ -10,10 +10,16 @@ export function uid(prefix = 'id'): string {
   return `${prefix}-${Date.now().toString(36)}-${counter}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** A unique numeric id, like GitHub's. */
+let lastGhId = 0;
+
+/**
+ * A unique numeric id, like GitHub's. GitHub sends ids as JSON numbers, so this stays below
+ * Number.MAX_SAFE_INTEGER: milliseconds × 1000 plus a random 0–999 (16 digits), and always
+ * higher than the last one this file handed out.
+ */
 export function ghId(): string {
-  counter += 1;
-  return `${Date.now()}${counter}${Math.floor(Math.random() * 1000)}`;
+  lastGhId = Math.max(lastGhId + 1, Date.now() * 1000 + Math.floor(Math.random() * 1000));
+  return String(lastGhId);
 }
 
 export async function makeUser(over: { login?: string; githubId?: string } = {}) {
