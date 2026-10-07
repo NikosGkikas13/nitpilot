@@ -4406,12 +4406,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `createApp()` (the Hono app with `GET /healthz`; later tasks add route groups and its `deps` argument);
   - `acquireSingletonLock(databaseUrl, key?) → SingletonLock | null`.
 
-- [ ] **Step 1: Install Hono**
+- [x] **Step 1: Install Hono**
 
 Run: `npm install hono@^4 @hono/node-server@^1 -w apps/server`
 Expected: `added … packages`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/lib/env.test.ts`:
 ```ts
@@ -4512,12 +4512,12 @@ describe('acquireSingletonLock', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: FAIL, `Failed to resolve import "./env"`, `"./app"` and `"./advisory-lock"`.
 
-- [ ] **Step 4: Write the environment reader**
+- [x] **Step 4: Write the environment reader**
 
 `apps/server/src/lib/env.ts`:
 ```ts
@@ -4560,7 +4560,7 @@ export function getEnv(source: NodeJS.ProcessEnv = process.env): Env {
 }
 ```
 
-- [ ] **Step 5: Write the error mapping and the app**
+- [x] **Step 5: Write the error mapping and the app**
 
 `apps/server/src/http/errors.ts`:
 ```ts
@@ -4626,7 +4626,7 @@ export function createApp(): Hono {
 }
 ```
 
-- [ ] **Step 6: Write the singleton lock and the boot file**
+- [x] **Step 6: Write the singleton lock and the boot file**
 
 `apps/server/src/lib/advisory-lock.ts`:
 ```ts
@@ -4726,12 +4726,12 @@ PUBLIC_REPOS_ONLY=false
 ALLOWED_LOGINS=
 ```
 
-- [ ] **Step 7: Run the tests to see them pass**
+- [x] **Step 7: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (env 4, app 4, advisory lock 1, plus everything earlier).
 
-- [ ] **Step 8: Start the server by hand once**
+- [x] **Step 8: Start the server by hand once**
 
 Copy the new keys from `apps/server/.env.example` into `apps/server/.env`. Set `ENCRYPTION_KEY` (`openssl rand -base64 32`) and put any placeholder text in the `GITHUB_*` values for now; Task 19 replaces them with the real dev app. Then run `npm run dev -w apps/server`, and in a second terminal:
 ```bash
@@ -4740,7 +4740,7 @@ npm run start -w apps/server
 ```
 Expected: `{"ok":true,"version":"0.1.0"}`, and the second server prints "Another Nitpilot server is already running against this database. Refusing to start." and exits. Stop the first server with Ctrl-C.
 
-- [ ] **Step 9: Write the explainer**
+- [x] **Step 9: Write the explainer**
 
 `docs/why/one-process.md`:
 ```markdown
@@ -4763,7 +4763,7 @@ Many backends split into a web process, worker processes and a queue (Redis, SQS
 It's like keeping app state in a single store instead of syncing several: simpler, as long as you only have one tab. The advisory lock is the check that you really do have only one tab.
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/server docs/why/one-process.md package-lock.json

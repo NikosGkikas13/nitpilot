@@ -11,13 +11,17 @@
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
     "test:unit": "vitest run --project unit",
-    "test:db": "vitest run --project db"
+    "test:db": "vitest run --project db",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.17",
     "@nitpilot/protocol": "*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "^17.4.2",
+    "hono": "^4.13.13",
     "pg": "^8.23.1",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"
