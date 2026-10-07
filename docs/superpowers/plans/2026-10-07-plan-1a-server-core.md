@@ -1020,7 +1020,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `CLOSE_CODES = { reauth: 4401, upgradeCli: 4426, serverRestart: 1012 }`;
   - `CliLoginStartRequest`/`Response`, `CliLoginPollRequest`/`Response`, `MeResponse`, `MyChat`, `MyChatsResponse`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/protocol/src/messages.test.ts`:
 ```ts
@@ -1102,12 +1102,12 @@ describe('REST shapes', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to see it fail**
+- [x] **Step 2: Run the test to see it fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, `Failed to resolve import "./api"`.
 
-- [ ] **Step 3: Write the envelope and close codes**
+- [x] **Step 3: Write the envelope and close codes**
 
 `packages/protocol/src/envelope.ts`:
 ```ts
@@ -1151,7 +1151,7 @@ export const CLOSE_CODES = {
 } as const;
 ```
 
-- [ ] **Step 4: Write the CLI ↔ server messages**
+- [x] **Step 4: Write the CLI ↔ server messages**
 
 `packages/protocol/src/cli-messages.ts`:
 ```ts
@@ -1231,7 +1231,7 @@ export const ServerToCli = z.discriminatedUnion('t', [Welcome, Pong, Ack, JobAss
 export type ServerToCli = z.infer<typeof ServerToCli>;
 ```
 
-- [ ] **Step 5: Write the REST shapes**
+- [x] **Step 5: Write the REST shapes**
 
 `packages/protocol/src/api.ts`:
 ```ts
@@ -1295,12 +1295,12 @@ export * from './api';
 export * as samples from './test-samples';
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm test -w packages/protocol && npm run typecheck -w packages/protocol && npm run lint`
 Expected: PASS, with no type or lint errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/protocol

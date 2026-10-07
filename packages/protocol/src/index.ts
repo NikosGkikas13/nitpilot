@@ -3,4 +3,8 @@ export * from './enums';
 export * from './rules';
 export * from './job-result';
 export * from './job-bundle';
+export * from './envelope';
+export * from './cli-messages';
+export * from './close-codes';
+export * from './api';
 export * as samples from './test-samples';
