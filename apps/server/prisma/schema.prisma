@@ -1,0 +1,327 @@
+// Nitpilot data model (spec §8). Every platform id is a string.
+// Status-like columns are plain strings; their allowed values are the zod enums in packages/protocol.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  githubId  String   @unique
+  login     String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  githubAuth    GithubAuth?
+  sessions      WebSession[]
+  cliTokens     CliToken[]
+  loginRequests CliLoginRequest[]
+  jobs          Job[]
+}
+
+/// The user's GitHub user access token (8 h) and refresh token (6 months, single use), encrypted.
+model GithubAuth {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessTokenEnc   String
+  accessExpiresAt  DateTime
+  refreshTokenEnc  String
+  refreshExpiresAt DateTime
+  /// Bumped on every refresh; a refresh only saves if the version didn't change meanwhile.
+  version          Int      @default(0)
+  /// ok | needs_reauth
+  status           String   @default("ok")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model WebSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// One per CLI device. Only the sha256 of the token is stored.
+model CliToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  prefix     String
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  jobs       Job[]
+}
+
+/// The `nitpilot login` handshake. The device code is stored only as a hash.
+model CliLoginRequest {
+  id             String   @id @default(cuid())
+  deviceCodeHash String   @unique
+  userCode       String   @unique
+  deviceName     String
+  /// pending | approved | consumed | denied | expired
+  status         String   @default("pending")
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Installation {
+  /// GitHub's installation id
+  id           String    @id
+  accountLogin String
+  suspendedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  repos        Repo[]
+}
+
+model Repo {
+  /// GitHub's repository id
+  id             String       @id
+  installationId String
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  fullName       String       @unique
+  private        Boolean
+  defaultBranch  String
+  /// Parsed .nitpilot.yml; null means the defaults apply.
+  rulesJson      Json?
+  rulesEtag      String?
+  rulesError     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  chats          PrChat[]
+}
+
+model PrChat {
+  id               String    @id @default(cuid())
+  repoId           String
+  repo             Repo      @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  number           Int
+  title            String
+  body             String    @default("")
+  url              String
+  authorGithubId   String
+  /// idle | reviewing | addressing | ready | escalated | closed
+  phase            String    @default("idle")
+  round            Int       @default(1)
+  addressPasses    Int       @default(0)
+  headSha          String
+  baseSha          String
+  baseRef          String
+  headRef          String
+  /// null when the PR came from a fork that has been deleted
+  headRepoFullName String?
+  isDraft          Boolean   @default(false)
+  trusted          Boolean   @default(false)
+  lastSeq          Int       @default(0)
+  pointCount       Int       @default(0)
+  summaryCommentId String?
+  summaryHash      String?
+  merged           Boolean   @default(false)
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  participants Participant[]
+  points       Point[]
+  messages     Message[]
+  jobs         Job[]
+  tasks        Task[]
+  githubWrites GithubWrite[]
+
+  @@unique([repoId, number])
+}
+
+model Participant {
+  id              String   @id @default(cuid())
+  chatId          String
+  chat            PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  githubId        String
+  /// author | reviewer
+  role            String
+  /// Cache of User.id; null = not on Nitpilot. Refreshed every time the chat is loaded.
+  userId          String?
+  login           String
+  isBot           Boolean  @default(false)
+  auto            Boolean  @default(true)
+  requested       Boolean  @default(false)
+  lastReviewedSha String?
+  /// none | decision | manual_review | failed | drafts
+  attention       String   @default("none")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  jobs            Job[]
+
+  @@unique([chatId, githubId, role])
+}
+
+model Point {
+  id                 String   @id @default(cuid())
+  chatId             String
+  chat               PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  /// Shown as P1, P2, …
+  number             Int
+  raisedByGithubId   String
+  /// agent | github
+  origin             String
+  jobId              String?
+  githubCommentId    String?
+  githubThreadRootId String?
+  path               String?
+  line               Int?
+  side               String?
+  commitSha          String?
+  severity           String
+  category           String
+  title              String
+  body               String
+  snippet            Json?
+  /// open | addressed | resolved | escalated
+  status             String   @default("open")
+  authorResolution   String?
+  escalationReason   String?
+  trusted            Boolean  @default(true)
+  round              Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([chatId, number])
+  @@unique([chatId, githubCommentId])
+}
+
+/// One item in a chat's timeline. `seq` is the resume cursor (spec §10).
+model Message {
+  id             String   @id @default(cuid())
+  chatId         String
+  chat           PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  seq            Int
+  /// point_raised | point_reply | point_decision | job_summary | human | system
+  kind           String
+  /// null = a system event
+  authorGithubId String?
+  authorLogin    String?
+  pointNumber    Int?
+  jobId          String?
+  body           String
+  data           Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([chatId, seq])
+}
+
+model Job {
+  id              String      @id @default(cuid())
+  chatId          String
+  chat            PrChat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  participantId   String
+  participant     Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  /// The participant id while this job is queued or running, null otherwise.
+  /// Unique, so a participant can have at most one active job (spec §9.4).
+  activeFor       String?     @unique
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// review | re_review | address
+  type            String
+  /// queued | running | done | failed | cancelled
+  status          String      @default("queued")
+  round           Int
+  /// The PR head when queued. Plan 1b's assigner moves it to the latest head at assignment.
+  headSha         String
+  sinceSha        String?
+  attempt         Int         @default(0)
+  runAfter        DateTime    @default(now())
+  cliTokenId      String?
+  cliToken        CliToken?   @relation(fields: [cliTokenId], references: [id], onDelete: SetNull)
+  leaseExpiresAt  DateTime?
+  /// Announced by job.pushing, so the server recognizes its own push.
+  expectedPushSha String?
+  result          Json?
+  /// pending | applied | draft | discarded
+  applyState      String      @default("pending")
+  failure         String?
+  cancelReason    String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status, runAfter])
+  @@index([chatId, expectedPushSha])
+}
+
+/// Server-side outbox and timers (spec §7). The task runner executes due rows.
+model Task {
+  id        String   @id @default(cuid())
+  /// timer | summary | post_review | thread_replies | notify
+  kind      String
+  chatId    String?
+  chat      PrChat?  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  payload   Json
+  runAt     DateTime @default(now())
+  /// pending | running | done | failed
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  lastError String?
+  /// A debounce is an upsert on this key.
+  dedupeKey String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAt])
+}
+
+/// Every webhook delivery, kept 14 days. The primary key stops double processing.
+model RawEvent {
+  /// X-GitHub-Delivery
+  deliveryId String   @id
+  event      String
+  action     String?
+  repoId     String?
+  body       String
+  /// received | processed | ignored | failed
+  status     String   @default("received")
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// GitHub comment ids already handled. A comment can arrive on its own and again inside a
+/// submitted review; this table makes sure it is handled once (Review Focus #3).
+model SeenComment {
+  commentId String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Everything Nitpilot wrote to GitHub, so it can edit those writes and ignore their webhooks.
+model GithubWrite {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  /// summary | review | review_comment | reply
+  kind      String
+  githubId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, githubId])
+}

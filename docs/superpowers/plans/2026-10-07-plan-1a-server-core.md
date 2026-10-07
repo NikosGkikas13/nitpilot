@@ -3818,7 +3818,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - **Natural keys:** `Point.raisedByGithubId`, `Message.authorGithubId`/`authorLogin`/`pointNumber` (see "Decisions" at the top).
   - **`Point`** is unique on `(chatId, githubCommentId)`.
 
-- [ ] **Step 1: Install Prisma and the Postgres driver**
+- [x] **Step 1: Install Prisma and the Postgres driver**
 
 Run:
 ```bash
@@ -3827,7 +3827,7 @@ npm install -D prisma@^7 @types/pg@^8 -w apps/server
 ```
 Expected: `added … packages`.
 
-- [ ] **Step 2: Write the schema**
+- [x] **Step 2: Write the schema**
 
 `apps/server/prisma/schema.prisma`:
 ```prisma
@@ -4186,7 +4186,7 @@ Add to `apps/server/package.json` `"scripts"`:
 "postinstall": "prisma generate"
 ```
 
-- [ ] **Step 3: Create the first migration**
+- [x] **Step 3: Create the first migration**
 
 Run:
 ```bash
@@ -4195,7 +4195,7 @@ npm run db:migrate -w apps/server -- --name init
 ```
 Expected: `Your database is now in sync with your schema` and `Generated Prisma Client … to ./src/generated/prisma`.
 
-- [ ] **Step 4: Write the Prisma client module**
+- [x] **Step 4: Write the Prisma client module**
 
 `apps/server/src/lib/prisma.ts`:
 ```ts
@@ -4222,7 +4222,7 @@ export function isUniqueViolation(err: unknown): boolean {
 }
 ```
 
-- [ ] **Step 5: Split the tests into unit and DB projects**
+- [x] **Step 5: Split the tests into unit and DB projects**
 
 Replace `apps/server/vitest.config.ts`:
 ```ts
@@ -4268,7 +4268,7 @@ Add to `apps/server/package.json` `"scripts"`:
 "test:db": "vitest run --project db"
 ```
 
-- [ ] **Step 6: Write the DB test helpers**
+- [x] **Step 6: Write the DB test helpers**
 
 `apps/server/test/db.ts`:
 ```ts
@@ -4339,7 +4339,7 @@ export async function resetDb(): Promise<void> {
 }
 ```
 
-- [ ] **Step 7: Write the schema tests**
+- [x] **Step 7: Write the schema tests**
 
 `apps/server/src/lib/prisma.db.test.ts`:
 ```ts
@@ -4377,12 +4377,12 @@ describe('schema', () => {
 });
 ```
 
-- [ ] **Step 8: Run the tests**
+- [x] **Step 8: Run the tests**
 
 Run: `npm run test:db -w apps/server && npm run test:unit -w apps/server && npm run typecheck -w apps/server`
 Expected: the `db` project PASSES with 2 tests, the `unit` project PASSES with every engine test, and there are no type errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/server package.json package-lock.json
