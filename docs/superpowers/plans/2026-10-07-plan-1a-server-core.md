@@ -4791,7 +4791,7 @@ Read the Odyhook originals first; these are close ports:
 - `~/Desktop/PracticeProjects/hooksmith/src/lib/hmac.ts`
 - `~/Desktop/PracticeProjects/hooksmith/src/lib/csrf.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/lib/crypto.test.ts`:
 ```ts
@@ -4885,12 +4885,12 @@ describe('isAllowedOrigin', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:unit -w apps/server`
 Expected: FAIL, `Failed to resolve import "./crypto"` (and the other three).
 
-- [ ] **Step 3: Write the four modules**
+- [x] **Step 3: Write the four modules**
 
 `apps/server/src/lib/crypto.ts`:
 ```ts
@@ -5021,12 +5021,12 @@ export function isAllowedOrigin(req: Request, publicUrl: string): boolean {
 }
 ```
 
-- [ ] **Step 4: Run the tests to see them pass**
+- [x] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:unit -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (crypto 2, tokens 3, hmac 7, csrf 5).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/lib
