@@ -3577,7 +3577,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 The format is spec §15's example. The body starts with the hidden marker `<!-- nitpilot:v1 chat=<id> -->`, so Nitpilot can recognize its own comment (Review Focus #1).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `apps/server/src/engine/summary.test.ts`:
 ```ts
@@ -3657,12 +3657,12 @@ describe('renderSummary', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to see it fail**
+- [x] **Step 2: Run the test to see it fail**
 
 Run: `npm run test -w apps/server -- src/engine/summary.test.ts`
 Expected: FAIL, `Failed to resolve import "./summary"`.
 
-- [ ] **Step 3: Write `summary.ts`**
+- [x] **Step 3: Write `summary.ts`**
 
 `apps/server/src/engine/summary.ts`:
 ```ts
@@ -3782,12 +3782,12 @@ function cell(text: string): string {
 }
 ```
 
-- [ ] **Step 4: Run the test to see it pass**
+- [x] **Step 4: Run the test to see it pass**
 
 Run: `npm run test -w apps/server -- src/engine && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (6 summary tests plus all earlier engine tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/engine
