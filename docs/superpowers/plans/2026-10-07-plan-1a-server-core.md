@@ -5055,7 +5055,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - test helpers `fakeFetch(routes)`, `json(data, status?, headers?)`, `cookieHeader(res)` and `sessionCookieFor(userId)`.
 - Routes: `GET /` (home), `GET /auth/github/login?next=`, `GET /auth/github/callback`, `POST /auth/logout`.
 
-- [ ] **Step 1: Write the test helpers**
+- [x] **Step 1: Write the test helpers**
 
 `apps/server/test/fake-fetch.ts`:
 ```ts
@@ -5110,7 +5110,7 @@ export async function sessionCookieFor(userId: string): Promise<string> {
 }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/auth/github-oauth.test.ts`:
 ```ts
@@ -5271,12 +5271,12 @@ import { fakeFetch } from '../../test/fake-fetch';
 import { GithubClient } from '../platform/github/client';
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: FAIL, `Failed to resolve import "../platform/github/client"`.
 
-- [ ] **Step 4: Write the GitHub client**
+- [x] **Step 4: Write the GitHub client**
 
 `apps/server/src/platform/github/client.ts`:
 ```ts
@@ -5353,7 +5353,7 @@ async function readBody(res: Response): Promise<unknown> {
 }
 ```
 
-- [ ] **Step 5: Write the OAuth helpers, user saving and sessions**
+- [x] **Step 5: Write the OAuth helpers, user saving and sessions**
 
 `apps/server/src/auth/github-oauth.ts`:
 ```ts
@@ -5498,7 +5498,7 @@ export async function endSession(c: Context): Promise<void> {
 }
 ```
 
-- [ ] **Step 6: Write the page layout and home page**
+- [x] **Step 6: Write the page layout and home page**
 
 `apps/server/src/http/pages/layout.tsx`:
 ```tsx
@@ -5578,7 +5578,7 @@ export function HomePage(props: { user: SessionUser | null; appSlug: string }) {
 }
 ```
 
-- [ ] **Step 7: Write the sign-in routes and mount them**
+- [x] **Step 7: Write the sign-in routes and mount them**
 
 `apps/server/src/http/routes/auth.ts`:
 ```ts
@@ -5700,12 +5700,12 @@ In `apps/server/src/main.ts`, add `import { GithubClient } from './platform/gith
   const app = createApp({ github });
 ```
 
-- [ ] **Step 8: Run the tests to see them pass**
+- [x] **Step 8: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (OAuth 4, sign-in 6, safeNext 5, plus everything earlier).
 
-- [ ] **Step 9: Write the explainer**
+- [x] **Step 9: Write the explainer**
 
 `docs/why/oauth-pkce.md`:
 ```markdown
@@ -5730,7 +5730,7 @@ Reviews and replies are posted **as you**, so GitHub shows your avatar plus the 
 Like a "magic link" login, except the link carries a code that only works together with a secret your own server kept.
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/server docs/why/oauth-pkce.md

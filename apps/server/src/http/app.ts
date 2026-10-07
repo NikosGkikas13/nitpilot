@@ -1,11 +1,21 @@
 import { Hono } from 'hono';
+import { currentUser } from '../auth/session';
+import { getEnv } from '../lib/env';
+import type { GithubClient } from '../platform/github/client';
 import { SERVER_VERSION } from '../version';
 import { onError } from './errors';
+import { HomePage } from './pages/home';
+import { renderPage } from './pages/layout';
+import { authRoutes } from './routes/auth';
 
-/** The HTTP app. Later tasks mount their route groups here. */
-export function createApp(): Hono {
+/** What the HTTP layer needs from outside. Tests pass fakes. Later tasks add fields. */
+export type AppDeps = { github: GithubClient };
+
+export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   app.onError(onError);
   app.get('/healthz', (c) => c.json({ ok: true, version: SERVER_VERSION }));
+  app.get('/', async (c) => renderPage(c, HomePage({ user: await currentUser(c), appSlug: getEnv().GITHUB_APP_SLUG })));
+  app.route('/', authRoutes(deps));
   return app;
 }

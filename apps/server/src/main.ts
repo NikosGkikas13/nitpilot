@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './http/app';
 import { acquireSingletonLock } from './lib/advisory-lock';
 import { getEnv } from './lib/env';
+import { GithubClient } from './platform/github/client';
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -14,7 +15,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const app = createApp();
+  const github = new GithubClient();
+  const app = createApp({ github });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });
