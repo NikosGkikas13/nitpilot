@@ -3,6 +3,7 @@ import {
   onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrToDraft,
   onReviewRequestRemoved, onReviewRequested,
 } from './lifecycle';
+import { onJobCompleted } from './results';
 import { author, onNitpilot } from './state';
 import type { DecideInput, DecideOutput } from './types';
 
@@ -30,6 +31,7 @@ export function decide(input: DecideInput): DecideOutput {
     case 'review_request_removed': onReviewRequestRemoved(ctx, event); break;
     case 'manual_review': onManualReview(ctx, event); break;
     case 'human_note': onHumanNote(ctx, event); break;
+    case 'job_completed': onJobCompleted(ctx, event); break;
     // Tasks 8–10 add the remaining event types and make this switch exhaustive.
     default: break;
   }

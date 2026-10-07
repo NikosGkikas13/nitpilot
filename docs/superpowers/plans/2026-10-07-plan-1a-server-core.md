@@ -2519,7 +2519,7 @@ Rules covered:
 - Drafts.
 - Ignoring stale results.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/engine/results.test.ts`:
 ```ts
@@ -2746,12 +2746,12 @@ describe('drafts and stale results', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test -w apps/server -- src/engine/results.test.ts`
 Expected: FAIL. The first assertion on `out.chat.points` gets `[]`, because `job_completed` hits `default` in `decide`.
 
-- [ ] **Step 3: Add `applyDecision` and `applyReply` to `points.ts`**
+- [x] **Step 3: Add `applyDecision` and `applyReply` to `points.ts`**
 
 Add these imports to the top of `apps/server/src/engine/points.ts` (merge with the existing ones):
 ```ts
@@ -2793,7 +2793,7 @@ export function applyReply(ctx: Ctx, authorP: ParticipantState, r: PointReply, j
 }
 ```
 
-- [ ] **Step 4: Write `results.ts`**
+- [x] **Step 4: Write `results.ts`**
 
 `apps/server/src/engine/results.ts`:
 ```ts
@@ -2899,7 +2899,7 @@ function severityCounts(result: JobResult): Partial<Record<Severity, number>> {
 }
 ```
 
-- [ ] **Step 5: Route `job_completed` in `decide.ts`**
+- [x] **Step 5: Route `job_completed` in `decide.ts`**
 
 In `apps/server/src/engine/decide.ts`, add the import and the case before `default`:
 ```ts
@@ -2909,12 +2909,12 @@ import { onJobCompleted } from './results';
     case 'job_completed': onJobCompleted(ctx, event); break;
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm run test -w apps/server -- src/engine && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (results and lifecycle), with no type or lint errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/engine

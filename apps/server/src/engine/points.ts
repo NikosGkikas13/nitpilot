@@ -1,7 +1,7 @@
-import type { EscalationReason, NewPoint } from '@nitpilot/protocol';
+import type { EscalationReason, NewPoint, PointDecision, PointReply } from '@nitpilot/protocol';
 import { emit, say, system, type Ctx } from './context';
-import { nextPointNumber, onNitpilot, pointList } from './state';
-import type { PointState } from './types';
+import { nextPointNumber, onNitpilot, pointByNumber, pointList, who } from './state';
+import type { ParticipantState, PointState } from './types';
 
 const REASON_TEXT: Record<EscalationReason, string> = {
   category: 'this category always goes to a person',
@@ -57,4 +57,34 @@ export function escalatePoints(ctx: Ctx, points: PointState[], reason: Escalatio
   if (userIds.length > 0) {
     emit(ctx, { type: 'notify', userIds: [...new Set(userIds)], kind: 'escalated', pointNumbers: points.map((p) => p.number) });
   }
+}
+
+/**
+ * A reviewer agent's verdict on one of its own points (spec §9.2). Returns false when the
+ * decision doesn't apply (someone else's point, or one that is escalated or resolved).
+ */
+export function applyDecision(ctx: Ctx, reviewer: ParticipantState, d: PointDecision, jobId: string): boolean {
+  const pt = pointByNumber(ctx.chat, d.point);
+  if (!pt || pt.raisedBy !== reviewer.githubId || pt.origin !== 'agent') return false;
+  if (pt.status === 'escalated' || pt.status === 'resolved') return false;
+
+  say(ctx, { kind: 'point_decision', author: who(reviewer), pointNumber: pt.number, jobId, body: d.comment, data: { decision: d.decision } });
+  if (d.decision === 'resolve') {
+    pt.status = 'resolved';
+  } else if (pt.status === 'addressed' && pt.authorResolution === 'declined') {
+    escalatePoints(ctx, [pt], 'disagreement'); // fires immediately (spec §9.2)
+  } else {
+    pt.status = 'open';
+  }
+  return true;
+}
+
+/** The author agent's answer to an open point. Returns false when the point isn't open. */
+export function applyReply(ctx: Ctx, authorP: ParticipantState, r: PointReply, jobId: string, commit: string | null): boolean {
+  const pt = pointByNumber(ctx.chat, r.point);
+  if (!pt || pt.status !== 'open' || !pt.trusted) return false;
+  pt.status = 'addressed';
+  pt.authorResolution = r.resolution;
+  say(ctx, { kind: 'point_reply', author: who(authorP), pointNumber: pt.number, jobId, body: r.comment, data: { resolution: r.resolution, commit } });
+  return true;
 }

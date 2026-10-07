@@ -1,0 +1,100 @@
+import type { JobResult, PointReply, Severity } from '@nitpilot/protocol';
+import { advance } from './advance';
+import { emit, say, system, type Ctx, type Ev } from './context';
+import { startReview } from './jobs';
+import { applyDecision, applyReply, raisePoint } from './points';
+import { author, onNitpilot, participant, pointByNumber, reviewers, who } from './state';
+import type { JobView, ParticipantState } from './types';
+
+export function onJobCompleted(ctx: Ctx, e: Ev<'job_completed'>): void {
+  const chat = ctx.chat;
+  const job = chat.jobs.find((j) => j.id === e.jobId);
+  // A result for a job that was cancelled or already finished is stale: ignore it.
+  if (!job || job.status !== 'running') return;
+  job.status = 'done';
+  const p = participant(chat, job.participantGithubId, job.role);
+
+  if (job.applyState === 'draft') {
+    emit(ctx, { type: 'complete_job', jobId: job.id, applyState: 'draft', result: e.result });
+    if (p) {
+      p.attention = 'drafts';
+      if (p.userId) emit(ctx, { type: 'notify', userIds: [p.userId], kind: 'drafts', pointNumbers: [] });
+      system(ctx, `${p.login}'s agent finished; its work waits as drafts`, { jobId: job.id });
+    }
+    return;
+  }
+
+  emit(ctx, { type: 'complete_job', jobId: job.id, applyState: 'applied', result: e.result });
+  if (!p) return;
+  if (job.jobType === 'address') applyAddress(ctx, job, p, e.result);
+  else applyReview(ctx, job, p, e.result);
+  advance(ctx);
+}
+
+function applyReview(ctx: Ctx, job: JobView, reviewer: ParticipantState, result: JobResult): void {
+  const chat = ctx.chat;
+  say(ctx, { kind: 'job_summary', author: who(reviewer), jobId: job.id, body: result.summary, data: { jobType: job.jobType, counts: severityCounts(result) } });
+
+  const raised = result.points.slice(0, ctx.rules.max_points_per_review).map((np) =>
+    raisePoint(ctx, {
+      ...np,
+      raisedBy: who(reviewer),
+      origin: 'agent',
+      jobId: job.id,
+      githubCommentId: null,
+      githubThreadRootId: null,
+      commitSha: job.headSha,
+      trusted: true,
+    }),
+  );
+  const decided = result.decisions.filter((d) => applyDecision(ctx, reviewer, d, job.id));
+  reviewer.lastReviewedSha = job.headSha;
+
+  // Single-player reviewer: the author isn't on Nitpilot, so answer on GitHub (spec §6.1).
+  const a = author(chat);
+  if (a && onNitpilot(a)) return;
+  if (raised.length > 0) {
+    emit(ctx, { type: 'post_review', reviewerGithubId: reviewer.githubId, pointNumbers: raised.map((p) => p.number) });
+  }
+  const onGithub = decided.filter((d) => pointByNumber(chat, d.point)?.githubThreadRootId);
+  if (onGithub.length > 0) {
+    emit(ctx, { type: 'post_thread_replies', asGithubId: reviewer.githubId, replies: onGithub.map((d) => ({ pointNumber: d.point, body: d.comment })) });
+  }
+}
+
+function applyAddress(ctx: Ctx, job: JobView, authorP: ParticipantState, result: JobResult): void {
+  const chat = ctx.chat;
+  const commit = result.push?.to ?? null;
+  say(ctx, { kind: 'job_summary', author: who(authorP), jobId: job.id, body: result.summary, data: { jobType: 'address', push: result.push } });
+  if (commit) system(ctx, `${authorP.login}'s agent pushed ${commit.slice(0, 7)}`, { commit });
+
+  const replied = result.replies.filter((r) => applyReply(ctx, authorP, r, job.id, commit));
+  chat.addressPasses += 1;
+  chat.round += 1;
+
+  // A point that lives on GitHub is answered in its GitHub thread (spec §6.1).
+  const onGithub = replied.filter((r) => pointByNumber(chat, r.point)?.githubThreadRootId);
+  if (onGithub.length > 0) {
+    emit(ctx, {
+      type: 'post_thread_replies',
+      asGithubId: authorP.githubId,
+      replies: onGithub.map((r) => ({ pointNumber: r.point, body: replyBody(r, commit) })),
+    });
+  }
+
+  // Reviewers with answered points re-review; requested reviewers who never reviewed start now.
+  for (const r of reviewers(chat)) {
+    const waiting = chat.points.some((p) => p.raisedBy === r.githubId && p.origin === 'agent' && p.status === 'addressed');
+    if (waiting || r.lastReviewedSha === null) startReview(ctx, r);
+  }
+}
+
+function replyBody(r: PointReply, commit: string | null): string {
+  return r.resolution === 'fixed' && commit ? `${r.comment}\n\nFixed in ${commit.slice(0, 7)}.` : r.comment;
+}
+
+function severityCounts(result: JobResult): Partial<Record<Severity, number>> {
+  const counts: Partial<Record<Severity, number>> = {};
+  for (const p of result.points) counts[p.severity] = (counts[p.severity] ?? 0) + 1;
+  return counts;
+}
