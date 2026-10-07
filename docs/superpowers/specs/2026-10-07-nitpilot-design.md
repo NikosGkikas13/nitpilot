@@ -181,8 +181,8 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 ```
 
 - **Purity rule.** `apps/server/src/engine/**` must not import database, platform or WebSocket code. ESLint `no-restricted-imports` enforces this.
-- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after} | external_comment{…, trusted} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, result} | job_failed{reason, final} | human_note | manual_review | timer{key}`.
-- **`Command`**: `enqueue_job | cancel_jobs | schedule{key, at} | unschedule | upsert_summary | post_review{participantId, points} | post_thread_replies | notify{userIds, kind, points}`.
+- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, result} | job_failed{jobId, reason, retryable} | human_note | manual_review | timer{key}`. The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested.
+- **`Command`**: `enqueue_job | cancel_jobs | complete_job | retry_job | fail_job | schedule{key, at} | unschedule | upsert_summary | post_review{reviewerGithubId, pointNumbers} | post_thread_replies | notify{userIds, kind, pointNumbers}`. Every job change is a command, so it shows up in table tests. The engine refers to people by `githubId + role` and to points by their chat-local number, so `decide` never has to generate ids.
 - **Drafts.** Whether a result is applied or becomes a draft is decided here: if Auto is off or forbidden, the job result gets `applyState = draft`.
 - **The dispatcher**, `dispatch(chatId, event)`, runs these steps:
   1. Take the chat's in-memory lock.

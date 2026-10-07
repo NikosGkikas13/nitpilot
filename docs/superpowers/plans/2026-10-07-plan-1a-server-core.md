@@ -1335,12 +1335,12 @@ All engine files live in `apps/server/src/engine/`. Tests use the builders from 
   - `rules.ts`: `parseTeamRules(text: string | null): { rules: TeamRules; error: string | null }`.
   - `test-builders.ts`: `T0`, `person`, `participantOf`, `chatState`, `agentToAgent`, `pointOf`, `jobOf`, `result`, `newPoint`, `rulesWith`, and the cast `maya`, `leo`, `sam`, `rabbit`.
 
-- [ ] **Step 1: Install the server's engine dependencies**
+- [x] **Step 1: Install the server's engine dependencies**
 
 Run: `npm install yaml@^2 zod@^4 -w apps/server`
 Expected: `added … packages`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/engine/rules.test.ts`:
 ```ts
@@ -1410,12 +1410,12 @@ describe('engine purity rule', { timeout: 30_000 }, () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: `rules.test.ts` FAILS with `Failed to resolve import "./rules"`. `purity.test.ts` PASSES already, because the rule has existed since Task 1 (it's a guard test, not a red/green one).
 
-- [ ] **Step 4: Write the engine types**
+- [x] **Step 4: Write the engine types**
 
 `apps/server/src/engine/types.ts`:
 ```ts
@@ -1575,7 +1575,7 @@ export type DecideInput = { chat: ChatState; rules: TeamRules; event: DomainEven
 export type DecideOutput = { chat: ChatState; timeline: NewItem[]; commands: Command[] };
 ```
 
-- [ ] **Step 5: Write the context and state helpers**
+- [x] **Step 5: Write the context and state helpers**
 
 `apps/server/src/engine/context.ts`:
 ```ts
@@ -1695,7 +1695,7 @@ export function pointList(points: PointState[]): string {
 }
 ```
 
-- [ ] **Step 6: Write the rules parser**
+- [x] **Step 6: Write the rules parser**
 
 `apps/server/src/engine/rules.ts`:
 ```ts
@@ -1727,7 +1727,7 @@ export function parseTeamRules(text: string | null): ParsedRules {
 }
 ```
 
-- [ ] **Step 7: Write the test builders**
+- [x] **Step 7: Write the test builders**
 
 `apps/server/src/engine/test-builders.ts`:
 ```ts
@@ -1850,12 +1850,12 @@ export function rulesWith(over: Partial<TeamRules> = {}): TeamRules {
 }
 ```
 
-- [ ] **Step 8: Run the tests to see them pass**
+- [x] **Step 8: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (5 rules tests and 5 purity tests), with no type or lint errors.
 
-- [ ] **Step 9: Write the explainer**
+- [x] **Step 9: Write the explainer**
 
 `docs/why/pure-engine.md`:
 ```markdown
@@ -1887,7 +1887,7 @@ In Redux you write `reducer(state, action) → newState` and keep side effects (
 ESLint's `no-restricted-imports` rule (in `eslint.config.mjs`) fails the build if any file in `engine/` imports Prisma, Hono, the GitHub adapter or `node:fs`. `engine/purity.test.ts` checks that the rule keeps working.
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/server package.json package-lock.json docs/why/pure-engine.md
