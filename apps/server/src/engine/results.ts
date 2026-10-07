@@ -1,6 +1,6 @@
-import type { JobResult, PointReply, Severity } from '@nitpilot/protocol';
+import type { FailureReason, JobResult, PointReply, Severity } from '@nitpilot/protocol';
 import { advance } from './advance';
-import { emit, say, system, type Ctx, type Ev } from './context';
+import { addMs, emit, say, system, type Ctx, type Ev } from './context';
 import { startReview } from './jobs';
 import { applyDecision, applyReply, raisePoint } from './points';
 import { author, onNitpilot, participant, pointByNumber, reviewers, who } from './state';
@@ -97,4 +97,52 @@ function severityCounts(result: JobResult): Partial<Record<Severity, number>> {
   const counts: Partial<Record<Severity, number>> = {};
   for (const p of result.points) counts[p.severity] = (counts[p.severity] ?? 0) + 1;
   return counts;
+}
+
+export const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 30_000;
+/** The branch moved under the job: run it again on the new head right away. */
+const RUN_AGAIN_NOW: readonly FailureReason[] = ['stale_head', 'branch_moved'];
+/** Not the agent's fault: wait, then try again without counting an attempt. */
+const WAIT_MS: Partial<Record<FailureReason, number>> = {
+  quota: 15 * 60_000,
+  daily_cap: 60 * 60_000,
+  repo_not_linked: 10 * 60_000,
+};
+
+export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
+  const chat = ctx.chat;
+  const job = chat.jobs.find((j) => j.id === e.jobId);
+  if (!job || job.status !== 'running') return;
+  const p = participant(chat, job.participantGithubId, job.role);
+  const name = p ? `${p.login}'s agent` : 'An agent';
+
+  if (RUN_AGAIN_NOW.includes(e.reason)) {
+    requeue(ctx, job, ctx.now, true);
+    return;
+  }
+  const wait = WAIT_MS[e.reason];
+  if (wait !== undefined) {
+    requeue(ctx, job, addMs(ctx.now, wait), true);
+    system(ctx, `${name} is waiting (${e.reason.replaceAll('_', ' ')}) and will try again later`, { reason: e.reason });
+    return;
+  }
+  if (e.retryable && job.attempt < MAX_ATTEMPTS) {
+    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (job.attempt - 1)), false);
+    return;
+  }
+
+  job.status = 'failed';
+  emit(ctx, { type: 'fail_job', jobId: job.id, reason: e.reason });
+  system(ctx, `${name} couldn't finish (${e.reason.replaceAll('_', ' ')})`, { reason: e.reason, jobId: job.id });
+  if (p) {
+    p.attention = 'failed';
+    if (p.userId) emit(ctx, { type: 'notify', userIds: [p.userId], kind: 'failed', pointNumbers: [] });
+  }
+  // No advance() here: a person decides what happens next (the Retry button arrives in Plan 2).
+}
+
+function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean): void {
+  job.status = 'queued';
+  emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt });
 }

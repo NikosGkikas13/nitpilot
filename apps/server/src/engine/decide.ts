@@ -6,7 +6,7 @@ import {
   onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrToDraft,
   onReviewRequestRemoved, onReviewRequested,
 } from './lifecycle';
-import { onJobCompleted } from './results';
+import { onJobCompleted, onJobFailed } from './results';
 import { author, onNitpilot } from './state';
 import type { DecideInput, DecideOutput } from './types';
 
@@ -42,8 +42,12 @@ export function decide(input: DecideInput): DecideOutput {
     case 'thread_unresolved': onThreadUnresolved(ctx, event); break;
     case 'head_updated': onHeadUpdated(ctx, event); break;
     case 'timer': onTimer(ctx, event); break;
-    // Tasks 8–10 add the remaining event types and make this switch exhaustive.
-    default: break;
+    case 'job_failed': onJobFailed(ctx, event); break;
+    default: {
+      // If a new DomainEvent type is added without a case, this line stops compiling.
+      const unhandled: never = event;
+      throw new Error(`Unhandled event: ${JSON.stringify(unhandled)}`);
+    }
   }
 
   finalize(ctx);

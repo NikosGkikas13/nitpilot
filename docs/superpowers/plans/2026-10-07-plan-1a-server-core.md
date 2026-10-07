@@ -3414,7 +3414,7 @@ Rules covered (§9.4):
 - Quota errors don't count as attempts. Neither does `daily_cap`, `repo_not_linked`, or a branch that moved under the job.
 - A final failure sets the participant's attention to `failed` and notifies them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/engine/failures.test.ts`:
 ```ts
@@ -3474,12 +3474,12 @@ describe('job_failed', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test -w apps/server -- src/engine/failures.test.ts`
 Expected: FAIL. `retry_job` commands are `[]`, because `job_failed` still hits `default`.
 
-- [ ] **Step 3: Add `onJobFailed` to `results.ts`**
+- [x] **Step 3: Add `onJobFailed` to `results.ts`**
 
 In `apps/server/src/engine/results.ts`, add `FailureReason` to the `@nitpilot/protocol` type import and `addMs` to the `./context` import:
 ```ts
@@ -3538,7 +3538,7 @@ function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean)
 }
 ```
 
-- [ ] **Step 4: Make `decide` exhaustive**
+- [x] **Step 4: Make `decide` exhaustive**
 
 In `apps/server/src/engine/decide.ts`:
 - Change the results import to `import { onJobCompleted, onJobFailed } from './results';`.
@@ -3552,12 +3552,12 @@ In `apps/server/src/engine/decide.ts`:
     }
 ```
 
-- [ ] **Step 5: Run every engine test**
+- [x] **Step 5: Run every engine test**
 
 Run: `npm run test -w apps/server -- src/engine && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (failures, external, results, lifecycle, rules, purity), with no type or lint errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/engine
