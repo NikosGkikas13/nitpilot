@@ -7255,7 +7255,7 @@ export class GithubReads {
 Run: `npm run test:unit -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (app auth 2, reads 11).
 
-- [ ] **Step 7: Create the dev GitHub App (manual, once)**
+- [x] **Step 7: Create the dev GitHub App (manual, once)**
 
 On GitHub: Settings → Developer settings → GitHub Apps → **New GitHub App**.
 - **Name:** `nitpilot-dev` (add a suffix if the name is taken, and put it in `GITHUB_APP_SLUG`).
@@ -7312,7 +7312,7 @@ process.on('SIGINT', () => tunnel.kill('SIGINT'));
 Add to `apps/server/package.json` `"scripts"`: `"dev:tunnel": "tsx scripts/dev-tunnel.ts"`.
 Add to the root `package.json` `"scripts"`: `"dev:tunnel": "npm run dev:tunnel -w apps/server"`.
 
-- [ ] **Step 9: Try the tunnel**
+- [x] **Step 9: Try the tunnel**
 
 Run `npm run dev -w apps/server` in one terminal and `npm run dev:tunnel` in another.
 Expected: a `https://….trycloudflare.com` URL, then `✓ nitpilot-dev now sends webhooks to …/webhooks/github`. In the app's **Advanced** tab on GitHub, "Redeliver" the ping: the dev server logs a 202, and a `RawEvent` row appears with status `ignored` ("no handler for ping yet").
