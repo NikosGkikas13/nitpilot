@@ -5944,7 +5944,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `GET|POST /cli/approve` (session + Origin check);
   - `GET /api/me`, `GET /api/me/chats` and `DELETE /api/cli/token` (CLI bearer token).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/http/routes/cli.db.test.ts`:
 ```ts
@@ -6050,12 +6050,12 @@ describe('/api/me/chats', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:db -w apps/server`
 Expected: FAIL, `Failed to resolve import "../../auth/cli-login"`.
 
-- [ ] **Step 3: Write the login handshake and token check**
+- [x] **Step 3: Write the login handshake and token check**
 
 `apps/server/src/auth/cli-login.ts`:
 ```ts
@@ -6162,7 +6162,7 @@ export function transcriptUrl(repoFullName: string, number: number): string {
 }
 ```
 
-- [ ] **Step 4: Write the approval page**
+- [x] **Step 4: Write the approval page**
 
 `apps/server/src/http/pages/approve.tsx`:
 ```tsx
@@ -6208,7 +6208,7 @@ export function ApproveResult(props: { outcome: keyof typeof RESULT }) {
 }
 ```
 
-- [ ] **Step 5: Write the routes and mount them**
+- [x] **Step 5: Write the routes and mount them**
 
 `apps/server/src/http/routes/cli-approve.tsx`:
 ```tsx
@@ -6333,12 +6333,12 @@ import { cliApproveRoutes } from './routes/cli-approve';
   app.route('/', cliApproveRoutes());
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (6 CLI-login and chats tests, plus everything earlier).
 
-- [ ] **Step 7: Try the handshake by hand**
+- [x] **Step 7: Try the handshake by hand**
 
 With `npm run dev -w apps/server` running:
 ```bash
@@ -6346,7 +6346,7 @@ curl -s -X POST localhost:8787/api/cli/login -H 'content-type: application/json'
 ```
 Expected: JSON with `deviceCode`, a `userCode` like `WDJB-MJHT`, and a `verifyUrl`. Opening the `verifyUrl` in a browser redirects to GitHub sign-in. That needs the real dev app credentials in `.env`, which Task 19 sets up.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/server

@@ -7,6 +7,8 @@ import { onError } from './errors';
 import { HomePage } from './pages/home';
 import { renderPage } from './pages/layout';
 import { authRoutes } from './routes/auth';
+import { cliRoutes } from './routes/cli';
+import { cliApproveRoutes } from './routes/cli-approve';
 
 /** What the HTTP layer needs from outside. Tests pass fakes. Later tasks add fields. */
 export type AppDeps = { github: GithubClient };
@@ -17,5 +19,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/healthz', (c) => c.json({ ok: true, version: SERVER_VERSION }));
   app.get('/', async (c) => renderPage(c, HomePage({ user: await currentUser(c), appSlug: getEnv().GITHUB_APP_SLUG })));
   app.route('/', authRoutes(deps));
+  app.route('/', cliRoutes());
+  app.route('/', cliApproveRoutes());
   return app;
 }
