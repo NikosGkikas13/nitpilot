@@ -410,7 +410,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: the workspace scripts from Task 1.
 - Produces: Postgres on `localhost:5433` (user/password/db `nitpilot`), and a CI gate that runs migrations, typecheck, lint and every workspace's tests (the CLI's too, which closes the Odyhook gap noted in spec §23).
 
-- [ ] **Step 1: Write `docker-compose.yml`**
+- [x] **Step 1: Write `docker-compose.yml`**
 
 ```yaml
 # Local development only. Plan 3 adds the production compose file.
@@ -432,7 +432,7 @@ volumes:
   nitpilot_pg:
 ```
 
-- [ ] **Step 2: Start it and check that it answers**
+- [x] **Step 2: Start it and check that it answers**
 
 Run:
 ```bash
@@ -441,7 +441,7 @@ docker compose exec postgres pg_isready -U nitpilot
 ```
 Expected: `/var/run/postgresql:5432 - accepting connections`.
 
-- [ ] **Step 3: Write the CI workflow**
+- [x] **Step 3: Write the CI workflow**
 
 `.github/workflows/ci.yml`:
 ```yaml
@@ -488,12 +488,12 @@ jobs:
       - run: npm test
 ```
 
-- [ ] **Step 4: Run the same steps locally**
+- [x] **Step 4: Run the same steps locally**
 
 Run: `npm ci && npm run typecheck && npm run lint && npm test`
 Expected: everything passes as in Task 1. If the repo has a GitHub remote, push the branch and check that the "CI" workflow is green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docker-compose.yml .github/workflows/ci.yml

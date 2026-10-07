@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: typecheck + lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nitpilot
+          POSTGRES_PASSWORD: nitpilot
+          POSTGRES_DB: nitpilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nitpilot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://nitpilot:nitpilot@localhost:5432/nitpilot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The script only exists once the server has a Prisma schema (Task 12).
+      - run: npm run db:deploy --if-present -w apps/server
+      - run: npm run typecheck
+      - run: npm run lint
+      # Runs every workspace's tests: protocol, server and CLI.
+      - run: npm test

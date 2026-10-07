@@ -1,0 +1,17 @@
+# Local development only. Plan 3 adds the production compose file.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nitpilot
+      POSTGRES_PASSWORD: nitpilot
+      POSTGRES_DB: nitpilot
+    ports:
+      # 5433 on your machine, because Odyhook's Postgres already uses 5432.
+      - "5433:5432"
+    volumes:
+      - nitpilot_pg:/var/lib/postgresql/data
+
+volumes:
+  nitpilot_pg:
