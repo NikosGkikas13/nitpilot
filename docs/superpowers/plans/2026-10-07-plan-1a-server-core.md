@@ -734,7 +734,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `samples.jobResult()` and `samples.jobBundle()` (test data that Plan 1b reuses).
 - Points are referenced by their chat-local **number** (P1 → `1`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/protocol/src/job.test.ts`:
 ```ts
@@ -772,12 +772,12 @@ describe('job schemas', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to see it fail**
+- [x] **Step 2: Run the test to see it fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, `Failed to resolve import "./job-bundle"`.
 
-- [ ] **Step 3: Write the result schema**
+- [x] **Step 3: Write the result schema**
 
 `packages/protocol/src/job-result.ts`:
 ```ts
@@ -838,7 +838,7 @@ export const JobResult = z.object({
 export type JobResult = z.infer<typeof JobResult>;
 ```
 
-- [ ] **Step 4: Write the bundle schema**
+- [x] **Step 4: Write the bundle schema**
 
 `packages/protocol/src/job-bundle.ts`:
 ```ts
@@ -917,7 +917,7 @@ export const JobBundle = z.object({
 export type JobBundle = z.infer<typeof JobBundle>;
 ```
 
-- [ ] **Step 5: Write the shared samples**
+- [x] **Step 5: Write the shared samples**
 
 `packages/protocol/src/test-samples.ts`:
 ```ts
@@ -992,12 +992,12 @@ export * from './job-bundle';
 export * as samples from './test-samples';
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm test -w packages/protocol && npm run typecheck -w packages/protocol`
 Expected: PASS (5 new tests), with no type errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/protocol
