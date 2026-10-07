@@ -517,7 +517,7 @@ Everything that crosses a process boundary (server ↔ CLI, server ↔ agent res
 - Consumes: nothing.
 - Produces: the zod enums (each with its type of the same name) `Severity`, `Category`, `PointStatus`, `PointOrigin`, `Phase`, `Role`, `Attention`, `JobType`, `JobStatus`, `ApplyState`, `MessageKind`, `Resolution`, `Decision`, `EscalationReason`, `Side`, `AgentId`, `AgentMode`, `NotifyKind` and `FailureReason`, plus `TeamRulesSchema`, `type TeamRules` and `DEFAULT_RULES`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/protocol/src/enums.test.ts`:
 ```ts
@@ -582,12 +582,12 @@ describe('TeamRulesSchema', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, `Failed to resolve import "./enums"` and `"./rules"`.
 
-- [ ] **Step 3: Write the enums**
+- [x] **Step 3: Write the enums**
 
 `packages/protocol/src/enums.ts`:
 ```ts
@@ -666,7 +666,7 @@ export const FailureReason = z.enum([
 export type FailureReason = z.infer<typeof FailureReason>;
 ```
 
-- [ ] **Step 4: Write the team rules schema**
+- [x] **Step 4: Write the team rules schema**
 
 `packages/protocol/src/rules.ts`:
 ```ts
@@ -706,12 +706,12 @@ export * from './enums';
 export * from './rules';
 ```
 
-- [ ] **Step 5: Run the tests to see them pass**
+- [x] **Step 5: Run the tests to see them pass**
 
 Run: `npm test -w packages/protocol && npm run typecheck -w packages/protocol`
 Expected: PASS (all enum and rules cases), with no type errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/protocol
