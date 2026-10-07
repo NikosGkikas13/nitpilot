@@ -2,3 +2,8 @@
 
 # Raw Claude Design export; the extracted copy lives in docs/design/handoff/design_handoff_nitpilot_web/
 docs/design/handoff/*.zip
+node_modules/
+dist/
+coverage/
+.env
+apps/server/src/generated/

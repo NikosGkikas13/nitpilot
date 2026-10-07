@@ -133,7 +133,7 @@ docs/why/                  pure-engine, one-process, oauth-pkce, webhooks, outbo
 - Consumes: nothing.
 - Produces: `BRAND` (from `@nitpilot/protocol`), the workspace scripts `npm test`, `npm run typecheck` and `npm run lint`, and `SERVER_VERSION` / `CLI_VERSION`.
 
-- [ ] **Step 1: Create the root workspace files**
+- [x] **Step 1: Create the root workspace files**
 
 `package.json`:
 ```json
@@ -219,7 +219,7 @@ coverage/
 apps/server/src/generated/
 ```
 
-- [ ] **Step 2: Create the protocol package and its failing test**
+- [x] **Step 2: Create the protocol package and its failing test**
 
 `packages/protocol/package.json`:
 ```json
@@ -269,7 +269,7 @@ describe('BRAND', () => {
 });
 ```
 
-- [ ] **Step 3: Install the root dev tools and run the test to see it fail**
+- [x] **Step 3: Install the root dev tools and run the test to see it fail**
 
 Run:
 ```bash
@@ -279,7 +279,7 @@ npm test -w packages/protocol
 ```
 Expected: FAIL, `Failed to resolve import "./brand"`.
 
-- [ ] **Step 4: Write `BRAND` and the package entry**
+- [x] **Step 4: Write `BRAND` and the package entry**
 
 `packages/protocol/src/brand.ts`:
 ```ts
@@ -310,12 +310,12 @@ export const BRAND = {
 export * from './brand';
 ```
 
-- [ ] **Step 5: Run the test to see it pass**
+- [x] **Step 5: Run the test to see it pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 2 tests.
 
-- [ ] **Step 6: Create the server and CLI package stubs**
+- [x] **Step 6: Create the server and CLI package stubs**
 
 `apps/server/package.json`:
 ```json
@@ -381,7 +381,7 @@ export const SERVER_VERSION = '0.1.0';
 export const CLI_VERSION = '0.1.0';
 ```
 
-- [ ] **Step 7: Link the workspaces and check everything**
+- [x] **Step 7: Link the workspaces and check everything**
 
 Run:
 ```bash
@@ -392,7 +392,7 @@ npm run lint
 ```
 Expected: the protocol tests PASS, the server reports "No test files found, exiting with code 0", typecheck prints nothing, and lint prints nothing.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add package.json package-lock.json tsconfig.base.json eslint.config.mjs .gitignore packages apps
