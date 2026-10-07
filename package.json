@@ -12,7 +12,8 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "dev:tunnel": "npm run dev:tunnel -w apps/server"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

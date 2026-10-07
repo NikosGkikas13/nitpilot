@@ -6805,7 +6805,7 @@ The adapter interface is spec §12.1, with three adjustments:
 2. Writes take an optional `{ reuseIfContains }`: on a retry, the adapter first looks for an earlier write containing that marker (Review Focus #2).
 3. `verifyWebhook` and `deliveryId` are left out: the GitHub route checks HMAC itself (Task 18), and they come back with a second platform. `findOpenPrsFor` and `listThreads` come in Plan 1b (catch-up).
 
-- [ ] **Step 1: Write the types**
+- [x] **Step 1: Write the types**
 
 `apps/server/src/platform/types.ts`:
 ```ts
@@ -6958,7 +6958,7 @@ export type GhInstallationReposEvent = {
 export type GhRepositoryEvent = Envelope & { action: string };
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/server/src/platform/github/app-auth.test.ts`:
 ```ts
@@ -7099,12 +7099,12 @@ describe('GithubReads', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm run test:unit -w apps/server`
 Expected: FAIL, `Failed to resolve import "./app-auth"` and `"./reads"`.
 
-- [ ] **Step 4: Write the app auth**
+- [x] **Step 4: Write the app auth**
 
 `apps/server/src/platform/github/app-auth.ts`:
 ```ts
@@ -7149,7 +7149,7 @@ export class AppAuth {
 }
 ```
 
-- [ ] **Step 5: Write the mapping helpers and the reads**
+- [x] **Step 5: Write the mapping helpers and the reads**
 
 `apps/server/src/platform/github/mapping.ts`:
 ```ts
@@ -7250,7 +7250,7 @@ export class GithubReads {
 }
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm run test:unit -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (app auth 2, reads 11).
@@ -7273,7 +7273,7 @@ After creating it, put these into `apps/server/.env`:
 - the webhook secret;
 - a new private key, as `GITHUB_APP_PRIVATE_KEY` on one line with `\n` for line breaks: `awk 'NF {printf "%s\\n", $0}' key.pem`.
 
-- [ ] **Step 8: Write the dev tunnel script**
+- [x] **Step 8: Write the dev tunnel script**
 
 `apps/server/scripts/dev-tunnel.ts`:
 ```ts
@@ -7317,7 +7317,7 @@ Add to the root `package.json` `"scripts"`: `"dev:tunnel": "npm run dev:tunnel -
 Run `npm run dev -w apps/server` in one terminal and `npm run dev:tunnel` in another.
 Expected: a `https://….trycloudflare.com` URL, then `✓ nitpilot-dev now sends webhooks to …/webhooks/github`. In the app's **Advanced** tab on GitHub, "Redeliver" the ping: the dev server logs a 202, and a `RawEvent` row appears with status `ignored` ("no handler for ping yet").
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/server package.json
