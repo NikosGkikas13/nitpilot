@@ -5750,7 +5750,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 Spec §15: access tokens last 8 hours; refresh tokens last 6 months and work once. Refreshes run one at a time per user. If a refresh fails, the user is marked `needs_reauth`, and writes in their name stop; Nitpilot never falls back to posting as the bot.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/auth/user-tokens.db.test.ts`:
 ```ts
@@ -5828,12 +5828,12 @@ describe('getUserToken', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:db -w apps/server`
 Expected: FAIL, `Failed to resolve import "./user-tokens"`.
 
-- [ ] **Step 3: Write the token store**
+- [x] **Step 3: Write the token store**
 
 `apps/server/src/auth/user-tokens.ts`:
 ```ts
@@ -5912,12 +5912,12 @@ async function markNeedsReauth(id: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 4: Run the tests to see them pass**
+- [x] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:db -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (6 token-store tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/auth
