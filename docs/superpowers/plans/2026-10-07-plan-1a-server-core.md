@@ -10063,7 +10063,7 @@ Rules covered:
 - **Review Focus #2:** a retry (`attempts > 1`) reuses earlier writes.
 - **§15 lost token:** a user who must sign in again stops writes in their name; Nitpilot never posts as the bot instead.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/tasks/handlers/handlers.db.test.ts`:
 ```ts
@@ -10214,12 +10214,12 @@ describe('a chat that no longer exists', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/tasks/handlers`
 Expected: FAIL, `Failed to resolve import "./index"`.
 
-- [ ] **Step 3: Write the notifier and the shared helpers**
+- [x] **Step 3: Write the notifier and the shared helpers**
 
 `apps/server/src/tasks/notifier.ts`:
 ```ts
@@ -10276,7 +10276,7 @@ export async function asUser<T>(write: () => Promise<T>): Promise<T> {
 }
 ```
 
-- [ ] **Step 4: Write the four handlers and the index**
+- [x] **Step 4: Write the four handlers and the index**
 
 `apps/server/src/tasks/handlers/summary.ts`:
 ```ts
@@ -10515,12 +10515,12 @@ export function createTaskHandlers(deps: TaskHandlerDeps): TaskHandlers {
 }
 ```
 
-- [ ] **Step 5: Run the tests to see them pass**
+- [x] **Step 5: Run the tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/tasks && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (handlers 10, plus the runner tests).
 
-- [ ] **Step 6: Run every handler in the server**
+- [x] **Step 6: Run every handler in the server**
 
 In `apps/server/src/main.ts`:
 - Add `import { createTaskHandlers } from './tasks/handlers/index';` and `import { LogNotifier } from './tasks/notifier';`, and remove the `timerHandler` import.
@@ -10530,7 +10530,7 @@ In `apps/server/src/main.ts`:
   const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }));
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server

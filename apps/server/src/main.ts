@@ -12,7 +12,8 @@ import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
-import { timerHandler } from './tasks/handlers/timer';
+import { createTaskHandlers } from './tasks/handlers/index';
+import { LogNotifier } from './tasks/notifier';
 import { recoverRunningTasks, TaskRunner } from './tasks/runner';
 
 async function main(): Promise<void> {
@@ -28,7 +29,8 @@ async function main(): Promise<void> {
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
   const dispatcher = new Dispatcher();
-  const runner = new TaskRunner({ timer: timerHandler(dispatcher.dispatch) });
+  const notifier = new LogNotifier();
+  const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }));
   dispatcher.onCommit((_chatId, effects) => {
     if (effects.tasksCreated) runner.wake();
   });

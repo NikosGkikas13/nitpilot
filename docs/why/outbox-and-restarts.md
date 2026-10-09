@@ -13,6 +13,18 @@ Say the engine decides "Leo's review is done; post a summary comment". If we cal
 3. Success → `done`. Failure → `pending` again with a growing delay (5 s, 10 s, 20 s…), up to 5 attempts.
 4. At boot, any row still `running` belonged to the crashed process, so it goes back to `pending`.
 
+## What each task does (`tasks/handlers/`)
+
+| Task kind | What runs | Posted as |
+| --- | --- | --- |
+| `summary` | create or edit the one summary comment; skipped when its content hash hasn't changed | the app bot |
+| `post_review` | post a reviewer agent's points as one GitHub review (`COMMENT`, never an approval); if GitHub rejects a line, every point goes in the review body | the reviewer |
+| `thread_replies` | answer points in their GitHub threads | the agent's owner (usually the author) |
+| `notify` | tell people they're needed (Plan 1a logs it; Plan 1b sends it to their CLI) | — |
+| `timer` | a debounce came due: tell the engine | — |
+
+Everything an agent wrote is cleaned first (`lib/sanitize.ts`). Writes "as" someone use their own GitHub token. If they have to sign in again, the task stops for good instead of retrying, and nothing is posted as the bot in their place.
+
 ## Making "run it again" safe
 
 A crash can happen **after** GitHub accepted a write but **before** we marked the task done. So every body we post carries a hidden marker (`lib/markers.ts`). On a retry, the GitHub adapter first looks for a write with that marker and reuses it instead of posting a duplicate (`platform/github/writes.ts`).
