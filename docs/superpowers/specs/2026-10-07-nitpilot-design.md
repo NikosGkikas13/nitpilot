@@ -182,7 +182,7 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 ```
 
 - **Purity rule.** `apps/server/src/engine/**` must not import database, platform or WebSocket code. ESLint `no-restricted-imports` enforces this.
-- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, result} | job_failed{jobId, reason, retryable} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error}`. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested.
+- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, attempt, result} | job_failed{jobId, attempt, reason, retryable} | retry_requested{who} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error}`. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15). `retry_requested` is a person asking to run their failed job again (`nitpilot retry`; the web app's Retry button in Plan 2). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested. Job events carry the attempt they report on, and the engine ignores one whose attempt is no longer the job's current one (fencing, §9.4).
 - **`Command`**: `enqueue_job | cancel_jobs | complete_job | retry_job | fail_job | schedule{key, at} | unschedule | upsert_summary | post_review{reviewerGithubId, pointNumbers} | post_thread_replies | notify{userIds, kind, pointNumbers}`. Every job change is a command, so it shows up in table tests. The engine refers to people by `githubId + role` and to points by their chat-local number, so `decide` never has to generate ids.
 - **Drafts.** Whether a result is applied or becomes a draft is decided here: if Auto is off or forbidden, the job result gets `applyState = draft`.
 - **The dispatcher**, `dispatch(chatId, event)`, runs these steps:
@@ -243,12 +243,12 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 
 The main path is `queued → running → done | failed | cancelled`. A job goes from `running` back to `queued` when it's retried or its lease expires.
 
-- **Assigning a job.** A single atomic compare-and-swap moves the job from `queued` to `running`. It adds 1 to `attempt`, sets a 90-second lease, and binds the job to one live CLI connection that belongs to the user, has the repo linked, and has free capacity. There's no offer/accept round-trip, because the server learns each CLI's capacity from its `hello` message.
-- **Leases.** Every 25 seconds the CLI sends a `ping` listing its running `{jobId, attempt}` pairs, which extends their leases. A job missing from two pings in a row goes back to `queued`.
-- **Fencing.** Every job message carries `(jobId, attempt)`, and a message with an old attempt number is acknowledged as `stale` and ignored. When a CLI reconnects, its `hello` reports its running jobs. Jobs that are still valid are bound to it again, so a laptop that went to sleep keeps its work. The rest are cancelled.
+- **Assigning a job.** A single atomic compare-and-swap moves the job from `queued` to `running`. It adds 1 to `attempt`, sets a 90-second lease, and binds the job to one live CLI connection that belongs to the user, has the repo linked, has free capacity, and runs an agent that supports the job's mode (`reviewer` for reviews, `editor` for address jobs). There's no offer/accept round-trip, because the server learns each CLI's capacity and agent from its `hello` message.
+- **Leases.** Every 25 seconds the CLI sends a `ping` listing its running `{jobId, attempt}` pairs, which extends their leases. A job missing from two pings in a row, or whose lease ran out, goes back to the engine as a `timeout` failure (so the retry rules below apply), and its CLI gets `job.cancel`. A CLI silent for 60 seconds is disconnected. After a server restart, running jobs get a fresh lease: it was the server that was away.
+- **Fencing.** Every job message carries `(jobId, attempt)`, and a message with an old attempt number is acknowledged as `stale` and ignored. The engine repeats the check inside the chat's lock, so a late result can't land on a newer attempt. When a CLI reconnects, its `hello` reports its running jobs. Jobs that are still valid are bound to it again, so a laptop that went to sleep keeps its work. The rest are cancelled, and so is any stale attempt a `ping` still lists.
 - **Retries.** A retryable failure goes back to `queued` with a backoff (`runAfter`), up to 3 attempts. Quota errors don't count as attempts. A final failure sets the participant's attention to `failed` and sends a notification.
 - **Cancelling.** A job is cancelled when the PR is closed, the reviewer is removed, or the branch moves while an address job is running. The CLI gets `job.cancel`.
-- **Which commit a job uses.** A queued job follows the latest head commit. A running job stays on the commit it started from.
+- **Which commit a job uses.** A queued job follows the latest head commit. A running job stays on the commit it started from. When an address job's result reports its push, the head moves to that commit at once (unless something else moved it meanwhile), so the re-review doesn't wait for GitHub's push webhook.
 - **Limits.** At most one active job per participant. Each CLI runs one job at a time by default.
 
 ## 10. Protocol
@@ -270,7 +270,8 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 
 - **Reconnecting.**
   - The CLI needs no event cursor: the Job table holds the state, and `hello` brings both sides back in sync.
-  - Close codes: `4401` means log in again, `4426` means upgrade the CLI, `1012` means reconnect.
+  - Each CLI token (one per device) has at most one live connection; a newer one replaces the older.
+  - Close codes: `4401` means log in again, `4426` means upgrade the CLI, `4409` means another connection from the same device took over (a second `nitpilot start`), so stop, and `1012` means reconnect.
   - Backoff starts at 1s and doubles up to 30s, with jitter, and resets after `welcome` (Odyhook's `listen.ts` pattern).
 - **Agent tool calls stay local.** They are **not** forwarded to the server as they happen. The CLI buffers the agent's output and sends it all at once in `job.complete`. That makes a job all-or-nothing, makes retries safe, and survives brief disconnects. Progress text is still streamed live.
 
@@ -288,6 +289,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
   - `POST /api/cli/login/poll` returns `pending | approved{token} | denied | expired`.
   - `GET|POST /cli/approve` is a page rendered on the server, protected by the session and an Origin check.
 - Status: `GET /api/me`, `GET /api/me/chats` (behind `nitpilot status`)
+- Retry a failed job: `POST /api/chats/:id/retry` (behind `nitpilot retry`)
 - Revoke a CLI: `DELETE /api/cli/token`
 - Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub, and the web app replaces it in Plan 2.
 - Health check: `GET /healthz`
@@ -306,6 +308,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - `nitpilot status`
 - `nitpilot doctor`: checks git, whether the agent is installed and logged in, the config, and linked repos
 - `nitpilot repos add [path]`: links a local clone to its GitHub repo by reading its remotes
+- `nitpilot retry <pr-url>`: runs your failed job on that PR again
 - Stretch goals: `nitpilot review <pr-url>`, `nitpilot say <pr-url> "<note>"`
 
 **Job steps**
@@ -516,7 +519,7 @@ max_points_per_review: 20
    - Webhook HMAC is checked on the raw body, with a 1 MB cap.
    - Secrets are encrypted at rest (AES-256-GCM).
    - Cookie-authenticated writes get an Origin check.
-   - CLI tokens are stored only as hashes.
+   - CLI tokens are stored only as hashes. Starting a CLI login is rate-limited, and old login requests are purged.
 8. **Budget protection.** Anyone who can request your review could otherwise spend your agent quota, so the personal `dailyJobCap` limits it. Concurrency defaults to 1.
 9. **Hosted instance.**
    - Public repos only: payloads where `repository.private` is true are dropped.
@@ -683,7 +686,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 | M4 | Webhook ingress, GitHub normalization, install/repo sync, public-only filter, dispatcher |
 | M5 | Task runner: summary, reviews, replies, own-write markers, boot redelivery, `FakePlatform` |
 | M6 | CLI hub: hello/assign/ping, leases, fencing, the push ack, rebinding |
-| M7 | CLI commands: config, login, start, status, doctor, repos add |
+| M7 | CLI commands: config, login, start, status, doctor, repos add, retry |
 | M8 | Safe git, worktrees, and the security tests |
 | M9 | Local MCP server, tool sets, snippets, `run_check` |
 | M10 | End-to-end test with the fake agent, in CI |
