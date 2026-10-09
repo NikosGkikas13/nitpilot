@@ -28,3 +28,11 @@ Some rules are too important to leave to "remember to check in code". Postgres r
 ## Tests that use the database
 
 Files named `*.db.test.ts` run against the local Postgres from `docker-compose.yml`, one file at a time. Every row they create uses unique values (`uid()`, `ghId()` in `apps/server/test/db.ts`), so tests don't trip over each other's data. Run them with `npm run test:db -w apps/server`; run the fast, database-free tests with `npm run test:unit -w apps/server`.
+
+**Tests have their own database.** One Postgres server can hold several separate databases, the way one browser holds a separate `localStorage` per site. The dev server uses `nitpilot`; tests use `nitpilot_test` on the same server. That matters because some tests empty every table first (`resetDb()`), and before this split each test run wiped your dev sign-ins, installations and chats.
+
+- `apps/server/test/test-database.ts` turns your `DATABASE_URL` into the test one by adding `_test` to the database name.
+- `apps/server/vitest.config.ts` swaps that url into the tests' environment, so `prisma` inside a test only ever sees `nitpilot_test`.
+- `apps/server/test/global-setup.ts` runs once before the database tests: it creates `nitpilot_test` if it's missing and applies every migration to it. You never create or migrate it by hand.
+
+`test/helpers.db.test.ts` checks that the tests really are connected to a `*_test` database.

@@ -660,7 +660,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   - close/reopen and force-push (if `sinceSha` is no longer an ancestor, do a full re-review).
 - **Protocol:** round-trip tests for every schema.
 - **Server:**
-  - Real Postgres, Odyhook style (unique data per test).
+  - Real Postgres, Odyhook style (unique data per test), in a separate `<name>_test` database on the same server, created and migrated before the tests run, so a test run never touches dev data.
   - The GitHub adapter is tested against recorded webhook fixtures.
   - A `FakePlatform` stands in for GitHub writes.
 - **CLI hub:** an in-process WebSocket client tests hello, assign, ping, leases, fencing and rebinding.

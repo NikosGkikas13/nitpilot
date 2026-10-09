@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { defineConfig } from 'vitest/config';
+import { testDatabaseUrl } from './test/test-database';
 
 // Values the server reads from the environment. Tests that care about one override it with vi.stubEnv.
 const testEnv = {
@@ -14,6 +15,9 @@ const testEnv = {
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret',
   PUBLIC_REPOS_ONLY: 'false',
   ALLOWED_LOGINS: '',
+  // Tests use their own database next to the dev one (nitpilot_test), so a test run never
+  // empties your dev data. test/global-setup.ts creates and migrates it.
+  ...(process.env.DATABASE_URL ? { DATABASE_URL: testDatabaseUrl(process.env.DATABASE_URL) } : {}),
 };
 
 export default defineConfig({
@@ -27,7 +31,13 @@ export default defineConfig({
       {
         // Real Postgres. Files run one at a time; tests use unique data (see test/db.ts).
         extends: true,
-        test: { name: 'db', include: ['src/**/*.db.test.{ts,tsx}', 'test/**/*.db.test.ts'], fileParallelism: false, testTimeout: 20_000 },
+        test: {
+          name: 'db',
+          include: ['src/**/*.db.test.{ts,tsx}', 'test/**/*.db.test.ts'],
+          fileParallelism: false,
+          testTimeout: 20_000,
+          globalSetup: ['./test/global-setup.ts'],
+        },
       },
     ],
   },
