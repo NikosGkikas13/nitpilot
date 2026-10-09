@@ -1,5 +1,6 @@
 import type { NormalizedEvent } from '../../types';
 import { normalizeIssueComment, normalizeReview, normalizeReviewComment, normalizeReviewThread, type FetchReviewComments } from './comments';
+import { normalizeInstallation, normalizeInstallationRepos, normalizeRepository } from './installation';
 import { normalizePullRequest } from './pull-request';
 
 export type { FetchReviewComments };
@@ -18,6 +19,12 @@ export async function parseGithubWebhook(event: string, raw: string, fetchReview
       return normalizeReviewThread(payload);
     case 'issue_comment':
       return normalizeIssueComment(payload);
+    case 'installation':
+      return normalizeInstallation(payload);
+    case 'installation_repositories':
+      return normalizeInstallationRepos(payload);
+    case 'repository':
+      return normalizeRepository(payload);
     default:
       return [];
   }

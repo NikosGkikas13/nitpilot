@@ -8011,7 +8011,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 Spec §14.9: in hosted mode (`PUBLIC_REPOS_ONLY=true`), `repository.privatized` cancels that repo's jobs and purges its chats. Deleting the chats cascades to their jobs. A CLI still running one finds out when its result comes back stale; Plan 1b's hub also sends it `job.cancel`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/platform/github/normalize/installation.test.ts`:
 ```ts
@@ -8137,12 +8137,12 @@ describe('GET /github/setup', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: FAIL. The installation parse tests get `[]`, and `./installations` and `./routes/setup` don't exist yet.
 
-- [ ] **Step 3: Write the normalizers and register them**
+- [x] **Step 3: Write the normalizers and register them**
 
 `apps/server/src/platform/github/normalize/installation.ts`:
 ```ts
@@ -8196,7 +8196,7 @@ import { normalizeInstallation, normalizeInstallationRepos, normalizeRepository 
       return normalizeRepository(payload);
 ```
 
-- [ ] **Step 4: Write the sync**
+- [x] **Step 4: Write the sync**
 
 `apps/server/src/ingest/installations.ts`:
 ```ts
@@ -8268,7 +8268,7 @@ export async function syncInstallationFromApi(installationId: string, github: Gi
 }
 ```
 
-- [ ] **Step 5: Write the setup route and mount it**
+- [x] **Step 5: Write the setup route and mount it**
 
 `apps/server/src/http/routes/setup.ts`:
 ```ts
@@ -8318,12 +8318,12 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
 
 In `apps/server/src/main.ts`, add `import { AppAuth } from './platform/github/app-auth';`, create `const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);` after `github`, and pass it: `createApp({ github, appAuth, ingest })`.
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm test -w apps/server && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (installation parse 7, sync 5, setup 2, plus everything earlier).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server

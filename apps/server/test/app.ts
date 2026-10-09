@@ -1,12 +1,15 @@
 import { createApp, type AppDeps } from '../src/http/app';
 import { createIngest } from '../src/ingest/process';
+import { AppAuth } from '../src/platform/github/app-auth';
 import { GithubClient } from '../src/platform/github/client';
 import { fakeFetch } from './fake-fetch';
 
 /** Everything createApp needs, as harmless fakes. Pass only what a test cares about. */
 export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
+  const github = over.github ?? new GithubClient(fakeFetch({}));
   return {
-    github: new GithubClient(fakeFetch({})),
+    github,
+    appAuth: new AppAuth(github, '12345', 'tests-that-need-a-key-pass-their-own'),
     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
     ...over,
   };
