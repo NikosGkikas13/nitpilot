@@ -66,6 +66,9 @@ function applyReview(ctx: Ctx, job: JobView, reviewer: ParticipantState, result:
 function applyAddress(ctx: Ctx, job: JobView, authorP: ParticipantState, result: JobResult): void {
   const chat = ctx.chat;
   const commit = result.push?.to ?? null;
+  // Our own push: move the head now, so the re-review queued below runs on the pushed commit instead
+  // of waiting for GitHub's push webhook. Only when nothing else moved the head meanwhile.
+  if (result.push && chat.headSha === result.push.from) chat.headSha = result.push.to;
   say(ctx, { kind: 'job_summary', author: who(authorP), jobId: job.id, body: result.summary, data: { jobType: 'address', push: result.push } });
   if (commit) system(ctx, `${authorP.login}'s agent pushed ${commit.slice(0, 7)}`, { commit });
 

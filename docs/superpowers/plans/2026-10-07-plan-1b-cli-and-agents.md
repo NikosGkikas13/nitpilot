@@ -2153,7 +2153,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **`CliNotifier`:** sends `notify { kind, chatId, title, url }` to every live connection of each user; users with no CLI online fall back to the log.
 - **Our own push moves the head at once** when the result arrives, so the re-review it queues runs on the pushed commit instead of waiting for GitHub's push webhook (and hitting `stale_head` meanwhile). Only when nothing else moved the head.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 In `apps/server/src/engine/results.test.ts`, inside `describe('address results', …)`, after the first test, add:
 ```ts
@@ -2179,12 +2179,12 @@ In `apps/server/src/engine/results.test.ts`, inside `describe('address results',
   });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/results`
 Expected: FAIL in `moves the head to the commit it pushed` (`head1`, not `head2`). The second test already passes; it guards the condition.
 
-- [ ] **Step 3: Move the head on our own push**
+- [x] **Step 3: Move the head on our own push**
 
 In `apps/server/src/engine/results.ts`, in `applyAddress`, after `const commit = result.push?.to ?? null;`, add:
 ```ts
@@ -2193,12 +2193,12 @@ In `apps/server/src/engine/results.ts`, in `applyAddress`, after `const commit =
   if (result.push && chat.headSha === result.push.from) chat.headSha = result.push.to;
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing hub-message tests**
+- [x] **Step 5: Write the failing hub-message tests**
 
 `apps/server/src/ws/handlers.db.test.ts`:
 ```ts
@@ -2387,12 +2387,12 @@ describe('CliNotifier', () => {
 });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/ws/handlers src/tasks/cli-notifier`
 Expected: FAIL. `handlers.db.test.ts`: `no ack within 2000 ms` (nothing answers job messages yet), and the cancel tests time out waiting for `job.cancel`. `cli-notifier.db.test.ts`: `Failed to resolve import "./cli-notifier"`.
 
-- [ ] **Step 7: Handle the CLI's job messages**
+- [x] **Step 7: Handle the CLI's job messages**
 
 `apps/server/src/ws/handlers.ts`:
 ```ts
@@ -2471,7 +2471,7 @@ function ack(conn: CliConnection, re: string | undefined, status: AckStatus): vo
 }
 ```
 
-- [ ] **Step 8: Send notifications to CLIs**
+- [x] **Step 8: Send notifications to CLIs**
 
 `apps/server/src/tasks/cli-notifier.ts`:
 ```ts
@@ -2500,7 +2500,7 @@ export class CliNotifier implements Notifier {
 }
 ```
 
-- [ ] **Step 9: Wire job messages and cancels**
+- [x] **Step 9: Wire job messages and cancels**
 
 Replace `apps/server/src/ws/wire.ts` with:
 ```ts
@@ -2571,12 +2571,12 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
 }
 ```
 
-- [ ] **Step 10: Run them to see them pass**
+- [x] **Step 10: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/ws src/jobs src/tasks/cli-notifier && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (handlers 11, cli-notifier 2, cli-hub 9, assign 10, bundle 5, leases 9).
 
-- [ ] **Step 11: Notify through the CLIs in the server**
+- [x] **Step 11: Notify through the CLIs in the server**
 
 Replace `apps/server/src/main.ts` with:
 ```ts
@@ -2673,7 +2673,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 12: Update the explainers**
+- [x] **Step 12: Update the explainers**
 
 In `docs/why/dispatcher.md`, replace:
 ```markdown
@@ -2693,7 +2693,7 @@ with:
 | `notify` | tell people they're needed: sent to each of their connected CLIs (`tasks/cli-notifier.ts`), or logged when none is online | — |
 ```
 
-- [ ] **Step 13: Write the stand-in CLI for the live check**
+- [x] **Step 13: Write the stand-in CLI for the live check**
 
 The real CLI arrives in M7, but whether a summary comment really posts on GitHub has never been seen. This script plays a reviewer's CLI: it logs in like `nitpilot login`, connects to `/ws/cli`, and answers each review job with one planted point.
 
@@ -2820,12 +2820,12 @@ In `apps/server/package.json`, replace the scripts line `"dev:tunnel": "tsx scri
     "dev:fake-cli": "tsx scripts/fake-cli.ts"
 ```
 
-- [ ] **Step 14: Run the full suite**
+- [x] **Step 14: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add apps/server docs/why/dispatcher.md docs/why/outbox-and-restarts.md

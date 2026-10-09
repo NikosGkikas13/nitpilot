@@ -98,6 +98,27 @@ describe('address results', () => {
     expect(commandsOf(out, 'post_thread_replies')).toEqual([]);
   });
 
+  it('moves the head to the commit it pushed, so the re-review runs on it without waiting for the webhook', () => {
+    const out = run(addressing(), {
+      type: 'job_completed',
+      jobId: 'job-a1',
+      attempt: 1,
+      result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Done.' }], push: { from: 'head1', to: 'head2' } }),
+    });
+    expect(out.chat.headSha).toBe('head2');
+    expect(out.chat.jobs.find((j) => j.jobType === 're_review')).toMatchObject({ headSha: 'head2' });
+  });
+
+  it('keeps a newer head that someone else pushed meanwhile', () => {
+    const out = run(addressing({ headSha: 'head3' }), {
+      type: 'job_completed',
+      jobId: 'job-a1',
+      attempt: 1,
+      result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Done.' }], push: { from: 'head1', to: 'head2' } }),
+    });
+    expect(out.chat.headSha).toBe('head3');
+  });
+
   it('answers a GitHub point in its GitHub thread', () => {
     const chat = agentToAgent({
       phase: 'addressing',

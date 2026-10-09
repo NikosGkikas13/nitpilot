@@ -15,9 +15,9 @@ import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
+import { CliNotifier } from './tasks/cli-notifier';
 import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
-import { LogNotifier } from './tasks/notifier';
 import { TaskRunner } from './tasks/runner';
 import { CliHub } from './ws/cli-hub';
 import { wireCliHub } from './ws/wire';
@@ -36,11 +36,11 @@ async function main(): Promise<void> {
   const github = new GithubClient();
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
-  const notifier = new LogNotifier();
-  // CLIs connect over a WebSocket and get their jobs through it (spec §10, docs/why/websockets.md).
+  // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
   const hub = new CliHub();
+  const notifier = new CliNotifier(hub);
 
-  // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub.
+  // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub, and jobs → CLIs.
   const dispatcher = new Dispatcher();
   const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }), {
     // A review or replies that never reached GitHub shows up in the chat and notifies its owner.
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   dispatcher.onCommit((_chatId, effects) => {
     if (effects.tasksCreated) runner.wake();
   });
-  // Jobs → CLIs: who gets which job, and who is still working on it (ws/wire.ts).
+  // Jobs → CLIs: the assigner, leases, and what CLIs report back (ws/wire.ts).
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 

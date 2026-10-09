@@ -16,7 +16,7 @@
    2. load the chat (`chats/load.ts`);
    3. call `decide()`, the pure engine (see [pure-engine.md](pure-engine.md));
    4. in **one transaction**, save the new state (`chats/save.ts`), append the timeline items, and turn the engine's commands into `Job` and `Task` rows (`chats/apply-commands.ts`);
-   5. after the commit, tell listeners: the task runner wakes up when new tasks were written (`main.ts`); Plan 1b adds the CLI hub.
+   5. after the commit, tell listeners: the task runner wakes up when new tasks were written (`main.ts`), and the CLI hub's wiring (`ws/wire.ts`) wakes the job assigner and sends `job.cancel` for running jobs the engine cancelled.
 
 ## Why a lock per chat
 
