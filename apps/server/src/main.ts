@@ -50,9 +50,12 @@ async function main(): Promise<void> {
   console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
   runner.start();
   const purge = setInterval(() => void purgeOldRows().catch((err) => console.error('[purge]', err)), 60 * 60_000);
+  // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
+  const retries = setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000);
 
   const shutdown = async () => {
     clearInterval(purge);
+    clearInterval(retries);
     runner.stop();
     server.close();
     await lock.release();

@@ -163,8 +163,8 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
 | `Message` | One item in the chat timeline | chatId + seq (unique; this is the chat's resume cursor), kind `point_raised\|point_reply\|point_decision\|job_summary\|human\|system`, authorGithubId, authorLogin, pointNumber, jobId, body, data | People and points are referenced by natural keys (GitHub id, point number), so the pure engine never has to generate ids |
 | `Job` | Work for one person's agent | chatId, participantId, userId, type `review\|re_review\|address`, status, round, headSha, sinceSha, attempt, runAfter, cliTokenId, leaseExpiresAt, expectedPushSha, result, applyState `pending\|applied\|draft\|discarded`, failure, cancelReason | At most one active job per participant, enforced by `activeFor` (the participant id while queued or running, null after) being unique. A plain unique column, so Prisma migrations never try to drop it |
 | `Task` | Server-side outbox and timers | kind, chatId, payload, runAt, status, attempts, lastError, dedupeKey | A debounce is an upsert on `dedupeKey` |
-| `RawEvent` | Every webhook received | deliveryId (PK = `X-GitHub-Delivery`), event, action, repoId, body (≤1 MB), status `received\|processed\|ignored\|failed`, note | Prevents double processing. Rows still `received` are replayed on boot. Purged after 14 days |
-| `SeenComment` | GitHub comment ids already handled | commentId (PK) | A comment can arrive on its own and again inside its submitted review; this makes sure it is handled once. Purged after 14 days, like `RawEvent` |
+| `RawEvent` | Every webhook received | deliveryId (PK = `X-GitHub-Delivery`), event, action, repoId, body (≤1 MB), status `received\|processed\|ignored\|retrying\|failed`, note, attempts, retryAt | Prevents double processing. Rows still `received` are replayed on boot. A delivery whose processing throws is `retrying`: tried again after 1, 2, 4, 8, 16 and 32 minutes, then `failed` after 7 attempts. Purged after 14 days |
+| `SeenComment` | GitHub comment ids already handled | commentId (PK) | A comment can arrive on its own and again inside its submitted review; this makes sure it is handled once. Written in the dispatcher's transaction, with the event that carried the comment, so a failed delivery leaves it unseen for the retry. Purged after 14 days, like `RawEvent` |
 | `GithubWrite` | Everything Nitpilot wrote to GitHub | chatId, kind `summary\|review\|review_comment\|reply`, githubId (unique per kind) | Used to edit those writes and to ignore our own events |
 | `PushSubscription` (Plan 2) | A Web Push endpoint | userId, endpoint (unique), p256dh, auth, failCount | |
 
@@ -551,7 +551,7 @@ max_points_per_review: 20
   - Team review requests are ignored in v1.
 - **Catching up when a CLI connects** (once, not polling): three searches, `is:pr is:open author:<login>`, `review-requested:<login>` and `reviewed-by:<login>`. Search allows 30 requests per minute.
 - **Recovering after a restart:**
-  - Replay `RawEvent` rows still marked `received`.
+  - Replay `RawEvent` rows still marked `received`. Rows marked `retrying` run again once their `retryAt` passes (a 30-second sweep).
   - Redeliver GitHub deliveries that failed in the last 3 days (`GET /app/hook/deliveries`, `POST …/attempts`).
 - **Staying under rate limits:**
   - One review per pass.

@@ -36,7 +36,9 @@ When Nitpilot posts a review on GitHub, GitHub sends us a webhook about it, just
 
 ## The same comment, twice
 
-A review comment reaches us once on its own (`pull_request_review_comment`) and again inside its submitted review. The router records each comment id in `SeenComment` with an insert that skips duplicates, and drops the repeat. The engine also ignores a comment that is already a point, but replies and the PR author's own comments never become points, so `SeenComment` is what stops them showing up twice in the timeline.
+A review comment reaches us once on its own (`pull_request_review_comment`) and again inside its submitted review. The router drops any comment whose id is already in `SeenComment`. The engine also ignores a comment that is already a point, but replies and the PR author's own comments never become points, so `SeenComment` is what stops them showing up twice in the timeline.
+
+**When the id is written matters.** The router only *reads* `SeenComment`. The dispatcher writes the ids inside step 4's transaction, together with everything the comment caused. If the id were written first and something failed afterwards (GitHub erroring while the router builds a new chat, say), the retry would find the comment "already seen" and drop it for good. Written in the same transaction, the comment is either handled and remembered, or neither, so the retry handles it.
 
 ## Debounced tasks
 

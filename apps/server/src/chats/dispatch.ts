@@ -7,7 +7,11 @@ import { loadChat } from './load';
 import { appendTimeline, saveChatState } from './save';
 
 export type { DispatchEffects };
-export type Dispatch = (chatId: string, event: DomainEvent) => Promise<DecideOutput>;
+export type DispatchOptions = {
+  /** GitHub comment ids this event carries. They're marked as seen in the same transaction (route-event.ts). */
+  seenCommentIds?: string[];
+};
+export type Dispatch = (chatId: string, event: DomainEvent, opts?: DispatchOptions) => Promise<DecideOutput>;
 type Listener = (chatId: string, effects: DispatchEffects) => void;
 
 /**
@@ -25,7 +29,7 @@ export class Dispatcher {
     this.listeners.push(listener);
   }
 
-  dispatch: Dispatch = (chatId, event) =>
+  dispatch: Dispatch = (chatId, event, opts = {}) =>
     this.locks.run(chatId, async () => {
       const loaded = await loadChat(chatId);
       const now = this.now();
@@ -33,6 +37,9 @@ export class Dispatcher {
       const effects = await prisma.$transaction(async (tx) => {
         await saveChatState(tx, chatId, loaded.state, out.chat, now);
         await appendTimeline(tx, chatId, out.timeline);
+        // All or nothing: a comment counts as seen only if what it caused was saved too.
+        const seen = opts.seenCommentIds ?? [];
+        if (seen.length > 0) await tx.seenComment.createMany({ data: seen.map((commentId) => ({ commentId })), skipDuplicates: true });
         return applyCommands(tx, chatId, out.commands, now);
       });
       for (const listener of this.listeners) {

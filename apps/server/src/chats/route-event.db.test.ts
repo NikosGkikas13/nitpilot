@@ -137,4 +137,15 @@ describe('a comment that arrives twice (Review Focus #3)', () => {
     await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7600 }));
     expect(await prisma.message.count({ where: { body: 'Still empty on page 2.' } })).toBe(1);
   });
+
+  it('is still handled when its first delivery failed on a GitHub error and is retried', async () => {
+    const { platform, deliver } = await setup();
+    // The chat doesn't exist yet, so the router reads the PR from GitHub, which fails once.
+    vi.spyOn(platform, 'getPr').mockRejectedValueOnce(new Error('GitHub 502'));
+    const event = reviewCommentEvent('created', reviewComment({ id: 9700 }));
+    await expect(deliver('pull_request_review_comment', event)).rejects.toThrow('GitHub 502');
+
+    expect(await deliver('pull_request_review_comment', event)).toEqual({ status: 'processed' });
+    expect((await chat()).points.map((p) => p.githubCommentId)).toEqual(['9700']);
+  });
 });

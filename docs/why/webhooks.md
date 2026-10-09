@@ -16,6 +16,18 @@ Every delivery has a JSON body (the PR, the comment, …) and headers:
 3. **Answer 202 right away.** GitHub gives up after 10 seconds, so we never make it wait for our work.
 4. **Process it afterwards**, one delivery at a time, in order (`ingest/process.ts`). If the server crashes first, the row is still `received`, and boot replays it.
 
+### When processing fails
+
+Processing can fail for reasons that go away on their own: GitHub answers a read with a 502, the database restarts. GitHub already got our 202, so as far as it knows the delivery arrived; it will never send it again. If we just marked the row `failed`, that review request or comment would be gone for good, and nobody would know.
+
+So `processDelivery` retries, with a growing wait, like a `fetch` wrapper with retries and exponential backoff:
+
+- After a failure the row becomes `retrying`, with `attempts` counted and a `retryAt` time: 1 minute after the first failure, then 2, 4, 8, 16 and 32 minutes.
+- Every 30 seconds the server calls `ingest.retryDue()` (`main.ts`), which puts each due row back to `received` and into the queue.
+- After 7 attempts (about an hour) the row becomes `failed` for good, with the last error in `note`.
+
+A retried delivery runs after deliveries that arrived later, so it can be applied out of order. Most events don't mind (each comment is its own point); [dispatcher.md](dispatcher.md) explains why a retried comment isn't mistaken for one we already handled.
+
 ## From GitHub's JSON to engine events ("normalizing")
 
 GitHub's payloads are big and GitHub-specific. The engine (`engine/`) doesn't know GitHub exists: it understands a short list of `DomainEvent`s like `pr_opened` or `head_updated`. The **normalizers** in `platform/github/normalize/` translate one into the other:

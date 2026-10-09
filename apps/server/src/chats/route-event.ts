@@ -46,7 +46,7 @@ export async function routePrEvent(ne: PrNormalizedEvent, deps: RouterDeps): Pro
   }
 
   if (event.type === 'head_updated') event = { ...event, ours: await isOurPush(chat, event.after) };
-  await deps.dispatch(chat.id, event);
+  await deps.dispatch(chat.id, event, { seenCommentIds: commentIdsOf(fresh) });
   return null;
 }
 
@@ -88,18 +88,26 @@ async function isOwnWrite(event: DomainEvent): Promise<boolean> {
 }
 
 /**
- * A comment can reach us twice: on its own, and inside its submitted review. Remember each
- * comment id once (SeenComment) and drop repeats. Returns null when nothing new is left.
+ * A comment can reach us twice: on its own, and inside its submitted review. Drop the comments
+ * already handled (SeenComment). Returns null when nothing new is left. This only reads: the
+ * dispatcher marks the comments as seen when it saves the event, so if anything fails before
+ * that, a retry still handles them.
  */
 async function keepUnseenComments(event: DomainEvent): Promise<DomainEvent | null> {
-  const isNew = async (commentId: string) => (await prisma.seenComment.createMany({ data: [{ commentId }], skipDuplicates: true })).count === 1;
-  if (event.type === 'external_comment') return (await isNew(event.comment.id)) ? event : null;
+  const ids = commentIdsOf(event);
+  if (ids.length === 0) return event;
+  const seen = new Set((await prisma.seenComment.findMany({ where: { commentId: { in: ids } }, select: { commentId: true } })).map((s) => s.commentId));
+  if (event.type === 'external_comment') return seen.has(event.comment.id) ? null : event;
   if (event.type === 'external_review_submitted') {
-    const comments = [];
-    for (const c of event.review.comments) if (await isNew(c.id)) comments.push(c);
-    return { ...event, review: { ...event.review, comments } };
+    return { ...event, review: { ...event.review, comments: event.review.comments.filter((c) => !seen.has(c.id)) } };
   }
   return event;
+}
+
+function commentIdsOf(event: DomainEvent): string[] {
+  if (event.type === 'external_comment') return [event.comment.id];
+  if (event.type === 'external_review_submitted') return event.review.comments.map((c) => c.id);
+  return [];
 }
 
 /** Our CLI announces each push with job.pushing before it happens (spec §10). */
