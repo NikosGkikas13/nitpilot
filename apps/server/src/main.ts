@@ -1,13 +1,16 @@
 // Load apps/server/.env if there is one. Variables already set in the environment win.
 import 'dotenv/config';
 import { serve } from '@hono/node-server';
+import { Dispatcher } from './chats/dispatch';
 import { createApp } from './http/app';
+import { createDeliveryHandler } from './ingest/handle';
 import { createIngest } from './ingest/process';
 import { purgeOldRows } from './ingest/record';
 import { acquireSingletonLock } from './lib/advisory-lock';
 import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
+import { GithubReads } from './platform/github/reads';
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -20,8 +23,9 @@ async function main(): Promise<void> {
 
   const github = new GithubClient();
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
-  // Until Task 23 the server stores deliveries but has nothing to do with them yet.
-  const ingest = createIngest(async (d) => ({ status: 'ignored', note: `no handler for ${d.event} yet` }));
+  const platform = new GithubReads(github, appAuth);
+  const dispatcher = new Dispatcher();
+  const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
   const app = createApp({ github, appAuth, ingest });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);

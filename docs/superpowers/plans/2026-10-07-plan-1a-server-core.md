@@ -8362,7 +8362,7 @@ The dispatcher implements spec §9's steps:
 
 The router runs **before** the lock. It is the only place that calls GitHub (to read `.nitpilot.yml` and missing PRs) on the way in.
 
-- [ ] **Step 1: Write the small helpers**
+- [x] **Step 1: Write the small helpers**
 
 `apps/server/src/lib/key-lock.ts`:
 ```ts
@@ -8431,7 +8431,7 @@ export function containsMarker(body: string | null | undefined): boolean {
 }
 ```
 
-- [ ] **Step 2: Write the failing dispatcher test**
+- [x] **Step 2: Write the failing dispatcher test**
 
 `apps/server/src/chats/dispatch.db.test.ts`:
 ```ts
@@ -8529,12 +8529,12 @@ describe('Dispatcher', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to see them fail**
+- [x] **Step 3: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: FAIL, `Failed to resolve import "./dispatch"`. The key-lock test fails the same way until Step 1's file is saved, then passes.
 
-- [ ] **Step 4: Write load, save and apply-commands**
+- [x] **Step 4: Write load, save and apply-commands**
 
 `apps/server/src/chats/rules.ts`:
 ```ts
@@ -8930,12 +8930,12 @@ export class Dispatcher {
 }
 ```
 
-- [ ] **Step 5: Run the dispatcher tests to see them pass**
+- [x] **Step 5: Run the dispatcher tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/dispatch && npm run test:unit -w apps/server -- src/lib/key-lock`
 Expected: PASS (dispatcher 6, key lock 2).
 
-- [ ] **Step 6: Write the failing router tests**
+- [x] **Step 6: Write the failing router tests**
 
 `apps/server/src/chats/route-event.db.test.ts`:
 ```ts
@@ -9057,12 +9057,12 @@ describe('a comment that arrives twice (Review Focus #3)', () => {
   });
 });
 ```
-- [ ] **Step 7: Run the router tests to see them fail**
+- [x] **Step 7: Run the router tests to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/route-event`
 Expected: FAIL, `Failed to resolve import "../ingest/handle"`.
 
-- [ ] **Step 8: Write people, the router and the delivery handler**
+- [x] **Step 8: Write people, the router and the delivery handler**
 
 `apps/server/src/chats/people.ts`:
 ```ts
@@ -9266,7 +9266,7 @@ export function createDeliveryHandler(deps: RouterDeps): DeliveryHandler {
 }
 ```
 
-- [ ] **Step 9: Wire the router into the server**
+- [x] **Step 9: Wire the router into the server**
 
 In `apps/server/src/main.ts`:
 - Add the imports:
@@ -9282,7 +9282,7 @@ import { GithubReads } from './platform/github/reads';
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 ```
 
-- [ ] **Step 10: Run every test**
+- [x] **Step 10: Run every test**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: PASS everywhere (router 8 and dispatcher 6 are new).
@@ -9300,7 +9300,7 @@ docker compose exec postgres psql -U nitpilot -c 'select phase, title from "PrCh
 ```
 Expected: one chat in `reviewing` and one `review` job in `queued`. It stays queued until Plan 1b's CLI picks it up.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add apps/server
