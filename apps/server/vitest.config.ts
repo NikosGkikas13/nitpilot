@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { defineConfig } from 'vitest/config';
-import { testDatabaseUrl } from './test/test-database';
+import { testDatabaseUrl } from './test/test-database.ts';
 
 // Values the server reads from the environment. Tests that care about one override it with vi.stubEnv.
 const testEnv = {
