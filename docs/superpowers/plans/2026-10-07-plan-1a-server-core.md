@@ -10865,7 +10865,7 @@ main().catch((err) => {
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: PASS in every workspace (redelivery 1, recovery 2, end to end 2 are new).
 
-- [ ] **Step 7: Watch it on a real PR**
+- [x] **Step 7: Watch it on a real PR**
 
 With `npm run dev -w apps/server` and `npm run dev:tunnel` running, and the app installed on a public sandbox repo (Task 23, Step 11):
 1. As account B (signed in to Nitpilot), comment on the line of a PR that account A opened.
