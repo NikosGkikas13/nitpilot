@@ -1,3 +1,4 @@
+import type { Person } from '../src/engine/types';
 import type { Prisma } from '../src/generated/prisma/client';
 import { prisma } from '../src/lib/prisma';
 import { generateToken } from '../src/lib/tokens';
@@ -34,6 +35,11 @@ export async function makeCliToken(userId: string, over: { revoked?: boolean } =
     data: { userId, name: 'test laptop', tokenHash: token.hash, prefix: token.prefix, revokedAt: over.revoked ? new Date() : null },
   });
   return { id: row.id, raw: token.raw };
+}
+
+/** A Nitpilot user as the engine sees them in an event. */
+export function personOf(u: { id: string; githubId: string; login: string }): Person {
+  return { githubId: u.githubId, login: u.login, isBot: false, userId: u.id };
 }
 
 export async function makeRepo(over: { private?: boolean; rulesJson?: Prisma.InputJsonValue } = {}) {

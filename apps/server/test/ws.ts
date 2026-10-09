@@ -2,7 +2,10 @@ import { randomBytes } from 'node:crypto';
 import { createServer, request } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { CLI_WS_PATH, PROTOCOL_VERSION, type CliToServer, type RunningJob, type ServerToCli } from '@nitpilot/protocol';
-import type { CliHub } from '../src/ws/cli-hub';
+import { Dispatcher } from '../src/chats/dispatch';
+import { FakePlatform } from '../src/platform/fake/fake-platform';
+import { CliHub } from '../src/ws/cli-hub';
+import { wireCliHub } from '../src/ws/wire';
 
 // Helpers for testing the CLI hub over real WebSockets (spec §19 "CLI hub").
 
@@ -158,3 +161,29 @@ export class TestCli {
     });
   }
 }
+
+/** The CLI side of the server, wired by ws/wire.ts exactly as main.ts does, on a random local port. */
+export async function startCliServer(opts: { now?: () => Date } = {}) {
+  const hub = new CliHub();
+  const dispatcher = new Dispatcher(opts.now);
+  const wired = wireCliHub({ hub, dispatcher, platform: new FakePlatform(), now: opts.now });
+  const server = await listen(hub);
+  /** Wait until every message received so far is handled and the assigner is idle. */
+  const settle = async (): Promise<void> => {
+    await hub.idle();
+    await wired.assigner.tick();
+  };
+  return {
+    ...wired,
+    hub,
+    dispatcher,
+    url: server.url,
+    settle,
+    async close(): Promise<void> {
+      await settle();
+      await server.close();
+    },
+  };
+}
+
+export type CliServer = Awaited<ReturnType<typeof startCliServer>>;

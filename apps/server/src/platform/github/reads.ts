@@ -1,4 +1,4 @@
-import type { GitSpec, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
+import type { GitSpec, GitSpecInput, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
 import type { AppAuth } from './app-auth';
 import { GithubError, type GithubClient } from './client';
 import { gitSpecFor, snapshotFromPull } from './mapping';
@@ -52,7 +52,7 @@ export class GithubReads implements PlatformReads {
     }
   }
 
-  gitSpec(pr: PrSnapshot): GitSpec {
+  gitSpec(pr: GitSpecInput): GitSpec {
     return gitSpecFor(pr);
   }
 }

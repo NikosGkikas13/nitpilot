@@ -21,6 +21,16 @@ Each `nitpilot login` creates one token per device, and the hub keeps one connec
 
 It doesn't know what a job is. It hands each message to listeners: the job assigner, the leases and the job results (`ws/wire.ts` connects them). The socket plumbing stays in one file you can read without the job rules.
 
+## Handing out a job (`jobs/assign.ts`)
+
+The server doesn't ask CLIs "do you want this job?". From `hello` it already knows which repos each CLI has linked, which kinds of job its agent can do, and how many jobs it runs at once, so it picks one and sends `job.assign`.
+
+Picking is a compare-and-swap (explained in [cli-login.md](cli-login.md)): the job moves from `queued` to `running` only if it is still `queued`, so two passes of the assigner can never hand out the same job twice. The same update adds 1 to `attempt`, starts a 90-second lease, and moves the job to the PR's newest commit, because a job that waited in the queue should review what's there now (spec §9.4).
+
+The assigner runs when something changes (a job was queued or finished, a CLI said hello) and every 5 seconds for jobs waiting out a retry delay. Like the task runner, it never runs two passes at once.
+
+The job travels as a self-contained **bundle** (`jobs/bundle.ts`): the PR, how to fetch its code, the points with their threads, human notes and the team rules. The CLI never has to call back for more.
+
 ## Leases, in one paragraph
 
 A laptop can vanish without saying goodbye: the lid closes, the Wi-Fi drops. So a job given to a CLI comes with a **lease**: 90 seconds, renewed by a ping every 25. When the pings stop, the lease runs out and the job goes back to the queue. [leases-and-fencing.md](leases-and-fencing.md) has the details.

@@ -2,7 +2,7 @@ import { GithubError } from '../github/client';
 import { parseGithubWebhook } from '../github/normalize/index';
 import type { GhReviewComment } from '../github/payloads';
 import { gitSpecFor } from '../github/mapping';
-import type { AnchoredComment, GitSpec, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
+import type { AnchoredComment, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
 
 export type FakeWrite = {
   kind: 'summary' | 'review' | 'reply';
@@ -59,7 +59,7 @@ export class FakePlatform implements PlatformAdapter {
     return etag === current ? 'not_modified' : { text, etag: current };
   }
 
-  gitSpec(pr: PrSnapshot): GitSpec {
+  gitSpec(pr: GitSpecInput): GitSpec {
     return gitSpecFor(pr);
   }
 

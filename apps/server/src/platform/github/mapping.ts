@@ -1,5 +1,5 @@
 import type { Person } from '../../engine/types';
-import type { GitSpec, PrRef, PrSnapshot } from '../types';
+import type { GitSpec, GitSpecInput, PrRef, PrSnapshot } from '../types';
 import type { GhPull, GhUser } from './payloads';
 
 // Pure helpers that turn GitHub's shapes into ours. No I/O, so the normalizers can use them too.
@@ -35,7 +35,7 @@ export function snapshotFromPull(ref: PrRef, pull: GhPull): PrSnapshot {
 }
 
 /** Fetch PR code from the base repo's `refs/pull/N/head`, which works for forks too (spec §11). */
-export function gitSpecFor(pr: PrSnapshot): GitSpec {
+export function gitSpecFor(pr: GitSpecInput): GitSpec {
   return {
     baseCloneUrl: `https://github.com/${pr.ref.repoFullName}.git`,
     fetchRef: `refs/pull/${pr.ref.number}/head`,

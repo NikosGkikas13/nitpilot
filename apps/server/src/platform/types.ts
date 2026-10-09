@@ -28,6 +28,9 @@ export type PrSnapshot = {
 /** How the CLI fetches the code (spec §11). `headRepoPath` null = nowhere to push. */
 export type GitSpec = { baseCloneUrl: string; fetchRef: string; headRepoPath: string | null; headBranch: string };
 
+/** What gitSpec needs to know about a PR. A PrSnapshot has it, and so does a saved chat. */
+export type GitSpecInput = Pick<PrSnapshot, 'ref' | 'headRef' | 'headRepoFullName'>;
+
 export type AnchoredComment = {
   path: string;
   line: number;
@@ -59,7 +62,7 @@ export interface PlatformReads {
   parseWebhook(h: Headers, raw: string): Promise<NormalizedEvent[]>;
   getPr(pr: PrRef): Promise<PrSnapshot>;
   readDefaultBranchFile(repo: RepoRef, path: string, etag?: string): Promise<{ text: string; etag: string } | 'not_modified' | null>;
-  gitSpec(pr: PrSnapshot): GitSpec;
+  gitSpec(pr: GitSpecInput): GitSpec;
 }
 
 /** On a retry, first look for an earlier write whose body contains this marker, and reuse it. */

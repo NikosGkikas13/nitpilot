@@ -919,7 +919,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - One pass at a time. The assigner wakes on `hello`, on every commit that changed jobs, and every 5 s (for `runAfter`).
 - The bundle carries: the PR; how to fetch it (`git`, with `headRepoPath: null` for a deleted fork); `you { login, role }`; `round`, `maxRounds`, `sinceSha`; `apply: 'draft'` when `applyState` is `draft`, else `'auto'`; every point with its thread (the messages about it after it was raised); the human notes; and `rules { ignorePaths, alwaysEscalate, maxPoints }`.
 
-- [ ] **Step 1: Write the failing bundle tests**
+- [x] **Step 1: Write the failing bundle tests**
 
 In `apps/server/test/db.ts`, add the import `import type { Person } from '../src/engine/types';` and, after `makeCliToken`, add:
 ```ts
@@ -1042,12 +1042,12 @@ describe('buildJobBundle', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/jobs/bundle`
 Expected: FAIL, `Failed to resolve import "./bundle"`.
 
-- [ ] **Step 3: Let `gitSpec` work from a saved chat**
+- [x] **Step 3: Let `gitSpec` work from a saved chat**
 
 `gitSpec` only reads the PR's ref, head branch and head repo. A saved chat has those, so the bundle can call it without fetching the PR from GitHub.
 
@@ -1064,7 +1064,7 @@ In `apps/server/src/platform/github/reads.ts`, add `GitSpecInput` to the `import
 
 In `apps/server/src/platform/fake/fake-platform.ts`, add `GitSpecInput` to the `import type { … } from '../types'` list and change `gitSpec(pr: PrSnapshot): GitSpec {` to `gitSpec(pr: GitSpecInput): GitSpec {`.
 
-- [ ] **Step 4: Write the bundle builder**
+- [x] **Step 4: Write the bundle builder**
 
 `apps/server/src/jobs/bundle.ts`:
 ```ts
@@ -1153,12 +1153,12 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
 }
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/jobs/bundle && npm run typecheck -w apps/server`
 Expected: PASS (bundle 5).
 
-- [ ] **Step 6: Write the failing assigner tests**
+- [x] **Step 6: Write the failing assigner tests**
 
 In `apps/server/test/ws.ts`, replace the line `import type { CliHub } from '../src/ws/cli-hub';` with:
 ```ts
@@ -1351,12 +1351,12 @@ describe('JobAssigner', () => {
 });
 ```
 
-- [ ] **Step 7: Run them to see them fail**
+- [x] **Step 7: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/jobs/assign`
 Expected: FAIL, `Failed to resolve import "../src/ws/wire"`.
 
-- [ ] **Step 8: Write the assigner**
+- [x] **Step 8: Write the assigner**
 
 `apps/server/src/jobs/assign.ts`:
 ```ts
@@ -1525,12 +1525,12 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
 }
 ```
 
-- [ ] **Step 9: Run them to see them pass**
+- [x] **Step 9: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/jobs && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (assign 10, bundle 5).
 
-- [ ] **Step 10: Run the assigner in the server**
+- [x] **Step 10: Run the assigner in the server**
 
 In `apps/server/src/main.ts`:
 - add the import `import { wireCliHub } from './ws/wire';`;
@@ -1542,7 +1542,7 @@ In `apps/server/src/main.ts`:
 - after `runner.start();`, add `cliJobs.start();`;
 - in `shutdown`, after `runner.stop();`, add `cliJobs.stop();`.
 
-- [ ] **Step 11: Explain job hand-out**
+- [x] **Step 11: Explain job hand-out**
 
 In `docs/why/websockets.md`, before `## Leases, in one paragraph`, add:
 ```markdown
@@ -1557,12 +1557,12 @@ The assigner runs when something changes (a job was queued or finished, a CLI sa
 The job travels as a self-contained **bundle** (`jobs/bundle.ts`): the PR, how to fetch its code, the points with their threads, human notes and the team rules. The CLI never has to call back for more.
 ```
 
-- [ ] **Step 12: Run the full suite**
+- [x] **Step 12: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add apps/server docs/why/websockets.md

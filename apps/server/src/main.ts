@@ -20,6 +20,7 @@ import { createTaskHandlers } from './tasks/handlers/index';
 import { LogNotifier } from './tasks/notifier';
 import { TaskRunner } from './tasks/runner';
 import { CliHub } from './ws/cli-hub';
+import { wireCliHub } from './ws/wire';
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -48,6 +49,8 @@ async function main(): Promise<void> {
   dispatcher.onCommit((_chatId, effects) => {
     if (effects.tasksCreated) runner.wake();
   });
+  // Jobs → CLIs: the assigner, and from Task 3 on, leases (ws/wire.ts).
+  const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
   const app = createApp({ github, appAuth, ingest });
@@ -60,6 +63,7 @@ async function main(): Promise<void> {
   const recovered = await recoverOnBoot({ ingest, platform });
   console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
   runner.start();
+  cliJobs.start();
   const purge = setInterval(() => void purgeOldRows().catch((err) => console.error('[purge]', err)), 60 * 60_000);
   // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
   const retries = setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000);
@@ -68,6 +72,7 @@ async function main(): Promise<void> {
     clearInterval(purge);
     clearInterval(retries);
     runner.stop();
+    cliJobs.stop();
     // 1012 tells every CLI the server is restarting, so they reconnect.
     hub.closeAll(CLOSE_CODES.serverRestart, 'server restarting');
     server.close();
