@@ -1,6 +1,7 @@
 // Load apps/server/.env if there is one. Variables already set in the environment win.
 import 'dotenv/config';
 import { serve } from '@hono/node-server';
+import { getUserToken } from './auth/user-tokens';
 import { Dispatcher } from './chats/dispatch';
 import { createApp } from './http/app';
 import { createDeliveryHandler } from './ingest/handle';
@@ -10,7 +11,7 @@ import { acquireSingletonLock } from './lib/advisory-lock';
 import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
-import { GithubReads } from './platform/github/reads';
+import { GithubPlatform } from './platform/github/platform';
 import { timerHandler } from './tasks/handlers/timer';
 import { recoverRunningTasks, TaskRunner } from './tasks/runner';
 
@@ -25,7 +26,7 @@ async function main(): Promise<void> {
 
   const github = new GithubClient();
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
-  const platform = new GithubReads(github, appAuth);
+  const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
   const dispatcher = new Dispatcher();
   const runner = new TaskRunner({ timer: timerHandler(dispatcher.dispatch) });
   dispatcher.onCommit((_chatId, effects) => {

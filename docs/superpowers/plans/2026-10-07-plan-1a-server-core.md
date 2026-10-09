@@ -9780,7 +9780,7 @@ Spec §15 "Who writes":
 - Reviews are posted as `COMMENT` and are never approvals.
 - Replies to a conversation comment (`issue:…`) or a review body (`review:…`) become new PR comments, because those have no threads on GitHub.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/platform/github/writes.test.ts`:
 ```ts
@@ -9881,12 +9881,12 @@ describe('replyToThread', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/platform/github/writes`
 Expected: FAIL, `Failed to resolve import "./writes"`.
 
-- [ ] **Step 3: Write the writes**
+- [x] **Step 3: Write the writes**
 
 `apps/server/src/platform/github/writes.ts`:
 ```ts
@@ -10018,12 +10018,12 @@ export class GithubPlatform extends GithubReads implements PlatformAdapter {
 }
 ```
 
-- [ ] **Step 4: Run the tests to see them pass**
+- [x] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/platform && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (writes 9, plus the earlier platform tests).
 
-- [ ] **Step 5: Use the full adapter in the server**
+- [x] **Step 5: Use the full adapter in the server**
 
 In `apps/server/src/main.ts`:
 - Replace `import { GithubReads } from './platform/github/reads';` with `import { GithubPlatform } from './platform/github/platform';` and add `import { getUserToken } from './auth/user-tokens';`.
@@ -10032,7 +10032,7 @@ In `apps/server/src/main.ts`:
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server

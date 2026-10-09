@@ -20,7 +20,7 @@ It stays honest in two ways:
 
 ## Writes that are safe to retry
 
-Every write method takes `{ reuseIfContains: '<!-- marker -->' }`. If an earlier write on that PR already contains the marker, it is reused instead of posting a duplicate. This matters when the server crashes after GitHub accepted a review but before we saved its id: the retry finds the first review instead of posting a second one. The fake implements the same rule, so tests can prove it; the real GitHub version arrives with the write side of the adapter.
+Every write method takes `{ reuseIfContains: '<!-- marker -->' }`. If an earlier write on that PR already contains the marker, it is reused instead of posting a duplicate. This matters when the server crashes after GitHub accepted a review but before we saved its id: the retry finds the first review instead of posting a second one. The real GitHub adapter (`platform/github/writes.ts`) looks through the PR's comments or reviews for the marker before posting, and the fake follows the same rule so tests can prove it.
 
 ## The React analogy
 
