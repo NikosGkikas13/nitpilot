@@ -60,7 +60,7 @@ describe('a human push while a review is running', () => {
   it('re-reviews the new head instead of becoming ready', () => {
     const reviewing = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-review-1', leo, 'reviewer', 'review')] });
     const pushed = run(reviewing, { type: 'head_updated', before: 'head1', after: 'head2', ours: false });
-    const out = run(pushed.chat, { type: 'job_completed', jobId: 'job-review-1', result: result() });
+    const out = run(pushed.chat, { type: 'job_completed', jobId: 'job-review-1', attempt: 1, result: result() });
 
     expect(out.chat.phase).toBe('reviewing');
     expect(notifiedReady(out)).toEqual([]);
@@ -76,7 +76,7 @@ describe('a human push while a review is running', () => {
       jobs: [jobOf('job-review-1', leo, 'reviewer', 'review')],
     });
     const pushed = run(reviewing, { type: 'head_updated', before: 'head1', after: 'head2', ours: false });
-    const out = run(pushed.chat, { type: 'job_completed', jobId: 'job-review-1', result: result() });
+    const out = run(pushed.chat, { type: 'job_completed', jobId: 'job-review-1', attempt: 1, result: result() });
 
     expect(out.chat.phase).toBe('idle');
     expect(notifiedReady(out)).toEqual([]);

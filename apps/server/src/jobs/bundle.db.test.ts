@@ -59,11 +59,11 @@ describe('buildJobBundle', () => {
 
   it('gives a re-review the points with their threads, the human notes, and the commit to start from', async () => {
     const { maya, chat, dispatcher, review } = await scene();
-    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, result: samples.jobResult() });
+    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, attempt: 1, result: samples.jobResult() });
     const address = await running(chat.id, 'address');
     await dispatcher.dispatch(chat.id, {
       type: 'job_completed',
-      jobId: address.id,
+      jobId: address.id, attempt: 1,
       result: { summary: 'Fixed it.', points: [], decisions: [], replies: [{ point: 1, resolution: 'fixed', comment: 'Added the empty check.' }], push: { from: chat.headSha, to: 'c'.repeat(40) } },
     });
     await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'Please keep the public API stable.' });

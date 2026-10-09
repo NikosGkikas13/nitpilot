@@ -4,7 +4,7 @@ import type { FailureReason } from '@nitpilot/protocol';
 
 function failing(attempt: number, reason: FailureReason, retryable: boolean) {
   const chat = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt })] });
-  return run(chat, { type: 'job_failed', jobId: 'job-r1', reason, retryable });
+  return run(chat, { type: 'job_failed', jobId: 'job-r1', attempt, reason, retryable });
 }
 
 const after = (ms: number) => new Date(T0.getTime() + ms);
@@ -48,7 +48,13 @@ describe('job_failed', () => {
 
   it('ignores a failure from a job that is no longer running', () => {
     const chat = agentToAgent({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { status: 'cancelled' })] });
-    const out = run(chat, { type: 'job_failed', jobId: 'job-r1', reason: 'crash', retryable: true });
+    const out = run(chat, { type: 'job_failed', jobId: 'job-r1', attempt: 1, reason: 'crash', retryable: true });
+    expect(out.commands).toEqual([]);
+  });
+
+  it('ignores a failure from an earlier attempt', () => {
+    const chat = agentToAgent({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt: 2 })] });
+    const out = run(chat, { type: 'job_failed', jobId: 'job-r1', attempt: 1, reason: 'crash', retryable: true });
     expect(out.commands).toEqual([]);
   });
 });

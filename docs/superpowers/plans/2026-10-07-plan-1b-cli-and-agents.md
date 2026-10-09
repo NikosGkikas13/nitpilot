@@ -1602,7 +1602,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Fencing happens twice: `currentAttempt` (the database, before dispatching) and the engine (inside the chat's lock), because the sweep can hand a job out again between the two.
 - At boot, every running job gets a fresh lease. The server was the one away, so CLIs that reconnect keep their work.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 In `apps/server/src/engine/results.test.ts`, inside `describe('drafts and stale results', …)`, after the test `ignores a result for a job that was cancelled`, add:
 ```ts
@@ -1623,12 +1623,12 @@ In `apps/server/src/engine/failures.test.ts`, after the test `ignores a failure 
   });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/results src/engine/failures`
 Expected: FAIL in the two new tests (the engine still applies the old attempt's result and retries its failure).
 
-- [ ] **Step 3: Fence job events by attempt in the engine**
+- [x] **Step 3: Fence job events by attempt in the engine**
 
 In `apps/server/src/engine/types.ts`, change the two job events to:
 ```ts
@@ -1657,12 +1657,12 @@ with:
   if (!job || job.status !== 'running' || job.attempt !== e.attempt) return;
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine/results src/engine/failures`
 Expected: PASS.
 
-- [ ] **Step 5: Give every existing job event its attempt**
+- [x] **Step 5: Give every existing job event its attempt**
 
 Every test job so far runs attempt 1. Add `attempt: 1` after `jobId` in every `job_completed` and `job_failed` event that doesn't have one yet:
 ```bash
@@ -1680,7 +1680,7 @@ to:
 Run: `npm run typecheck -w apps/server && npm run test:unit -w apps/server && npm run test:db -w apps/server -- src/chats src/jobs test/integration`
 Expected: typecheck clean; PASS. (`git diff --stat` shows the edit in `chats/dispatch.db.test.ts`, `engine/{ready-gate,external,results,failures}.test.ts`, `jobs/bundle.db.test.ts` and `test/integration/plan-1a.db.test.ts`.)
 
-- [ ] **Step 6: Write the failing lease tests**
+- [x] **Step 6: Write the failing lease tests**
 
 `apps/server/src/jobs/leases.db.test.ts`:
 ```ts
@@ -1826,12 +1826,12 @@ describe('fencing and liveness', () => {
 });
 ```
 
-- [ ] **Step 7: Run them to see them fail**
+- [x] **Step 7: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/jobs/leases`
 Expected: FAIL, `Failed to resolve import "./leases"`.
 
-- [ ] **Step 8: Teach the hub about silence**
+- [x] **Step 8: Teach the hub about silence**
 
 In `apps/server/src/ws/cli-hub.ts`:
 
@@ -1870,7 +1870,7 @@ In `apps/server/src/ws/cli-hub.ts`:
      }
    ```
 
-- [ ] **Step 9: Write the leases**
+- [x] **Step 9: Write the leases**
 
 `apps/server/src/jobs/leases.ts`:
 ```ts
@@ -2054,12 +2054,12 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
 }
 ```
 
-- [ ] **Step 10: Run them to see them pass**
+- [x] **Step 10: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/jobs src/ws && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (leases 9, assign 10, bundle 5, cli-hub 9).
 
-- [ ] **Step 11: Renew leases at boot**
+- [x] **Step 11: Renew leases at boot**
 
 In `apps/server/src/main.ts`, before `cliJobs.start();`, add:
 ```ts
@@ -2067,7 +2067,7 @@ In `apps/server/src/main.ts`, before `cliJobs.start();`, add:
   await cliJobs.leases.renewAfterRestart();
 ```
 
-- [ ] **Step 12: Write the explainer**
+- [x] **Step 12: Write the explainer**
 
 `docs/why/leases-and-fencing.md`:
 ```markdown
@@ -2108,12 +2108,12 @@ A stale result gets `ack { status: 'stale' }`, not silence. Silence would look l
 Fencing fixes the classic stale-fetch bug: you start loading user 1, switch to user 2, and user 1's slow response arrives last and overwrites the screen. The fix is a request id, and you ignore any response that isn't for the latest one. The attempt number is that id. A lease is a presence heartbeat, like the dot that turns grey when someone's tab stops checking in.
 ```
 
-- [ ] **Step 13: Run the full suite**
+- [x] **Step 13: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add apps/server docs/why/leases-and-fencing.md

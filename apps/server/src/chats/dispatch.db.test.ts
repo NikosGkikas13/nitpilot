@@ -51,7 +51,7 @@ describe('Dispatcher', () => {
     const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });
     await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1 } });
 
-    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: job.id, result: samples.jobResult() });
+    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: job.id, attempt: 1, result: samples.jobResult() });
 
     expect(await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: 'done', activeFor: null, applyState: 'applied' });
     expect(await prisma.point.findMany({ where: { chatId: chat.id } })).toEqual([expect.objectContaining({ number: 1, status: 'open', origin: 'agent', severity: 'major' })]);

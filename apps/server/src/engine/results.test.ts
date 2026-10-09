@@ -39,7 +39,7 @@ function reReviewing(over: Partial<ChatState> = {}): ChatState {
 
 describe('review results (agent-to-agent)', () => {
   it("raises points and queues the author's address job", () => {
-    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint(), newPoint({ severity: 'nit', title: 'Rename' })] }) });
+    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint(), newPoint({ severity: 'nit', title: 'Rename' })] }) });
     expect(out.chat.points.map((p) => [p.number, p.status, p.raisedBy, p.commitSha])).toEqual([
       [1, 'open', leo.githubId, 'head1'],
       [2, 'open', leo.githubId, 'head1'],
@@ -55,7 +55,7 @@ describe('review results (agent-to-agent)', () => {
   });
 
   it('escalates a security point at once, notifies both sides, and keeps working on the rest', () => {
-    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint({ category: 'security' }), newPoint()] }) });
+    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint({ category: 'security' }), newPoint()] }) });
     expect(out.chat.points[0]).toMatchObject({ status: 'escalated', escalationReason: 'category' });
     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-maya', 'user-leo'], kind: 'escalated', pointNumbers: [1] }]);
     expect(commandsOf(out, 'enqueue_job')[0]!.jobType).toBe('address');
@@ -63,12 +63,12 @@ describe('review results (agent-to-agent)', () => {
   });
 
   it('caps the points from one review at max_points_per_review', () => {
-    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint(), newPoint(), newPoint()] }) }, { rules: { max_points_per_review: 2 } });
+    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint(), newPoint(), newPoint()] }) }, { rules: { max_points_per_review: 2 } });
     expect(out.chat.points).toHaveLength(2);
   });
 
   it('goes straight to ready when the review finds nothing', () => {
-    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', result: result() });
+    const out = run(reviewing(), { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result() });
     expect(out.chat.phase).toBe('ready');
     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo'], kind: 'ready', pointNumbers: [] }]);
   });
@@ -78,7 +78,7 @@ describe('address results', () => {
   it('marks answers, bumps the round and queues a re-review from the last reviewed commit', () => {
     const out = run(addressing(), {
       type: 'job_completed',
-      jobId: 'job-a1',
+      jobId: 'job-a1', attempt: 1,
       result: result({
         replies: [
           { point: 1, resolution: 'fixed', comment: 'Added the empty check.' },
@@ -107,7 +107,7 @@ describe('address results', () => {
     });
     const out = run(chat, {
       type: 'job_completed',
-      jobId: 'job-a1',
+      jobId: 'job-a1', attempt: 1,
       result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Added the check.' }], push: { from: 'head1aaa', to: 'c0ffee1234' } }),
     });
     expect(commandsOf(out, 'post_thread_replies')).toEqual([
@@ -120,7 +120,7 @@ describe('address results', () => {
 
   it('ignores replies to points that are not open', () => {
     const chat = addressing({ points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'category' })] });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-a1', result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'x' }] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-a1', attempt: 1, result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'x' }] }) });
     expect(out.chat.points[0]!.status).toBe('escalated');
   });
 });
@@ -129,7 +129,7 @@ describe('re-review results', () => {
   it('becomes ready when every point is resolved, and tells only the reviewer', () => {
     const out = run(reReviewing(), {
       type: 'job_completed',
-      jobId: 'job-rr2',
+      jobId: 'job-rr2', attempt: 1,
       result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'Looks right.' }, { point: 2, decision: 'resolve', comment: 'Fair.' }] }),
     });
     expect(out.chat.phase).toBe('ready');
@@ -140,7 +140,7 @@ describe('re-review results', () => {
   it('escalates a declined point that the reviewer keeps open (a disagreement)', () => {
     const out = run(reReviewing(), {
       type: 'job_completed',
-      jobId: 'job-rr2',
+      jobId: 'job-rr2', attempt: 1,
       result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'ok' }, { point: 2, decision: 'keep_open', comment: 'Still needed.' }] }),
     });
     expect(out.chat.points[1]).toMatchObject({ status: 'escalated', escalationReason: 'disagreement' });
@@ -151,7 +151,7 @@ describe('re-review results', () => {
   it('reopens a fixed point the reviewer keeps open, and starts another address pass', () => {
     const out = run(reReviewing(), {
       type: 'job_completed',
-      jobId: 'job-rr2',
+      jobId: 'job-rr2', attempt: 1,
       result: result({ decisions: [{ point: 1, decision: 'keep_open', comment: 'Still crashes on null.' }, { point: 2, decision: 'resolve', comment: 'ok' }] }),
     });
     expect(out.chat.points[0]!.status).toBe('open');
@@ -162,7 +162,7 @@ describe('re-review results', () => {
   it('escalates every open point when the round limit is reached', () => {
     const out = run(reReviewing({ addressPasses: 3, round: 4 }), {
       type: 'job_completed',
-      jobId: 'job-rr2',
+      jobId: 'job-rr2', attempt: 1,
       result: result({ decisions: [{ point: 1, decision: 'keep_open', comment: 'no' }, { point: 2, decision: 'resolve', comment: 'ok' }] }),
     });
     expect(out.chat.points[0]).toMatchObject({ status: 'escalated', escalationReason: 'round_limit' });
@@ -172,7 +172,7 @@ describe('re-review results', () => {
 
   it("ignores decisions about another reviewer's points", () => {
     const chat = reReviewing({ points: [pointOf(1, sam, { status: 'addressed', authorResolution: 'fixed' })] });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-rr2', result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'mine now' }] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-rr2', attempt: 1, result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'mine now' }] }) });
     expect(out.chat.points[0]!.status).toBe('addressed');
   });
 });
@@ -182,7 +182,7 @@ describe('single-player reviewer (the author is not on Nitpilot)', () => {
 
   it('posts the points as one GitHub review and hands the turn to the human author', () => {
     const chat = reviewing({ participants: [participantOf(offAuthor, 'author'), participantOf(leo, 'reviewer')] });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint()] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint()] }) });
     expect(commandsOf(out, 'post_review')).toEqual([{ type: 'post_review', reviewerGithubId: leo.githubId, pointNumbers: [1] }]);
     expect(out.chat.phase).toBe('addressing');
     expect(commandsOf(out, 'enqueue_job')).toEqual([]);
@@ -194,7 +194,7 @@ describe('single-player reviewer (the author is not on Nitpilot)', () => {
       participants: [participantOf(offAuthor, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
       points: [pointOf(1, leo, { status: 'addressed', authorResolution: 'answered', githubCommentId: '77', githubThreadRootId: '77' })],
     });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-rr2', result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'Thanks, that works.' }] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-rr2', attempt: 1, result: result({ decisions: [{ point: 1, decision: 'resolve', comment: 'Thanks, that works.' }] }) });
     expect(commandsOf(out, 'post_thread_replies')).toEqual([
       { type: 'post_thread_replies', asGithubId: leo.githubId, replies: [{ pointNumber: 1, body: 'Thanks, that works.' }] },
     ]);
@@ -205,7 +205,7 @@ describe('single-player reviewer (the author is not on Nitpilot)', () => {
 describe('drafts and stale results', () => {
   it('keeps a draft-mode result as drafts and tells its owner', () => {
     const chat = reviewing({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { applyState: 'draft' })] });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint()] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint()] }) });
     expect(commandsOf(out, 'complete_job')[0]).toMatchObject({ applyState: 'draft' });
     expect(out.chat.points).toEqual([]);
     expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('drafts');
@@ -214,7 +214,14 @@ describe('drafts and stale results', () => {
 
   it('ignores a result for a job that was cancelled', () => {
     const chat = reviewing({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { status: 'cancelled' })] });
-    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', result: result({ points: [newPoint()] }) });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint()] }) });
+    expect(out.commands).toEqual([]);
+    expect(out.timeline).toEqual([]);
+  });
+
+  it('ignores a result from an earlier attempt: the job was handed out again since', () => {
+    const chat = reviewing({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt: 2 })] });
+    const out = run(chat, { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result({ points: [newPoint()] }) });
     expect(out.commands).toEqual([]);
     expect(out.timeline).toEqual([]);
   });

@@ -48,7 +48,7 @@ describe('Plan 1a end to end', () => {
       const job = await prisma.job.findFirstOrThrow({ where: { chatId, type, status: 'queued' } });
       await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1, expectedPushSha: pushTo ?? null } });
       if (pushTo) await s.deliver('pull_request', prEvent('synchronize', { before: 'a'.repeat(40), after: pushTo }));
-      await s.dispatcher.dispatch(chatId, { type: 'job_completed', jobId: job.id, result });
+      await s.dispatcher.dispatch(chatId, { type: 'job_completed', jobId: job.id, attempt: 1, result });
       return job;
     }
 

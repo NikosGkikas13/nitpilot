@@ -1,10 +1,11 @@
 import type { Dispatcher } from '../chats/dispatch';
 import { JobAssigner } from '../jobs/assign';
 import { buildJobBundle } from '../jobs/bundle';
+import { Leases } from '../jobs/leases';
 import type { PlatformReads } from '../platform/types';
 import type { CliHub } from './cli-hub';
 
-/** How often the timers run: jobs whose retry delay ended. */
+/** How often the timers run: jobs whose retry delay ended, and leases that ran out. */
 export const SWEEP_MS = 5_000;
 
 export type CliHubDeps = {
@@ -20,7 +21,10 @@ export type CliHubDeps = {
  */
 export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }: CliHubDeps) {
   const assigner = new JobAssigner(hub, (jobId) => buildJobBundle(jobId, platform), now);
+  const leases = new Leases(hub, dispatcher.dispatch, now);
 
+  // Every message from a CLI goes through these listeners, in this order.
+  hub.onMessage(leases.handle); // hello and ping: renew leases, cancel what's no longer theirs
   hub.onMessage(async (_conn, msg) => {
     // A CLI that just said hello may be able to take queued jobs.
     if (msg.t === 'hello') assigner.wake();
@@ -34,14 +38,18 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
   assigner.onBundleFailed(async (job) => {
     // The job is ours but can't be sent. Let the engine's retry rules decide now, instead of
     // waiting for its lease to run out and calling it a timeout (spec §9.4).
-    await dispatcher.dispatch(job.chatId, { type: 'job_failed', jobId: job.jobId, reason: 'setup_failed', retryable: true });
+    await dispatcher.dispatch(job.chatId, { type: 'job_failed', jobId: job.jobId, reason: 'setup_failed', retryable: true, attempt: job.attempt });
   });
 
   let timer: ReturnType<typeof setInterval> | null = null;
   return {
     assigner,
+    leases,
     start(): void {
-      timer ??= setInterval(() => assigner.wake(), SWEEP_MS);
+      timer ??= setInterval(() => {
+        assigner.wake();
+        void leases.sweep().catch((err) => console.error('[leases] sweep failed:', err));
+      }, SWEEP_MS);
     },
     stop(): void {
       if (timer) clearInterval(timer);

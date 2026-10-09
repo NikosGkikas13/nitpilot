@@ -201,7 +201,7 @@ describe('results after external activity', () => {
   it('a job result still settles normally after a GitHub point was raised mid-review', () => {
     const chat = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-r1', leo, 'reviewer', 'review')] });
     const commented = run(chat, { type: 'external_comment', comment: comment('9001', sam) });
-    const done = run(commented.chat, { type: 'job_completed', jobId: 'job-r1', result: result() });
+    const done = run(commented.chat, { type: 'job_completed', jobId: 'job-r1', attempt: 1, result: result() });
     // sam's GitHub point is actionable, so maya's agent works on it.
     expect(commandsOf(done, 'enqueue_job')[0]).toMatchObject({ jobType: 'address' });
   });

@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   dispatcher.onCommit((_chatId, effects) => {
     if (effects.tasksCreated) runner.wake();
   });
-  // Jobs → CLIs: the assigner, and from Task 3 on, leases (ws/wire.ts).
+  // Jobs → CLIs: who gets which job, and who is still working on it (ws/wire.ts).
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
@@ -63,6 +63,8 @@ async function main(): Promise<void> {
   const recovered = await recoverOnBoot({ ingest, platform });
   console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
   runner.start();
+  // The server was away, not the CLIs: running jobs get a fresh lease, so CLIs that reconnect keep them.
+  await cliJobs.leases.renewAfterRestart();
   cliJobs.start();
   const purge = setInterval(() => void purgeOldRows().catch((err) => console.error('[purge]', err)), 60 * 60_000);
   // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.

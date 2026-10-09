@@ -118,8 +118,8 @@ export type DomainEvent =
   | { type: 'external_review_submitted'; review: ExternalReview }
   | { type: 'thread_resolved'; threadRootId: string }
   | { type: 'thread_unresolved'; threadRootId: string }
-  | { type: 'job_completed'; jobId: string; result: JobResult }
-  | { type: 'job_failed'; jobId: string; reason: FailureReason; retryable: boolean }
+  | { type: 'job_completed'; jobId: string; attempt: number; result: JobResult }
+  | { type: 'job_failed'; jobId: string; attempt: number; reason: FailureReason; retryable: boolean }
   | { type: 'human_note'; author: Person; body: string }
   | { type: 'manual_review'; reviewer: Person }
   | { type: 'timer'; key: string }

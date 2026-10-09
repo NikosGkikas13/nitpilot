@@ -9,8 +9,9 @@ import type { JobView, ParticipantState } from './types';
 export function onJobCompleted(ctx: Ctx, e: Ev<'job_completed'>): void {
   const chat = ctx.chat;
   const job = chat.jobs.find((j) => j.id === e.jobId);
-  // A result for a job that was cancelled or already finished is stale: ignore it.
-  if (!job || job.status !== 'running') return;
+  // A result for a job that was cancelled, already finished, or handed out again since (a newer
+  // attempt) is stale: ignore it. The fencing check of spec §9.4, done inside the chat's lock.
+  if (!job || job.status !== 'running' || job.attempt !== e.attempt) return;
   job.status = 'done';
   const p = participant(chat, job.participantGithubId, job.role);
 
@@ -113,7 +114,8 @@ const WAIT_MS: Partial<Record<FailureReason, number>> = {
 export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const chat = ctx.chat;
   const job = chat.jobs.find((j) => j.id === e.jobId);
-  if (!job || job.status !== 'running') return;
+  // Same fencing as onJobCompleted: only the current attempt can fail.
+  if (!job || job.status !== 'running' || job.attempt !== e.attempt) return;
   const p = participant(chat, job.participantGithubId, job.role);
   const name = p ? `${p.login}'s agent` : 'An agent';
 

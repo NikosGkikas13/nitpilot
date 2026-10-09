@@ -30,8 +30,13 @@ export type CliConnection = {
   repos: Set<string>;
   /** How many jobs it runs at once. */
   concurrency: number;
+  /** When it last sent anything. A CLI pings every 25 s, so a long silence means the socket is dead. */
+  lastMessageAt: Date;
+  /** For each job bound to this CLI, how many pings in a row left it out (jobs/leases.ts). */
+  missedPings: Map<string, number>;
   send(msg: ServerToCli): boolean;
   close(code: number, reason: string): void;
+  terminate(): void;
 };
 
 /** Called for every message a CLI sends, from its hello on: one message at a time per CLI, in order. */
@@ -86,6 +91,19 @@ export class CliHub {
     await Promise.all([...this.queues].map((q) => q.idle()));
   }
 
+  /**
+   * Drop CLIs that sent nothing since `cutoff`. Their socket is dead (a laptop that slept, a network
+   * that vanished), so no job may go there. Returns how many were dropped.
+   */
+  dropSilent(cutoff: Date): number {
+    const silent = this.connections().filter((c) => c.lastMessageAt < cutoff);
+    for (const c of silent) {
+      this.byToken.delete(c.tokenId);
+      c.terminate();
+    }
+    return silent.length;
+  }
+
   private async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     const onError = () => socket.destroy();
     socket.on('error', onError);
@@ -138,6 +156,7 @@ export class CliHub {
           console.warn(`[cli-hub] ${conn.login}/${conn.device} said hello twice; ignored`);
           return;
         }
+        conn.lastMessageAt = new Date();
         await this.emit(conn, msg);
       }),
     );
@@ -165,12 +184,15 @@ export class CliHub {
       agent: hello.d.agent,
       repos: new Set(hello.d.repos),
       concurrency: hello.d.concurrency,
+      lastMessageAt: new Date(),
+      missedPings: new Map(),
       send: (msg) => {
         if (ws.readyState !== ws.OPEN) return false;
         ws.send(JSON.stringify(msg));
         return true;
       },
       close: (code, reason) => ws.close(code, reason),
+      terminate: () => ws.terminate(),
     };
     // One connection per device. A second one with the same token is the same laptop back from
     // sleep, or a second `nitpilot start`: the newest wins, and the old one is told to stop.
