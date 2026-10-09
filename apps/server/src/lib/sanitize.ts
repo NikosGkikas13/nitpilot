@@ -9,11 +9,21 @@ const SECRETS: RegExp[] = [
   new RegExp(`\\b${BRAND.tokenPrefix}[A-Za-z0-9_-]{43}`, 'g'),
 ];
 
-// An @mention not preceded by a word character, backtick, slash, @ or dot (so emails are safe).
-const MENTION = /(^|[^\w`/@.])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]+)?)/g;
+// An @name GitHub turns into a mention: an @ not preceded by a letter, digit or underscore
+// (so emails are safe), then a login, or an org/team.
+const MENTION = /(?<!\w)@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]+)?)/g;
 
 // Fenced code blocks and inline code. GitHub never turns @names inside them into mentions.
-const CODE = /(```[\s\S]*?```|`[^`\n]*`)/;
+// A backtick escaped with \ is plain text, so it can't open one.
+const CODE = /((?<!\\)```[\s\S]*?```|(?<!\\)`[^`\n]*`)/;
+
+// GitHub decodes HTML entities before it looks for mentions, so `&#64;name` and `@&#110;ame` ping too.
+const ENTITY = /&commat;|&#(?:(\d{1,7})|[xX]([0-9a-fA-F]{1,6}));/g;
+const MENTION_CHAR = /^[A-Za-z0-9@/._-]$/;
+
+// Goes right after the @ of a neutralized mention. It's invisible, but GitHub needs a name
+// character straight after the @, so it no longer sees a mention, however the backticks pair up.
+const ZERO_WIDTH_SPACE = '\u200B';
 
 export type SanitizeOptions = {
   /** Logins of the people in the PR; everyone else's mention is neutralized. */
@@ -28,14 +38,37 @@ export function sanitizeForGithub(text: string, opts: SanitizeOptions): string {
   out = stripMarkup(out);
 
   const allowed = new Set(opts.allowedMentions.map((l) => l.toLowerCase()));
+  // Cut first, then neutralize: a cut can shorten an allowed @maya into a stranger's @ma, or break
+  // a code span open so its @name is plain text again. Neutralizing makes the text longer, so when
+  // the result doesn't fit, cut that much more and try again.
+  let budget = opts.maxLength;
+  for (;;) {
+    const cut = out.length > budget ? `${out.slice(0, Math.max(budget - 1, 0))}…` : out;
+    const result = neutralizeMentions(cut, allowed);
+    if (result.length <= opts.maxLength || budget <= 1) return result;
+    budget -= result.length - opts.maxLength;
+  }
+}
+
+/** Neutralize every mention outside code, except those of the people in the PR. */
+function neutralizeMentions(text: string, allowed: Set<string>): string {
   const neutralize = (part: string) =>
-    part.replace(MENTION, (match, before: string, name: string) =>
-      !name.includes('/') && allowed.has(name.toLowerCase()) ? match : `${before}\`@${name}\``,
+    decodeMentionEntities(part).replace(MENTION, (match, name: string) =>
+      !name.includes('/') && allowed.has(name.toLowerCase()) ? match : `\`@${ZERO_WIDTH_SPACE}${name}\``,
     );
   // split() with a capturing group puts the code parts at the odd indexes; only the rest changes.
-  out = out.split(CODE).map((part, i) => (i % 2 === 1 ? part : neutralize(part))).join('');
+  return text.split(CODE).map((part, i) => (i % 2 === 1 ? part : neutralize(part))).join('');
+}
 
-  return out.length > opts.maxLength ? `${out.slice(0, opts.maxLength - 1)}…` : out;
+/** Decode the entities that spell part of a mention (`&#64;`, `&#115;`, …). Every other entity stays as it is. */
+function decodeMentionEntities(text: string): string {
+  return text.replace(ENTITY, (entity, decimal?: string, hex?: string) => {
+    if (entity === '&commat;') return '@';
+    const code = decimal !== undefined ? Number(decimal) : parseInt(hex ?? '', 16);
+    if (!Number.isInteger(code) || code > 0x10ffff) return entity;
+    const char = String.fromCodePoint(code);
+    return MENTION_CHAR.test(char) ? char : entity;
+  });
 }
 
 /**

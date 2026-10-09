@@ -14,9 +14,14 @@ import { HttpError } from '../errors';
 
 const OAuthCookie = z.object({ state: z.string(), verifier: z.string(), next: z.string() });
 
-/** Only same-site paths, so a crafted link can't send people to another site after sign-in. */
+/**
+ * Only same-site paths, so a crafted link can't send people to another site after sign-in.
+ * Browsers read `\` as `/` and silently drop tabs and newlines, so `/<tab>/evil.example` would
+ * turn into `//evil.example` (another site). Any path with a backslash or a control character is refused.
+ */
 export function safeNext(next: string | undefined): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+  if (/[\p{Cc}\\]/u.test(next)) return '/';
   return next;
 }
 

@@ -3,6 +3,10 @@ import { sanitizeForGithub } from './sanitize';
 
 const clean = (text: string, maxLength = 4000) => sanitizeForGithub(text, { allowedMentions: ['maya', 'Leo'], maxLength });
 
+// A neutralized mention: in backticks, with an invisible zero-width space after the @, so GitHub
+// can't read it as a mention even when its backticks get paired with other ones.
+const quiet = (name: string) => `\`@\u200B${name}\``;
+
 describe('sanitizeForGithub', () => {
   it.each([
     ['a GitHub token', `token ghp_${'a'.repeat(36)} here`],
@@ -30,7 +34,28 @@ describe('sanitizeForGithub', () => {
   });
 
   it('neutralizes mentions of people outside the PR, keeps the ones inside', () => {
-    expect(clean('@maya and @leo, also @someone and @acme/team')).toBe('@maya and @leo, also `@someone` and `@acme/team`');
+    expect(clean('@maya and @leo, also @someone and @acme/team')).toBe(`@maya and @leo, also ${quiet('someone')} and ${quiet('acme/team')}`);
+  });
+
+  // GitHub pings any @name not preceded by a letter, digit or underscore, and it decodes HTML
+  // entities before it looks, so each of these would still ping @someone.
+  it.each([
+    ['after a dot', '.@someone', `.${quiet('someone')}`],
+    ['after a slash', 'x/@someone', `x/${quiet('someone')}`],
+    ['after another @', '@@someone', `@${quiet('someone')}`],
+    ['after a lone backtick', '`@someone', `\`${quiet('someone')}`],
+    ['after an escaped backtick', '\\`@someone`', `\\\`${quiet('someone')}\``],
+    ['written as &#64;', '&#64;someone', quiet('someone')],
+    ['written as &#x40;', '&#x40;someone', quiet('someone')],
+    ['written as &commat;', '&commat;someone', quiet('someone')],
+    ['with an encoded letter', '@&#115;omeone', quiet('someone')],
+  ])('neutralizes a mention %s', (_label, input, expected) => {
+    expect(clean(input)).toBe(expected);
+  });
+
+  it('keeps a neutralized mention quiet when an odd backtick earlier pairs with ours', () => {
+    // GitHub pairs the backtick before "foo" with the first one we add, which leaves @ outside code.
+    expect(clean('use `foo @someone')).toBe(`use \`foo ${quiet('someone')}`);
   });
 
   it('leaves emails and code alone', () => {
@@ -48,12 +73,23 @@ describe('sanitizeForGithub', () => {
 
   it('leaves mentions inside a fenced code block alone', () => {
     const block = '```\nnpm i @scope/pkg\n@someone\n```';
-    expect(clean(`see\n${block}\nthanks @someone`)).toBe(`see\n${block}\nthanks \`@someone\``);
+    expect(clean(`see\n${block}\nthanks @someone`)).toBe(`see\n${block}\nthanks ${quiet('someone')}`);
   });
 
   it('cuts long text with an ellipsis', () => {
     const out = clean('x'.repeat(50), 10);
     expect(out).toHaveLength(10);
     expect(out.endsWith('…')).toBe(true);
+  });
+
+  // Cutting must never leave a mention that pings someone.
+  it.each([
+    ['inside a neutralized mention', 'hi @someone', 10, `hi ${quiet('so')}…`],
+    ["inside an allowed mention, which would leave a stranger's name", 'hi @maya', 6, 'hi…'],
+    ['through a code span, so its @name is no longer code', 'see `npm i @scope/pkg`', 18, `see \`npm i ${quiet('sc')}…`],
+  ])('cuts %s safely', (_label, input, maxLength, expected) => {
+    const out = clean(input, maxLength);
+    expect(out).toBe(expected);
+    expect(out.length).toBeLessThanOrEqual(maxLength);
   });
 });

@@ -102,7 +102,7 @@ describe('post_review (single-player reviewer)', () => {
     await s.handlers.post_review!(await s.task('post_review', { reviewerGithubId: s.leo.githubId, pointNumbers: [1] }));
     const body = s.platform.writesFor(s.ref, 'review')[0]!.comments[0]!.body;
     expect(body).toContain('[redacted]');
-    expect(body).toContain('`@someone`');
+    expect(body).toContain('`@\u200Bsomeone`');
     expect(body).toContain('@maya');
     expect(body).not.toContain('evil.example');
   });

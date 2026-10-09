@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDb } from '../../test/db';
-import { issueCommentEvent, people, prEvent, pull, reviewComment, reviewCommentEvent, reviewEvent } from '../../test/fixtures/github';
+import { issueCommentEvent, people, prEvent, pull, repository, repositoryEvent, reviewComment, reviewCommentEvent, reviewEvent } from '../../test/fixtures/github';
 import { createDeliveryHandler } from '../ingest/handle';
 import { syncFromEvent } from '../ingest/installations';
 import { summaryMarker } from '../lib/markers';
@@ -71,6 +71,18 @@ describe('routing PR events', () => {
     vi.stubEnv('PUBLIC_REPOS_ONLY', 'true');
     const secret = { ...prEvent('opened'), repository: { id: 501, full_name: 'octo/sandbox', private: true } };
     expect(await deliver('pull_request', secret)).toMatchObject({ status: 'ignored', note: expect.stringMatching(/private/) });
+  });
+
+  it('purges the chats and jobs of a repo made private, in public-only mode', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    expect(await prisma.job.count()).toBe(1);
+
+    vi.stubEnv('PUBLIC_REPOS_ONLY', 'true');
+    expect(await deliver('repository', repositoryEvent('privatized', { ...repository, private: true }))).toEqual({ status: 'processed' });
+    expect(await prisma.prChat.count()).toBe(0);
+    expect(await prisma.job.count()).toBe(0);
+    expect((await prisma.repo.findUniqueOrThrow({ where: { id: '501' } })).private).toBe(true);
   });
 });
 

@@ -97,5 +97,10 @@ describe('safeNext', () => {
     ['https://evil.example', '/'],
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],
-  ])('%s → %s', (input, expected) => expect(safeNext(input)).toBe(expected));
+    // Browsers drop tabs and newlines inside a URL and read \ as /, so each of these becomes //evil.example.
+    ['/\t/evil.example', '/'],
+    ['/\n/evil.example', '/'],
+    ['/\r/evil.example', '/'],
+    ['/\t\\evil.example', '/'],
+  ])('%j → %j', (input, expected) => expect(safeNext(input)).toBe(expected));
 });
