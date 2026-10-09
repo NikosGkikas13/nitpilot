@@ -85,6 +85,23 @@ describe('connecting to /ws/cli', () => {
   });
 });
 
+describe('a hello that fails on the server', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('closes with 1011 when the server fails while handling hello, so the CLI tries again', async () => {
+    const { hub, url } = await hubOnPort();
+    const { token } = await device();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(prisma.user, 'findUniqueOrThrow').mockRejectedValueOnce(new Error('database unavailable'));
+    const cli = await TestCli.connect(url, token.raw);
+    cli.send(hello());
+    const closed = await Promise.race([cli.closed, sleep(1_000).then(() => 'still open')]);
+    expect(closed).toMatchObject({ code: 1011 });
+    expect(hub.connections()).toEqual([]);
+    expect(logged).toHaveBeenCalled();
+  });
+});
+
 describe('connections', () => {
   it("lists each of a user's devices and closes them all when the server stops", async () => {
     const { hub, url } = await hubOnPort();

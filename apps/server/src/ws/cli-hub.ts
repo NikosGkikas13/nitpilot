@@ -14,6 +14,8 @@ const MAX_MESSAGE_BYTES = 1_000_000;
 const HELLO_TIMEOUT_MS = 10_000;
 /** WebSocket's "policy violation" close code: the CLI broke the rules of the conversation. */
 const CLOSE_POLICY = 1008;
+/** WebSocket's "internal error" close code: the server failed; the CLI reconnects and tries again. */
+const CLOSE_SERVER_ERROR = 1011;
 
 type Hello = Extract<CliToServer, { t: 'hello' }>;
 
@@ -122,7 +124,15 @@ export class CliHub {
             return;
           }
           clearTimeout(helloTimer);
-          conn = await this.register(ws, auth, msg);
+          try {
+            conn = await this.register(ws, auth, msg);
+          } catch (err) {
+            // The hello was fine but we failed (a database hiccup, say). Without this the socket would stay
+            // open and silent for good, with no timer left to close it: hang up so the CLI tries again.
+            console.error('[cli-hub] could not finish the handshake:', err);
+            ws.close(CLOSE_SERVER_ERROR, 'server error, try again');
+            return;
+          }
           if (!conn) return;
         } else if (msg.t === 'hello') {
           console.warn(`[cli-hub] ${conn.login}/${conn.device} said hello twice; ignored`);
