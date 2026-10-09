@@ -9649,7 +9649,7 @@ Spec §14.6: everything agents wrote is cleaned before it goes to GitHub.
 - Images and raw HTML are stripped (image URLs can leak data).
 - HTML comments are removed too, so agent text can never forge our hidden marker (Review Focus #1).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `apps/server/src/lib/sanitize.test.ts`:
 ```ts
@@ -9700,12 +9700,12 @@ describe('sanitizeForGithub', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to see it fail**
+- [x] **Step 2: Run the test to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/lib/sanitize`
 Expected: FAIL, `Failed to resolve import "./sanitize"`.
 
-- [ ] **Step 3: Write the sanitizer**
+- [x] **Step 3: Write the sanitizer**
 
 `apps/server/src/lib/sanitize.ts`:
 ```ts
@@ -9747,12 +9747,12 @@ export function sanitizeForGithub(text: string, opts: SanitizeOptions): string {
 }
 ```
 
-- [ ] **Step 4: Run the test to see it pass**
+- [x] **Step 4: Run the test to see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/lib/sanitize && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (12 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/lib

