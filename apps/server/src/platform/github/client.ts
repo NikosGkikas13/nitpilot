@@ -9,7 +9,14 @@ export class GithubError extends Error {
   }
 }
 
-export type GithubRequest = { token?: string; body?: unknown; headers?: Record<string, string>; accept?: string };
+export type GithubRequest = {
+  token?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  accept?: string;
+  /** Return the response body as text, without JSON.parse (e.g. to keep 64-bit ids exact). */
+  raw?: boolean;
+};
 export type GithubResponse<T> = { status: number; data: T; headers: Headers };
 
 /**
@@ -37,7 +44,7 @@ export class GithubClient {
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
-    const data = await readBody(res);
+    const data = opts.raw ? await res.text() : await readBody(res);
     if (res.status >= 400) throw new GithubError(res.status, data, `GitHub ${method} ${path} failed with ${res.status}`);
     return { status: res.status, data: data as T, headers: res.headers };
   }

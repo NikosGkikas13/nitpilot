@@ -10559,7 +10559,7 @@ Spec §15 "Recovering after a restart":
 
 The end-to-end test is the Plan 1a version of the spec §20 acceptance test. Plan 1b's CLI hub is the only missing piece, so the test plays the CLI's part by marking jobs running and reporting their results.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/platform/github/platform.test.ts`:
 ```ts
@@ -10733,12 +10733,12 @@ describe('Plan 1a end to end', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm test -w apps/server`
 Expected: FAIL. `redeliverFailed` is not a function, and `./recovery` doesn't exist. The end-to-end file should already pass, because everything it uses exists. If it doesn't, fix that before going on.
 
-- [ ] **Step 3: Add `redeliverFailed` to `GithubPlatform`**
+- [x] **Step 3: Add `redeliverFailed` to `GithubPlatform`**
 
 In `apps/server/src/platform/github/platform.ts`, add this method to the class:
 ```ts
@@ -10763,7 +10763,7 @@ In `apps/server/src/platform/github/platform.ts`, add this method to the class:
   }
 ```
 
-- [ ] **Step 4: Write `recoverOnBoot`**
+- [x] **Step 4: Write `recoverOnBoot`**
 
 `apps/server/src/ingest/recovery.ts`:
 ```ts
@@ -10788,7 +10788,7 @@ export async function recoverOnBoot(deps: { ingest: Ingest; platform: PlatformWr
 }
 ```
 
-- [ ] **Step 5: Write the final `main.ts`**
+- [x] **Step 5: Write the final `main.ts`**
 
 Replace `apps/server/src/main.ts`:
 ```ts
@@ -10860,7 +10860,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: PASS in every workspace (redelivery 1, recovery 2, end to end 2 are new).
@@ -10873,7 +10873,7 @@ With `npm run dev -w apps/server` and `npm run dev:tunnel` running, and the app 
 
 Expected: the server log shows the comment arriving and a timer task running. If A is signed in, an `address` job is queued for A. Jobs stay queued until Plan 1b's CLI exists. To see a GitHub write without a CLI, complete a job by hand from a `tsx` REPL with `dispatcher.dispatch(chatId, { type: 'job_completed', … })`. Then the summary comment appears on the PR within a few seconds, and editing it again leaves a single comment.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/server

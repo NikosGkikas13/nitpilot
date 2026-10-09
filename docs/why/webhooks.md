@@ -35,9 +35,18 @@ When someone submits a review with three inline comments, GitHub sends four webh
 
 So for a submitted review, `normalizeReview` asks the API for that review's comments (`GithubReads.reviewComments`) and builds the full review from the answer (spec §15). The API call is passed in as a function (`fetchComments`), so the normalizer itself still has no network code and its tests pass a fake list.
 
+## When the server was down (`ingest/recovery.ts`)
+
+At every boot, `recoverOnBoot` picks up what a crash or restart left behind:
+1. tasks still marked `running` go back to `pending` (see [outbox-and-restarts.md](outbox-and-restarts.md));
+2. stored deliveries still marked `received` are processed;
+3. deliveries that never reached us at all (server stopped, tunnel down) are asked for again. GitHub keeps a log of every delivery it tried, with its status code. `GithubPlatform.redeliverFailed` reads the log (`GET /app/hook/deliveries`) and asks GitHub to resend each delivery from the last 3 days that failed and never succeeded on a later try (`POST /app/hook/deliveries/{id}/attempts`). If GitHub can't be reached, the server boots anyway.
+
+**A JavaScript number trap.** Delivery ids are 64-bit integers like `3847320851447848960`. JavaScript numbers are exact only up to 2^53 (about 9 × 10^15), so `JSON.parse` quietly rounds that id to `3847320851447849000`, a different delivery. In the real log, every id was affected. So `redeliverFailed` reads the response as text and turns each `"id": 3847…` into the string `"id": "3847…"` before parsing. For the same reason, Nitpilot stores every GitHub id as a string.
+
 ## The React analogy
 
-It's the difference between `setInterval(fetchUpdates, 5000)` and a WebSocket push: the server tells you instead of you asking. The signature check is like validating a JWT before trusting its claims.
+It's the difference between `setInterval(fetchUpdates, 5000)` and a WebSocket push: the server tells you instead of you asking. Recovery on boot is the refetch you do when a WebSocket reconnects, to catch what you missed while it was down. The signature check is like validating a JWT before trusting its claims.
 
 A normalizer is like the function you write to turn an API response into the shape your component wants (`apiUser → { id, name, avatar }`), so components never depend on the API's raw format.
 
