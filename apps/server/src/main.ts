@@ -11,6 +11,8 @@ import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubReads } from './platform/github/reads';
+import { timerHandler } from './tasks/handlers/timer';
+import { recoverRunningTasks, TaskRunner } from './tasks/runner';
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -25,6 +27,10 @@ async function main(): Promise<void> {
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
   const platform = new GithubReads(github, appAuth);
   const dispatcher = new Dispatcher();
+  const runner = new TaskRunner({ timer: timerHandler(dispatcher.dispatch) });
+  dispatcher.onCommit((_chatId, effects) => {
+    if (effects.tasksCreated) runner.wake();
+  });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
   const app = createApp({ github, appAuth, ingest });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
@@ -32,10 +38,13 @@ async function main(): Promise<void> {
   });
 
   await ingest.replayReceived();
+  await recoverRunningTasks();
+  runner.start();
   const purge = setInterval(() => void purgeOldRows().catch((err) => console.error('[purge]', err)), 60 * 60_000);
 
   const shutdown = async () => {
     clearInterval(purge);
+    runner.stop();
     server.close();
     await lock.release();
     process.exit(0);

@@ -16,7 +16,7 @@
    2. load the chat (`chats/load.ts`);
    3. call `decide()`, the pure engine (see [pure-engine.md](pure-engine.md));
    4. in **one transaction**, save the new state (`chats/save.ts`), append the timeline items, and turn the engine's commands into `Job` and `Task` rows (`chats/apply-commands.ts`);
-   5. after the commit, tell listeners (the task runner from Task 24; the CLI hub in Plan 1b).
+   5. after the commit, tell listeners: the task runner wakes up when new tasks were written (`main.ts`); Plan 1b adds the CLI hub.
 
 ## Why a lock per chat
 
@@ -40,7 +40,7 @@ A review comment reaches us once on its own (`pull_request_review_comment`) and 
 
 ## Debounced tasks
 
-Some commands mean "do this later": edit the summary comment, or wait for more comments before starting a round. They become `Task` rows with a `dedupeKey` like `summary:<chatId>`. Scheduling the same key again is an *upsert*: it moves the existing row's time instead of adding a second row. Five changes in a burst make one summary edit.
+Some commands mean "do this later": edit the summary comment, or wait for more comments before starting a round. They become `Task` rows with a `dedupeKey` like `summary:<chatId>`. Scheduling the same key again is an *upsert*: it moves the existing row's time instead of adding a second row. Five changes in a burst make one summary edit. How the runner executes them, retries them and survives a restart is in [outbox-and-restarts.md](outbox-and-restarts.md).
 
 ## The React analogy
 

@@ -9332,7 +9332,7 @@ At the end of this milestone, Plan 1a is complete. The engine's commands become 
 
 Spec §7: "a `Task` table and a 1-second ticker handle GitHub writes and timers". Claiming a task is the same compare-and-swap as Odyhook's `claimDelivery` (`hooksmith/src/lib/delivery-claim.ts`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/tasks/runner.db.test.ts`:
 ```ts
@@ -9422,12 +9422,12 @@ describe('timerHandler', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/tasks`
 Expected: FAIL, `Failed to resolve import "./runner"`.
 
-- [ ] **Step 3: Write the runner and the timer handler**
+- [x] **Step 3: Write the runner and the timer handler**
 
 `apps/server/src/tasks/runner.ts`:
 ```ts
@@ -9572,12 +9572,12 @@ export function timerHandler(dispatch: Dispatch): TaskHandler {
 }
 ```
 
-- [ ] **Step 4: Run the tests to see them pass**
+- [x] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/tasks && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (runner 5, recovery 1, timer 1).
 
-- [ ] **Step 5: Run timers in the server**
+- [x] **Step 5: Run timers in the server**
 
 In `apps/server/src/main.ts`, add the imports `import { timerHandler } from './tasks/handlers/timer';` and `import { recoverRunningTasks, TaskRunner } from './tasks/runner';`. After `const dispatcher = new Dispatcher();`, add:
 ```ts
@@ -9593,7 +9593,7 @@ After `await ingest.replayReceived();`, add:
 ```
 Add `runner.stop();` to `shutdown` after `clearInterval(purge);`.
 
-- [ ] **Step 6: Write the explainer**
+- [x] **Step 6: Write the explainer**
 
 `docs/why/outbox-and-restarts.md`:
 ```markdown
@@ -9625,7 +9625,7 @@ A crash can happen **after** GitHub accepted a write but **before** we marked th
 Like an optimistic update with a persisted queue of pending mutations, but on the server: the intent is saved first, then executed and retried until it sticks.
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server docs/why/outbox-and-restarts.md
