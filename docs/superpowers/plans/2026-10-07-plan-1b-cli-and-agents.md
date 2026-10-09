@@ -145,7 +145,7 @@ docs/why/websockets.md, docs/why/leases-and-fencing.md
 - Every message re-checks the token (`touchCliToken`, which also keeps `lastSeenAt` fresh for "offline since…"). A token revoked while connected closes with `4401` on its next message.
 - Server shutdown closes every socket with `1012`.
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 In `packages/protocol/src/messages.test.ts`, change the import `import { encode } from './envelope';` to:
 ```ts
@@ -159,12 +159,12 @@ and replace the test `it('uses the spec close codes', …)` with:
   });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w packages/protocol -- src/messages.test.ts`
 Expected: FAIL in `uses the spec close codes and path` (`replaced` missing, `CLI_WS_PATH` undefined).
 
-- [ ] **Step 3: Add the close code and the path**
+- [x] **Step 3: Add the close code and the path**
 
 `packages/protocol/src/close-codes.ts`:
 ```ts
@@ -187,19 +187,19 @@ In `packages/protocol/src/envelope.ts`, after `export const LEASE_SEC = 90;`, ad
 export const CLI_WS_PATH = '/ws/cli';
 ```
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS (40 tests).
 
-- [ ] **Step 5: Install `ws`**
+- [x] **Step 5: Install `ws`**
 
 Node has a built-in WebSocket *client* (the CLI will use it), but no server, so the server uses the `ws` package.
 
 Run: `npm install ws -w apps/server && npm install -D @types/ws -w apps/server`
 Expected: `apps/server/package.json` gains `"ws": "^8…"` in `dependencies` and `"@types/ws": "^8…"` in `devDependencies` (8.22 and 8.18 on 2026-10-09).
 
-- [ ] **Step 6: Add `touchCliToken`**
+- [x] **Step 6: Add `touchCliToken`**
 
 In `apps/server/src/auth/cli-token.ts`, after `authenticateCliToken`, add:
 ```ts
@@ -213,7 +213,7 @@ export async function touchCliToken(tokenId: string, now = new Date()): Promise<
 }
 ```
 
-- [ ] **Step 7: Add the test helpers**
+- [x] **Step 7: Add the test helpers**
 
 In `apps/server/test/db.ts`, add the import `import { generateToken } from '../src/lib/tokens';` and, after `makeUser`, add:
 ```ts
@@ -391,7 +391,7 @@ export class TestCli {
 }
 ```
 
-- [ ] **Step 8: Write the failing hub tests**
+- [x] **Step 8: Write the failing hub tests**
 
 `apps/server/src/ws/cli-hub.db.test.ts`:
 ```ts
@@ -521,12 +521,12 @@ describe('connections', () => {
 });
 ```
 
-- [ ] **Step 9: Run them to see them fail**
+- [x] **Step 9: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/ws`
 Expected: FAIL, `Failed to resolve import "./cli-hub"`.
 
-- [ ] **Step 10: Write the hub**
+- [x] **Step 10: Write the hub**
 
 `apps/server/src/ws/cli-hub.ts`:
 ```ts
@@ -742,12 +742,12 @@ function readMessage(data: RawData, isBinary: boolean): CliToServer | null {
 }
 ```
 
-- [ ] **Step 11: Run them to see them pass**
+- [x] **Step 11: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/ws && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (cli-hub 9).
 
-- [ ] **Step 12: Attach the hub to the server**
+- [x] **Step 12: Attach the hub to the server**
 
 Replace `apps/server/src/main.ts` with:
 ```ts
@@ -837,7 +837,7 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 13: Write the explainer**
+- [x] **Step 13: Write the explainer**
 
 `docs/why/websockets.md`:
 ```markdown
@@ -875,12 +875,12 @@ A laptop can vanish without saying goodbye: the lid closes, the Wi-Fi drops. So 
 - Close codes are HTTP status codes for the end of a conversation.
 ```
 
-- [ ] **Step 14: Run the full suite**
+- [x] **Step 14: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add packages/protocol apps/server package-lock.json docs/why/websockets.md

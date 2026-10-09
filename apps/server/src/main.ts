@@ -1,6 +1,8 @@
 // Load apps/server/.env if there is one. Variables already set in the environment win.
 import 'dotenv/config';
+import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
+import { CLOSE_CODES } from '@nitpilot/protocol';
 import { getUserToken } from './auth/user-tokens';
 import { Dispatcher } from './chats/dispatch';
 import { createApp } from './http/app';
@@ -17,6 +19,7 @@ import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
 import { LogNotifier } from './tasks/notifier';
 import { TaskRunner } from './tasks/runner';
+import { CliHub } from './ws/cli-hub';
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -33,6 +36,8 @@ async function main(): Promise<void> {
   const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
   const notifier = new LogNotifier();
+  // CLIs connect over a WebSocket and get their jobs through it (spec §10, docs/why/websockets.md).
+  const hub = new CliHub();
 
   // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub.
   const dispatcher = new Dispatcher();
@@ -49,6 +54,8 @@ async function main(): Promise<void> {
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });
+  // serve() makes a plain HTTP/1 server; WebSocket upgrades on it go to the hub.
+  hub.attach(server as Server);
 
   const recovered = await recoverOnBoot({ ingest, platform });
   console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
@@ -61,6 +68,8 @@ async function main(): Promise<void> {
     clearInterval(purge);
     clearInterval(retries);
     runner.stop();
+    // 1012 tells every CLI the server is restarting, so they reconnect.
+    hub.closeAll(CLOSE_CODES.serverRestart, 'server restarting');
     server.close();
     await lock.release();
     process.exit(0);

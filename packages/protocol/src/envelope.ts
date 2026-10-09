@@ -5,6 +5,8 @@ export const PROTOCOL_VERSION = 1;
 /** The CLI pings every 25 s; a running job's lease lasts 90 s (spec §9.4). */
 export const PING_SEC = 25;
 export const LEASE_SEC = 90;
+/** Where CLIs open their WebSocket (spec §10). */
+export const CLI_WS_PATH = '/ws/cli';
 
 /**
  * Every WebSocket message has the same envelope: `{ v: 1, t: "<type>", id?, re?, d: {…} }`.

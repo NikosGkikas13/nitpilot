@@ -4,6 +4,8 @@ export const CLOSE_CODES = {
   reauth: 4401,
   /** The CLI speaks an old protocol: upgrade it. */
   upgradeCli: 4426,
+  /** Another connection with the same CLI token took over (a second `nitpilot start` on this device): stop. */
+  replaced: 4409,
   /** The server is restarting: reconnect. */
   serverRestart: 1012,
 } as const;

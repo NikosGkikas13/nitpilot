@@ -1,5 +1,6 @@
 import type { Prisma } from '../src/generated/prisma/client';
 import { prisma } from '../src/lib/prisma';
+import { generateToken } from '../src/lib/tokens';
 
 // Tests share one database, so every row they create uses values no other test uses.
 
@@ -24,6 +25,15 @@ export function ghId(): string {
 
 export async function makeUser(over: { login?: string; githubId?: string } = {}) {
   return prisma.user.create({ data: { githubId: over.githubId ?? ghId(), login: over.login ?? uid('user') } });
+}
+
+/** A CLI token for `userId`, as `nitpilot login` creates one. `raw` is what the CLI sends. */
+export async function makeCliToken(userId: string, over: { revoked?: boolean } = {}) {
+  const token = generateToken();
+  const row = await prisma.cliToken.create({
+    data: { userId, name: 'test laptop', tokenHash: token.hash, prefix: token.prefix, revokedAt: over.revoked ? new Date() : null },
+  });
+  return { id: row.id, raw: token.raw };
 }
 
 export async function makeRepo(over: { private?: boolean; rulesJson?: Prisma.InputJsonValue } = {}) {

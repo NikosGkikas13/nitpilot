@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { CliLoginPollResponse, MyChatsResponse } from './api';
 import { CliToServer, ServerToCli } from './cli-messages';
 import { CLOSE_CODES } from './close-codes';
-import { encode } from './envelope';
+import { CLI_WS_PATH, encode } from './envelope';
 import { jobBundle, jobResult } from './test-samples';
 
 function roundTrip<S extends z.ZodType>(schema: S, value: z.infer<S>) {
@@ -61,8 +61,9 @@ describe('envelope and constants', () => {
     expect(JSON.parse(encode({ t: 'pong', d: {} }))).toEqual({ v: 1, t: 'pong', d: {} });
   });
 
-  it('uses the spec close codes', () => {
-    expect(CLOSE_CODES).toEqual({ reauth: 4401, upgradeCli: 4426, serverRestart: 1012 });
+  it('uses the spec close codes and path', () => {
+    expect(CLOSE_CODES).toEqual({ reauth: 4401, upgradeCli: 4426, replaced: 4409, serverRestart: 1012 });
+    expect(CLI_WS_PATH).toBe('/ws/cli');
   });
 });
 
