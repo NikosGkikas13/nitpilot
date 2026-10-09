@@ -1,7 +1,8 @@
 import { emit, system, type Ctx } from './context';
-import { enqueueJob } from './jobs';
+import { enqueueJob, startReview } from './jobs';
 import { escalatePoints } from './points';
 import { activeJobs, author, isActionable, onNitpilot, reviewers } from './state';
+import type { ChatState, ParticipantState } from './types';
 
 /**
  * What happens next (spec §9.3 "When reviews settle"). Safe to call at any time: while a
@@ -21,8 +22,9 @@ export function advance(ctx: Ctx): void {
     return;
   }
 
-  // Nothing has been reviewed yet, so there's nothing to approve.
-  const reviewedOnce = chat.points.length > 0 || reviewers(chat).some((r) => r.lastReviewedSha !== null);
+  // Nothing has been reviewed yet, so there's nothing to approve. Untrusted points don't count:
+  // anyone on GitHub can leave one (spec §6.1).
+  const reviewedOnce = chat.points.some((p) => p.trusted) || reviewers(chat).some((r) => r.lastReviewedSha !== null);
   if (!reviewedOnce) {
     chat.phase = 'idle';
     return;
@@ -37,6 +39,16 @@ export function advance(ctx: Ctx): void {
     }
     if (chat.points.some((p) => p.status === 'escalated')) {
       enterEscalated(ctx);
+      return;
+    }
+    const behind = reviewersBehind(chat);
+    if (behind.length > 0) {
+      // Catch them up first: a re-review since the commit they last saw, or, on an outside
+      // contributor's PR, a request to start it by hand. A failed job or waiting drafts is left
+      // for a person to decide.
+      const waitsForPerson = (r: ParticipantState) => r.attention === 'failed' || r.attention === 'drafts';
+      const started = behind.filter((r) => !waitsForPerson(r)).map((r) => startReview(ctx, r)).some(Boolean);
+      if (!started) chat.phase = 'idle';
       return;
     }
     enterReady(ctx);
@@ -59,6 +71,14 @@ export function advance(ctx: Ctx): void {
     system(ctx, `${a.login}'s agent is working on ${n} point${n === 1 ? '' : 's'}`);
   }
   chat.phase = 'addressing';
+}
+
+/**
+ * Requested reviewers on Nitpilot who haven't reviewed the commit that's there now, or who still
+ * have to start a review by hand. The PR isn't ready for approval until they have.
+ */
+function reviewersBehind(chat: ChatState): ParticipantState[] {
+  return reviewers(chat).filter((r) => r.requested && onNitpilot(r) && (r.lastReviewedSha !== chat.headSha || r.attention === 'manual_review'));
 }
 
 function enterReady(ctx: Ctx): void {

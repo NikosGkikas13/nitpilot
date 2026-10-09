@@ -232,7 +232,7 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 - **A round's reviews have settled** when every review job for a Nitpilot reviewer in that round has finished and any submitted GitHub reviews have been processed.
 - **A point is actionable** if it is open, trusted and not escalated.
 - **When reviews settle:**
-  - Nothing is actionable and nothing is escalated → **ready**.
+  - Nothing is actionable and nothing is escalated → **ready**, but only once every requested reviewer on Nitpilot has reviewed the current head. Untrusted points alone never count as a review. A reviewer who is behind (a human pushed during their review, say) gets a re-review since the commit they last saw, or, on an outside contributor's PR, a request to start it by hand. A reviewer whose job failed or whose work waits as drafts is left for a person, and the chat stays `idle`.
   - Nothing is actionable but escalated points remain → **escalated**.
   - Points are actionable and the author is **not** on Nitpilot → `addressing`, and it's the human author's turn. The round limit doesn't apply, since no automated pass runs.
   - Points are actionable, the author is on Nitpilot, and `addressPasses < max_rounds` → queue an address job.
