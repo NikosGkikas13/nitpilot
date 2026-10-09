@@ -7590,7 +7590,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 Spec §15: a submitted review's comments are fetched through the API instead of trusting the order the webhooks arrive in (Review Focus #3).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/platform/github/normalize/comments.test.ts`:
 ```ts
@@ -7718,12 +7718,12 @@ describe('FakePlatform', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to see them fail**
+- [x] **Step 2: Run the tests to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/platform`
 Expected: FAIL, `Failed to resolve import "./comments"` and `"./fake-platform"`.
 
-- [ ] **Step 3: Write the comment normalizers**
+- [x] **Step 3: Write the comment normalizers**
 
 `apps/server/src/platform/github/normalize/comments.ts`:
 ```ts
@@ -7846,7 +7846,7 @@ export async function parseGithubWebhook(event: string, raw: string, fetchReview
 }
 ```
 
-- [ ] **Step 4: Add `parseWebhook` to `GithubReads`**
+- [x] **Step 4: Add `parseWebhook` to `GithubReads`**
 
 In `apps/server/src/platform/github/reads.ts`:
 - Add the imports `import type { NormalizedEvent, PlatformReads } from '../types';` (merge into the existing `../types` import), `import { parseGithubWebhook } from './normalize/index';`, and add `GhReviewComment` to the `./payloads` import.
@@ -7865,7 +7865,7 @@ In `apps/server/src/platform/github/reads.ts`:
   }
 ```
 
-- [ ] **Step 5: Write `FakePlatform`**
+- [x] **Step 5: Write `FakePlatform`**
 
 `apps/server/src/platform/fake/fake-platform.ts`:
 ```ts
@@ -7980,12 +7980,12 @@ export class FakePlatform implements PlatformAdapter {
 }
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/platform && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (comment normalizers 14, FakePlatform 4, plus the earlier platform tests).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server

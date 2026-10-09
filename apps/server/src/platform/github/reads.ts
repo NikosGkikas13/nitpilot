@@ -1,19 +1,31 @@
-import type { GitSpec, PrRef, PrSnapshot, RepoRef } from '../types';
+import type { GitSpec, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
 import type { AppAuth } from './app-auth';
 import { GithubError, type GithubClient } from './client';
 import { gitSpecFor, snapshotFromPull } from './mapping';
-import type { GhPull } from './payloads';
+import { parseGithubWebhook } from './normalize/index';
+import type { GhPull, GhReviewComment } from './payloads';
 
 export { gitSpecFor, isTrustedAssociation, snapshotFromPull, toPerson } from './mapping';
 
-/** The read side of the GitHub adapter. Task 21 adds parseWebhook; Task 26 adds the writes. */
-export class GithubReads {
+/** The read side of the GitHub adapter. Task 26 adds the writes. */
+export class GithubReads implements PlatformReads {
   readonly id = 'github' as const;
 
   constructor(
     protected readonly github: GithubClient,
     protected readonly appAuth: AppAuth,
   ) {}
+
+  async parseWebhook(h: Headers, raw: string): Promise<NormalizedEvent[]> {
+    return parseGithubWebhook(h.get('x-github-event') ?? '', raw, (ref, reviewId) => this.reviewComments(ref, reviewId));
+  }
+
+  /** The comments that belong to one submitted review. */
+  async reviewComments(ref: PrRef, reviewId: string): Promise<GhReviewComment[]> {
+    const token = await this.appAuth.installationToken(ref.installationId);
+    const { data } = await this.github.api<GhReviewComment[]>('GET', `/repos/${ref.repoFullName}/pulls/${ref.number}/reviews/${reviewId}/comments?per_page=100`, { token });
+    return data;
+  }
 
   async getPr(ref: PrRef): Promise<PrSnapshot> {
     const token = await this.appAuth.installationToken(ref.installationId);

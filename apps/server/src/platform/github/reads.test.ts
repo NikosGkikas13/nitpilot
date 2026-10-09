@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { fakeFetch, json } from '../../../test/fake-fetch';
+import { reviewComment, reviewEvent } from '../../../test/fixtures/github';
 import { AppAuth } from './app-auth';
 import { GithubClient } from './client';
 import type { GhPull } from './payloads';
@@ -89,5 +90,12 @@ describe('GithubReads', () => {
     expect(fetch.calls.at(-1)!.headers.get('if-none-match')).toBe('"abc"');
     status = 404;
     expect(await platform.readDefaultBranchFile(repo, '.nitpilot.yml')).toBeNull();
+  });
+
+  it("parses a submitted review, fetching that review's comments with the installation token", async () => {
+    const { fetch, platform } = reads({ 'GET /repos/octo/sandbox/pulls/42/reviews/7001/comments': () => [reviewComment({ id: 9101 })] });
+    const [ne] = await platform.parseWebhook(new Headers({ 'x-github-event': 'pull_request_review' }), JSON.stringify(reviewEvent('COMMENTED', { id: 7001 })));
+    expect(ne).toMatchObject({ event: { type: 'external_review_submitted', review: { id: '7001', comments: [{ id: '9101' }] } } });
+    expect(fetch.calls.at(-1)!.headers.get('authorization')).toBe('Bearer ghs_x');
   });
 });
