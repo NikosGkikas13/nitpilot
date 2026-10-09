@@ -7261,6 +7261,7 @@ On GitHub: Settings → Developer settings → GitHub Apps → **New GitHub App*
 - **Name:** `nitpilot-dev` (add a suffix if the name is taken, and put it in `GITHUB_APP_SLUG`).
 - **Homepage URL:** `http://localhost:8787`.
 - **Callback URL:** `http://localhost:8787/auth/github/callback`. Tick **Expire user authorization tokens**.
+- Leave **Request user authorization (OAuth) during installation** unticked. When it's ticked, GitHub ignores the Setup URL and sends people to the Callback URL after installing, without the `state` our sign-in started, so the callback rejects them.
 - **Setup URL:** `http://localhost:8787/github/setup`. Tick **Redirect on update**.
 - **Webhook:** Active. The URL can be anything for now (`npm run dev:tunnel` sets it). **Secret:** run `openssl rand -hex 32`.
 - **Repository permissions:** Pull requests *Read and write*, Issues *Read*, Contents *Read*, Metadata *Read* (spec §15).
@@ -9287,7 +9288,7 @@ import { GithubReads } from './platform/github/reads';
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: PASS everywhere (router 8 and dispatcher 6 are new).
 
-- [ ] **Step 11: See a real PR become a chat**
+- [x] **Step 11: See a real PR become a chat**
 
 With `npm run dev -w apps/server` and `npm run dev:tunnel` running:
 1. Sign in at `http://localhost:8787`.
