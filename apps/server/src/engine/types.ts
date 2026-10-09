@@ -57,7 +57,10 @@ export type JobView = {
   jobType: JobType;
   status: JobStatus;
   round: number;
+  /** How many times it was handed to a CLI. Only ever grows, so (job, attempt) names one run. */
   attempt: number;
+  /** How many of those hand-outs don't count toward the retry limit (quota, a moved branch). */
+  refundedAttempts: number;
   headSha: string;
   applyState: ApplyState;
 };

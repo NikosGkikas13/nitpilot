@@ -129,8 +129,10 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
     system(ctx, `${name} is waiting (${e.reason.replaceAll('_', ' ')}) and will try again later`, { reason: e.reason });
     return;
   }
-  if (e.retryable && job.attempt < MAX_ATTEMPTS) {
-    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (job.attempt - 1)), false);
+  // Only the attempts that were the agent's problem count toward the limit and the backoff.
+  const counted = job.attempt - job.refundedAttempts;
+  if (e.retryable && counted < MAX_ATTEMPTS) {
+    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (counted - 1)), false);
     return;
   }
 

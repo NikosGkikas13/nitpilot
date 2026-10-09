@@ -89,6 +89,7 @@ export function jobOf(id: string, p: Person, role: Role, jobType: JobType, over:
     status: 'running',
     round: 1,
     attempt: 1,
+    refundedAttempts: 0,
     headSha: 'head1',
     applyState: 'pending',
     ...over,

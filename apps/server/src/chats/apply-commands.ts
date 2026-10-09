@@ -47,7 +47,7 @@ export async function applyCommands(tx: Tx, chatId: string, commands: Command[],
       case 'retry_job':
         await tx.job.update({
           where: { id: cmd.jobId },
-          data: { status: 'queued', runAfter: cmd.runAfter, cliTokenId: null, leaseExpiresAt: null, ...(cmd.refundAttempt ? { attempt: { decrement: 1 } } : {}) },
+          data: { status: 'queued', runAfter: cmd.runAfter, cliTokenId: null, leaseExpiresAt: null, ...(cmd.refundAttempt ? { refundedAttempts: { increment: 1 } } : {}) },
         });
         effects.jobsChanged = true;
         break;

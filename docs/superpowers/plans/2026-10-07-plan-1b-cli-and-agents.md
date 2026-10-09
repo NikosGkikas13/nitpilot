@@ -2319,7 +2319,7 @@ describe('job.fail and job.reject', () => {
     const { leoCli, job, row } = await reviewing();
     leoCli.send({ v: 1, t: 'job.reject', id: 'r1', d: { ...job, reason: 'daily_cap' } });
     expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
-    expect(await row()).toMatchObject({ status: 'queued', attempt: 0, runAfter: later(60 * 60_000) });
+    expect(await row()).toMatchObject({ status: 'queued', attempt: 1, refundedAttempts: 1, runAfter: later(60 * 60_000) });
   });
 });
 

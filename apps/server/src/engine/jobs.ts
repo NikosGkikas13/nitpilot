@@ -26,6 +26,7 @@ export function enqueueJob(ctx: Ctx, p: ParticipantState, jobType: JobType, sinc
     status: 'queued',
     round: ctx.chat.round,
     attempt: 0,
+    refundedAttempts: 0,
     headSha: ctx.chat.headSha,
     applyState,
   });

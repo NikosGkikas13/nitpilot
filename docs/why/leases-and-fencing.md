@@ -26,6 +26,8 @@ Taking the job back isn't enough, because the old laptop may still send a result
 - The engine checks the attempt again inside the chat's lock (`engine/results.ts`), because between our check and the lock, the sweep could have handed the job out again.
 - When the laptop reconnects, its `hello` lists what it's still running. A job that is still its own, on the same attempt, keeps going: the lease is renewed, and the laptop that slept loses nothing. Anything else gets `job.cancel`.
 
+Some failures aren't the agent's fault: a daily cap, or a branch that moved under the job. They don't count toward the 3-attempt limit, but the attempt number still goes up, because the number has to name exactly one run. Instead, the job remembers how many runs didn't count in `Job.refundedAttempts`, and the engine uses `attempt - refundedAttempts` for its limit and its backoff. If the number went back down after such a failure, the next run would reuse it, and a late message from the old run could be mistaken for one from the new run.
+
 ## Stale answers are acknowledged, then ignored
 
 A stale result gets `ack { status: 'stale' }`, not silence. Silence would look like a network problem and the CLI would keep resending. "Stale" says: we heard you, it's not yours anymore, drop it. It matters most for `job.pushing`: the CLI only pushes after an `applied` ack, so an old attempt can never push.

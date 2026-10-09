@@ -228,38 +228,43 @@ model Message {
 }
 
 model Job {
-  id              String      @id @default(cuid())
-  chatId          String
-  chat            PrChat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  participantId   String
-  participant     Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  id               String      @id @default(cuid())
+  chatId           String
+  chat             PrChat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  participantId    String
+  participant      Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
   /// The participant id while this job is queued or running, null otherwise.
   /// Unique, so a participant can have at most one active job (spec §9.4).
-  activeFor       String?     @unique
-  userId          String
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeFor        String?     @unique
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// review | re_review | address
-  type            String
+  type             String
   /// queued | running | done | failed | cancelled
-  status          String      @default("queued")
-  round           Int
+  status           String      @default("queued")
+  round            Int
   /// The PR head when queued. Plan 1b's assigner moves it to the latest head at assignment.
-  headSha         String
-  sinceSha        String?
-  attempt         Int         @default(0)
-  runAfter        DateTime    @default(now())
-  cliTokenId      String?
-  cliToken        CliToken?   @relation(fields: [cliTokenId], references: [id], onDelete: SetNull)
-  leaseExpiresAt  DateTime?
+  headSha          String
+  sinceSha         String?
+  /// How many times this job was handed to a CLI. It only ever grows: (id, attempt) names one run,
+  /// which is what lets the server ignore messages from an older run (fencing, spec §9.4).
+  attempt          Int         @default(0)
+  /// Hand-outs that ended for a reason that isn't the agent's fault (quota, a moved branch), so they
+  /// don't count toward the 3-attempt limit. The engine counts `attempt - refundedAttempts`.
+  refundedAttempts Int         @default(0)
+  runAfter         DateTime    @default(now())
+  cliTokenId       String?
+  cliToken         CliToken?   @relation(fields: [cliTokenId], references: [id], onDelete: SetNull)
+  leaseExpiresAt   DateTime?
   /// Announced by job.pushing, so the server recognizes its own push.
-  expectedPushSha String?
-  result          Json?
+  expectedPushSha  String?
+  result           Json?
   /// pending | applied | draft | discarded
-  applyState      String      @default("pending")
-  failure         String?
-  cancelReason    String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  applyState       String      @default("pending")
+  failure          String?
+  cancelReason     String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   @@index([status, runAfter])
   @@index([chatId, expectedPushSha])

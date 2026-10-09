@@ -27,6 +27,15 @@ describe('job_failed', () => {
     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo'], kind: 'failed', pointNumbers: [] }]);
   });
 
+  it("doesn't count refunded attempts toward the limit, nor in the backoff", () => {
+    // Handed out three times, but one of those runs ended in a way that wasn't the agent's fault.
+    const chat = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt: 3, refundedAttempts: 1 })] });
+    const out = run(chat, { type: 'job_failed', jobId: 'job-r1', attempt: 3, reason: 'crash', retryable: true });
+    // Two attempts counted: retried (not failed), and it waits as after the second one (60 s).
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(60_000), refundAttempt: false }]);
+    expect(commandsOf(out, 'fail_job')).toEqual([]);
+  });
+
   it('gives up at once on a failure that is not retryable', () => {
     const out = failing(1, 'auth', false);
     expect(commandsOf(out, 'fail_job')).toHaveLength(1);

@@ -52,6 +52,7 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
       status: j.status as JobStatus,
       round: j.round,
       attempt: j.attempt,
+      refundedAttempts: j.refundedAttempts,
       headSha: j.headSha,
       applyState: j.applyState as ApplyState,
     })),

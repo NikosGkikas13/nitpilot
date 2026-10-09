@@ -129,6 +129,17 @@ describe('fencing and liveness', () => {
     expect(await currentAttempt(otherDevice.id, job)).toBeNull();
   });
 
+  it("never hands out the same attempt number twice, even when a failure doesn't count", async () => {
+    const { chat, laptop, laptopToken, job, row } = await assigned();
+    // branch_moved is not the agent's fault: the job is queued again at once and the attempt is refunded.
+    await s.dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: job.jobId, attempt: job.attempt, reason: 'branch_moved', retryable: true });
+    expect((await laptop.next('job.assign')).d.bundle.attempt).toBe(2);
+    expect(await row()).toMatchObject({ status: 'running', attempt: 2, refundedAttempts: 1 });
+    // So a message about the first run can never be taken for one about the second.
+    expect(await currentAttempt(laptopToken.id, job)).toBeNull();
+    expect(await currentAttempt(laptopToken.id, { jobId: job.jobId, attempt: 2 })).toEqual({ chatId: chat.id });
+  });
+
   it('drops a CLI that went silent', async () => {
     const leo = await makeUser({ login: 'leo' });
     const cli = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw);
