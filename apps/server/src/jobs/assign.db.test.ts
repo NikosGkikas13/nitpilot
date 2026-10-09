@@ -1,8 +1,9 @@
-import { LEASE_SEC } from '@nitpilot/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CLOSE_CODES, LEASE_SEC } from '@nitpilot/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { sleep, startCliServer, TestCli, type CliServer } from '../../test/ws';
 import { prisma } from '../lib/prisma';
+import { JobAssigner } from './assign';
 
 // The assigner looks at every queued job, so each test starts from an empty database.
 let s: CliServer;
@@ -12,7 +13,10 @@ beforeEach(async () => {
   clock = new Date();
   s = await startCliServer({ now: () => clock });
 });
-afterEach(() => s.close());
+afterEach(async () => {
+  await s.close();
+  vi.restoreAllMocks();
+});
 
 type User = Awaited<ReturnType<typeof makeUser>>;
 
@@ -147,5 +151,93 @@ describe('JobAssigner', () => {
     const cli = await online(leo, { repos: [repo.fullName] });
     expect((await cli.next('job.assign')).d.bundle.pr.headSha).toBe('c'.repeat(40));
     expect((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).headSha).toBe('c'.repeat(40));
+  });
+
+  it("doesn't give a job to a CLI that came online during the pass, whose running jobs weren't counted", async () => {
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const desktopToken = await makeCliToken(leo.id);
+    // The desktop is already running its one allowed job.
+    const busy = await queueJob((await makeChat(repo.id)).id, leo, 'reviewer', 'review');
+    await prisma.job.update({ where: { id: busy.id }, data: { status: 'running', attempt: 1, cliTokenId: desktopToken.id } });
+    const waiting = await queueJob((await makeChat(repo.id)).id, leo, 'reviewer', 'review');
+    await online(leo, { device: 'laptop', repos: [] });
+    const desktop = await TestCli.online(s.url, desktopToken.raw, { device: 'desktop', repos: [repo.fullName], concurrency: 1 });
+    await s.settle();
+
+    // This pass starts when only the laptop is connected: it never counted the desktop's running job.
+    const laptop = s.hub.connectionsFor(leo.id).find((c) => c.device === 'laptop')!;
+    vi.spyOn(s.hub, 'connections').mockReturnValueOnce([laptop]);
+    expect(await s.assigner.assignDue()).toBe(0);
+    await desktop.nothing('job.assign');
+    expect(await statusOf(waiting.id)).toBe('queued');
+  });
+
+  it('skips a connection that was replaced during the pass', async () => {
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id);
+    const token = await makeCliToken(leo.id);
+    const first = await TestCli.online(s.url, token.raw, { repos: [repo.fullName] });
+    const stale = s.hub.connectionsFor(leo.id)[0]!;
+    // The same laptop reconnects: the newest connection wins and the old socket is closed.
+    const second = await TestCli.online(s.url, token.raw, { repos: [repo.fullName] });
+    expect((await first.closed).code).toBe(CLOSE_CODES.replaced);
+    await s.settle();
+    const job = await queueJob(chat.id, leo, 'reviewer', 'review');
+
+    vi.spyOn(s.hub, 'connections').mockReturnValueOnce([stale]);
+    expect(await s.assigner.assignDue()).toBe(0);
+    expect(await statusOf(job.id)).toBe('queued');
+    await s.assigner.tick();
+    expect((await second.next('job.assign')).d.bundle.jobId).toBe(job.id);
+  });
+
+  it('looks past older jobs that no CLI can take', async () => {
+    const leo = await makeUser({ login: 'leo' });
+    const linked = await makeRepo();
+    const unlinked = await makeRepo();
+    // More jobs than a pass could ever fetch at once, all older than the one job that can run.
+    const stuck = await Promise.all(Array.from({ length: 101 }, async () => queueJob((await makeChat(unlinked.id)).id, leo, 'reviewer', 'review')));
+    await prisma.job.updateMany({ where: { id: { in: stuck.map((j) => j.id) } }, data: { runAfter: new Date(clock.getTime() - 60_000) } });
+    const next = await queueJob((await makeChat(linked.id)).id, leo, 'reviewer', 'review');
+    const cli = await online(leo, { repos: [linked.fullName] });
+    expect((await cli.next('job.assign')).d.bundle.jobId).toBe(next.id);
+  });
+
+  it("hands a job whose bundle can't be built back to the engine instead of leaving it running", async () => {
+    const { leo, repo, chat, job } = await leoWithAJob();
+    // The engine loads this point without complaint, but a bundle point needs a line above 0, so the bundle can't be built.
+    await prisma.point.create({
+      data: { chatId: chat.id, number: 1, raisedByGithubId: leo.githubId, origin: 'agent', severity: 'major', category: 'bug', title: 'Bad row', body: 'x', round: 1, path: 'src/a.ts', line: 0, side: 'RIGHT' },
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cli = await online(leo, { repos: [repo.fullName] });
+    await s.settle();
+    await cli.nothing('job.assign');
+
+    const row = await prisma.job.findUniqueOrThrow({ where: { id: job.id } });
+    expect(row).toMatchObject({ status: 'queued', cliTokenId: null, leaseExpiresAt: null });
+    expect(row.runAfter.getTime()).toBeGreaterThan(clock.getTime()); // the engine's retry delay
+    // The real cause is in the log.
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining(job.id), expect.anything());
+  });
+
+  it('logs a bundle-failed listener that throws instead of breaking the pass', async () => {
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id);
+    await online(leo, { repos: [repo.fullName] });
+    await s.settle();
+    const job = await queueJob(chat.id, leo, 'reviewer', 'review');
+
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const assigner = new JobAssigner(s.hub, async () => { throw new Error('no bundle'); }, () => clock);
+    const heard: string[] = [];
+    assigner.onBundleFailed(async (failed) => { heard.push(`${failed.jobId} attempt ${failed.attempt} chat ${failed.chatId}`); });
+    assigner.onBundleFailed(async () => { throw new Error('listener broke'); });
+    expect(await assigner.assignDue()).toBe(1);
+    expect(heard).toEqual([`${job.id} attempt 1 chat ${chat.id}`]);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('listener'), expect.objectContaining({ message: 'listener broke' }));
   });
 });

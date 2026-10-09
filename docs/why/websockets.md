@@ -29,7 +29,7 @@ Picking is a compare-and-swap (explained in [cli-login.md](cli-login.md)): the j
 
 The assigner runs when something changes (a job was queued or finished, a CLI said hello) and every 5 seconds for jobs waiting out a retry delay. Like the task runner, it never runs two passes at once.
 
-The job travels as a self-contained **bundle** (`jobs/bundle.ts`): the PR, how to fetch its code, the points with their threads, human notes and the team rules. The CLI never has to call back for more.
+The job travels as a self-contained **bundle** (`jobs/bundle.ts`): the PR, how to fetch its code, the points with their threads, human notes and the team rules. The CLI never has to call back for more. If the bundle can't be built (a corrupt row, say), the engine is told the job failed to set up, so its usual retry rules apply instead of the job sitting there until its lease runs out.
 
 ## Leases, in one paragraph
 

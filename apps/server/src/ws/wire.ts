@@ -31,6 +31,12 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
     if (effects.jobsChanged) assigner.wake();
   });
 
+  assigner.onBundleFailed(async (job) => {
+    // The job is ours but can't be sent. Let the engine's retry rules decide now, instead of
+    // waiting for its lease to run out and calling it a timeout (spec §9.4).
+    await dispatcher.dispatch(job.chatId, { type: 'job_failed', jobId: job.jobId, reason: 'setup_failed', retryable: true });
+  });
+
   let timer: ReturnType<typeof setInterval> | null = null;
   return {
     assigner,
