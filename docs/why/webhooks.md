@@ -16,6 +16,18 @@ Every delivery has a JSON body (the PR, the comment, …) and headers:
 3. **Answer 202 right away.** GitHub gives up after 10 seconds, so we never make it wait for our work.
 4. **Process it afterwards**, one delivery at a time, in order (`ingest/process.ts`). If the server crashes first, the row is still `received`, and boot replays it.
 
+## From GitHub's JSON to engine events ("normalizing")
+
+GitHub's payloads are big and GitHub-specific. The engine (`engine/`) doesn't know GitHub exists: it understands a short list of `DomainEvent`s like `pr_opened` or `head_updated`. The **normalizers** in `platform/github/normalize/` translate one into the other:
+
+- `pull_request` with `action: "opened"` → `{ type: 'pr_opened', author, reviewers }`; `"synchronize"` (someone pushed) → `head_updated`; and so on.
+- GitHub ids become strings, and users become `Person`s (`isBot` is set for accounts like `coderabbitai[bot]`).
+- Anything Nitpilot doesn't care about (`labeled`, `assigned`, team review requests) becomes an empty list, `[]`.
+
+Normalizers are pure functions: payload in, events out, no database and no network. That's why their tests are simple, and why a second platform (GitLab) would only need its own normalizers, not a new engine.
+
 ## The React analogy
 
 It's the difference between `setInterval(fetchUpdates, 5000)` and a WebSocket push: the server tells you instead of you asking. The signature check is like validating a JWT before trusting its claims.
+
+A normalizer is like the function you write to turn an API response into the shape your component wants (`apiUser → { id, name, avatar }`), so components never depend on the API's raw format.

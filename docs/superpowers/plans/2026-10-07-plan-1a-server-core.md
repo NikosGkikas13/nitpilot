@@ -7339,7 +7339,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 The fixtures are typed builders shaped like GitHub's documented payloads, trimmed to the fields we read. Plan 1b's live acceptance checks them against real deliveries.
 
-- [ ] **Step 1: Write the fixtures**
+- [x] **Step 1: Write the fixtures**
 
 `apps/server/test/fixtures/github.ts`:
 ```ts
@@ -7442,7 +7442,7 @@ export function repositoryEvent(action: string, repo: GhRepo = repository): GhRe
 }
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `apps/server/src/platform/github/normalize/pull-request.test.ts`:
 ```ts
@@ -7502,12 +7502,12 @@ describe('normalizePullRequest', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to see it fail**
+- [x] **Step 3: Run the test to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/platform/github/normalize`
 Expected: FAIL, `Failed to resolve import "./pull-request"`.
 
-- [ ] **Step 4: Write the normalizer**
+- [x] **Step 4: Write the normalizer**
 
 `apps/server/src/platform/github/normalize/pull-request.ts`:
 ```ts
@@ -7556,12 +7556,12 @@ export function normalizePullRequest(p: GhPullRequestEvent): NormalizedEvent[] {
 }
 ```
 
-- [ ] **Step 5: Run the test to see it pass**
+- [x] **Step 5: Run the test to see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/platform/github/normalize && npm run typecheck -w apps/server && npm run lint`
 Expected: PASS (13 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server
