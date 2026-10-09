@@ -3,10 +3,28 @@ import { BRAND } from '@nitpilot/protocol';
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class GithubError extends Error {
-  constructor(readonly status: number, readonly body: unknown, message: string) {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+    message: string,
+    /** How long GitHub asked us to wait before trying again (rate limits), if it said. */
+    readonly retryAfterMs?: number,
+  ) {
     super(message);
     this.name = 'GithubError';
   }
+}
+
+/**
+ * How long a rate-limited response asks us to wait: `retry-after` (seconds) for a secondary rate
+ * limit, or until `x-ratelimit-reset` (a Unix time) once the hourly allowance is used up.
+ */
+export function retryAfterMs(headers: Headers, now = Date.now()): number | undefined {
+  const retryAfter = headers.get('retry-after');
+  if (retryAfter && /^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000;
+  const reset = Number(headers.get('x-ratelimit-reset'));
+  if (headers.get('x-ratelimit-remaining') === '0' && reset > 0) return Math.max(reset * 1000 - now, 0);
+  return undefined;
 }
 
 export type GithubRequest = {
@@ -45,7 +63,7 @@ export class GithubClient {
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
     const data = opts.raw ? await res.text() : await readBody(res);
-    if (res.status >= 400) throw new GithubError(res.status, data, `GitHub ${method} ${path} failed with ${res.status}`);
+    if (res.status >= 400) throw new GithubError(res.status, data, `GitHub ${method} ${path} failed with ${res.status}`, retryAfterMs(res.headers));
     return { status: res.status, data: data as T, headers: res.headers };
   }
 

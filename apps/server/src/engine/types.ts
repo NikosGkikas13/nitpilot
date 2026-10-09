@@ -122,7 +122,8 @@ export type DomainEvent =
   | { type: 'job_failed'; jobId: string; reason: FailureReason; retryable: boolean }
   | { type: 'human_note'; author: Person; body: string }
   | { type: 'manual_review'; reviewer: Person }
-  | { type: 'timer'; key: string };
+  | { type: 'timer'; key: string }
+  | { type: 'write_failed'; write: 'review' | 'replies'; asGithubId: string; pointNumbers: number[]; reason: 'needs_reauth' | 'github_error' };
 
 export type ParticipantKey = { githubId: string; role: Role };
 

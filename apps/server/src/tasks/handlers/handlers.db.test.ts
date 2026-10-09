@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ghId, makeChat, makeRepo, makeUser, resetDb } from '../../../test/db';
 import type { Prisma } from '../../generated/prisma/client';
 import { NeedsReauthError } from '../../auth/user-tokens';
@@ -8,6 +8,7 @@ import { prisma } from '../../lib/prisma';
 import { FakePlatform } from '../../platform/fake/fake-platform';
 import type { Notification } from '../notifier';
 import { PermanentTaskError } from '../runner';
+import { reportFailedWrite } from './failed-writes';
 import { createTaskHandlers } from './index';
 
 beforeEach(resetDb);
@@ -118,6 +119,39 @@ describe('a reviewer whose GitHub sign-in expired (spec §15)', () => {
     const run = s.handlers.post_review!(await s.task('post_review', { reviewerGithubId: s.leo.githubId, pointNumbers: [1] }));
     await expect(run).rejects.toBeInstanceOf(PermanentTaskError);
     expect(s.platform.writes).toEqual([]);
+  });
+});
+
+describe('reportFailedWrite (the runner gave up on a write)', () => {
+  const fakeDispatch = () => vi.fn(async () => ({ chat: {} as never, timeline: [], commands: [] }));
+
+  it("tells the engine leo's review wasn't posted because his GitHub sign-in expired", async () => {
+    const s = await scene({ authorOnNitpilot: false });
+    await s.point(1);
+    s.platform.postReview = async () => {
+      throw new NeedsReauthError(s.leo.id);
+    };
+    const task = await s.task('post_review', { reviewerGithubId: s.leo.githubId, pointNumbers: [1] });
+    const error = await s.handlers.post_review!(task).catch((err: unknown) => err);
+
+    const dispatch = fakeDispatch();
+    await reportFailedWrite(dispatch)(task, error);
+    expect(dispatch).toHaveBeenCalledWith(s.chat.id, { type: 'write_failed', write: 'review', asGithubId: s.leo.githubId, pointNumbers: [1], reason: 'needs_reauth' });
+  });
+
+  it('tells the engine about replies GitHub kept refusing', async () => {
+    const s = await scene({ authorOnNitpilot: true });
+    const task = await s.task('thread_replies', { asGithubId: s.maya!.githubId, replies: [{ pointNumber: 1, body: 'Fixed.' }, { pointNumber: 2, body: 'Fixed.' }] });
+    const dispatch = fakeDispatch();
+    await reportFailedWrite(dispatch)(task, new Error('GitHub 502'));
+    expect(dispatch).toHaveBeenCalledWith(s.chat.id, { type: 'write_failed', write: 'replies', asGithubId: s.maya!.githubId, pointNumbers: [1, 2], reason: 'github_error' });
+  });
+
+  it('stays quiet about the summary, which is rewritten on the next change anyway', async () => {
+    const s = await scene({ authorOnNitpilot: true });
+    const dispatch = fakeDispatch();
+    await reportFailedWrite(dispatch)(await s.task('summary', {}), new Error('GitHub 502'));
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 

@@ -13,6 +13,7 @@ import { getEnv } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
+import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
 import { LogNotifier } from './tasks/notifier';
 import { TaskRunner } from './tasks/runner';
@@ -35,7 +36,10 @@ async function main(): Promise<void> {
 
   // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub.
   const dispatcher = new Dispatcher();
-  const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }));
+  const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }), {
+    // A review or replies that never reached GitHub shows up in the chat and notifies its owner.
+    onGiveUp: reportFailedWrite(dispatcher.dispatch),
+  });
   dispatcher.onCommit((_chatId, effects) => {
     if (effects.tasksCreated) runner.wake();
   });

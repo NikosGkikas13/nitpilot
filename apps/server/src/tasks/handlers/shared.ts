@@ -27,7 +27,7 @@ export async function asUser<T>(write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (err) {
-    if (err instanceof NeedsReauthError) throw new PermanentTaskError(`${err.message}; writes in their name are paused until they sign in again`);
+    if (err instanceof NeedsReauthError) throw new PermanentTaskError(`${err.message}; writes in their name are paused until they sign in again`, { cause: err });
     throw err;
   }
 }

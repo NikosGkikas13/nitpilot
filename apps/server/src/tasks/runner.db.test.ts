@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeRepo, resetDb } from '../../test/db';
 import type { Prisma } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
+import { GithubError } from '../platform/github/client';
 import { timerHandler } from './handlers/timer';
 import { backoffMs, MAX_TASK_ATTEMPTS, PermanentTaskError, recoverRunningTasks, TaskRunner } from './runner';
 
@@ -38,6 +39,35 @@ describe('TaskRunner', () => {
       row = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     }
     expect(row).toMatchObject({ status: 'failed', attempts: MAX_TASK_ATTEMPTS });
+  });
+
+  it('keeps trying for about an hour before giving up, so a short GitHub incident loses nothing', () => {
+    const waits = Array.from({ length: MAX_TASK_ATTEMPTS - 1 }, (_, i) => backoffMs(i + 1));
+    const total = waits.reduce((sum, ms) => sum + ms, 0);
+    expect(total).toBeGreaterThanOrEqual(55 * 60_000);
+    expect(total).toBeLessThanOrEqual(70 * 60_000);
+  });
+
+  it('waits as long as GitHub asks when it rate-limits a write', async () => {
+    const task = await newTask();
+    await new TaskRunner({ test: async () => { throw new GithubError(403, null, 'secondary rate limit', 120_000); } }, { now: () => NOW }).runDue();
+    const row = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(row).toMatchObject({ status: 'pending', attempts: 1 });
+    expect(row.runAt).toEqual(new Date(NOW.getTime() + 120_000));
+  });
+
+  it('tells onGiveUp about a task it gave up on, and not about one it will retry', async () => {
+    const permanent = await newTask();
+    const transient = await newTask({ kind: 'flaky' });
+    const gaveUp: { id: string; error: unknown }[] = [];
+    const error = new PermanentTaskError('user must sign in again');
+    const runner = new TaskRunner(
+      { test: async () => { throw error; }, flaky: async () => { throw new Error('GitHub 502'); } },
+      { now: () => NOW, onGiveUp: async (task, err) => { gaveUp.push({ id: task.id, error: err }); } },
+    );
+    await runner.runDue();
+    expect(gaveUp).toEqual([{ id: permanent.id, error }]);
+    expect(await statusOf(transient.id)).toBe('pending');
   });
 
   it('gives up at once on a PermanentTaskError, or a kind it has no handler for', async () => {

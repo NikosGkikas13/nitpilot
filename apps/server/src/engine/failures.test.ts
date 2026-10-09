@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { T0, agentToAgent, commandsOf, jobOf, leo, run } from './test-builders';
+import { T0, agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, run, sam } from './test-builders';
 import type { FailureReason } from '@nitpilot/protocol';
 
 function failing(attempt: number, reason: FailureReason, retryable: boolean) {
@@ -50,5 +50,26 @@ describe('job_failed', () => {
     const chat = agentToAgent({ jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { status: 'cancelled' })] });
     const out = run(chat, { type: 'job_failed', jobId: 'job-r1', reason: 'crash', retryable: true });
     expect(out.commands).toEqual([]);
+  });
+});
+
+describe('write_failed (a GitHub write in someone\'s name was given up on)', () => {
+  /** sam (not on Nitpilot) authored the PR; leo's agent reviewed it, so leo's review goes to GitHub. */
+  const singlePlayerReviewer = () => chatState({ phase: 'addressing', authorGithubId: sam.githubId, participants: [participantOf(sam, 'author'), participantOf(leo, 'reviewer')] });
+
+  it('says so in the timeline, flags the person and notifies them', () => {
+    const out = run(singlePlayerReviewer(), { type: 'write_failed', write: 'review', asGithubId: leo.githubId, pointNumbers: [1, 2], reason: 'github_error' });
+    expect(out.timeline).toEqual([
+      expect.objectContaining({ kind: 'system', body: "Couldn't post leo's review (P1, P2) on GitHub: GitHub kept failing" }),
+    ]);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('failed');
+    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo'], kind: 'failed', pointNumbers: [1, 2] }]);
+  });
+
+  it('asks the person to sign in again when their GitHub sign-in expired', () => {
+    const soloAuthor = chatState({ participants: [participantOf(maya, 'author')] });
+    const out = run(soloAuthor, { type: 'write_failed', write: 'replies', asGithubId: maya.githubId, pointNumbers: [3], reason: 'needs_reauth' });
+    expect(out.timeline[0]!.body).toBe("Couldn't post maya's replies (P3) on GitHub: maya needs to sign in to Nitpilot again");
+    expect(out.chat.participants[0]!.attention).toBe('failed');
   });
 });

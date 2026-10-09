@@ -9,6 +9,7 @@ import {
 import { onJobCompleted, onJobFailed } from './results';
 import { author, onNitpilot } from './state';
 import type { DecideInput, DecideOutput } from './types';
+import { onWriteFailed } from './writes';
 
 /**
  * The workflow rules, as one pure function (spec §9): (state, event) → (state, timeline, commands).
@@ -43,6 +44,7 @@ export function decide(input: DecideInput): DecideOutput {
     case 'head_updated': onHeadUpdated(ctx, event); break;
     case 'timer': onTimer(ctx, event); break;
     case 'job_failed': onJobFailed(ctx, event); break;
+    case 'write_failed': onWriteFailed(ctx, event); break;
     default: {
       // If a new DomainEvent type is added without a case, this line stops compiling.
       const unhandled: never = event;

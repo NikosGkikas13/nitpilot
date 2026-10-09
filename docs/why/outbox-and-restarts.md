@@ -10,7 +10,8 @@ Say the engine decides "Leo's review is done; post a summary comment". If we cal
 
 1. The dispatcher (`chats/dispatch.ts`) saves the chat **and** its new `Task` rows in one transaction (`chats/apply-commands.ts`).
 2. `tasks/runner.ts` wakes every second, or right after a dispatch, and claims due rows one by one. Claiming is a compare-and-swap from `pending` to `running`, the same trick as Odyhook's `claimDelivery`.
-3. Success → `done`. Failure → `pending` again with a growing delay (5 s, 10 s, 20 s…), up to 5 attempts.
+3. Success → `done`. Failure → `pending` again with a growing delay (5 s, 10 s, 20 s… up to 10 minutes), for 13 attempts: about an hour, so a short GitHub incident loses nothing. When GitHub rate-limits us, it says how long to wait (a `retry-after` header, or `x-ratelimit-reset` once the hourly allowance is used up); `GithubError.retryAfterMs` carries that, and the runner waits at least that long, since asking sooner only fails again.
+   After the last attempt the row is `failed`, and the runner calls its `onGiveUp` hook (see "When a write never reaches GitHub" below).
 4. At boot, any row still `running` belonged to the crashed process, so it goes back to `pending`.
 
 ## What each task does (`tasks/handlers/`)
@@ -24,6 +25,16 @@ Say the engine decides "Leo's review is done; post a summary comment". If we cal
 | `timer` | a debounce came due: tell the engine | — |
 
 Everything an agent wrote is cleaned first (`lib/sanitize.ts`). Writes "as" someone use their own GitHub token. If they have to sign in again, the task stops for good instead of retrying, and nothing is posted as the bot in their place.
+
+## When a write never reaches GitHub
+
+A review or a set of replies that fails for good is worse than it looks: the chat already shows those points as raised or answered, but nobody on GitHub can see them. So the runner's `onGiveUp` hook (`tasks/handlers/failed-writes.ts`, wired in `main.ts`) turns that into an engine event, `write_failed`. The engine (`engine/writes.ts`) then:
+
+- adds a timeline message, e.g. "Couldn't post leo's review (P1, P2) on GitHub: leo needs to sign in to Nitpilot again";
+- sets that person's attention to `failed`, which is what the inbox will show (Plan 2);
+- notifies them.
+
+The summary comment is left out on purpose. The next change to the chat writes it again anyway, and reporting it would add a timeline message, which is itself a change that asks for a new summary.
 
 ## Making "run it again" safe
 
