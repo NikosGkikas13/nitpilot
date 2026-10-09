@@ -32,7 +32,7 @@ export type CliConnection = {
   concurrency: number;
   /** When it last sent anything. A CLI pings every 25 s, so a long silence means the socket is dead. */
   lastMessageAt: Date;
-  /** For each job bound to this CLI, how many pings in a row left it out (jobs/leases.ts). */
+  /** For each run bound to this CLI (keyed `jobId#attempt`), how many pings in a row left it out (jobs/leases.ts). */
   missedPings: Map<string, number>;
   send(msg: ServerToCli): boolean;
   close(code: number, reason: string): void;

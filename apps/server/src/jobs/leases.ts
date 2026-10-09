@@ -57,17 +57,25 @@ export class Leases {
     await this.renewOrCancel(conn, running);
     const listed = new Set(running.map(keyOf));
     const bound = await prisma.job.findMany({ where: { status: 'running', cliTokenId: conn.tokenId }, select: BOUND });
+    const boundKeys = new Set(bound.map((job) => keyOf({ jobId: job.id, attempt: job.attempt })));
+    // Counts are per run (jobId#attempt). Forget the runs this CLI no longer holds, so the map can't grow forever.
+    for (const key of conn.missedPings.keys()) if (!boundKeys.has(key)) conn.missedPings.delete(key);
     for (const job of bound) {
-      if (listed.has(keyOf({ jobId: job.id, attempt: job.attempt }))) {
-        conn.missedPings.delete(job.id);
+      const key = keyOf({ jobId: job.id, attempt: job.attempt });
+      if (listed.has(key)) {
+        conn.missedPings.delete(key);
         continue;
       }
       // Once can happen: the ping crossed the job.assign on the wire. Twice means the CLI doesn't have it.
-      const missed = (conn.missedPings.get(job.id) ?? 0) + 1;
-      conn.missedPings.set(job.id, missed);
-      if (missed >= 2) {
-        conn.missedPings.delete(job.id);
+      const missed = (conn.missedPings.get(key) ?? 0) + 1;
+      conn.missedPings.set(key, missed);
+      if (missed < 2) continue;
+      try {
         await this.takeBack(job, 'missed_pings');
+        conn.missedPings.delete(key);
+      } catch (err) {
+        // Keep the count: the next ping tries again. The other jobs and the pong must not wait for this one.
+        console.error(`[leases] could not take back job ${job.id}:`, err);
       }
     }
     conn.send({ v: 1, t: 'pong', d: {} });

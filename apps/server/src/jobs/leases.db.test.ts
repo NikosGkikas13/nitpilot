@@ -1,9 +1,10 @@
 import { LEASE_SEC } from '@nitpilot/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { ping, startCliServer, TestCli, type CliServer } from '../../test/ws';
+import type { Dispatch } from '../chats/dispatch';
 import { prisma } from '../lib/prisma';
-import { currentAttempt } from './leases';
+import { currentAttempt, Leases } from './leases';
 
 // The sweep looks at every running job, so each test starts from an empty database.
 // The leases run on `clock`, but the hub notes a CLI's last message in real time. So moving `clock`
@@ -54,6 +55,81 @@ describe('pings', () => {
     await laptop.next('pong');
     expect(await row()).toMatchObject({ status: 'queued', attempt: 1, cliTokenId: null, runAfter: later(30_000) });
     expect((await laptop.next('job.cancel')).d).toEqual({ ...job, reason: 'missed_pings' });
+  });
+});
+
+describe('missed pings', () => {
+  it('are forgiven once again when the job comes back on a new attempt', async () => {
+    const { chat, laptop, job, row } = await assigned();
+    laptop.send(ping([]));
+    await laptop.next('pong'); // J#1 missed once: the ping may have crossed its job.assign
+    // J#1 fails and is requeued (30 s delay, skipped here); the laptop gets it again as attempt 2.
+    await s.dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: job.jobId, attempt: job.attempt, reason: 'crash', retryable: true });
+    await prisma.job.update({ where: { id: job.jobId }, data: { runAfter: clock } });
+    await s.assigner.tick();
+    expect((await laptop.next('job.assign')).d.bundle.attempt).toBe(2);
+    // A ping that crossed this new hand-out is a first miss for attempt 2, not a second one.
+    laptop.send(ping([]));
+    await laptop.next('pong');
+    await laptop.nothing('job.cancel');
+    expect(await row()).toMatchObject({ status: 'running', attempt: 2 });
+  });
+
+  it('are forgotten for jobs the CLI no longer holds', async () => {
+    const { chat, laptop, laptopToken, job } = await assigned();
+    laptop.send(ping([]));
+    await laptop.next('pong');
+    const conn = s.hub.connection(laptopToken.id)!;
+    expect(conn.missedPings.size).toBe(1);
+    // The job leaves this CLI (failed, waiting for its retry), and the next ping has nothing bound to count.
+    await s.dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: job.jobId, attempt: job.attempt, reason: 'crash', retryable: true });
+    laptop.send(ping([]));
+    await laptop.next('pong');
+    expect(conn.missedPings.size).toBe(0);
+  });
+
+  it('still answer the ping when taking back one job fails', async () => {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const laptopToken = await makeCliToken(leo.id);
+    const laptop = await TestCli.online(s.url, laptopToken.raw, { device: 'laptop', repos: [repo.fullName], concurrency: 2 });
+    for (const number of [1, 2]) {
+      const chat = await makeChat(repo.id, { number, authorGithubId: maya.githubId });
+      await s.dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+    }
+    const first = (await laptop.next('job.assign')).d.bundle;
+    const second = (await laptop.next('job.assign')).d.bundle;
+    const rowOf = (jobId: string) => prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+
+    // A second Leases whose database trouble hits one job only. It shares the connection (and its counts) with the wired one.
+    let triedToFail = 0;
+    const flaky: Dispatch = async (chatId, event, opts) => {
+      if (event.type === 'job_failed' && event.jobId === first.jobId) {
+        triedToFail += 1;
+        throw new Error('the database is having a moment');
+      }
+      return s.dispatcher.dispatch(chatId, event, opts);
+    };
+    const leases = new Leases(s.hub, flaky, () => clock);
+    const conn = s.hub.connection(laptopToken.id)!;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await leases.handle(conn, ping([])); // both jobs missed once: forgiven
+      await laptop.next('pong');
+      await leases.handle(conn, ping([])); // both missed twice: both are taken back, and the first can't be
+      await laptop.next('pong');
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not take back job ${first.jobId}`), expect.any(Error));
+      expect(await rowOf(second.jobId)).toMatchObject({ status: 'queued', cliTokenId: null });
+      expect(await rowOf(first.jobId)).toMatchObject({ status: 'running', cliTokenId: laptopToken.id });
+      expect(triedToFail).toBe(1);
+      // Its count was kept, so the next ping tries again.
+      await leases.handle(conn, ping([]));
+      await laptop.next('pong');
+      expect(triedToFail).toBe(2);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
 
