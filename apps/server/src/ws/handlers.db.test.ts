@@ -1,5 +1,5 @@
 import { samples, type JobResult, type RunningJob } from '@nitpilot/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { startCliServer, TestCli, type CliServer } from '../../test/ws';
 import { prisma } from '../lib/prisma';
@@ -13,7 +13,13 @@ beforeEach(async () => {
   clock = new Date();
   s = await startCliServer({ now: () => clock });
 });
-afterEach(() => s.close());
+afterEach(async () => {
+  try {
+    await s.close();
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
 
 const complete = (job: RunningJob, result: JobResult, id = 'c1') => ({ v: 1, t: 'job.complete', id, d: { ...job, result } });
 const pointsIn = (chatId: string) => prisma.point.count({ where: { chatId } });
@@ -96,16 +102,21 @@ describe('job.pushing', () => {
 
 describe('job.fail and job.reject', () => {
   it('put a retryable failure back in the queue after a delay', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { leoCli, job, row } = await reviewing();
     leoCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...job, reason: 'crash', retryable: true, detail: 'claude exited with code 1' } });
     expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
     expect(await row()).toMatchObject({ status: 'queued', attempt: 1, cliTokenId: null, runAfter: later(30_000) });
+    // The CLI's own explanation goes to the server log, with who, which attempt and what the server made of it.
+    expect(warned).toHaveBeenCalledWith(`[cli] leo/test laptop: job ${job.jobId} attempt 1 failed (crash, ack applied): "claude exited with code 1"`);
   });
 
   it('fail the job for good on a final failure, flag its owner and queue a notification', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { chat, leoCli, job, row } = await reviewing();
     leoCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...job, reason: 'auth', retryable: false, detail: 'claude is not logged in' } });
     expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
+    expect(warned).toHaveBeenCalledWith(`[cli] leo/test laptop: job ${job.jobId} attempt 1 failed (auth, ack applied): "claude is not logged in"`);
     expect(await row()).toMatchObject({ status: 'failed', failure: 'auth' });
     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'reviewer' } })).toMatchObject({ attention: 'failed' });
     expect(await prisma.task.count({ where: { chatId: chat.id, kind: 'notify' } })).toBe(1);

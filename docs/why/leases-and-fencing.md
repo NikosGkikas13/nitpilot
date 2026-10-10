@@ -30,7 +30,7 @@ Some failures aren't the agent's fault: a daily cap, or a branch that moved unde
 
 ## Stale answers are acknowledged, then ignored
 
-A stale result gets `ack { status: 'stale' }`, not silence. Silence would look like a network problem and the CLI would keep resending. "Stale" says: we heard you, it's not yours anymore, drop it. It matters most for `job.pushing`: the CLI only pushes after an `applied` ack, so an old attempt can never push.
+A stale result gets `ack { status: 'stale' }`, not silence. Silence would look like a network problem and the CLI would keep resending. "Stale" says: we heard you, it's not yours anymore, drop it. It matters most for `job.pushing`: the CLI only pushes after an `applied` ack, so an old attempt can never push. The acks are sent by `ws/handlers.ts`; its `recordPush()` is the `job.pushing` check, one database update that tests the attempt and records the commit together.
 
 ## The React analogy
 

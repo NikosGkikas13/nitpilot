@@ -24,8 +24,11 @@ export function jobMessageHandler(deps: { dispatch: Dispatch }): MessageListener
       }
       case 'job.fail': {
         const { jobId, attempt, reason, retryable, detail } = msg.d;
-        console.warn(`[cli] ${conn.login}/${conn.device}: job ${jobId} failed (${reason}): ${detail}`);
-        return ack(conn, msg.id, await report(deps.dispatch, conn, { type: 'job_failed', jobId, attempt, reason, retryable }));
+        const status = await report(deps.dispatch, conn, { type: 'job_failed', jobId, attempt, reason, retryable });
+        // Logged after the fencing check, so the line says whether the server took it. The detail comes
+        // from the CLI and may span lines; JSON.stringify keeps it on one log line.
+        console.warn(`[cli] ${conn.login}/${conn.device}: job ${jobId} attempt ${attempt} failed (${reason}, ack ${status}): ${JSON.stringify(detail)}`);
+        return ack(conn, msg.id, status);
       }
       case 'job.reject': {
         // The CLI turned the job down (daily cap, repo not linked there, …). The engine decides how long to wait.

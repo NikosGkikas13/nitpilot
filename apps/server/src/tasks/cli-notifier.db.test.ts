@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeCliToken, makeUser } from '../../test/db';
 import { startCliServer, TestCli, type CliServer } from '../../test/ws';
+import type { CliConnection } from '../ws/cli-hub';
 import { CliNotifier } from './cli-notifier';
 import type { Notification } from './notifier';
 
@@ -39,5 +40,18 @@ describe('CliNotifier', () => {
     await new CliNotifier(s.hub, offline).notify(ready([leo.id, kim.id]));
     await laptop.next('notify');
     expect(offline.notify).toHaveBeenCalledWith(ready([kim.id]));
+  });
+
+  it("falls back to the server log for someone whose only CLI can't be reached", async () => {
+    // A real socket can't be made to refuse a send on demand, so these connections are stand-ins:
+    // send() returns false the way it does for a socket that is closing.
+    const closing = { send: vi.fn(() => false) } as unknown as CliConnection;
+    const working = { send: vi.fn(() => true) } as unknown as CliConnection;
+    const hub = { connectionsFor: (userId: string) => (userId === 'leo' ? [closing] : [closing, working]) };
+    const offline = { notify: vi.fn(async () => {}) };
+    await new CliNotifier(hub, offline).notify(ready(['leo', 'kim']));
+    // leo's only CLI is closing, so he gets the log line. kim has one that took it, so she doesn't.
+    expect(offline.notify).toHaveBeenCalledWith(ready(['leo']));
+    expect(working.send).toHaveBeenCalledOnce();
   });
 });
