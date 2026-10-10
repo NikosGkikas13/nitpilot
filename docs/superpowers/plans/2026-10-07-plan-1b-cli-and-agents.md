@@ -6043,7 +6043,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **Agent:** the configured agent's binary answers `--version` (`claude`, `gemini`; the fake agent is built in), else fail. Whether it's logged in waits for the adapters' `detect()`.
 - **Repo `<owner/name>`,** one per linked clone: the folder exists, else fail; one of its remotes points at that repo, else fail; `commit.gpgsign` is `true` → warn (a passphrase prompt would stall an address job until it times out).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/cli/src/commands/doctor.test.ts`:
 ```ts
@@ -6211,12 +6211,12 @@ In `apps/cli/src/http.test.ts`, inside `describe('ServerClient', …)`, add:
   });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/commands/doctor src/http`
 Expected: FAIL: `Failed to resolve import "./doctor"`; in `http.test.ts`, `health is not a function`.
 
-- [ ] **Step 3: Write the health check and the doctor**
+- [x] **Step 3: Write the health check and the doctor**
 
 In `packages/protocol/src/api.ts`, at the end, add:
 ```ts
@@ -6410,22 +6410,22 @@ In `apps/cli/src/cli.ts`, add `import { doctor } from './commands/doctor';` and,
   doctor: { usage: `${BRAND.cli} doctor`, summary: 'Check this machine is ready to run jobs', run: (_args, out) => doctor({ out }) },
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/cli && npm run typecheck -w apps/cli -w apps/server && npm run lint`
 Expected: PASS (doctor 15, http 9, plus everything before).
 
-- [ ] **Step 5: Try the CLI by hand**
+- [x] **Step 5: Try the CLI by hand**
 
 Run: `npm run build -w apps/cli && node apps/cli/dist/index.js --help && NITPILOT_CONFIG_DIR="$(mktemp -d)" NITPILOT_SERVER=http://127.0.0.1:9 node apps/cli/dist/index.js doctor`
 Expected: `--help` lists `login`, `start`, `status`, `doctor`, `repos add [path]` and `retry <pr-url>` in that order. `doctor` prints ✓ for Node, Platform, git and Config, ✗ for Server (`Can't reach http://127.0.0.1:9…`: nothing listens on port 9), no Account lines, ✓ or ✗ for Agent depending on whether `claude` is installed, and ends with `… to fix.` (exit code 1). The temporary config folder keeps your real `~/.config/nitpilot` out of it, and port 9 keeps the check off the network.
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli apps/server/src/http/app.ts packages/protocol/src/api.ts docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

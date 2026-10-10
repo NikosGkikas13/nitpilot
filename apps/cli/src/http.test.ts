@@ -68,4 +68,10 @@ describe('ServerClient', () => {
     const fetch = fakeFetch(() => json({ hello: 'world' }));
     await expect(new ServerClient(SERVER, 'nit_abc', fetch).me()).rejects.toThrow('Unexpected answer from /api/me');
   });
+
+  it('checks the server is up, without a token', async () => {
+    const fetch = fakeFetch(() => json({ ok: true, version: '0.1.0' }));
+    expect(await new ServerClient(SERVER, null, fetch).health()).toEqual({ ok: true, version: '0.1.0' });
+    expect(fetch.calls[0]!.url.pathname).toBe('/healthz');
+  });
 });

@@ -1,3 +1,4 @@
+import type { HealthResponse } from '@nitpilot/protocol';
 import { Hono } from 'hono';
 import { currentUser } from '../auth/session';
 import type { Dispatch } from '../chats/dispatch';
@@ -21,7 +22,10 @@ export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest; 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   app.onError(onError);
-  app.get('/healthz', (c) => c.json({ ok: true, version: SERVER_VERSION }));
+  app.get('/healthz', (c) => {
+    const body: HealthResponse = { ok: true, version: SERVER_VERSION };
+    return c.json(body);
+  });
   app.get('/', async (c) => renderPage(c, HomePage({ user: await currentUser(c), appSlug: getEnv().GITHUB_APP_SLUG })));
   app.route('/', authRoutes(deps));
   app.route('/', cliRoutes(deps));
