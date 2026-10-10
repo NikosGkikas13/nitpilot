@@ -4,7 +4,7 @@
 
 ## The file (`apps/cli/src/config/config.ts`)
 
-`~/.config/nitpilot/config.json` holds the server's address, this device's token from `nitpilot login`, which agent you use, your limits (`concurrency`, `jobTimeoutMinutes`, `dailyJobCap`) and your linked clones (`repos`). Every setting has a default (spec §13), so a missing file just means "all defaults". The file is checked with a zod schema when it's read; a typo gives an error that names the file and the setting.
+`~/.config/nitpilot/config.json` holds the server's address, this device's token from `nitpilot login`, which agent you use, your limits (`concurrency`, `jobTimeoutMinutes`, `dailyJobCap`) and your linked clones (`repos`). Every setting has a default (spec §13), so a missing file just means "all defaults". The file is checked with a zod schema when it's read: a misspelled setting name or a wrong value gives an error that names the file and the setting, instead of being ignored (the same rule as `.nitpilot.yml`).
 
 ## One folder per account
 

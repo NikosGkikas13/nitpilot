@@ -51,6 +51,14 @@ describe('loadConfig', () => {
     writeConfig(dir, JSON.stringify({ concurrency: 9 }));
     expect(() => loadConfig({ env: {}, dir })).toThrow(/Invalid setting "concurrency" in .*config\.json/);
   });
+
+  it("names a setting it doesn't know, so a typo isn't silently ignored", () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ concurency: 2 }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow(/Unknown setting "concurency" in .*config\.json/);
+    writeConfig(dir, JSON.stringify({ repos: { 'acme/shop-api': { path: '/code/shop-api', setpu: ['npm', 'ci'] } } }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow('Unknown setting "repos.acme/shop-api.setpu"');
+  });
 });
 
 describe('loadConfigFile', () => {

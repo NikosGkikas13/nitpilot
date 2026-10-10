@@ -17,19 +17,22 @@ const ENV = {
 type Env = Record<string, string | undefined>;
 
 /** One linked clone (spec §13): where it is, how to prepare a fresh checkout, and which checks the agent may run. */
-const RepoConfig = z.object({
+const RepoConfig = z.strictObject({
   path: z.string().min(1),
   setup: z.array(z.string()).min(1).optional(),
   checks: z.record(z.string(), z.array(z.string()).min(1)).optional(),
 });
 
-/** config.json (spec §13). Every field has a default, so a missing or empty file is valid. */
-export const PersonalConfigSchema = z.object({
+/**
+ * config.json (spec §13). Every field has a default, so a missing or empty file is valid.
+ * Names it doesn't know are rejected, so a typo is an error instead of a setting silently ignored (and dropped on the next save).
+ */
+export const PersonalConfigSchema = z.strictObject({
   server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
   token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
   agent: AgentId.default('claude-code'),
   /** Defaults for new chats. Ignored in Plan 1, where Auto is always on. */
-  auto: z.object({ review: z.boolean(), address: z.boolean() }).default({ review: true, address: true }),
+  auto: z.strictObject({ review: z.boolean(), address: z.boolean() }).default({ review: true, address: true }),
   concurrency: z.number().int().min(1).max(4).default(1),
   jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
   dailyJobCap: z.number().int().min(1).default(40),
@@ -95,5 +98,7 @@ function parse(raw: Record<string, unknown>, where: string): PersonalConfig {
   const parsed = PersonalConfigSchema.safeParse(raw);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
+  // A misspelled name: point at the name itself, not at the object it sits in.
+  if (issue.code === 'unrecognized_keys') throw new CliError(`Unknown setting "${[...issue.path, issue.keys[0]].join('.')}" in ${where}. Check the spelling.`);
   throw new CliError(`Invalid setting "${issue.path.join('.') || '(the whole file)'}" in ${where}: ${issue.message}`);
 }

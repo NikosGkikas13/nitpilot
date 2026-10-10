@@ -18,7 +18,8 @@ describe('the published bundle', () => {
     await build({ ...buildOptions, entry: [join(cliDir, 'src/index.ts')], outDir, config: false, silent: true });
     const { stdout } = await run(process.execPath, [join(outDir, 'index.js'), '--help'], { cwd: outDir });
     expect(stdout).toContain('Usage: nitpilot <command>');
-    // Test data isn't part of the product (Plan 1a deferred minor M8).
+    // No test data in the product: this fails if CLI code ever uses @nitpilot/protocol/test-samples.
+    // (M8 itself, the samples leaving the main entry, is guarded by packages/protocol/src/index.test.ts.)
     expect(readFileSync(join(outDir, 'index.js'), 'utf8')).not.toContain('Found a crash on empty input');
   }, 60_000);
 });

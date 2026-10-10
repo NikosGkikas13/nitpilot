@@ -49,4 +49,12 @@ describe('runCli', () => {
     expect(await runCli(['nope'], out, { hello })).toBe(2);
     expect(out.text()).toContain('Unknown command: nope');
   });
+
+  it('treats names every JS object has (constructor, toString) as unknown commands', async () => {
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      const out = recordOut();
+      expect(await runCli([name], out, { hello })).toBe(2);
+      expect(out.text()).toContain(`Unknown command: ${name}`);
+    }
+  });
 });

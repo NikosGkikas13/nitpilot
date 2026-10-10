@@ -20,7 +20,8 @@ export async function runCli(argv: string[], out: Out, commands: Record<string, 
     out.log(CLI_VERSION);
     return 0;
   }
-  const command = commands[name];
+  // Own keys only: "constructor" or "toString" would otherwise find Object's built-ins.
+  const command = Object.hasOwn(commands, name) ? commands[name] : undefined;
   if (!command) {
     out.error(`Unknown command: ${name}\n`);
     out.error(usage(commands));
