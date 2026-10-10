@@ -319,9 +319,9 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 4. **Address jobs only:** run the repo's optional `setup` command (e.g. `npm ci`). The CLI runs it, not the agent.
 5. Give the job its own token on the local MCP server, build the command through the agent adapter, and run the agent. On a timeout or cancel, the whole process tree is killed.
 6. **Address jobs:**
-   1. `git status --porcelain`, `git add -A`, then `git commit --no-verify --trailer "Nitpilot-Job: <id>"`, using the user's own git identity.
-   2. Send `job.pushing` and wait for the ack.
-   3. `git push --no-verify <headRemote> HEAD:refs/heads/<headRef>`. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
+   1. `git status --porcelain`, `git add -A`, then `git commit --no-verify --trailer "Nitpilot-Job: <id>"` with the message `Address review feedback (round N)`, using the user's own git identity. Files matching the scrub list stay out of the commit, even ones the agent created.
+   2. Send `job.pushing` and wait for the ack. A `stale` ack means nothing is pushed.
+   3. `git push --no-verify -- <headRemote> HEAD:refs/heads/<headRef>`, where `<headRemote>` is the clone's remote for the PR's head repo. A deleted fork, or a clone with no such remote, fails the job (`git_error`) before the agent runs. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
 7. Attach ±5 lines of surrounding code to each new point, read with `git show <sha>:<path>`. These are the snippets the UI shows.
 8. Send `job.complete`, then remove the worktree and the job's refs. On startup the CLI also deletes the worktrees a crash left behind and has each linked clone forget them (`git worktree remove`, never `git worktree prune`, which would also drop the user's own worktrees on a drive that isn't mounted).
 
@@ -748,7 +748,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 - **Claude subscription policy** could change.
 - **Scrubbing has a cost.** Agents can't edit `CLAUDE.md`, `AGENTS.md` or `.env` in address jobs. This will be documented.
 - **Missing dependencies.** Fresh worktrees have no `node_modules`; the per-repo `setup` command covers that.
-- **GPG commit signing** can block on a passphrase prompt. `GIT_TERMINAL_PROMPT=0` and the job timeout cover it, and `nitpilot doctor` warns.
+- **GPG commit signing** follows the user's own git config. The daemon passes no `GPG_TTY`, so a terminal passphrase prompt fails at once (the job fails with `git_error` and can be retried); a GUI prompt (pinentry-mac, 1Password) may appear, and a cancel or safe git's 10-minute limit stops a commit that waits. `nitpilot doctor` warns.
 
 ## 23. Reuse from Odyhook (port the pattern, don't import)
 

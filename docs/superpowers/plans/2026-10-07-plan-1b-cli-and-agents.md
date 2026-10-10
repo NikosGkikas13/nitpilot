@@ -7395,7 +7395,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `git push --porcelain --no-verify <remote> HEAD:refs/heads/<headBranch>`, never forced. `[rejected] (fetch first)` or `(non-fast-forward)` → `branch_moved` (retryable; the engine runs it again on the new head). Any other git failure → `git_error` (retryable).
 - `pickPushRemote`: `headRepoPath === null` (the fork was deleted) or no remote for it → `git_error`, not retryable: a person has to act, then `nitpilot retry`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/cli/src/runner/push.test.ts`:
 ```ts
@@ -7527,12 +7527,12 @@ describe('pickPushRemote', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/runner/push`
 Expected: FAIL: `Cannot find module './push'`.
 
-- [ ] **Step 3: Write `commitAndPush`**
+- [x] **Step 3: Write `commitAndPush`**
 
 `apps/cli/src/runner/push.ts`:
 ```ts
@@ -7613,12 +7613,12 @@ function rejectedBecauseMoved(porcelain: string): boolean {
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/runner/push`
 Expected: PASS (push 7).
 
-- [ ] **Step 5: Explain committing and pushing, and bring the spec in line**
+- [x] **Step 5: Explain committing and pushing, and bring the spec in line**
 
 In `docs/why/safe-git.md`, before `## The React analogy`, add:
 ```markdown
@@ -7639,12 +7639,12 @@ In the spec, §11 "Job steps", step 6:
 - 6.2: replace `Send \`job.pushing\` and wait for the ack.` with `` Send `job.pushing` and wait for the ack. A `stale` ack means nothing is pushed. ``
 - 6.3: replace `` `git push --no-verify <headRemote> HEAD:refs/heads/<headRef>`. Never force. `` with `` `git push --no-verify <headRemote> HEAD:refs/heads/<headRef>`, where `<headRemote>` is the clone's remote for the PR's head repo. A deleted fork, or a clone with no such remote, fails the job (`git_error`) before the agent runs. Never force. ``
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 144, protocol 41, server 398).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/runner/push.ts apps/cli/src/runner/push.test.ts docs/why/safe-git.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

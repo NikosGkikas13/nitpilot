@@ -22,6 +22,17 @@ A PR is files someone else wrote. Most of git just copies files around, but a fe
 
 Arguments still go to `execFile` as a list (docs/why/child-processes.md), so a branch name with `;` or `$(…)` in it is just text.
 
+## Committing and pushing (`apps/cli/src/runner/push.ts`)
+
+For an address job, the CLI commits and pushes, never the agent:
+
+1. `git status`: nothing changed means nothing to push.
+2. `git add -A` and `git commit --no-verify`, under your own name, with a `Nitpilot-Job: <id>` trailer, so anyone can tell which commits an agent made. Scrubbed files stay out, even if the agent wrote one again. A new one the agent creates (like `.claude/settings.local.json` or `.env`) is dropped from the commit too: it stays on disk, untracked.
+3. Before pushing, it sends `job.pushing` and waits for the server's ack. `stale` means the job was cancelled or handed out again meanwhile, so nothing is pushed.
+4. `git push` to the PR's branch, never forced. If someone pushed in the meantime, git refuses ("non-fast-forward"): the job fails with `branch_moved`, and the server runs it again on the new head. A teammate's commit is never overwritten.
+
+In draft mode (Auto off, Plan 2) the commit stays on `refs/nitpilot/drafts/<job>` in your clone, and nothing is pushed.
+
 ## The React analogy
 
 `safeGit()` is `<iframe sandbox>` for git: the content still loads (the files check out), but its scripts don't run, its links don't escape, and it can't read the parent page's cookies (your tokens).
