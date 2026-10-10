@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JobBundle } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -22,6 +22,14 @@ async function prepare(pr: Pr, bundle: JobBundle = pr.bundle) {
 /** The worktrees the clone knows about (its own folder counts as one). */
 const worktreesOf = (pr: Pr) => pr.git(pr.clone, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree '));
 const nitpilotRefs = (pr: Pr) => pr.git(pr.clone, 'for-each-ref', '--format=%(refname)', 'refs/nitpilot');
+
+/** What a setup command can leave behind: read-only folders with files in them (Go's module cache does this). */
+function addReadOnlyCache(dir: string) {
+  mkdirSync(join(dir, 'cache/mod'), { recursive: true });
+  writeFileSync(join(dir, 'cache/mod/pkg.go'), 'package pkg\n');
+  chmodSync(join(dir, 'cache/mod'), 0o555);
+  chmodSync(join(dir, 'cache'), 0o555);
+}
 
 describe('prepareWorktree', () => {
   it("checks out a fork PR's head from the base repo's PR ref, in its own folder, leaving the clone alone", async () => {
@@ -63,6 +71,76 @@ describe('prepareWorktree', () => {
     }
     expect(existsSync(join(configDir, 'worktrees'))).toBe(false);
     expect(nitpilotRefs(pr)).toBe('');
+  });
+
+  it('refuses a clone URL that git could read as an option, and runs nothing', async () => {
+    const pr = prRepo();
+    const configDir = tempDir();
+    const options = { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env };
+    // No remote of the clone points at the base repo (the fixture's is a local path), so this URL is what git would fetch from.
+    const evil = '--upload-pack=touch "$HOME/pwned" #';
+    for (const baseCloneUrl of [evil, 'ext::sh -c "touch $HOME/pwned"', 'http://github.com/acme/shop-api.git', 'git@github.com:acme/shop-api.git', 'file:///tmp/repo', 'relative/repo.git', '']) {
+      const bundle = { ...pr.bundle, git: { ...pr.bundle.git, baseCloneUrl } };
+      const failed = await prepareWorktree(bundle, pr.clone, options).catch((err: unknown) => err);
+      expect(existsSync(join(pr.home, 'pwned')), baseCloneUrl).toBe(false);
+      expect(failed, baseCloneUrl).toBeInstanceOf(JobFailure);
+      expect(failed, baseCloneUrl).toMatchObject({ reason: 'setup_failed', retryable: false });
+    }
+    expect(existsSync(join(configDir, 'worktrees'))).toBe(false);
+    expect(nitpilotRefs(pr)).toBe('');
+  });
+
+  it("fetches through the clone's own remote and leaves its remote-tracking branches and FETCH_HEAD alone", async () => {
+    const pr = prRepo();
+    // The clone's origin is the GitHub repo over ssh. The stand-in "ssh" serves the sandbox's bare repo instead.
+    pr.write(pr.root, { 'fake-ssh': { script: `#!/bin/sh\nexec git upload-pack '${pr.base}'\n` } });
+    pr.git(pr.clone, 'remote', 'set-url', 'origin', 'git@github.com:acme/shop-api.git');
+    const originMain = pr.git(pr.clone, 'rev-parse', 'refs/remotes/origin/main');
+    pr.git(pr.work, 'push', '-q', pr.base, 'HEAD:refs/heads/main'); // main moves on after the clone was made
+    const bundle = { ...pr.bundle, git: { ...pr.bundle.git, baseCloneUrl: '/nonexistent/repo.git' } }; // so only origin can work
+    const configDir = tempDir();
+    const env = { ...pr.env, GIT_SSH_COMMAND: join(pr.root, 'fake-ssh') };
+    const wt = await prepareWorktree(bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env });
+    onTestFinished(() => wt.cleanup());
+    expect([wt.headSha, wt.baseSha]).toEqual([pr.headSha, pr.headSha]);
+    expect(pr.git(pr.clone, 'rev-parse', 'refs/remotes/origin/main')).toBe(originMain);
+    expect(existsSync(join(pr.clone, '.git', 'FETCH_HEAD'))).toBe(false);
+  });
+
+  it('cleans up even when the job left read-only folders behind, and so does the next start', async () => {
+    const pr = prRepo();
+    const { wt, configDir } = await prepare(pr);
+    addReadOnlyCache(wt.dir);
+    await wt.cleanup();
+    expect(existsSync(wt.dir)).toBe(false);
+    expect(worktreesOf(pr)).toHaveLength(1);
+    expect(nitpilotRefs(pr)).toBe('');
+
+    const options = { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env };
+    const crashed = await prepareWorktree({ ...pr.bundle, jobId: 'job_2' }, pr.clone, options); // never cleaned up
+    addReadOnlyCache(crashed.dir);
+    await cleanUpWorktrees({ configDir, repoPaths: [pr.clone], hooksDir: options.hooksDir, env: pr.env });
+    expect(existsSync(join(configDir, 'worktrees'))).toBe(false);
+    expect(worktreesOf(pr)).toHaveLength(1);
+  });
+
+  it("never forgets the person's own worktrees, even one whose folder is gone (an unplugged drive)", async () => {
+    const pr = prRepo();
+    const theirs = join(tempDir(), 'their-worktree');
+    pr.git(pr.clone, 'worktree', 'add', '-q', '--detach', theirs, 'HEAD');
+    const entry = `worktree ${realpathSync(theirs)}`;
+    rmSync(theirs, { recursive: true }); // the drive is unplugged
+    expect(worktreesOf(pr)).toContain(entry);
+
+    const first = await prepare(pr);
+    await first.wt.cleanup();
+    expect(worktreesOf(pr)).toContain(entry);
+
+    const crashed = await prepare(pr, { ...pr.bundle, jobId: 'job_2' }); // never cleaned up
+    await cleanUpWorktrees({ configDir: crashed.configDir, repoPaths: [pr.clone], hooksDir: emptyHooksDir(crashed.configDir), env: pr.env });
+    expect(existsSync(crashed.wt.dir)).toBe(false);
+    expect(worktreesOf(pr)).toHaveLength(2); // the clone itself and theirs
+    expect(worktreesOf(pr)).toContain(entry);
   });
 
   it('refuses a folder that already exists at the job path, and leaves it alone', async () => {

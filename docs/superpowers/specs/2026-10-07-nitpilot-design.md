@@ -323,7 +323,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
    2. Send `job.pushing` and wait for the ack.
    3. `git push --no-verify <headRemote> HEAD:refs/heads/<headRef>`. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
 7. Attach ±5 lines of surrounding code to each new point, read with `git show <sha>:<path>`. These are the snippets the UI shows.
-8. Send `job.complete`, then remove the worktree and the temporary ref. On startup the CLI also deletes the worktrees a crash left behind and runs `git worktree prune`.
+8. Send `job.complete`, then remove the worktree and the job's refs. On startup the CLI also deletes the worktrees a crash left behind and has each linked clone forget them (`git worktree remove`, never `git worktree prune`, which would also drop the user's own worktrees on a drive that isn't mounted).
 
 **Safe git.** Every git call gets these settings, so hooks from the PR (husky, for example) never run during checkout, commit or push, and symlinks can't point at secrets:
 - `-c core.hooksPath=<empty dir>`
