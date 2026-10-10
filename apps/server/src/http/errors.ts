@@ -10,6 +10,7 @@ export type ErrorCode =
   | 'validation_error'
   | 'conflict'
   | 'payload_too_large'
+  | 'rate_limited'
   | 'server_error';
 
 const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
@@ -19,6 +20,7 @@ const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   validation_error: 400,
   conflict: 409,
   payload_too_large: 413,
+  rate_limited: 429,
   server_error: 500,
 };
 

@@ -149,6 +149,25 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   // No advance() here: a person decides what happens next (the Retry button arrives in Plan 2).
 }
 
+/**
+ * A person asks to run their failed job again (`nitpilot retry`; Plan 2's Retry button). Only someone
+ * flagged `failed` can. The job starts over as a new job, with a fresh count of attempts.
+ */
+export function onRetryRequested(ctx: Ctx, e: Ev<'retry_requested'>): void {
+  const chat = ctx.chat;
+  if (chat.phase === 'closed') return;
+  const failed = chat.participants.filter((p) => p.githubId === e.who.githubId && p.attention === 'failed');
+  if (failed.length === 0) return;
+  system(ctx, `${e.who.login} asked their agent to try again`);
+  for (const p of failed) {
+    p.attention = 'none';
+    // The person asked for it, so on an outside contributor's PR this counts as starting the review by hand.
+    if (p.role === 'reviewer') startReview(ctx, p, { manual: true });
+  }
+  // The author's address pass (or anything else now due) is queued the usual way.
+  advance(ctx);
+}
+
 function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean): void {
   job.status = 'queued';
   emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt });

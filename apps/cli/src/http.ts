@@ -1,4 +1,4 @@
-import { BRAND, CliLoginPollResponse, CliLoginStartResponse, MeResponse, MyChatsResponse } from '@nitpilot/protocol';
+import { BRAND, CliLoginPollResponse, CliLoginStartResponse, MeResponse, MyChatsResponse, RetryResponse } from '@nitpilot/protocol';
 import type { z } from 'zod';
 import { CliError } from './errors';
 import { CLI_VERSION } from './version';
@@ -40,6 +40,11 @@ export class ServerClient {
 
   myChats() {
     return this.call('GET', '/api/me/chats', MyChatsResponse, { auth: true });
+  }
+
+  /** `nitpilot retry`: queue my failed job on this chat again. */
+  retry(chatId: string) {
+    return this.call('POST', `/api/chats/${encodeURIComponent(chatId)}/retry`, RetryResponse, { auth: true });
   }
 
   /** Sign this device out: the server revokes the token that sent the request. */

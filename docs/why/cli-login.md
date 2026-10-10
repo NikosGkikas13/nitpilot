@@ -20,6 +20,11 @@ The first poll after approval gets the token; every later poll gets `expired`. T
 - **Compare-and-swap:** we change the request from `approved` to `consumed` with `updateMany(where: status = 'approved')`. Only one poll can win that change; the other sees `count === 0`.
 - **A transaction:** marking it `consumed` and creating the `CliToken` row happen inside `prisma.$transaction`. A transaction is all-or-nothing: if creating the token fails, the status change is undone too, so you never end up with a "consumed" login and no token.
 
+## Limits and cleanup
+
+- **A rate limit.** Each `POST /api/cli/login` writes a row, so anyone could fill the table by calling it in a loop. One client address may start 10 logins a minute (`lib/rate-limit.ts`); the 11th gets `429 Too Many Requests`. The count lives in memory, which is fine because there is one server process (spec §7). It works like a "sliding window": we remember when each recent request came in and count the ones from the last 60 seconds.
+- **Cleanup.** A login request is useless 10 minutes after it was made, so the hourly purge (`ingest/record.ts`) deletes the ones older than a day.
+
 ## The React analogy
 
 - Polling is a `useEffect` with `setInterval(fetchStatus, 2000)` that stops once the status isn't `pending`.

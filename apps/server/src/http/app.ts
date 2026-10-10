@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { currentUser } from '../auth/session';
+import type { Dispatch } from '../chats/dispatch';
 import type { Ingest } from '../ingest/process';
 import { getEnv } from '../lib/env';
 import type { AppAuth } from '../platform/github/app-auth';
@@ -15,7 +16,7 @@ import { setupRoutes } from './routes/setup';
 import { webhookRoutes } from './routes/webhooks';
 
 /** What the HTTP layer needs from outside. Tests pass fakes. Later tasks add fields. */
-export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest };
+export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest; dispatch: Dispatch };
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
@@ -23,7 +24,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/healthz', (c) => c.json({ ok: true, version: SERVER_VERSION }));
   app.get('/', async (c) => renderPage(c, HomePage({ user: await currentUser(c), appSlug: getEnv().GITHUB_APP_SLUG })));
   app.route('/', authRoutes(deps));
-  app.route('/', cliRoutes());
+  app.route('/', cliRoutes(deps));
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));

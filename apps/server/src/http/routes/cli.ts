@@ -1,17 +1,28 @@
+import type { IncomingMessage } from 'node:http';
 import {
-  CliLoginPollRequest, CliLoginStartRequest, type MeResponse, type MyChat, type MyChatsResponse, type Attention, type Phase, type Role,
+  CliLoginPollRequest, CliLoginStartRequest,
+  type Attention, type MeResponse, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
 } from '@nitpilot/protocol';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
 import { requireCliToken, type CliAuth } from '../../auth/cli-token';
+import type { Dispatch } from '../../chats/dispatch';
+import type { Person } from '../../engine/types';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
+import { RateLimiter } from '../../lib/rate-limit';
 import { transcriptUrl } from '../../lib/urls';
+import { HttpError } from '../errors';
 
-export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
+/** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
+export const LOGIN_STARTS_PER_MINUTE = 10;
+
+export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli: CliAuth } }> {
   const app = new Hono<{ Variables: { cli: CliAuth } }>();
+  const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
 
   app.post('/api/cli/login', async (c) => {
+    if (!loginStarts.allow(clientAddress(c))) throw new HttpError('rate_limited', 'Too many logins started from here. Wait a minute and try again.');
     const { deviceName } = CliLoginStartRequest.parse(await c.req.json());
     const login = await startCliLogin(deviceName);
     return c.json({
@@ -63,5 +74,41 @@ export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
     return c.body(null, 204);
   });
 
+  // `nitpilot retry` (spec §10): run my failed job on this PR again. Plan 2's Retry button uses it too.
+  app.post('/api/chats/:id/retry', requireCliToken, async (c) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
+    const chatId = c.req.param('id');
+    if (!(await newestJobFailed(chatId, user.githubId))) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
+    const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
+    const queued = out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId);
+    if (!queued) throw new HttpError('conflict', 'Nothing was queued: the PR may be closed, or your agent runs once the current step finishes.');
+    const body: RetryResponse = { status: 'queued' };
+    return c.json(body);
+  });
+
   return app;
+}
+
+/**
+ * True when one of this person's roles in the chat is flagged `failed` because its newest job failed.
+ * A flag from a GitHub write that failed (spec §15) is fixed by signing in again, not by re-running the agent.
+ */
+async function newestJobFailed(chatId: string, githubId: string): Promise<boolean> {
+  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
+  for (const p of flagged) {
+    const newest = await prisma.job.findFirst({ where: { participantId: p.id }, orderBy: { createdAt: 'desc' }, select: { status: true } });
+    if (newest?.status === 'failed') return true;
+  }
+  return false;
+}
+
+/**
+ * The address a request came from: Hono's Node adapter puts the raw request in `c.env.incoming`.
+ * Tests call the app without a socket ('unknown'). Behind a reverse proxy (Plan 3) this is the
+ * proxy's address, until we read X-Forwarded-For from it.
+ */
+function clientAddress(c: Context): string {
+  const incoming = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming;
+  return incoming?.socket.remoteAddress ?? 'unknown';
 }

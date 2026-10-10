@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
-  const app = createApp({ github, appAuth, ingest });
+  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });

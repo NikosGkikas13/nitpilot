@@ -307,8 +307,8 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - `nitpilot start` (runs the daemon in the foreground)
 - `nitpilot status`
 - `nitpilot doctor`: checks git, whether the agent is installed and logged in, the config, and linked repos
-- `nitpilot repos add [path]`: links a local clone to its GitHub repo by reading its remotes
-- `nitpilot retry <pr-url>`: runs your failed job on that PR again
+- `nitpilot repos add [path]`: links a local clone to every GitHub repo its remotes point at (a fork's clone serves both the fork and the base repo)
+- `nitpilot retry <pr-url>`: runs your failed job on that PR again (or `owner/name#12`)
 - Stretch goals: `nitpilot review <pr-url>`, `nitpilot say <pr-url> "<note>"`
 
 **Job steps**

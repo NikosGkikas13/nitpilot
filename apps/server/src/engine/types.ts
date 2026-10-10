@@ -123,6 +123,7 @@ export type DomainEvent =
   | { type: 'thread_unresolved'; threadRootId: string }
   | { type: 'job_completed'; jobId: string; attempt: number; result: JobResult }
   | { type: 'job_failed'; jobId: string; attempt: number; reason: FailureReason; retryable: boolean }
+  | { type: 'retry_requested'; who: Person }
   | { type: 'human_note'; author: Person; body: string }
   | { type: 'manual_review'; reviewer: Person }
   | { type: 'timer'; key: string }

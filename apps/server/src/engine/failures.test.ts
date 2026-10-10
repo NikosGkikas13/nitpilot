@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { T0, agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, run, sam } from './test-builders';
+import { T0, agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, pointOf, run, sam } from './test-builders';
 import type { FailureReason } from '@nitpilot/protocol';
+import type { ChatState } from './types';
 
 function failing(attempt: number, reason: FailureReason, retryable: boolean) {
   const chat = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt })] });
@@ -86,5 +87,41 @@ describe('write_failed (a GitHub write in someone\'s name was given up on)', () 
     const out = run(soloAuthor, { type: 'write_failed', write: 'replies', asGithubId: maya.githubId, pointNumbers: [3], reason: 'needs_reauth' });
     expect(out.timeline[0]!.body).toBe("Couldn't post maya's replies (P3) on GitHub: maya needs to sign in to Nitpilot again");
     expect(out.chat.participants[0]!.attention).toBe('failed');
+  });
+});
+
+describe('retry_requested', () => {
+  /** leo's review failed for good. */
+  const reviewFailed = (over: Partial<ChatState> = {}) =>
+    agentToAgent({ participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { attention: 'failed' })], ...over });
+
+  it("queues the reviewer's review again and clears the flag", () => {
+    const out = run(reviewFailed(), { type: 'retry_requested', who: leo });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending' },
+    ]);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
+    expect(out.chat.phase).toBe('reviewing');
+  });
+
+  it("queues the author's address pass again", () => {
+    const chat = agentToAgent({
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { attention: 'failed' }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+    const out = run(chat, { type: 'retry_requested', who: maya });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address' })]);
+  });
+
+  it("starts the review on an outside contributor's PR too: asking again counts as starting it by hand", () => {
+    const out = run(reviewFailed({ trusted: false }), { type: 'retry_requested', who: leo });
+    expect(commandsOf(out, 'enqueue_job')).toHaveLength(1);
+    expect(commandsOf(out, 'notify')).toEqual([]);
+  });
+
+  it('does nothing for someone with nothing failed, or on a closed PR', () => {
+    expect(run(reviewFailed(), { type: 'retry_requested', who: maya }).commands).toEqual([]);
+    expect(run(reviewFailed({ phase: 'closed', closed: true }), { type: 'retry_requested', who: leo }).commands).toEqual([]);
   });
 });

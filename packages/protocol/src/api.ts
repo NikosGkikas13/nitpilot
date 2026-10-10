@@ -42,3 +42,7 @@ export const MyChat = z.object({
 export type MyChat = z.infer<typeof MyChat>;
 export const MyChatsResponse = z.object({ chats: z.array(MyChat) });
 export type MyChatsResponse = z.infer<typeof MyChatsResponse>;
+
+// `nitpilot retry`
+export const RetryResponse = z.object({ status: z.literal('queued') });
+export type RetryResponse = z.infer<typeof RetryResponse>;

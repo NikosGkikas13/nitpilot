@@ -9,11 +9,16 @@ export async function recordDelivery(row: DeliveryRow): Promise<boolean> {
 }
 
 const KEEP_MS = 14 * 86_400_000;
+const LOGIN_KEEP_MS = 86_400_000;
 
-/** Raw deliveries and seen comment ids are kept 14 days (spec §8). */
-export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: number; seenComments: number }> {
+/**
+ * Raw deliveries and seen comment ids are kept 14 days (spec §8). CLI login requests are kept a day:
+ * each one expires after 10 minutes anyway (spec §14).
+ */
+export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: number; seenComments: number; cliLoginRequests: number }> {
   const before = new Date(now.getTime() - KEEP_MS);
   const rawEvents = await prisma.rawEvent.deleteMany({ where: { createdAt: { lt: before } } });
   const seenComments = await prisma.seenComment.deleteMany({ where: { createdAt: { lt: before } } });
-  return { rawEvents: rawEvents.count, seenComments: seenComments.count };
+  const cliLoginRequests = await prisma.cliLoginRequest.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - LOGIN_KEEP_MS) } } });
+  return { rawEvents: rawEvents.count, seenComments: seenComments.count, cliLoginRequests: cliLoginRequests.count };
 }

@@ -3727,7 +3727,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **Server, login starts:** at most 10 per minute per client address, counted in memory (one process, spec §7); the 11th gets `429 rate_limited`. Behind a reverse proxy (Plan 3) every request has the proxy's address; Plan 3 reads `X-Forwarded-For` from its own proxy.
 - **Server, purge:** the hourly `purgeOldRows` also deletes CLI login requests older than a day (they expire after 10 minutes).
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 In `apps/server/src/engine/failures.test.ts`, change the builders import to include `pointOf`:
 ```ts
@@ -3772,12 +3772,12 @@ describe('retry_requested', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/failures`
 Expected: FAIL: `Unhandled event: {"type":"retry_requested",…}` from `decide()`'s exhaustive switch (typecheck would also reject the unknown event type).
 
-- [ ] **Step 3: Handle `retry_requested` in the engine**
+- [x] **Step 3: Handle `retry_requested` in the engine**
 
 In `apps/server/src/engine/types.ts`, in `DomainEvent`, after the `job_failed` line, add:
 ```ts
@@ -3815,12 +3815,12 @@ export function onRetryRequested(ctx: Ctx, e: Ev<'retry_requested'>): void {
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine && npm run typecheck -w apps/server`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing server tests**
+- [x] **Step 5: Write the failing server tests**
 
 `apps/server/src/lib/rate-limit.test.ts`:
 ```ts
@@ -3932,12 +3932,12 @@ In `apps/server/src/ingest/process.db.test.ts`:
   });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/lib/rate-limit && npm run test:db -w apps/server -- src/http/routes/cli src/ingest/process`
 Expected: FAIL. `rate-limit.test.ts`: `Failed to resolve import "./rate-limit"`. `cli.db.test.ts`: the 11th login start gets 200, not 429, and the retry route answers 404. `process.db.test.ts`: `cliLoginRequests` is missing from the result.
 
-- [ ] **Step 7: Rate-limit login starts, add the retry route, purge old login requests**
+- [x] **Step 7: Rate-limit login starts, add the retry route, purge old login requests**
 
 `apps/server/src/lib/rate-limit.ts`:
 ```ts
@@ -4155,12 +4155,12 @@ export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: numbe
 }
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/lib/rate-limit src/engine && npm run test:db -w apps/server -- src/http src/ingest && npm run typecheck -w apps/server`
 Expected: PASS (rate-limit 3; cli.db adds 4; process.db adds 1).
 
-- [ ] **Step 9: Write the failing CLI tests**
+- [x] **Step 9: Write the failing CLI tests**
 
 `apps/cli/test/stub-server.ts`:
 ```ts
@@ -4510,12 +4510,12 @@ In `apps/cli/src/http.test.ts`, inside `describe('ServerClient', …)`, add:
   });
 ```
 
-- [ ] **Step 10: Run them to see them fail**
+- [x] **Step 10: Run them to see them fail**
 
 Run: `npm test -w apps/cli`
 Expected: FAIL: `Failed to resolve import "./remotes"` (and `./login`, `./status`, `./repos`, `./retry`); in `http.test.ts`, `retry is not a function`.
 
-- [ ] **Step 11: Write the git helpers and the four commands**
+- [x] **Step 11: Write the git helpers and the four commands**
 
 `apps/cli/src/git/remotes.ts`:
 ```ts
@@ -4804,12 +4804,12 @@ export const COMMANDS: Record<string, Command> = {
 };
 ```
 
-- [ ] **Step 12: Run them to see them pass**
+- [x] **Step 12: Run them to see them pass**
 
 Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
 Expected: PASS (remotes 14, login 4, status 5, repos 4, retry 5, http 8, plus Task 5's files).
 
-- [ ] **Step 13: Explain the limits on logging in**
+- [x] **Step 13: Explain the limits on logging in**
 
 In `docs/why/cli-login.md`, before `## The React analogy`, add:
 ```markdown
@@ -4819,12 +4819,12 @@ In `docs/why/cli-login.md`, before `## The React analogy`, add:
 - **Cleanup.** A login request is useless 10 minutes after it was made, so the hourly purge (`ingest/record.ts`) deletes the ones older than a day.
 ```
 
-- [ ] **Step 14: Run the full suite**
+- [x] **Step 14: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add apps/server apps/cli packages/protocol/src/api.ts docs/why/cli-login.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

@@ -1,3 +1,4 @@
+import { Dispatcher } from '../src/chats/dispatch';
 import { createApp, type AppDeps } from '../src/http/app';
 import { createIngest } from '../src/ingest/process';
 import { AppAuth } from '../src/platform/github/app-auth';
@@ -11,6 +12,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     github,
     appAuth: new AppAuth(github, '12345', 'tests-that-need-a-key-pass-their-own'),
     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
+    dispatch: new Dispatcher().dispatch,
     ...over,
   };
 }

@@ -1,4 +1,8 @@
 import { BRAND } from '@nitpilot/protocol';
+import { login } from './commands/login';
+import { reposAdd } from './commands/repos';
+import { retry } from './commands/retry';
+import { status } from './commands/status';
 import { CliError } from './errors';
 import type { Out } from './out';
 import { CLI_VERSION } from './version';
@@ -7,7 +11,19 @@ import { CLI_VERSION } from './version';
 export type Command = { usage: string; summary: string; run(args: string[], out: Out): Promise<number | void> };
 
 /** Every command, in the order `--help` lists them. Each lives in src/commands/ and is added by the task that builds it. */
-export const COMMANDS: Record<string, Command> = {};
+export const COMMANDS: Record<string, Command> = {
+  login: { usage: `${BRAND.cli} login`, summary: 'Connect this device to your account', run: (_args, out) => login({ out }) },
+  status: { usage: `${BRAND.cli} status`, summary: 'Your open PRs and what they need from you', run: (_args, out) => status({ out }) },
+  repos: {
+    usage: `${BRAND.cli} repos add [path]`,
+    summary: 'Link a local clone, so its jobs can come here',
+    run: async ([sub, path], out) => {
+      if (sub !== 'add') throw new CliError(`Usage: ${BRAND.cli} repos add [path]`);
+      await reposAdd(path, { out });
+    },
+  },
+  retry: { usage: `${BRAND.cli} retry <pr-url>`, summary: 'Run your failed job on that PR again', run: ([ref], out) => retry(ref, { out }) },
+};
 
 /** Run the CLI with these arguments and return the exit code. src/index.ts calls it with process.argv. */
 export async function runCli(argv: string[], out: Out, commands: Record<string, Command> = COMMANDS): Promise<number> {

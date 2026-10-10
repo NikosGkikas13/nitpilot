@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDb, uid } from '../../test/db';
+import { startCliLogin } from '../auth/cli-login';
 import { prisma } from '../lib/prisma';
 import { createIngest, MAX_DELIVERY_ATTEMPTS, processDelivery } from './process';
 import { purgeOldRows, recordDelivery } from './record';
@@ -92,8 +93,16 @@ describe('purgeOldRows', () => {
     const fresh = row();
     await recordDelivery(fresh);
 
-    expect(await purgeOldRows()).toEqual({ rawEvents: 1, seenComments: 0 });
+    expect(await purgeOldRows()).toEqual({ rawEvents: 1, seenComments: 0, cliLoginRequests: 0 });
     expect(await prisma.rawEvent.count()).toBe(1);
+  });
+
+  it('deletes CLI login requests older than a day', async () => {
+    const old = await startCliLogin('old laptop');
+    await prisma.cliLoginRequest.update({ where: { userCode: old.userCode }, data: { createdAt: new Date(Date.now() - 2 * 86_400_000) } });
+    await startCliLogin('new laptop');
+    expect(await purgeOldRows()).toMatchObject({ cliLoginRequests: 1 });
+    expect(await prisma.cliLoginRequest.count()).toBe(1);
   });
 });
 

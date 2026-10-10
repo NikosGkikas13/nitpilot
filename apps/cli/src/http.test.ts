@@ -46,6 +46,13 @@ describe('ServerClient', () => {
     await expect(new ServerClient(SERVER, 'nit_abc', fetch).myChats()).rejects.toThrow('Nothing of yours failed on this PR. (HTTP 409)');
   });
 
+  it("asks the server to queue a chat's failed job again", async () => {
+    const fetch = fakeFetch(() => json({ status: 'queued' }));
+    expect(await new ServerClient(SERVER, 'nit_abc', fetch).retry('chat_1')).toEqual({ status: 'queued' });
+    expect(fetch.calls[0]!.url.pathname).toBe('/api/chats/chat_1/retry');
+    expect(fetch.calls[0]!.init.method).toBe('POST');
+  });
+
   it('needs a token for calls that need one, and then asks nothing of the server', async () => {
     const fetch = fakeFetch(() => json({}));
     await expect(new ServerClient(SERVER, null, fetch).me()).rejects.toThrow('Not logged in. Run `nitpilot login`.');

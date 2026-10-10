@@ -1,10 +1,11 @@
 import type { MyChatsResponse } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
-import { makeChat, makeRepo, makeUser } from '../../../test/db';
+import { makeChat, makeCliToken, makeRepo, makeUser, personOf } from '../../../test/db';
 import { fakeFetch } from '../../../test/fake-fetch';
 import { testApp } from '../../../test/app';
 import { sessionCookieFor } from '../../../test/http';
 import { startCliLogin } from '../../auth/cli-login';
+import { Dispatcher } from '../../chats/dispatch';
 import { prisma } from '../../lib/prisma';
 import { generateToken } from '../../lib/tokens';
 import { GithubClient } from '../../platform/github/client';
@@ -80,6 +81,15 @@ describe('nitpilot login', () => {
   it('rejects a bad request body', async () => {
     expect((await post('/api/cli/login', { deviceName: '' })).status).toBe(400);
   });
+
+  it('lets one address start 10 logins a minute, then answers 429', async () => {
+    const server = app(); // one app: the count lives in the running server
+    const start = () => server.request('/api/cli/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceName: 'laptop' }) });
+    for (let i = 0; i < 10; i++) expect((await start()).status).toBe(200);
+    const res = await start();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ error: { code: 'rate_limited' } });
+  });
 });
 
 describe('/api/me/chats', () => {
@@ -99,5 +109,50 @@ describe('/api/me/chats', () => {
     expect(body.chats).toEqual([
       expect.objectContaining({ id: chat.id, repo: repo.fullName, number: 142, role: 'reviewer', attention: 'decision', url: `http://localhost:8787/c/${repo.fullName}/142` }),
     ]);
+  });
+});
+
+describe('POST /api/chats/:id/retry', () => {
+  /** leo's review of maya's PR failed for good. */
+  async function failedReview() {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const dispatcher = new Dispatcher();
+    await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+    const review = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });
+    await prisma.job.update({ where: { id: review.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: review.id, attempt: 1, reason: 'auth', retryable: false });
+    const server = testApp({ github: new GithubClient(fakeFetch({})), dispatch: dispatcher.dispatch });
+    const retry = (token: string) => server.request(`/api/chats/${chat.id}/retry`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+    return { chat, leo, retry, leoToken: (await makeCliToken(leo.id)).raw, mayaToken: (await makeCliToken(maya.id)).raw };
+  }
+
+  it("queues leo's failed review again and clears his failed flag", async () => {
+    const { chat, leo, retry, leoToken } = await failedReview();
+    const res = await retry(leoToken);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'queued' });
+    const jobs = await prisma.job.findMany({ where: { chatId: chat.id }, orderBy: { createdAt: 'asc' } });
+    expect(jobs.map((j) => [j.type, j.status])).toEqual([
+      ['review', 'failed'],
+      ['review', 'queued'],
+    ]);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } })).toMatchObject({ attention: 'none' });
+  });
+
+  it('refuses when nothing of yours failed there: the author, or leo once his job is queued again', async () => {
+    const { retry, leoToken, mayaToken } = await failedReview();
+    const asMaya = await retry(mayaToken);
+    expect(asMaya.status).toBe(409);
+    expect(await asMaya.json()).toMatchObject({ error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } });
+    expect((await retry(leoToken)).status).toBe(200);
+    expect((await retry(leoToken)).status).toBe(409);
+  });
+
+  it('needs a CLI token', async () => {
+    const { chat } = await failedReview();
+    expect((await app().request(`/api/chats/${chat.id}/retry`, { method: 'POST' })).status).toBe(401);
   });
 });
