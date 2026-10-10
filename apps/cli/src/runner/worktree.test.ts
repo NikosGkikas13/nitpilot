@@ -124,6 +124,22 @@ describe('prepareWorktree', () => {
     expect(worktreesOf(pr)).toHaveLength(1);
   });
 
+  it("leaves no worktree entry behind when the job's .git link was rewritten or deleted", async () => {
+    const pr = prRepo();
+    const { wt, configDir } = await prepare(pr);
+    writeFileSync(join(wt.dir, '.git'), 'gitdir: /tmp/elsewhere\n'); // git refuses to remove a worktree whose link was changed
+    await wt.cleanup();
+    expect(existsSync(wt.dir)).toBe(false);
+    expect(worktreesOf(pr)).toHaveLength(1);
+
+    const options = { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env };
+    const crashed = await prepareWorktree({ ...pr.bundle, jobId: 'job_2' }, pr.clone, options); // never cleaned up
+    rmSync(join(crashed.dir, '.git'));
+    await cleanUpWorktrees({ configDir, repoPaths: [pr.clone], hooksDir: options.hooksDir, env: pr.env });
+    expect(existsSync(crashed.dir)).toBe(false);
+    expect(worktreesOf(pr)).toHaveLength(1);
+  });
+
   it("never forgets the person's own worktrees, even one whose folder is gone (an unplugged drive)", async () => {
     const pr = prRepo();
     const theirs = join(tempDir(), 'their-worktree');

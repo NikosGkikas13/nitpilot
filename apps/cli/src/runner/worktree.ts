@@ -154,8 +154,10 @@ async function readConventions(repo: GitPlace, baseSha: string): Promise<Record<
 async function removeWorktree(repo: GitPlace, dir: string | null, refs: string[]): Promise<void> {
   const place = { ...repo, signal: undefined };
   if (dir !== null) {
-    await safeGit(place, ['worktree', 'remove', '--force', '--force', dir]).catch(() => {}); // twice: a locked worktree goes too
+    const forget = () => safeGit(place, ['worktree', 'remove', '--force', '--force', dir]).catch(() => {}); // twice: a locked worktree goes too
+    await forget();
     removeFolder(dir);
+    await forget(); // the first call refuses a worktree whose `.git` link was changed; this one clears the entry once the folder is gone
   }
   for (const ref of refs) await safeGit(place, ['update-ref', '-d', ref]).catch(() => {});
 }
@@ -195,11 +197,13 @@ function makeFoldersWritable(dir: string): void {
 }
 
 /**
- * At `nitpilot start`, before any job runs (spec §11 step 8): have each linked clone forget the worktrees
- * a crash left in <config dir>/worktrees, then delete that folder. Only entries inside it are touched, so
+ * At `nitpilot start`, before any job runs (spec §11 step 8): delete <config dir>/worktrees, then have each
+ * linked clone forget the worktrees a crash left there. Only entries inside that folder are touched, so
  * there is no `git worktree prune`: it would also forget your own worktrees whose folder is missing.
  */
 export async function cleanUpWorktrees(opts: { configDir: string; repoPaths: string[]; hooksDir: string; env?: Record<string, string | undefined> }): Promise<void> {
+  // Folders first: git refuses to remove a worktree whose `.git` link was changed, but accepts one whose folder is gone.
+  removeFolder(join(opts.configDir, 'worktrees'));
   // Git lists real paths (`/tmp/x` is `/private/tmp/x` on macOS), so compare against the real path of our folder.
   const ours = join(realPathOrSame(opts.configDir), 'worktrees') + sep;
   for (const repoPath of opts.repoPaths) {
@@ -214,7 +218,6 @@ export async function cleanUpWorktrees(opts: { configDir: string; repoPaths: str
       // A clone that's gone or broken: `nitpilot doctor` reports it, and its jobs fail with setup_failed.
     }
   }
-  removeFolder(join(opts.configDir, 'worktrees'));
 }
 
 function realPathOrSame(path: string): string {
