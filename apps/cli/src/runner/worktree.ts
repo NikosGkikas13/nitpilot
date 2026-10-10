@@ -41,11 +41,13 @@ export type PrepareOptions = {
  * the base branch. Anything else that goes wrong is `setup_failed`. See docs/why/git-worktrees.md.
  */
 export async function prepareWorktree(bundle: JobBundle, repoPath: string, opts: PrepareOptions): Promise<Worktree> {
+  checkFolderNames(bundle);
   const key = `${bundle.jobId}-${bundle.attempt}`;
   const headRef = `${BRAND.gitRefNamespace}/${key}/head`;
   const baseRef = `${BRAND.gitRefNamespace}/${key}/base`;
   const dir = join(opts.configDir, 'worktrees', ...bundle.pr.repoFullName.split('/'), `${bundle.pr.number}-${bundle.you.role}-${key}`);
   let repo: GitPlace | null = null;
+  let dirIsOurs = false; // set just before `worktree add`: until then `dir` isn't ours to delete
   try {
     repo = { gitDir: cloneGitDir(repoPath), hooksDir: opts.hooksDir, signal: opts.signal, env: opts.env };
     // The PR's ref lives on the base repo, forks included. Fetch through the clone's own remote for it when
@@ -58,7 +60,9 @@ export async function prepareWorktree(bundle: JobBundle, repoPath: string, opts:
       throw new JobFailure('stale_head', true, `The PR's head is ${headSha.slice(0, 7)} now, not ${bundle.pr.headSha.slice(0, 7)}.`);
     }
     const baseSha = await commitOf(repo, baseRef);
+    if (pathExists(dir)) throw new JobFailure('setup_failed', true, `${dir} is already there, so it isn't safe to check the PR out into it.`);
     mkdirSync(dirname(dir), { recursive: true, mode: 0o700 });
+    dirIsOurs = true;
     await safeGit(repo, ['worktree', 'add', '--detach', dir, headSha]);
     const git = { ...repo, gitDir: linkedGitDir(dir), workTree: dir };
     await scrub(git, opts.scrubPaths);
@@ -66,9 +70,33 @@ export async function prepareWorktree(bundle: JobBundle, repoPath: string, opts:
     const place = repo;
     return { dir, git, headSha, baseSha, conventions, cleanup: () => removeWorktree(place, dir, [headRef, baseRef]) };
   } catch (err) {
-    if (repo) await removeWorktree(repo, dir, [headRef, baseRef]);
+    if (repo) await removeWorktree(repo, dirIsOurs ? dir : null, [headRef, baseRef]);
     if (err instanceof JobFailure) throw err;
     throw new JobFailure('setup_failed', true, `Couldn't check out the PR: ${(err as Error).message}`);
+  }
+}
+
+/** Letters, digits, `.`, `_` and `-`: what a job id or a repo's owner and name may be made of. */
+const FOLDER_NAME = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * The job id and the repo's `owner` and `name` become folder and ref names, so a server bug must never
+ * reach outside <config dir>/worktrees. Checked before any git runs. Not retryable: the same bundle would fail again.
+ */
+function checkFolderNames(bundle: JobBundle): void {
+  const repoParts = bundle.pr.repoFullName.split('/');
+  const names = [bundle.jobId, ...repoParts];
+  if (repoParts.length === 2 && names.every((name) => FOLDER_NAME.test(name) && name !== '.' && name !== '..')) return;
+  const shown = JSON.stringify({ jobId: bundle.jobId, repo: bundle.pr.repoFullName }).slice(0, 300);
+  throw new JobFailure('setup_failed', false, `This job's ids can't be used as folder names: ${shown}`);
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path); // lstat, so a broken link counts as there too
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -95,11 +123,16 @@ async function readConventions(repo: GitPlace, baseSha: string): Promise<Record<
   return conventions;
 }
 
-/** Remove a job's worktree, folder and refs, whatever state they're in. Runs even after a cancel. Never throws. */
-async function removeWorktree(repo: GitPlace, dir: string, refs: string[]): Promise<void> {
+/**
+ * Remove a job's worktree, folder and refs, whatever state they're in. Runs even after a cancel. Never throws.
+ * `dir` is null when the job never got as far as making its folder: then there is nothing of ours to delete.
+ */
+async function removeWorktree(repo: GitPlace, dir: string | null, refs: string[]): Promise<void> {
   const place = { ...repo, signal: undefined };
-  await safeGit(place, ['worktree', 'remove', '--force', dir]).catch(() => {});
-  rmSync(dir, { recursive: true, force: true });
+  if (dir !== null) {
+    await safeGit(place, ['worktree', 'remove', '--force', dir]).catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
   await safeGit(place, ['worktree', 'prune']).catch(() => {});
   for (const ref of refs) await safeGit(place, ['update-ref', '-d', ref]).catch(() => {});
 }

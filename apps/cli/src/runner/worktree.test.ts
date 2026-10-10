@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JobBundle } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -34,6 +34,49 @@ describe('prepareWorktree', () => {
     expect(readFileSync(join(wt.dir, 'src/orders.ts'), 'utf8')).toBe('export const pageSize = 50;\n');
     expect(pr.git(pr.clone, 'rev-parse', 'HEAD')).toBe(cloneHead);
     expect(pr.git(pr.clone, 'status', '--porcelain')).toBe('');
+  });
+
+  it("refuses names that would put the worktree outside the config dir, and deletes nothing that was already there", async () => {
+    const pr = prRepo();
+    const configDir = tempDir();
+    // Unchecked, this jobId makes the job's folder <configDir>/victim-1: a real folder that isn't ours.
+    const victim = join(configDir, 'victim-1');
+    mkdirSync(victim);
+    writeFileSync(join(victim, 'precious.txt'), 'keep me\n');
+    const options = { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env };
+
+    const escaping = { ...pr.bundle, jobId: 'x/../../../../victim' };
+    const failed = await prepareWorktree(escaping, pr.clone, options).catch((err: unknown) => err);
+    expect(readFileSync(join(victim, 'precious.txt'), 'utf8')).toBe('keep me\n');
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'setup_failed', retryable: false });
+    expect(nitpilotRefs(pr)).toBe('');
+
+    // Every name that becomes a folder is checked: the job id, and exactly `owner/name`.
+    for (const repoFullName of ['acme', 'acme/shop/api', 'acme/..', '../shop-api', 'acme/shop api', '/shop-api']) {
+      const bad = await prepareWorktree({ ...pr.bundle, pr: { ...pr.bundle.pr, repoFullName } }, pr.clone, options).catch((err: unknown) => err);
+      expect(bad, repoFullName).toMatchObject({ reason: 'setup_failed', retryable: false });
+    }
+    for (const jobId of ['..', 'job one', 'job/1']) {
+      const bad = await prepareWorktree({ ...pr.bundle, jobId }, pr.clone, options).catch((err: unknown) => err);
+      expect(bad, jobId).toMatchObject({ reason: 'setup_failed', retryable: false });
+    }
+    expect(existsSync(join(configDir, 'worktrees'))).toBe(false);
+    expect(nitpilotRefs(pr)).toBe('');
+  });
+
+  it('refuses a folder that already exists at the job path, and leaves it alone', async () => {
+    const pr = prRepo();
+    const configDir = tempDir();
+    const taken = join(configDir, 'worktrees', 'acme', 'shop-api', '142-reviewer-job_1-1');
+    mkdirSync(taken, { recursive: true });
+    writeFileSync(join(taken, 'precious.txt'), 'keep me\n');
+    const failed = await prepareWorktree(pr.bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env }).catch((err: unknown) => err);
+    expect(readFileSync(join(taken, 'precious.txt'), 'utf8')).toBe('keep me\n');
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'setup_failed', retryable: true });
+    expect(nitpilotRefs(pr)).toBe('');
+    expect(worktreesOf(pr)).toHaveLength(1);
   });
 
   it('fails with stale_head when the PR moved on since the job was handed out, and leaves nothing behind', async () => {

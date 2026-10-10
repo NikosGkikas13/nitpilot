@@ -10,22 +10,31 @@ import { safeGit, type GitPlace } from './safe-git';
 export const SCRUB_PATHS: readonly string[] = ['.claude/', '.gemini/', '.mcp.json', '.env', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md'];
 
 /**
+ * A name the way macOS compares it: in any letter case, and look-alikes too (`.mcp.jſon`, with a long
+ * s, opens as `.mcp.json`). Folding to upper case and back catches those. Matching too much only
+ * scrubs one extra file, so this errs on the wide side.
+ */
+function foldName(name: string): string {
+  return name.toUpperCase().toLowerCase();
+}
+
+/**
  * Which tracked files to hide from git, and what to delete for them: a matching folder at any depth
- * goes as a whole, a matching file on its own. Names match in any letter case, because on macOS
- * `claude.md` and `CLAUDE.md` are the same file.
+ * goes as a whole, a matching file on its own. Names match as macOS compares them (see foldName), because
+ * there `claude.md` and `CLAUDE.md` are the same file.
  */
 export function scrubPlan(tracked: string[], scrubPaths: readonly string[]): { hide: string[]; remove: string[] } {
-  const folders = new Set(scrubPaths.filter((p) => p.endsWith('/')).map((p) => p.slice(0, -1).toLowerCase()));
-  const files = new Set(scrubPaths.filter((p) => !p.endsWith('/')).map((p) => p.toLowerCase()));
+  const folders = new Set(scrubPaths.filter((p) => p.endsWith('/')).map((p) => foldName(p.slice(0, -1))));
+  const files = new Set(scrubPaths.filter((p) => !p.endsWith('/')).map(foldName));
   const hide: string[] = [];
   const remove = new Set<string>();
   for (const path of tracked) {
     const parts = path.split('/');
-    const folderAt = parts.findIndex((part) => folders.has(part.toLowerCase()));
+    const folderAt = parts.findIndex((part) => folders.has(foldName(part)));
     if (folderAt >= 0) {
       hide.push(path);
       remove.add(parts.slice(0, folderAt + 1).join('/'));
-    } else if (files.has(parts.at(-1)!.toLowerCase())) {
+    } else if (files.has(foldName(parts.at(-1)!))) {
       hide.push(path);
       remove.add(path);
     }
