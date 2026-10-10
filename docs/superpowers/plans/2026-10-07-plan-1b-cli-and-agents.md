@@ -6950,7 +6950,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Conventions: the base tip's `CLAUDE.md`, `AGENTS.md` and `GEMINI.md`, read with `git show`, never from the worktree.
 - Anything else that fails is `setup_failed` (retryable), after removing what was made. `cleanup()` removes the worktree, its folder and both refs, even after a cancel, and never throws. `cleanUpWorktrees` deletes `<configDir>/worktrees` and runs `git worktree prune` in each linked clone.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `apps/cli/src/git/remotes.test.ts`, change the import to `import { parseGithubRemote, remoteFor } from './remotes';` and add at the end:
 ```ts
@@ -7103,12 +7103,12 @@ describe('cleanUpWorktrees', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/git/remotes src/runner/scrub src/runner/worktree`
 Expected: FAIL: `Cannot find module './scrub'` and `'./worktree'`; in `remotes.test.ts`, the two `remoteFor` tests fail with `remoteFor is not a function` (the 17 `parseGithubRemote` cases still pass).
 
-- [ ] **Step 3: Write `remoteFor`, `JobFailure`, the scrub and the worktree**
+- [x] **Step 3: Write `remoteFor`, `JobFailure`, the scrub and the worktree**
 
 At the end of `apps/cli/src/git/remotes.ts`, add:
 ```ts
@@ -7320,12 +7320,12 @@ export async function cleanUpWorktrees(opts: { configDir: string; repoPaths: str
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/git/remotes src/runner/scrub src/runner/worktree`
 Expected: PASS (remotes 19, scrub 2, worktree 7).
 
-- [ ] **Step 5: Explain worktrees, and bring the spec in line**
+- [x] **Step 5: Explain worktrees, and bring the spec in line**
 
 `docs/why/git-worktrees.md`:
 ```markdown
@@ -7361,12 +7361,12 @@ In the spec, §11 "Job steps":
 - Step 3: replace `` `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth. `` with `` `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case (on macOS `claude.md` is `CLAUDE.md`). ``
 - Step 8: replace `On startup the CLI also runs \`git worktree prune\`.` with `On startup the CLI also deletes the worktrees a crash left behind and runs \`git worktree prune\`.`
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 137, protocol 41, server 398).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/runner/job-failure.ts apps/cli/src/runner/scrub.ts apps/cli/src/runner/scrub.test.ts apps/cli/src/runner/worktree.ts apps/cli/src/runner/worktree.test.ts apps/cli/src/git/remotes.ts apps/cli/src/git/remotes.test.ts docs/why/git-worktrees.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

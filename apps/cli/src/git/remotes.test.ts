@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseGithubRemote } from './remotes';
+import { parseGithubRemote, remoteFor } from './remotes';
 
 describe('parseGithubRemote', () => {
   it.each([
@@ -23,5 +23,24 @@ describe('parseGithubRemote', () => {
     ['https://github.com/octo', null],
   ])('%s → %s', (url, expected) => {
     expect(parseGithubRemote(url)).toBe(expected);
+  });
+});
+
+describe('remoteFor', () => {
+  const remotes = [
+    'origin\tgit@github.com:maya/shop-api.git (fetch)',
+    'origin\tgit@github.com:maya/shop-api.git (push)',
+    'upstream\thttps://github.com/Acme/Shop-API.git (fetch)',
+    'upstream\tno-pushing-here (push)',
+  ].join('\n');
+
+  it('names the remote that points at a repo, in any letter case', () => {
+    expect(remoteFor(remotes, 'acme/shop-api', 'fetch')).toBe('upstream');
+    expect(remoteFor(remotes, 'maya/shop-api', 'push')).toBe('origin');
+  });
+
+  it('is null when no remote points there for that use', () => {
+    expect(remoteFor(remotes, 'acme/shop-api', 'push')).toBeNull();
+    expect(remoteFor(remotes, 'octo/other', 'fetch')).toBeNull();
   });
 });

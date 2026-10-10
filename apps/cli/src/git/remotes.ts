@@ -63,3 +63,15 @@ export function githubReposInRemoteList(text: string): string[] {
     .filter((name): name is string => name !== null);
   return [...new Set(names)];
 }
+
+/**
+ * The remote that points at `repo` (`owner/name`, in any letter case) in `git remote -v` output, for
+ * fetching or for pushing (a remote can have its own push URL). Null when none does.
+ */
+export function remoteFor(remoteList: string, repo: string, use: 'fetch' | 'push'): string | null {
+  for (const line of remoteList.split('\n')) {
+    const [name, url, kind] = line.split(/\s+/);
+    if (name && url && kind === `(${use})` && parseGithubRemote(url)?.toLowerCase() === repo.toLowerCase()) return name;
+  }
+  return null;
+}

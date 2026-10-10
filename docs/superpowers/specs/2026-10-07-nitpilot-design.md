@@ -313,9 +313,9 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - Stretch goals: `nitpilot review <pr-url>`, `nitpilot say <pr-url> "<note>"`
 
 **Job steps**
-1. `git fetch <baseRemote> +<fetchRef>:refs/nitpilot/<jobId>`. The platform adapter supplies `fetchRef`: `refs/pull/N/head` on GitHub, `refs/merge-requests/N/head` on GitLab. This works for PRs from forks too. If the head sha doesn't match the job's, fail with `stale_head`.
-2. `git worktree add --detach <configDir>/worktrees/<repo>/<pr>-<role> <headSha>`. The user's own working folder is never touched.
-3. **Scrub the files agents load automatically:** `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth. They are marked `skip-worktree` and then deleted, so a commit never records the deletion. The repo's conventions are read from the **base branch** (`git show <base>:CLAUDE.md`, and so on) and handed to the agent through `get_job`.
+1. `git fetch <baseRemote> +<fetchRef>:refs/nitpilot/<jobId>-<attempt>/head +refs/heads/<baseRef>:refs/nitpilot/<jobId>-<attempt>/base`. `<baseRemote>` is the clone's remote for the base repo, or `baseCloneUrl` when it has none. The platform adapter supplies `fetchRef`: `refs/pull/N/head` on GitHub, `refs/merge-requests/N/head` on GitLab. This works for PRs from forks too. If the head sha doesn't match the job's, fail with `stale_head`.
+2. `git worktree add --detach <configDir>/worktrees/<owner>/<name>/<pr>-<role>-<jobId>-<attempt> <headSha>`. The user's own working folder is never touched.
+3. **Scrub the files agents load automatically:** `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case (on macOS `claude.md` is `CLAUDE.md`). They are marked `skip-worktree` and then deleted, so a commit never records the deletion. The repo's conventions are read from the **base branch** (`git show <base>:CLAUDE.md`, and so on) and handed to the agent through `get_job`.
 4. **Address jobs only:** run the repo's optional `setup` command (e.g. `npm ci`). The CLI runs it, not the agent.
 5. Give the job its own token on the local MCP server, build the command through the agent adapter, and run the agent. On a timeout or cancel, the whole process tree is killed.
 6. **Address jobs:**
@@ -323,7 +323,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
    2. Send `job.pushing` and wait for the ack.
    3. `git push --no-verify <headRemote> HEAD:refs/heads/<headRef>`. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
 7. Attach ±5 lines of surrounding code to each new point, read with `git show <sha>:<path>`. These are the snippets the UI shows.
-8. Send `job.complete`, then remove the worktree and the temporary ref. On startup the CLI also runs `git worktree prune`.
+8. Send `job.complete`, then remove the worktree and the temporary ref. On startup the CLI also deletes the worktrees a crash left behind and runs `git worktree prune`.
 
 **Safe git.** Every git call gets these settings, so hooks from the PR (husky, for example) never run during checkout, commit or push, and symlinks can't point at secrets:
 - `-c core.hooksPath=<empty dir>`
