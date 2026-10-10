@@ -2837,7 +2837,7 @@ for live checks before the real CLI exists.
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 16: Live checkpoint: a summary comment on real GitHub**
+- [x] **Step 16: Live checkpoint: a summary comment on real GitHub**
 
 A summary comment from `nitpilot-dev[bot]` has never been seen on GitHub, and neither has mention neutralizing. This run checks both. It needs three terminals; `apps/server/.env` holds the app's credentials (never print them).
 
@@ -2860,7 +2860,7 @@ A summary comment from `nitpilot-dev[bot]` has never been seen on GitHub, and ne
 
 If any expectation fails, stop and debug it (superpowers:systematic-debugging) before Task 5; a fix gets its own failing test and commit.
 
-- [ ] **Step 17: Record the result**
+- [x] **Step 17: Record the result**
 
 Add a `Task 4 live check:` line to the ledger with the PR number, the comment's URL, the seconds from opening the PR to `job.assign`, and whether the mention showed as code. If anything needed a fix, list the fix commit.
 
