@@ -36,6 +36,13 @@ describe('nitpilot retry', () => {
     expect(out.lines[0]).toContain('Queued your agent again on acme/shop-api#142.');
   });
 
+  it('says the failure is cleared when the job has to wait for the PR', async () => {
+    const { env } = await setup({ body: { status: 'waiting' } });
+    const out = recordOut();
+    await retry('acme/shop-api#142', { env, out });
+    expect(out.lines[0]).toContain('Cleared the failure on acme/shop-api#142.');
+  });
+
   it("passes on the server's answer when there is nothing to retry", async () => {
     const { env } = await setup({ status: 409, body: { error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } } });
     await expect(retry('acme/shop-api#142', { env, out: recordOut() })).rejects.toThrow('Nothing of yours failed on this PR.');

@@ -120,6 +120,20 @@ describe('retry_requested', () => {
     expect(commandsOf(out, 'notify')).toEqual([]);
   });
 
+  it("clears the flag but queues nothing yet while the author's agent is fixing: the review starts after that pass", () => {
+    const chat = reviewFailed({ phase: 'addressing', jobs: [jobOf('job-a1', maya, 'author', 'address', { status: 'queued' })] });
+    const out = run(chat, { type: 'retry_requested', who: leo });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([]);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
+  });
+
+  it('does nothing for a reviewer whose review request was removed: the flag stays', () => {
+    const chat = agentToAgent({ participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { attention: 'failed', requested: false })] });
+    const out = run(chat, { type: 'retry_requested', who: leo });
+    expect(out.commands).toEqual([]);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('failed');
+  });
+
   it('does nothing for someone with nothing failed, or on a closed PR', () => {
     expect(run(reviewFailed(), { type: 'retry_requested', who: maya }).commands).toEqual([]);
     expect(run(reviewFailed({ phase: 'closed', closed: true }), { type: 'retry_requested', who: leo }).commands).toEqual([]);

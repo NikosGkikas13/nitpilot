@@ -142,6 +142,19 @@ describe('POST /api/chats/:id/retry', () => {
     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } })).toMatchObject({ attention: 'none' });
   });
 
+  it("answers waiting when the author's agent is still fixing: the review starts after that pass", async () => {
+    const { chat, leo, retry, leoToken } = await failedReview();
+    const maya = await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } });
+    await prisma.job.create({
+      data: { chatId: chat.id, participantId: maya.id, activeFor: maya.id, userId: maya.userId!, type: 'address', status: 'queued', round: 1, headSha: chat.headSha },
+    });
+    const res = await retry(leoToken);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'waiting' });
+    expect(await prisma.job.count({ where: { chatId: chat.id, type: { in: ['review', 're_review'] } } })).toBe(1); // still only the failed one
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } })).toMatchObject({ attention: 'none' });
+  });
+
   it('refuses when nothing of yours failed there: the author, or leo once his job is queued again', async () => {
     const { retry, leoToken, mayaToken } = await failedReview();
     const asMaya = await retry(mayaToken);

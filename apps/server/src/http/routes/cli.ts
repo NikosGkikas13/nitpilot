@@ -81,10 +81,19 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
     if (!(await newestJobFailed(chatId, user.githubId))) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
     const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
     const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
-    const queued = out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId);
-    if (!queued) throw new HttpError('conflict', 'Nothing was queued: the PR may be closed, or your agent runs once the current step finishes.');
-    const body: RetryResponse = { status: 'queued' };
-    return c.json(body);
+    // The job is queued now.
+    if (out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId)) {
+      const body: RetryResponse = { status: 'queued' };
+      return c.json(body);
+    }
+    // The engine cleared the failure but the job can't start yet (the author's agent is fixing, or the PR is a draft).
+    // It starts by itself once that step is done.
+    if (!out.chat.participants.some((p) => p.githubId === user.githubId && p.attention === 'failed')) {
+      const body: RetryResponse = { status: 'waiting' };
+      return c.json(body);
+    }
+    // The engine changed nothing.
+    throw new HttpError('conflict', "Nothing to retry: the PR is closed, or you're no longer a reviewer on it.");
   });
 
   return app;

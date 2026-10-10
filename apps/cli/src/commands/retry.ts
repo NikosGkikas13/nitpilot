@@ -16,7 +16,11 @@ export async function retry(ref: string | undefined, deps: RetryDeps = {}): Prom
   const { chats } = await client.myChats();
   const chat = chats.find((c) => c.repo.toLowerCase() === pr.repo.toLowerCase() && c.number === pr.number);
   if (!chat) throw new CliError(`You're not part of an open ${BRAND.name} chat on ${pr.repo}#${pr.number}.`);
-  await client.retry(chat.id);
+  const { status } = await client.retry(chat.id);
+  if (status === 'waiting') {
+    out.log(`Cleared the failure on ${chat.repo}#${chat.number}. Your agent runs again once the PR's current step is done (the author's agent fixing, or the PR still a draft).`);
+    return;
+  }
   out.log(`Queued your agent again on ${chat.repo}#${chat.number}. It runs on a device where \`${BRAND.cli} start\` is running.`);
 }
 

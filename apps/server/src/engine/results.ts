@@ -151,12 +151,12 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
 
 /**
  * A person asks to run their failed job again (`nitpilot retry`; Plan 2's Retry button). Only someone
- * flagged `failed` can. The job starts over as a new job, with a fresh count of attempts.
+ * flagged `failed` can (a reviewer only while still requested). The job starts over as a new job, with a fresh count of attempts.
  */
 export function onRetryRequested(ctx: Ctx, e: Ev<'retry_requested'>): void {
   const chat = ctx.chat;
   if (chat.phase === 'closed') return;
-  const failed = chat.participants.filter((p) => p.githubId === e.who.githubId && p.attention === 'failed');
+  const failed = chat.participants.filter((p) => p.githubId === e.who.githubId && p.attention === 'failed' && (p.role === 'author' || p.requested));
   if (failed.length === 0) return;
   system(ctx, `${e.who.login} asked their agent to try again`);
   for (const p of failed) {

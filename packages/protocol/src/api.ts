@@ -44,5 +44,6 @@ export const MyChatsResponse = z.object({ chats: z.array(MyChat) });
 export type MyChatsResponse = z.infer<typeof MyChatsResponse>;
 
 // `nitpilot retry`
-export const RetryResponse = z.object({ status: z.literal('queued') });
+// `queued`: the job is queued now. `waiting`: the failure is cleared, and the job starts once the PR's current step is done.
+export const RetryResponse = z.object({ status: z.enum(['queued', 'waiting']) });
 export type RetryResponse = z.infer<typeof RetryResponse>;
