@@ -2948,7 +2948,7 @@ docs/why/cli-config.md (new); docs/why/cli-login.md, docs/why/websockets.md (new
 - `ServerClient` checks every answer against the protocol's zod schemas. A 401 says to run `nitpilot login`; other errors carry the server's own message; an unreachable server says so.
 - The published package bundles `@nitpilot/protocol` and zod into one file with tsup, so `npx nitpilot` needs nothing else, and the private protocol package is a dev dependency only.
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 `packages/protocol/src/index.test.ts`:
 ```ts
@@ -2962,12 +2962,12 @@ describe('the package entry', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w packages/protocol -- src/index.test.ts`
 Expected: FAIL: `expected [ …, 'samples', … ] not to include 'samples'`.
 
-- [ ] **Step 3: Give the samples their own entry**
+- [x] **Step 3: Give the samples their own entry**
 
 In `packages/protocol/package.json`, replace:
 ```json
@@ -2996,12 +2996,12 @@ import type { JobResult, RunningJob } from '@nitpilot/protocol';
 import * as samples from '@nitpilot/protocol/test-samples';
 ```
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w packages/protocol && npm run typecheck -w apps/server`
 Expected: PASS (protocol 41); the server typechecks with the new import path.
 
-- [ ] **Step 5: Set up the CLI package**
+- [x] **Step 5: Set up the CLI package**
 
 Replace `apps/cli/package.json` with:
 ```json
@@ -3070,7 +3070,7 @@ export default defineConfig(buildOptions);
 Run: `npm install`
 Expected: tsup is installed and `package-lock.json` updated; `@nitpilot/protocol` is still linked into `node_modules`.
 
-- [ ] **Step 6: Write the failing CLI tests**
+- [x] **Step 6: Write the failing CLI tests**
 
 `apps/cli/test/out.ts`:
 ```ts
@@ -3341,12 +3341,12 @@ describe('the published bundle', () => {
 });
 ```
 
-- [ ] **Step 7: Run them to see them fail**
+- [x] **Step 7: Run them to see them fail**
 
 Run: `npm test -w apps/cli`
 Expected: FAIL: `Failed to resolve import "./cli"` (and `./config`, `./http`, `../src/out`), since none of those files exist yet.
 
-- [ ] **Step 8: Write the entry point and the command runner**
+- [x] **Step 8: Write the entry point and the command runner**
 
 `apps/cli/src/errors.ts`:
 ```ts
@@ -3433,7 +3433,7 @@ import { terminal } from './out';
 process.exitCode = await runCli(process.argv.slice(2), terminal);
 ```
 
-- [ ] **Step 9: Write the personal config**
+- [x] **Step 9: Write the personal config**
 
 `apps/cli/src/config/config.ts`:
 ```ts
@@ -3538,7 +3538,7 @@ function parse(raw: Record<string, unknown>, where: string): PersonalConfig {
 }
 ```
 
-- [ ] **Step 10: Write the server client**
+- [x] **Step 10: Write the server client**
 
 `apps/cli/src/http.ts`:
 ```ts
@@ -3628,12 +3628,12 @@ async function errorMessage(res: Response): Promise<string> {
 }
 ```
 
-- [ ] **Step 11: Run them to see them pass**
+- [x] **Step 11: Run them to see them pass**
 
 Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
 Expected: PASS (cli 5, config 8, http 7, build 1).
 
-- [ ] **Step 12: Explain the config file**
+- [x] **Step 12: Explain the config file**
 
 `docs/why/cli-config.md`:
 ```markdown
@@ -3677,12 +3677,12 @@ with:
   "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY (§12.2)
 ```
 
-- [ ] **Step 13: Run the full suite**
+- [x] **Step 13: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green: protocol 41, server unchanged, CLI 21.
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add packages/protocol apps/server/src/chats/dispatch.db.test.ts apps/server/src/jobs/bundle.db.test.ts apps/server/src/ws/handlers.db.test.ts apps/cli package-lock.json docs/why/cli-config.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

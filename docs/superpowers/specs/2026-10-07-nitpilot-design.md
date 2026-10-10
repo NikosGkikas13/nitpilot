@@ -484,6 +484,7 @@ max_points_per_review: 20
   "concurrency": 1,
   "jobTimeoutMinutes": 15,
   "dailyJobCap": 40,
+  "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY (§12.2)
   "repos": {
     "octo/sandbox": {
       "path": "/Users/me/code/sandbox",

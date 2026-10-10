@@ -1,4 +1,5 @@
-import { samples, type JobResult, type RunningJob } from '@nitpilot/protocol';
+import type { JobResult, RunningJob } from '@nitpilot/protocol';
+import * as samples from '@nitpilot/protocol/test-samples';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { startCliServer, TestCli, type CliServer } from '../../test/ws';

@@ -1,0 +1,99 @@
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { AgentId, BRAND } from '@nitpilot/protocol';
+import { z } from 'zod';
+import { CliError } from '../errors';
+
+/** The hosted instance (Plan 3). For another server, set NITPILOT_SERVER or "server" in the file. */
+export const DEFAULT_SERVER = 'https://nitpilot.dev';
+
+const ENV = {
+  configDir: `${BRAND.envPrefix}CONFIG_DIR`,
+  server: `${BRAND.envPrefix}SERVER`,
+  token: `${BRAND.envPrefix}TOKEN`,
+} as const;
+
+type Env = Record<string, string | undefined>;
+
+/** One linked clone (spec §13): where it is, how to prepare a fresh checkout, and which checks the agent may run. */
+const RepoConfig = z.object({
+  path: z.string().min(1),
+  setup: z.array(z.string()).min(1).optional(),
+  checks: z.record(z.string(), z.array(z.string()).min(1)).optional(),
+});
+
+/** config.json (spec §13). Every field has a default, so a missing or empty file is valid. */
+export const PersonalConfigSchema = z.object({
+  server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
+  token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
+  agent: AgentId.default('claude-code'),
+  /** Defaults for new chats. Ignored in Plan 1, where Auto is always on. */
+  auto: z.object({ review: z.boolean(), address: z.boolean() }).default({ review: true, address: true }),
+  concurrency: z.number().int().min(1).max(4).default(1),
+  jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
+  dailyJobCap: z.number().int().min(1).default(40),
+  /** Let Claude Code bill your API key. Off: ANTHROPIC_API_KEY never reaches the agent (spec §12.2). */
+  apiBilling: z.boolean().default(false),
+  /** Linked clones, keyed `owner/name`. */
+  repos: z.record(z.string(), RepoConfig).default({}),
+});
+export type PersonalConfig = z.infer<typeof PersonalConfigSchema>;
+
+/** Where the config lives: $NITPILOT_CONFIG_DIR, else $XDG_CONFIG_HOME/nitpilot, else ~/.config/nitpilot. */
+export function configDir(env: Env = process.env): string {
+  const own = env[ENV.configDir];
+  if (own) return own;
+  return join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), BRAND.configDirName);
+}
+
+export function configPath(dir: string): string {
+  return join(dir, 'config.json');
+}
+
+/** The settings in effect: the file, with NITPILOT_SERVER and NITPILOT_TOKEN winning one field at a time. */
+export function loadConfig(opts: { env?: Env; dir?: string } = {}): PersonalConfig {
+  const env = opts.env ?? process.env;
+  const dir = opts.dir ?? configDir(env);
+  const raw = readRaw(configPath(dir));
+  const server = env[ENV.server];
+  const token = env[ENV.token];
+  if (server) raw.server = server;
+  if (token) raw.token = token;
+  return parse(raw, `${configPath(dir)} (or ${ENV.server} / ${ENV.token})`);
+}
+
+/** The file alone, without the environment. Change what this returns and save it: no override ends up in the file. */
+export function loadConfigFile(dir: string): PersonalConfig {
+  return parse(readRaw(configPath(dir)), configPath(dir));
+}
+
+/** Save the config readable by you only (0600), even when the old file had looser permissions. */
+export function saveConfig(cfg: PersonalConfig, dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const path = configPath(dir);
+  const tmp = `${path}.tmp`;
+  // Write a new file, then swap it in: a crash halfway never leaves a half-written config behind.
+  writeFileSync(tmp, `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(tmp, 0o600); // mode only applies to new files; a leftover .tmp could have another one
+  renameSync(tmp, path);
+}
+
+function readRaw(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (err) {
+    throw new CliError(`${path} is not valid JSON: ${(err as Error).message}`);
+  }
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new CliError(`${path} must hold a JSON object.`);
+  return json as Record<string, unknown>;
+}
+
+function parse(raw: Record<string, unknown>, where: string): PersonalConfig {
+  const parsed = PersonalConfigSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0]!;
+  throw new CliError(`Invalid setting "${issue.path.join('.') || '(the whole file)'}" in ${where}: ${issue.message}`);
+}

@@ -1,4 +1,4 @@
-import { samples } from '@nitpilot/protocol';
+import * as samples from '@nitpilot/protocol/test-samples';
 import { describe, expect, it } from 'vitest';
 import { ghId, makeChat, makeRepo, makeUser } from '../../test/db';
 import type { Person } from '../engine/types';
