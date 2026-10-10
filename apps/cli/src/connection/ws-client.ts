@@ -5,8 +5,9 @@ export type Closed = { code: number; reason: string; opened: boolean };
 
 export type ServerSocket = {
   send(msg: CliToServer): boolean;
+  /** Leave now: `closed` resolves at once, without waiting for the server to finish the closing handshake. */
   close(code: number, reason: string): void;
-  /** Give up on a socket that looks open but is dead: `closed` resolves now instead of when TCP notices. */
+  /** Give up on a socket that looks open but is dead: like `close`, so nothing waits for TCP to notice. */
   abandon(): void;
   /** Resolves exactly once. */
   closed: Promise<Closed>;
@@ -25,7 +26,7 @@ export type SocketHandlers = {
  * Messages that don't fit the protocol are reported and dropped.
  */
 export function openSocket(h: SocketHandlers): ServerSocket {
-  const ws = new WebSocket(`${h.server.replace(/^http/, 'ws')}${CLI_WS_PATH}`, { headers: { authorization: `Bearer ${h.token}` } });
+  const ws = new WebSocket(socketUrl(h.server), { headers: { authorization: `Bearer ${h.token}` } });
   let opened = false;
   let ended = false;
   let settle!: (closed: Closed) => void;
@@ -34,6 +35,12 @@ export function openSocket(h: SocketHandlers): ServerSocket {
     if (ended) return;
     ended = true;
     settle(how);
+  };
+
+  // The caller is leaving, so don't wait for the server to answer the close: a half-open socket never would.
+  const close = (code: number, reason: string) => {
+    end({ code, reason, opened });
+    ws.close(code, reason);
   };
 
   ws.addEventListener('open', () => {
@@ -65,13 +72,17 @@ export function openSocket(h: SocketHandlers): ServerSocket {
       ws.send(JSON.stringify(msg));
       return true;
     },
-    close(code, reason) {
-      ws.close(code, reason);
-    },
+    close,
     abandon() {
-      end({ code: 4000, reason: 'the server went quiet', opened });
-      ws.close(4000, 'the server went quiet');
+      close(4000, 'the server went quiet');
     },
     closed,
   };
+}
+
+/** ws://host/ws/cli for http://host (wss for https), joined the way ServerClient joins its paths, so a trailing slash is fine. */
+function socketUrl(server: string): string {
+  const url = new URL(CLI_WS_PATH, server);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.href;
 }

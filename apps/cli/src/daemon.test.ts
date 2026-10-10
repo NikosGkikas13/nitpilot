@@ -26,12 +26,12 @@ function deferred<T>() {
 }
 
 /** A stub server, and a daemon talking to it with fast timings. Both stop when the test ends. */
-async function setup(over: Partial<DaemonOptions> = {}, opts: { daemonToken?: string; routes?: StubRoutes } = {}) {
+async function setup(over: Partial<DaemonOptions> = {}, opts: { daemonToken?: string; routes?: StubRoutes; serverSuffix?: string } = {}) {
   const hub = await startStubHub({ token: TOKEN, routes: opts.routes });
   const out = recordOut();
   const notified: string[] = [];
   const daemon = startDaemon({
-    config: PersonalConfigSchema.parse({ server: hub.url, token: opts.daemonToken ?? TOKEN, repos: { 'acme/shop-api': { path: '/code/shop-api' } } }),
+    config: PersonalConfigSchema.parse({ server: `${hub.url}${opts.serverSuffix ?? ''}`, token: opts.daemonToken ?? TOKEN, repos: { 'acme/shop-api': { path: '/code/shop-api' } } }),
     configDir: tempDir(),
     agent: { id: 'fake', version: null, modes: ['reviewer', 'editor'] },
     executor: async () => done,
@@ -62,6 +62,24 @@ async function welcomed(hub: Awaited<ReturnType<typeof startStubHub>>) {
 /** Wait for a ping (one every 50 ms) whose running list is exactly `expected`. */
 function pingListing(conn: StubConnection, expected: RunningJob[]) {
   return conn.nextMatching('ping', (ping) => JSON.stringify(ping.d.running) === JSON.stringify(expected));
+}
+
+/** Wait until the daemon has handled everything sent so far. It handles messages in order, so once it shows a notification, it has seen what came before. */
+async function handled(conn: StubConnection, notified: string[]) {
+  const title = `handled ${notified.length}`;
+  conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title, url: 'http://nitpilot.test/x' } });
+  await vi.waitFor(() => expect(notified).toContain(title));
+}
+
+/** An executor that records the signal of every run, and finishes (as a failure) only when that signal aborts. */
+function abortableExecutor() {
+  const signals: AbortSignal[] = [];
+  const executor: JobExecutor = (_bundle, io) =>
+    new Promise((resolve) => {
+      signals.push(io.signal);
+      io.signal.addEventListener('abort', () => resolve({ kind: 'fail', reason: 'crash', retryable: true, detail: 'stopped' }));
+    });
+  return { executor, signals };
 }
 
 describe('startDaemon', () => {
@@ -134,13 +152,58 @@ describe('startDaemon', () => {
     await conn.nothing('job.fail');
   });
 
-  it("ignores a cancel for a job it doesn't know", async () => {
-    const { hub, out } = await setup();
+  it("ignores a cancel for a job it doesn't know, and leaves the job that is running alone", async () => {
+    const { executor, signals } = abortableExecutor();
+    const { hub, out, notified } = await setup({ executor });
     const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
     conn.send({ v: 1, t: 'job.cancel', d: { jobId: 'job_unknown', attempt: 3, reason: 'stale' } });
+    await handled(conn, notified);
     conn.forget('ping');
-    await pingListing(conn, []);
+    await pingListing(conn, [JOB]);
+    expect(signals[0]?.aborted).toBe(false);
     expect(out.text()).not.toContain('job_unknown');
+  });
+
+  it('ignores a cancel for another attempt of the job that is running', async () => {
+    const { executor, signals } = abortableExecutor();
+    const { hub, out, notified } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
+    conn.send({ v: 1, t: 'job.cancel', d: { jobId: 'job_1', attempt: 2, reason: 'pr_closed' } });
+    await handled(conn, notified);
+    conn.forget('ping');
+    await pingListing(conn, [JOB]);
+    expect(signals[0]?.aborted).toBe(false);
+    expect(out.text()).not.toContain('Stopped');
+  });
+
+  it('runs a job handed out twice once', async () => {
+    const executor = vi.fn<JobExecutor>(() => new Promise<JobOutcome>(() => {})); // never finishes
+    const { hub, notified } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    conn.send(assign());
+    await handled(conn, notified);
+    conn.forget('ping');
+    await pingListing(conn, [JOB]);
+    expect(executor).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the older run when a newer attempt of the job arrives, and answers only for the newer one', async () => {
+    const { executor, signals } = abortableExecutor();
+    const { hub } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
+    conn.send(assign({ ...jobBundle(), attempt: 2 }));
+    conn.forget('ping');
+    await pingListing(conn, [{ jobId: 'job_1', attempt: 2 }]);
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
+    // The stopped run's executor did finish (with a failure), but nothing is sent for it.
+    await Promise.all([conn.nothing('job.fail'), conn.nothing('job.complete')]);
   });
 
   it.each([
@@ -267,4 +330,28 @@ describe('startDaemon', () => {
     conn.forget('ping');
     await pingListing(conn, []);
   });
+
+  it('connects when the server URL ends with a slash', async () => {
+    const { hub } = await setup({}, { serverSuffix: '/' });
+    const { hello } = await welcomed(hub);
+    expect(hello.d.device).toBe('test laptop');
+  });
+
+  it('stops at once when told to while it is checking whether its token works', async () => {
+    let checking: AbortSignal | undefined;
+    const asked = deferred<void>();
+    // A server that never answers: the request ends only when the daemon gives up on it.
+    const hangingFetch: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        checking = init?.signal ?? undefined;
+        checking?.addEventListener('abort', () => reject(new Error('aborted')));
+        asked.resolve();
+      });
+    const { daemon, out } = await setup({ fetch: hangingFetch, backoff: new Backoff({ startMs: 60_000 }) }, { daemonToken: 'nit_revoked' });
+    await asked.promise; // the connection was refused, and the daemon is now asking GET /api/me
+    daemon.stop();
+    expect(await daemon.stopped).toBe('stopped');
+    expect(checking?.aborted).toBe(true);
+    expect(out.text()).not.toContain('Trying again');
+  }, 3_000);
 });

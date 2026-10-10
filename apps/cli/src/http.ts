@@ -14,7 +14,7 @@ export class ServerError extends CliError {
   }
 }
 
-type CallOptions = { body?: unknown; auth?: boolean };
+type CallOptions = { body?: unknown; auth?: boolean; signal?: AbortSignal };
 
 /** The Nitpilot server's REST API (spec §10). Every answer is checked against the protocol's schemas. */
 export class ServerClient {
@@ -34,8 +34,9 @@ export class ServerClient {
     return this.call('POST', '/api/cli/login/poll', CliLoginPollResponse, { body: { deviceCode } });
   }
 
-  me() {
-    return this.call('GET', '/api/me', MeResponse, { auth: true });
+  /** Who this token belongs to. `signal` lets the caller give up on a slow answer. */
+  me(opts: { signal?: AbortSignal } = {}) {
+    return this.call('GET', '/api/me', MeResponse, { auth: true, signal: opts.signal });
   }
 
   myChats() {
@@ -72,6 +73,7 @@ export class ServerClient {
         method,
         headers,
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal: opts.signal,
       });
     } catch (err) {
       throw new ServerError(0, `Can't reach ${this.server}: ${(err as Error).message}`);

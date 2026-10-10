@@ -65,6 +65,9 @@ export type Daemon = { stopped: Promise<StopReason>; stop(): void };
 /** Live status goes out at most this often (spec §10). */
 const PROGRESS_EVERY_MS = 2_000;
 
+/** How long to wait for GET /api/me when checking whether the token still works, so a dead server can't stall the daemon. */
+const TOKEN_CHECK_TIMEOUT_MS = 10_000;
+
 const STOP_CODES: Partial<Record<number, Exclude<StopReason, 'stopped'>>> = {
   [CLOSE_CODES.reauth]: 'reauth',
   [CLOSE_CODES.upgradeCli]: 'upgrade',
@@ -80,7 +83,7 @@ const STOP_MESSAGES: Record<Exclude<StopReason, 'stopped'>, string> = {
 /** A job from its job.assign until the server acks its result. */
 type RunningEntry = RunningJob & { controller: AbortController };
 
-/** An answer the server hasn't acked yet. `sentAt` is when it last went out (0: not yet on this connection). */
+/** An answer the server hasn't acked yet. `sentAt` is when it last went out (0: never sent, or the last send failed). */
 type Unacked = { msg: AckedMessage; done(status: AckStatus): void; sentAt: number };
 
 /**
@@ -122,6 +125,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
         out.error(STOP_MESSAGES.reauth);
         return 'reauth';
       }
+      if (stopping.signal.aborted) break; // told to stop while asking: no retry to announce
       const wait = backoff.next();
       const why = closed.code ? ` (${closed.code}${closed.reason ? ` ${closed.reason}` : ''})` : '';
       out.log(`Disconnected${why}. Trying again in ${(wait / 1000).toFixed(1)} s…`);
@@ -301,7 +305,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 
   async function tokenRejected(): Promise<boolean> {
     try {
-      await client.me();
+      await client.me({ signal: AbortSignal.any([stopping.signal, AbortSignal.timeout(TOKEN_CHECK_TIMEOUT_MS)]) });
       return false;
     } catch (err) {
       return err instanceof ServerError && err.status === 401;
@@ -348,6 +352,7 @@ function describeOutcome(outcome: JobOutcome): string {
 /** Wait `ms`, or less if `signal` fires first. */
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
     const onAbort = () => {
       clearTimeout(timer);
       resolve();
