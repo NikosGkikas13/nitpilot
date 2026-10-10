@@ -6497,7 +6497,7 @@ docs/why/safe-git.md, docs/why/git-worktrees.md (new); docs/why/child-processes.
 - With a `workTree`, the worktree's `.git` must be a file naming exactly `gitDir`, else the command is refused. That refuses a changed link and a real clone alike: safeGit only works in worktrees the CLI made.
 - A failure rejects with `SafeGitError`: git's exit code, its output, and a message from its first `stderr` line. A cancel (`signal`) stops git. Ten minutes is the limit for one command.
 
-- [ ] **Step 1: Write the git test fixtures**
+- [x] **Step 1: Write the git test fixtures**
 
 `apps/cli/test/git-fixtures.ts`:
 ```ts
@@ -6590,7 +6590,7 @@ export function prRepo(opts: { base?: Record<string, FileSpec>; head?: Record<st
 }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/cli/src/runner/safe-git.test.ts`:
 ```ts
@@ -6717,12 +6717,12 @@ describe('emptyHooksDir', () => {
 });
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/runner/safe-git`
 Expected: FAIL: `Cannot find module './safe-git'`.
 
-- [ ] **Step 4: Write `safeGit()`**
+- [x] **Step 4: Write `safeGit()`**
 
 `apps/cli/src/runner/safe-git.ts`:
 ```ts
@@ -6861,12 +6861,12 @@ export function emptyHooksDir(configDir: string): string {
 }
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/runner/safe-git`
 Expected: PASS (safe-git 10). The hook test also proves its trap is real: plain git in the same worktree runs the PR's hook.
 
-- [ ] **Step 6: Explain it, and bring the spec in line**
+- [x] **Step 6: Explain it, and bring the spec in line**
 
 `docs/why/safe-git.md`:
 ```markdown
@@ -6910,12 +6910,12 @@ In the spec, §11 "Safe git", after the line `` - `GIT_TERMINAL_PROMPT=0` ``, ad
 - in a worktree, its `.git` link is checked first: a changed link, or a real clone, stops the command
 ```
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 126, protocol 41, server 398).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/cli/src/runner/safe-git.ts apps/cli/src/runner/safe-git.test.ts apps/cli/test/git-fixtures.ts docs/why/safe-git.md docs/why/child-processes.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

@@ -332,6 +332,8 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - `-c submodule.recurse=false`
 - `GIT_DIR` and `GIT_WORK_TREE` set explicitly
 - `GIT_TERMINAL_PROMPT=0`
+- an allowlisted environment (`PATH`, `HOME`, the SSH agent, locale, proxies), and `ssh -o BatchMode=yes` unless the user set `GIT_SSH_COMMAND`, so nothing waits for a password
+- in a worktree, its `.git` link is checked first: a changed link, or a real clone, stops the command
 
 **Local MCP server.** One per daemon, on `127.0.0.1:<random port>`, built with MCP TS SDK v2 (`createMcpHandler`, with localhost host and origin validation). Each job gets its own 32-byte bearer token, compared with `timingSafeEqual`. The token picks the job and its tool set, and it stops working when the job ends.
 

@@ -27,7 +27,7 @@ A program can hang forever (a password prompt, a dead network). `execFile` takes
 - `apps/cli/src/commands/login.ts`: `open` / `xdg-open` to show the browser page.
 - `apps/cli/src/commands/doctor.ts`: `runProgram`, which never throws and turns every outcome into `{ code, stdout, stderr }`.
 
-Task 9's `safeGit()` adds safe settings (hooks off, symlinks off, …) to the git that runs on PR code. Agents never get a shell at all.
+Git that runs on PR code goes through `safeGit()` (`apps/cli/src/runner/safe-git.ts`), which adds safe settings on top: no hooks, no symlinks, no prompts (docs/why/safe-git.md). Agents never get a shell at all.
 
 ## The React analogy
 
