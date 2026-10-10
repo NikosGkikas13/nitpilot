@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import {
-  CliLoginPollRequest, CliLoginStartRequest,
+  BRAND, CliLoginPollRequest, CliLoginStartRequest,
   type Attention, type MeResponse, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
 } from '@nitpilot/protocol';
 import { Hono, type Context } from 'hono';
@@ -78,7 +78,14 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
   app.post('/api/chats/:id/retry', requireCliToken, async (c) => {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
     const chatId = c.req.param('id');
-    if (!(await newestJobFailed(chatId, user.githubId))) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    const failure = await failureKind(chatId, user.githubId);
+    if (failure === null) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    if (failure === 'github_post') {
+      throw new HttpError(
+        'conflict',
+        `Your agent didn't fail on this PR: posting its review or replies to GitHub did, and running the agent again won't fix that. If \`${BRAND.cli} status\` says GitHub access expired, sign in again at ${getEnv().PUBLIC_URL}.`,
+      );
+    }
     const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
     const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
     // The job is queued now.
@@ -100,16 +107,20 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
 }
 
 /**
- * True when one of this person's roles in the chat is flagged `failed` because its newest job failed.
- * A flag from a GitHub write that failed (spec §15) is fixed by signing in again, not by re-running the agent.
+ * Why this person is flagged `failed` in the chat, if they are:
+ * - null: none of their roles is flagged;
+ * - 'agent': a flagged role's newest job failed, so running it again can help;
+ * - 'github_post': otherwise. A write that never reached GitHub (spec §15, `write_failed`) is the only other
+ *   thing that sets the flag, and it is fixed by signing in again, not by re-running the agent.
  */
-async function newestJobFailed(chatId: string, githubId: string): Promise<boolean> {
+async function failureKind(chatId: string, githubId: string): Promise<'agent' | 'github_post' | null> {
   const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
+  if (flagged.length === 0) return null;
   for (const p of flagged) {
     const newest = await prisma.job.findFirst({ where: { participantId: p.id }, orderBy: { createdAt: 'desc' }, select: { status: true } });
-    if (newest?.status === 'failed') return true;
+    if (newest?.status === 'failed') return 'agent';
   }
-  return false;
+  return 'github_post';
 }
 
 /**

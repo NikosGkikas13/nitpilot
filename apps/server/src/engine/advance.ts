@@ -66,6 +66,11 @@ export function advance(ctx: Ctx): void {
     enterEscalated(ctx);
     return;
   }
+  // A pass that failed for good waits for the author to ask again (`nitpilot retry`): a person decides (spec §9.4).
+  if (a.attention === 'failed') {
+    chat.phase = 'addressing';
+    return;
+  }
   if (enqueueJob(ctx, a, 'address', null)) {
     const n = actionable.length;
     system(ctx, `${a.login}'s agent is working on ${n} point${n === 1 ? '' : 's'}`);

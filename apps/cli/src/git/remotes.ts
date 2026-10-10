@@ -6,8 +6,9 @@ const run = promisify(execFile);
 
 /**
  * `owner/name` for a GitHub remote URL, or null for anything else. Understands https, ssh:// and the
- * short `git@host:owner/name.git` form. Over SSH the host may also be an alias without a dot, like the
- * `github-a` and `github-b` aliases used to run two GitHub accounts on one machine (spec §17).
+ * short `git@host:owner/name.git` form. Over SSH the host may also be an alias from `~/.ssh/config`, used
+ * to run two GitHub accounts on one machine (spec §17): one without a dot (`github-a`, `github-b`) or one
+ * that starts with `github.com-` (`github.com-work`).
  */
 export function parseGithubRemote(url: string): string | null {
   const path = githubPath(url.trim());
@@ -31,7 +32,7 @@ function githubPath(url: string): string | null {
 }
 
 function isGithubHost(host: string, opts: { sshAlias: boolean }): boolean {
-  return host === 'github.com' || (opts.sshAlias && !host.includes('.'));
+  return host === 'github.com' || (opts.sshAlias && (!host.includes('.') || host.startsWith('github.com-')));
 }
 
 /** The top folder of the git clone that contains `path`. */

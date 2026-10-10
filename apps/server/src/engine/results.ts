@@ -146,7 +146,7 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
     p.attention = 'failed';
     if (p.userId) emit(ctx, { type: 'notify', userIds: [p.userId], kind: 'failed', pointNumbers: [] });
   }
-  // No advance() here: a person decides what happens next (the Retry button arrives in Plan 2).
+  // No advance() here: a person decides what happens next (`nitpilot retry`; Plan 2's Retry button).
 }
 
 /**

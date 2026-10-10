@@ -126,7 +126,7 @@ describe('POST /api/chats/:id/retry', () => {
     await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: review.id, attempt: 1, reason: 'auth', retryable: false });
     const server = testApp({ github: new GithubClient(fakeFetch({})), dispatch: dispatcher.dispatch });
     const retry = (token: string) => server.request(`/api/chats/${chat.id}/retry`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
-    return { chat, leo, retry, leoToken: (await makeCliToken(leo.id)).raw, mayaToken: (await makeCliToken(maya.id)).raw };
+    return { chat, leo, dispatcher, retry, leoToken: (await makeCliToken(leo.id)).raw, mayaToken: (await makeCliToken(maya.id)).raw };
   }
 
   it("queues leo's failed review again and clears his failed flag", async () => {
@@ -162,6 +162,20 @@ describe('POST /api/chats/:id/retry', () => {
     expect(await asMaya.json()).toMatchObject({ error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } });
     expect((await retry(leoToken)).status).toBe(200);
     expect((await retry(leoToken)).status).toBe(409);
+  });
+
+  it('explains a failed GitHub post instead of running the agent again', async () => {
+    const { chat, leo, dispatcher, retry, leoToken } = await failedReview();
+    expect((await retry(leoToken)).status).toBe(200);
+    // The review ran fine this time, but posting it to GitHub kept failing.
+    const review = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, status: 'queued' } });
+    await prisma.job.update({ where: { id: review.id }, data: { status: 'done', activeFor: null } });
+    await dispatcher.dispatch(chat.id, { type: 'write_failed', write: 'review', asGithubId: leo.githubId, pointNumbers: [], reason: 'needs_reauth' });
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } })).toMatchObject({ attention: 'failed' });
+
+    const res = await retry(leoToken);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: 'conflict', message: expect.stringContaining('posting its review or replies to GitHub did') } });
   });
 
   it('needs a CLI token', async () => {

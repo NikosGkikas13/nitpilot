@@ -139,3 +139,20 @@ describe('retry_requested', () => {
     expect(run(reviewFailed({ phase: 'closed', closed: true }), { type: 'retry_requested', who: leo }).commands).toEqual([]);
   });
 });
+
+describe('an author whose address pass failed for good', () => {
+  it("waits for a retry: a new comment on the PR doesn't restart the pass", () => {
+    const chat = agentToAgent({
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { attention: 'failed' }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+    // sam comments; a quiet period later the comments timer fires and the engine decides what's next.
+    const comment = { id: '9001', threadRootId: null, author: sam, trusted: true, body: 'Please handle the empty list.', path: 'src/orders/list.ts', line: 48, side: 'RIGHT' as const, commitSha: 'head1' };
+    const commented = run(chat, { type: 'external_comment', comment });
+    const out = run(commented.chat, { type: 'timer', key: 'comments' });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([]);
+    expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('failed');
+    expect(out.chat.phase).toBe('addressing');
+  });
+});
