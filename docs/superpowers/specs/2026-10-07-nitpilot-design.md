@@ -137,7 +137,7 @@ GitHub ──────────────────▶ ┌────
 ```
 packages/protocol   zod schemas, enums, BRAND
 apps/server         http/ ws/ engine/ (pure) chats/ jobs/ tasks/ platform/{github,fake}/ lib/ + prisma/
-apps/cli            commands/ config/ connection/ runner/{safe-git,worktree,prompt,snippets,checks}/ mcp/
+apps/cli            commands/ config/ connection/ git/ runner/{safe-git,scrub,worktree,push,…}.ts mcp/
                     agents/{claude-code,gemini-cli,fake,conformance}/
 apps/web            (Plan 2)
 docs/               architecture.md · why/*.md · adapters.md · self-hosting.md (Plan 3)

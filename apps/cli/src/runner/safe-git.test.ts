@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CANARY_HOOK, prRepo } from '../../test/git-fixtures';
@@ -49,12 +49,13 @@ describe('safeGitArgs and safeGitEnv', () => {
   it('passes only allowlisted variables, names the place, and never prompts', () => {
     const env = safeGitEnv({
       ...place,
-      env: { PATH: '/usr/bin', HOME: '/home/maya', SSH_AUTH_SOCK: '/tmp/ssh', GITHUB_TOKEN: 'ghp_x', AWS_SECRET_ACCESS_KEY: 'x', GIT_INDEX_FILE: '/elsewhere' },
+      env: { PATH: '/usr/bin', HOME: '/home/maya', SSH_AUTH_SOCK: '/tmp/ssh', GIT_CONFIG_NOSYSTEM: '1', GITHUB_TOKEN: 'ghp_x', AWS_SECRET_ACCESS_KEY: 'x', GIT_INDEX_FILE: '/elsewhere' },
     });
     expect(env).toEqual({
       PATH: '/usr/bin',
       HOME: '/home/maya',
       SSH_AUTH_SOCK: '/tmp/ssh',
+      GIT_CONFIG_NOSYSTEM: '1',
       GIT_DIR: '/code/shop-api/.git/worktrees/w',
       GIT_WORK_TREE: '/tmp/w',
       GIT_TERMINAL_PROMPT: '0',
@@ -102,6 +103,38 @@ describe('safeGit', () => {
     await expect(safeGit({ ...clone, workTree: pr.clone }, ['status'])).rejects.toThrow(/\.git was changed/);
   });
 
+  it('refuses a .git link with any other line before or after it', async () => {
+    const pr = prRepo();
+    const { dir, inTree } = await worktreeOf(pr);
+    const link = readFileSync(join(dir, '.git'), 'utf8');
+    writeFileSync(join(dir, '.git'), `# junk\n${link}`);
+    await expect(safeGit(inTree, ['status'])).rejects.toThrow(/\.git was changed/);
+    writeFileSync(join(dir, '.git'), `${link}# junk\n`);
+    await expect(safeGit(inTree, ['status'])).rejects.toThrow(/\.git was changed/);
+  });
+
+  it("says so when the clone's folder is gone", async () => {
+    const pr = prRepo();
+    const clone = clonePlace(pr);
+    rmSync(pr.clone, { recursive: true });
+    await expect(safeGit(clone, ['status'])).rejects.toMatchObject({
+      name: 'SafeGitError',
+      message: `${clone.gitDir} doesn't exist (moved or deleted?)`,
+      code: null,
+    });
+  });
+
+  it("says so when the worktree's folder is gone, instead of blaming its .git link", async () => {
+    const pr = prRepo();
+    const { dir, inTree } = await worktreeOf(pr);
+    rmSync(dir, { recursive: true });
+    await expect(safeGit(inTree, ['status'])).rejects.toMatchObject({
+      name: 'SafeGitError',
+      message: `${dir} doesn't exist (moved or deleted?)`,
+      code: null,
+    });
+  });
+
   it('passes ; and $(…) through as plain text, never to a shell', async () => {
     const pr = prRepo();
     const { inTree } = await worktreeOf(pr);
@@ -118,6 +151,15 @@ describe('safeGit', () => {
     const failed = await safeGit(inTree, ['rev-parse', '--verify', 'no-such-branch']).catch((err: unknown) => err);
     expect(failed).toBeInstanceOf(SafeGitError);
     expect(failed).toMatchObject({ code: 128, message: 'git rev-parse failed: fatal: Needed a single revision' });
+  });
+
+  it("puts git's error line in the message when a push is rejected, not the line before it", async () => {
+    const pr = prRepo();
+    const { inTree } = await worktreeOf(pr);
+    pr.pushAsHuman({ 'src/orders.ts': 'export const pageSize = 100;\n' });
+    const failed = await safeGit(inTree, ['push', pr.base, `HEAD:refs/heads/${pr.bundle.git.headBranch}`]).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(SafeGitError);
+    expect((failed as SafeGitError).message).toMatch(/^git push failed: error: failed to push some refs/);
   });
 
   it('refuses worktree commands in a place with no worktree, instead of using the git folder as one', async () => {
@@ -188,5 +230,20 @@ describe('emptyHooksDir', () => {
     writeFileSync(join(dir, 'pre-commit'), '#!/bin/sh\n');
     expect(emptyHooksDir(configDir)).toBe(dir);
     expect(existsSync(join(dir, 'pre-commit'))).toBe(false);
+  });
+
+  it('replaces a no-hooks symlink or file with a real folder, without emptying where the link pointed', () => {
+    const configDir = tempDir();
+    const elsewhere = tempDir();
+    writeFileSync(join(elsewhere, 'keep.txt'), 'keep');
+    symlinkSync(elsewhere, join(configDir, 'no-hooks'));
+    const dir = emptyHooksDir(configDir);
+    expect(lstatSync(dir).isDirectory()).toBe(true); // lstat does not follow links: a real folder, not a link to one
+    expect(readdirSync(dir)).toEqual([]);
+    expect(readFileSync(join(elsewhere, 'keep.txt'), 'utf8')).toBe('keep');
+
+    const otherConfigDir = tempDir();
+    writeFileSync(join(otherConfigDir, 'no-hooks'), 'not a folder');
+    expect(lstatSync(emptyHooksDir(otherConfigDir)).isDirectory()).toBe(true);
   });
 });
