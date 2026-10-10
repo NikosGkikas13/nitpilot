@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { BRAND, type AgentId } from '@nitpilot/protocol';
 import { loadConfig, type PersonalConfig } from '../config/config';
 import { githubReposInRemoteList } from '../git/remotes';
@@ -19,10 +19,12 @@ export type DoctorDeps = {
   loadConfig(): PersonalConfig;
   client(config: PersonalConfig): Pick<ServerClient, 'health' | 'me'>;
   detectAgent(id: AgentId): Promise<AgentCheck>;
-  exists(path: string): boolean;
+  isFolder(path: string): boolean;
 };
 
 const MIN_NODE = 22;
+/** Every program and network check gets 10 s, so a hung one can't hang doctor. */
+const CHECK_TIMEOUT_MS = 10_000;
 
 /** `nitpilot doctor` (spec §11, §22): can this machine run jobs? One check per line, in a fixed order. */
 export async function runDoctor(deps: DoctorDeps): Promise<Check[]> {
@@ -64,7 +66,7 @@ async function checkGit(deps: DoctorDeps): Promise<Check> {
 
 async function checkServer(client: Pick<ServerClient, 'health'>, server: string): Promise<Check> {
   try {
-    const health = await client.health();
+    const health = await client.health({ signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
     return { name: 'Server', status: 'ok', detail: `${server} (version ${health.version})` };
   } catch (err) {
     return { name: 'Server', status: 'fail', detail: (err as Error).message };
@@ -74,7 +76,7 @@ async function checkServer(client: Pick<ServerClient, 'health'>, server: string)
 async function checkAccount(client: Pick<ServerClient, 'me'>, config: PersonalConfig): Promise<Check[]> {
   if (!config.token) return [{ name: 'Account', status: 'fail', detail: `Not logged in. Run \`${BRAND.cli} login\`.` }];
   try {
-    const me = await client.me();
+    const me = await client.me({ signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
     const access: Check =
       me.githubAuth === 'ok'
         ? { name: 'GitHub access', status: 'ok', detail: `${BRAND.name} can post in your name` }
@@ -93,14 +95,21 @@ async function checkAgent(deps: DoctorDeps, id: AgentId): Promise<Check> {
 
 async function checkRepo(deps: DoctorDeps, name: string, path: string): Promise<Check> {
   const result = (status: Check['status'], detail: string): Check => ({ name: `Repo ${name}`, status, detail });
-  if (!deps.exists(path)) return result('fail', `${path} doesn't exist. Link the clone again: ${BRAND.cli} repos add <path>`);
+  if (!deps.isFolder(path)) return result('fail', `${path} doesn't exist or isn't a folder. Link the clone again: ${BRAND.cli} repos add <path>`);
   const remotes = await deps.run('git', ['-C', path, 'remote', '-v']);
+  // Git ran but failed (not a clone any more, git broken): show git's own words.
+  if (remotes.code !== 0) return result('fail', firstLine(remotes.stderr) ?? `git couldn't list the remotes of ${path}`);
   if (!githubReposInRemoteList(remotes.stdout).includes(name)) return result('fail', `no remote in ${path} points at ${name}`);
-  const signing = await deps.run('git', ['-C', path, 'config', '--get', 'commit.gpgsign']);
+  // --type=bool makes git turn yes/on/1 into true itself (git 2.18+; an older git errors and we skip the warning).
+  const signing = await deps.run('git', ['-C', path, 'config', '--get', '--type=bool', 'commit.gpgsign']);
   if (signing.stdout.trim() === 'true') {
     return result('warn', 'commit.gpgsign is on: a passphrase prompt would stall address jobs until they time out');
   }
   return result('ok', path);
+}
+
+function firstLine(text: string): string | undefined {
+  return text.split('\n').find((line) => line.trim() !== '')?.trim();
 }
 
 const MARK: Record<Check['status'], string> = { ok: '✓', warn: '!', fail: '✗' };
@@ -134,10 +143,10 @@ export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<A
   return { ok: false, problem: `\`${binary}\` is not installed (or not on your PATH)` };
 }
 
-/** Run a program without a shell. Never throws: a missing program, or one past the 10 s timeout, gives code null. */
-function runProgram(file: string, args: string[]): Promise<RunResult> {
+/** Run a program without a shell. Never throws: a missing program, or one past the timeout, gives code null. */
+export function runProgram(file: string, args: string[]): Promise<RunResult> {
   return new Promise((resolve) =>
-    execFile(file, args, { timeout: 10_000 }, (err, stdout, stderr) =>
+    execFile(file, args, { timeout: CHECK_TIMEOUT_MS }, (err, stdout, stderr) =>
       resolve({ code: err ? (typeof err.code === 'number' ? err.code : null) : 0, stdout, stderr: stderr || (err?.message ?? '') }),
     ),
   );
@@ -154,7 +163,7 @@ export async function doctor(deps: { env?: Record<string, string | undefined>; o
     loadConfig: () => loadConfig({ env }),
     client: (config) => new ServerClient(config.server, config.token),
     detectAgent: (id) => probeAgent(id, runProgram),
-    exists: existsSync,
+    isFolder: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
   });
   return printChecks(checks, out);
 }

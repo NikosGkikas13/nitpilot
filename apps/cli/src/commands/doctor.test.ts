@@ -1,9 +1,10 @@
+import { BRAND } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { recordOut } from '../../test/out';
 import { PersonalConfigSchema } from '../config/config';
 import { CliError } from '../errors';
 import { ServerError } from '../http';
-import { printChecks, probeAgent, runDoctor, type Check, type DoctorDeps, type RunResult } from './doctor';
+import { printChecks, probeAgent, runDoctor, runProgram, type Check, type DoctorDeps, type RunResult } from './doctor';
 
 const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' });
 const missing: RunResult = { code: null, stdout: '', stderr: 'spawn ENOENT' };
@@ -32,7 +33,7 @@ function healthy(over: Partial<DoctorDeps> = {}): DoctorDeps {
     loadConfig: () => PersonalConfigSchema.parse({ server: 'https://nitpilot.test', token: 'nit_abc', repos: { 'acme/shop-api': { path: '/code/shop-api' } } }),
     client: () => server,
     detectAgent: async () => ({ ok: true, version: '2.1.29 (Claude Code)' }),
-    exists: () => true,
+    isFolder: () => true,
     ...over,
   };
 }
@@ -53,6 +54,8 @@ describe('runDoctor', () => {
       ['Agent', 'ok'],
       ['Repo acme/shop-api', 'ok'],
     ]);
+    expect(find(checks, 'GitHub access')?.detail).toBe(`${BRAND.name} can post in your name`);
+    expect(find(checks, 'Agent')?.detail).toBe('claude-code 2.1.29 (Claude Code)');
   });
 
   it('fails on a Node older than 22', async () => {
@@ -88,6 +91,23 @@ describe('runDoctor', () => {
     expect(find(checks, 'Account')).toBeUndefined();
   });
 
+  it('gives both network checks a deadline, so a silent server cannot hang doctor', async () => {
+    const signals: Record<string, AbortSignal | undefined> = {};
+    const recording = {
+      health: async (opts?: { signal?: AbortSignal }) => {
+        signals.health = opts?.signal;
+        return { ok: true, version: '0.1.0' };
+      },
+      me: async (opts?: { signal?: AbortSignal }) => {
+        signals.me = opts?.signal;
+        return { login: 'maya', avatarUrl: null, githubAuth: 'ok' as const };
+      },
+    };
+    await runDoctor(healthy({ client: () => recording }));
+    expect(signals.health).toBeInstanceOf(AbortSignal);
+    expect(signals.me).toBeInstanceOf(AbortSignal);
+  });
+
   it('fails when not logged in', async () => {
     const config = PersonalConfigSchema.parse({ server: 'https://nitpilot.test' });
     expect(find(await runDoctor(healthy({ loadConfig: () => config })), 'Account')).toMatchObject({ status: 'fail', detail: 'Not logged in. Run `nitpilot login`.' });
@@ -114,10 +134,23 @@ describe('runDoctor', () => {
   });
 
   it("fails when a linked clone's folder is gone", async () => {
-    expect(find(await runDoctor(healthy({ exists: () => false })), 'Repo acme/shop-api')).toMatchObject({
+    expect(find(await runDoctor(healthy({ isFolder: () => false })), 'Repo acme/shop-api')).toMatchObject({
       status: 'fail',
-      detail: expect.stringContaining("/code/shop-api doesn't exist"),
+      detail: expect.stringContaining("/code/shop-api doesn't exist or isn't a folder"),
     });
+  });
+
+  it("reports git's own error when the clone's remotes can't be read", async () => {
+    const remotes = 'git -C /code/shop-api remote -v';
+    const notAClone: RunResult = { code: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' };
+    expect(find(await runDoctor(healthy({ run: fakeRun({ ...GIT, [remotes]: notAClone }) })), 'Repo acme/shop-api')).toEqual({
+      name: 'Repo acme/shop-api',
+      status: 'fail',
+      detail: 'fatal: not a git repository (or any of the parent directories): .git',
+    });
+    // git said nothing: a short text of our own
+    const silent = fakeRun({ ...GIT, [remotes]: { code: 1, stdout: '', stderr: '' } });
+    expect(find(await runDoctor(healthy({ run: silent })), 'Repo acme/shop-api')).toMatchObject({ status: 'fail', detail: expect.stringContaining("git couldn't list the remotes of /code/shop-api") });
   });
 
   it("fails when a linked clone's remotes point elsewhere", async () => {
@@ -126,7 +159,7 @@ describe('runDoctor', () => {
   });
 
   it('warns when commit signing could stall a job on a passphrase prompt', async () => {
-    const run = fakeRun({ ...GIT, 'git -C /code/shop-api config --get commit.gpgsign': ok('true\n') });
+    const run = fakeRun({ ...GIT, 'git -C /code/shop-api config --get --type=bool commit.gpgsign': ok('true\n') });
     expect(find(await runDoctor(healthy({ run })), 'Repo acme/shop-api')).toMatchObject({ status: 'warn', detail: expect.stringContaining('commit.gpgsign') });
   });
 });
@@ -148,6 +181,31 @@ describe('printChecks', () => {
     ];
     expect(printChecks(checks, out)).toBe(0);
     expect(out.lines).toEqual(['✓ Node: v22.12.0', '! Platform: Windows', '', 'Ready, with warnings above.']);
-    expect(printChecks([{ name: 'git', status: 'fail', detail: 'missing' }], recordOut())).toBe(1);
+
+    // failures are counted, with the right plural
+    const git: Check = { name: 'git', status: 'fail', detail: 'missing' };
+    const node: Check = { name: 'Node', status: 'fail', detail: 'v20' };
+    const one = recordOut();
+    expect(printChecks([git], one)).toBe(1);
+    expect(one.lines).toEqual(['✗ git: missing', '', '1 problem to fix.']);
+    const two = recordOut();
+    expect(printChecks([git, node], two)).toBe(1);
+    expect(two.lines.at(-1)).toBe('2 problems to fix.');
+  });
+});
+
+describe('runProgram', () => {
+  it('runs a real program and gives what it printed', async () => {
+    expect(await runProgram(process.execPath, ['-e', "process.stdout.write('hi')"])).toMatchObject({ code: 0, stdout: 'hi' });
+  });
+
+  it('gives the exit code of a program that ran and failed', async () => {
+    expect(await runProgram(process.execPath, ['-e', 'process.exit(3)'])).toMatchObject({ code: 3 });
+  });
+
+  it('gives code null, not an exception, when the program does not exist', async () => {
+    const r = await runProgram('nitpilot-no-such-program', []);
+    expect(r.code).toBeNull();
+    expect(r.stderr).toContain('ENOENT');
   });
 });

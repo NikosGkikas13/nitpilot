@@ -24,9 +24,9 @@ export class ServerClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  /** Is the server up, and which version? No token needed. */
-  health() {
-    return this.call('GET', '/healthz', HealthResponse);
+  /** Is the server up, and which version? No token needed. `signal` lets the caller give up on a slow answer. */
+  health(opts: { signal?: AbortSignal } = {}) {
+    return this.call('GET', '/healthz', HealthResponse, { signal: opts.signal });
   }
 
   /** `nitpilot login`, step 1: a code for the person and a secret for this device. */

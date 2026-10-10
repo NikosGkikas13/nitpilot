@@ -74,4 +74,11 @@ describe('ServerClient', () => {
     expect(await new ServerClient(SERVER, null, fetch).health()).toEqual({ ok: true, version: '0.1.0' });
     expect(fetch.calls[0]!.url.pathname).toBe('/healthz');
   });
+
+  it("hands the caller's signal to fetch, so a silent server can be given up on", async () => {
+    const fetch = fakeFetch(() => json({ ok: true, version: '0.1.0' }));
+    const { signal } = new AbortController();
+    await new ServerClient(SERVER, null, fetch).health({ signal });
+    expect(fetch.calls[0]!.init.signal).toBe(signal);
+  });
 });
