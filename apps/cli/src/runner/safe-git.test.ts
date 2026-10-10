@@ -5,9 +5,16 @@ import { CANARY_HOOK, prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
 import { emptyHooksDir, linkedGitDir, safeGit, safeGitArgs, safeGitEnv, SafeGitError, type GitPlace } from './safe-git';
 
+type PrRepo = ReturnType<typeof prRepo>;
+
+/** The person's clone of a PR repo, as a place with no worktree (for fetch, worktree add, refs). */
+function clonePlace(pr: PrRepo): GitPlace {
+  return { gitDir: join(pr.clone, '.git'), hooksDir: emptyHooksDir(tempDir()), env: pr.env };
+}
+
 /** The person's clone of a PR repo, and a linked worktree of it at the PR's head, made with safeGit. */
-async function worktreeOf(pr: ReturnType<typeof prRepo>) {
-  const clone: GitPlace = { gitDir: join(pr.clone, '.git'), hooksDir: emptyHooksDir(tempDir()), env: pr.env };
+async function worktreeOf(pr: PrRepo) {
+  const clone = clonePlace(pr);
   await safeGit(clone, ['fetch', '-q', pr.base, pr.bundle.git.fetchRef]);
   const dir = join(pr.root, 'worktree');
   await safeGit(clone, ['worktree', 'add', '--detach', dir, pr.headSha]);
@@ -28,6 +35,17 @@ describe('safeGitArgs and safeGitEnv', () => {
     ]);
   });
 
+  it('adds --bare when there is no worktree, so git never treats the git folder as one', () => {
+    expect(safeGitArgs({ gitDir: '/code/shop-api/.git', hooksDir: '/cfg/no-hooks' }, ['fetch'])).toEqual([
+      '-c', 'core.hooksPath=/cfg/no-hooks',
+      '-c', 'core.symlinks=false',
+      '-c', 'core.fsmonitor=false',
+      '-c', 'submodule.recurse=false',
+      '--bare',
+      'fetch',
+    ]);
+  });
+
   it('passes only allowlisted variables, names the place, and never prompts', () => {
     const env = safeGitEnv({
       ...place,
@@ -40,12 +58,12 @@ describe('safeGitArgs and safeGitEnv', () => {
       GIT_DIR: '/code/shop-api/.git/worktrees/w',
       GIT_WORK_TREE: '/tmp/w',
       GIT_TERMINAL_PROMPT: '0',
-      GIT_SSH_COMMAND: 'ssh -o BatchMode=yes',
     });
   });
 
-  it('keeps your own GIT_SSH_COMMAND', () => {
+  it('keeps your own GIT_SSH_COMMAND and GIT_SSH', () => {
     expect(safeGitEnv({ ...place, env: { GIT_SSH_COMMAND: 'ssh -i ~/.ssh/work' } }).GIT_SSH_COMMAND).toBe('ssh -i ~/.ssh/work');
+    expect(safeGitEnv({ ...place, env: { GIT_SSH: '/usr/local/bin/my-ssh' } }).GIT_SSH).toBe('/usr/local/bin/my-ssh');
   });
 });
 
@@ -102,10 +120,63 @@ describe('safeGit', () => {
     expect(failed).toMatchObject({ code: 128, message: 'git rev-parse failed: fatal: Needed a single revision' });
   });
 
+  it('refuses worktree commands in a place with no worktree, instead of using the git folder as one', async () => {
+    const pr = prRepo();
+    await expect(safeGit(clonePlace(pr), ['checkout', 'HEAD', '--', '.'])).rejects.toThrow(/work tree/);
+    expect(existsSync(join(pr.clone, '.git', 'README.md'))).toBe(false);
+  });
+
   it('stops git when the job is cancelled', async () => {
     const pr = prRepo();
     const { inTree } = await worktreeOf(pr);
     await expect(safeGit({ ...inTree, signal: AbortSignal.abort() }, ['status'])).rejects.toThrow('git status was stopped');
+  });
+});
+
+describe('safeGit and ssh', () => {
+  const remote = 'ssh://git@example.invalid/acme/shop-api.git';
+
+  /** Fake ssh programs in a folder: each writes its arguments to `<name>-args` in the sandbox's HOME, then fails. No network. */
+  function fakeSsh(pr: PrRepo, ...names: string[]): string {
+    const bin = join(pr.root, 'bin');
+    pr.write(bin, Object.fromEntries(names.map((name) => [name, { script: `#!/bin/sh\necho "$@" >> "$HOME/${name}-args"\nexit 1\n` }])));
+    return bin;
+  }
+  /** What the fake `name` was called with, or null if it never ran. */
+  function calledWith(pr: PrRepo, name: string): string | null {
+    const file = join(pr.home, `${name}-args`);
+    return existsSync(file) ? readFileSync(file, 'utf8') : null;
+  }
+
+  it('adds BatchMode=yes to ssh, so it never waits for a passphrase', async () => {
+    const pr = prRepo();
+    const bin = fakeSsh(pr, 'ssh');
+    const clone = { ...clonePlace(pr), env: { ...pr.env, PATH: `${bin}:${pr.env.PATH}` } };
+    await expect(safeGit(clone, ['fetch', remote])).rejects.toBeInstanceOf(SafeGitError);
+    expect(calledWith(pr, 'ssh')).toContain('-o BatchMode=yes');
+  });
+
+  it("keeps the clone's own core.sshCommand (two GitHub accounts, two keys) and adds BatchMode=yes to it", async () => {
+    const pr = prRepo();
+    pr.git(pr.clone, 'config', 'core.sshCommand', 'work-ssh -i /keys/id_work');
+    const bin = fakeSsh(pr, 'ssh', 'work-ssh');
+    const clone = { ...clonePlace(pr), env: { ...pr.env, PATH: `${bin}:${pr.env.PATH}` } };
+    await expect(safeGit(clone, ['fetch', remote])).rejects.toBeInstanceOf(SafeGitError);
+    expect(calledWith(pr, 'work-ssh')).toContain('-i /keys/id_work -o BatchMode=yes');
+    expect(calledWith(pr, 'ssh')).toBeNull();
+  });
+
+  it.each([
+    ['GIT_SSH_COMMAND', 'my-ssh -i /keys/id_work'],
+    ['GIT_SSH', 'my-ssh'],
+  ])('leaves ssh alone when you set %s yourself', async (name, value) => {
+    const pr = prRepo();
+    const bin = fakeSsh(pr, 'ssh', 'my-ssh');
+    const clone = { ...clonePlace(pr), env: { ...pr.env, PATH: `${bin}:${pr.env.PATH}`, [name]: value } };
+    await expect(safeGit(clone, ['fetch', remote])).rejects.toBeInstanceOf(SafeGitError);
+    expect(calledWith(pr, 'my-ssh')).not.toBeNull();
+    expect(calledWith(pr, 'my-ssh')).not.toContain('BatchMode');
+    expect(calledWith(pr, 'ssh')).toBeNull();
   });
 });
 

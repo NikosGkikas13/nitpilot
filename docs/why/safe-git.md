@@ -15,9 +15,9 @@ A PR is files someone else wrote. Most of git just copies files around, but a fe
 - `-c core.hooksPath=<an empty folder>`: settings given on the command line beat the ones in config files, so git looks for hooks in a folder with nothing in it (`<config dir>/no-hooks`, emptied every time). No hook runs, whoever put it where.
 - `-c core.symlinks=false`: a symlink checks out as a small text file holding the link's target, never a real link.
 - `-c core.fsmonitor=false` and `-c submodule.recurse=false`.
-- `GIT_DIR` and `GIT_WORK_TREE` are set explicitly, so git never searches for a repo by walking up folders.
+- `GIT_DIR` and `GIT_WORK_TREE` are set explicitly, so git never searches for a repo by walking up folders. When a command has no worktree (`fetch`, `worktree add`), it runs with `--bare`: otherwise git would treat the `.git` folder itself as the project and, say, a `checkout` would write files into it.
 - **An allowlisted environment:** git gets `PATH`, `HOME`, your SSH agent and a few more (`ENV_ALLOWLIST`), never the tokens in your shell (`GITHUB_TOKEN`, `AWS_*`, …).
-- **No prompts:** `GIT_TERMINAL_PROMPT=0`, and `ssh -o BatchMode=yes` unless you set your own `GIT_SSH_COMMAND`, make git fail instead of waiting for a password nobody will type.
+- **No prompts:** `GIT_TERMINAL_PROMPT=0` for git itself, and `-o BatchMode=yes` for ssh, make git fail instead of waiting for a password nobody will type. If your clone says which key to use (`git config core.sshCommand "ssh -i ~/.ssh/id_work"`), `safeGit()` keeps that and adds `-o BatchMode=yes` to it. If you set `GIT_SSH_COMMAND` or `GIT_SSH` yourself, it leaves ssh alone.
 - **The `.git` link is checked.** A worktree's `.git` is a one-line file saying where its git data lives (docs/why/git-worktrees.md). An agent that can edit files could rewrite it, so `safeGit()` refuses to run in a worktree whose link changed. It also refuses a real clone (a `.git` folder): it only works in worktrees the CLI made, which is how your own folder stays untouched.
 
 Arguments still go to `execFile` as a list (docs/why/child-processes.md), so a branch name with `;` or `$(…)` in it is just text.

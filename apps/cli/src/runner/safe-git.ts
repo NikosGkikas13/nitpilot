@@ -9,7 +9,10 @@ import { join, resolve } from 'node:path';
 export type GitPlace = {
   /** The clone's git directory, or a linked worktree's own (<clone>/.git/worktrees/<name>). */
   gitDir: string;
-  /** The linked worktree to work in. Left out for commands that only touch refs and objects (fetch, worktree add). */
+  /**
+   * The linked worktree to work in. Left out for commands that only touch refs and objects (fetch,
+   * worktree add): those run with `--bare`, so git never treats the git directory itself as a worktree.
+   */
   workTree?: string;
   /** An empty folder for core.hooksPath, so no hook runs (see emptyHooksDir). */
   hooksDir: string;
@@ -38,7 +41,7 @@ export class SafeGitError extends Error {
 /** The only variables git gets from our environment: enough to find programs, the person's git config and SSH keys. */
 const ENV_ALLOWLIST = [
   'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'XDG_CONFIG_HOME',
-  'SSH_AUTH_SOCK', 'GIT_SSH_COMMAND', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy',
+  'SSH_AUTH_SOCK', 'GIT_SSH_COMMAND', 'GIT_SSH', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy',
 ];
 
 /** A slow fetch of a big repo is fine; a git that hangs forever is not. */
@@ -46,13 +49,16 @@ const GIT_TIMEOUT_MS = 10 * 60_000;
 /** `git show` of a big file or `git ls-files` of a big repo can print a lot. */
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
-/** The arguments git gets: the four safety settings first, then the command. */
+/** The arguments git gets: the four safety settings first, then `--bare` if there's no worktree, then the command. */
 export function safeGitArgs(place: GitPlace, args: string[]): string[] {
   return [
     '-c', `core.hooksPath=${place.hooksDir}`, // no hook runs: not the repo's, not husky's, not one a relative path points at
     '-c', 'core.symlinks=false', // a symlink in the PR checks out as a small text file, never a link to your secrets
     '-c', 'core.fsmonitor=false', // fsmonitor would start a program named in the config
     '-c', 'submodule.recurse=false', // never reach into other repos
+    // With GIT_DIR set and no GIT_WORK_TREE, git would treat the git folder itself as the worktree
+    // (`checkout` would write files into `.git`). `--bare` makes it refuse worktree commands instead.
+    ...(place.workTree ? [] : ['--bare']),
     ...args,
   ];
 }
@@ -67,9 +73,8 @@ export function safeGitEnv(place: GitPlace): Record<string, string> {
   }
   env.GIT_DIR = place.gitDir;
   if (place.workTree) env.GIT_WORK_TREE = place.workTree;
-  // Never wait for a password: fail instead. SSH gets the same rule unless you set your own GIT_SSH_COMMAND.
+  // Never wait for a password: fail instead. (ssh gets the same rule in safeGit, see sshCommandWithBatchMode.)
   env.GIT_TERMINAL_PROMPT = '0';
-  env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes';
   return env;
 }
 
@@ -78,19 +83,41 @@ export function safeGitEnv(place: GitPlace): Record<string, string> {
  * allowlisted environment. In a worktree it first checks the worktree's `.git` link wasn't changed.
  * Resolves with the output; rejects with SafeGitError when git fails. See docs/why/safe-git.md.
  */
-export function safeGit(place: GitPlace, args: string[]): Promise<GitResult> {
+export async function safeGit(place: GitPlace, args: string[]): Promise<GitResult> {
   if (place.workTree && linkedGitDirOrNull(place.workTree) !== resolve(place.gitDir)) {
     // An agent that can edit files could repoint `.git`. GIT_DIR keeps git from following it anyway,
     // but a changed link means something tried, so stop. A real clone (a `.git` folder) is never a worktree here.
     const message = `${join(place.workTree, '.git')} was changed: refusing to run git there`;
-    return Promise.reject(new SafeGitError(message, args, null, '', ''));
+    throw new SafeGitError(message, args, null, '', '');
   }
-  const options = { cwd: place.workTree ?? place.gitDir, env: safeGitEnv(place), signal: place.signal, timeout: GIT_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES };
+  const env = safeGitEnv(place);
+  if (env.GIT_SSH_COMMAND === undefined && env.GIT_SSH === undefined) env.GIT_SSH_COMMAND = await sshCommandWithBatchMode(place, env, args);
+  return runGit(place, args, env, args);
+}
+
+/**
+ * Respects the person's own key setup (`core.sshCommand`, e.g. `ssh -i ~/.ssh/id_work`) and still
+ * stops ssh from ever waiting for a passphrase: their command, plus `-o BatchMode=yes`.
+ */
+async function sshCommandWithBatchMode(place: GitPlace, env: Record<string, string>, asked: string[]): Promise<string> {
+  const configured = await runGit(place, ['config', '--get', 'core.sshCommand'], env, asked).then(
+    (result) => result.stdout.trim(),
+    (err: unknown) => {
+      if (err instanceof SafeGitError && err.code === 1) return ''; // exit code 1: core.sshCommand isn't set
+      throw err;
+    },
+  );
+  return `${configured || 'ssh'} -o BatchMode=yes`;
+}
+
+/** Start git. `asked` is the command the caller wanted, so a failure in a helper command is reported under that name. */
+function runGit(place: GitPlace, gitArgs: string[], env: Record<string, string>, asked: string[]): Promise<GitResult> {
+  const options = { cwd: place.workTree ?? place.gitDir, env, signal: place.signal, timeout: GIT_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES };
   return new Promise((done, fail) => {
-    execFile('git', safeGitArgs(place, args), options, (err, stdout, stderr) => {
+    execFile('git', safeGitArgs(place, gitArgs), options, (err, stdout, stderr) => {
       if (!err) return done({ stdout, stderr });
       const code = typeof err.code === 'number' ? err.code : null;
-      fail(new SafeGitError(describeFailure(args, err, stderr), args, code, stdout, stderr));
+      fail(new SafeGitError(describeFailure(asked, err, stderr), asked, code, stdout, stderr));
     });
   });
 }
