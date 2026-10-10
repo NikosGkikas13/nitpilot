@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: M6 at step level; M7–M13 at task level.** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). "Checked against Plan 1a's code" below lists where it differs from the earlier task-level text. M7–M13 still fix only the tasks, files, interfaces and tests; their step-level code is written one milestone at a time, against the code that exists by then. Nobody executes a task that is still at task level.
+> **Status: M6 and M7 at step level; M8–M13 at task level.** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). M7 (Tasks 5–8) was written the same way on 2026-10-10, against the branch after M6 (`f2dc50f`). "Checked against Plan 1a's code (M6)" and "Checked against the code (M7)" below list where each differs from the earlier task-level text. M8–M13 still fix only the tasks, files, interfaces and tests; their step-level code is written one milestone at a time, against the code that exists by then. Nobody executes a task that is still at task level.
 
 **Goal:** Connect each developer's own agent to the Plan 1a server: a CLI daemon that receives jobs over a WebSocket, runs Claude Code or Gemini CLI safely in an isolated git worktree with a local MCP server, pushes fixes, and reports results. Then prove it end to end and with the live acceptance test from spec §20.
 
@@ -80,6 +80,24 @@ Where step-level M6 differs from the earlier task-level text, and why:
 - **`job.progress` isn't kept in memory.** Nothing shows it in Plan 1; Plan 2 forwards it to the web app.
 - **Our own push moves the head.** When an address result reports its push and the chat's head is still `push.from`, the engine moves the head to `push.to` at once, so the re-review isn't assigned on the old head while GitHub's webhook is on its way (spec §9.4 updated).
 - **A token check on every message** (`touchCliToken`) catches a token revoked while connected and keeps `CliToken.lastSeenAt` fresh for "offline since…" (Task 22). The hub looks up the login itself; `CliAuth` is unchanged.
+
+## Checked against the code (M7)
+
+M7 was written at step level on 2026-10-10, against branch `plan-1b-cli-and-agents` after M6 (`f2dc50f`). Where it differs from the earlier task-level text, and why:
+
+- **`apps/cli` already exists as a stub** (`package.json`, `tsconfig.json`, `src/version.ts`); Task 5 fills it in. `@nitpilot/protocol` moves to `devDependencies`: it's private, and tsup bundles it (with zod) into `dist/index.js`, so the published package has no dependencies at all.
+- **A command table instead of a `parseArgs` dispatcher.** `src/cli.ts` holds `COMMANDS` and `runCli(argv, out)`, which returns the exit code, so tests run commands without a process. Commands print through an `Out` and take their dependencies (environment, `fetch`, `sleep`, `open`) as optional parameters.
+- **The samples' own entry is a package `exports` subpath,** `@nitpilot/protocol/test-samples`. The failing test lives in the protocol package (`samples` is gone from the main entry); the bundle check only confirms it, because esbuild would drop unused samples anyway.
+- **CLI tests never need Postgres.** `login`, `status` and `retry` are tested against a stub server (`test/stub-server.ts`) that answers in the protocol's shapes. The real handshake is covered by the server's own `cli.db.test.ts`, and Task 18 runs the CLI against the real server end to end.
+- **The retry endpoint needs the dispatcher,** so `AppDeps` gains `dispatch`. It retries only when the person's role is flagged `failed` *and* its newest job failed: the flag a failed GitHub write leaves (`write_failed`) is fixed by signing in again. The engine's `retry_requested` starts a reviewer's review as if by hand (so an outside contributor's PR doesn't block it) and lets `advance` queue the author's address pass.
+- **The login rate limit counts by the socket's address.** Behind a reverse proxy (Plan 3) that's the proxy's; Plan 3 must read `X-Forwarded-For` from its own proxy.
+- **`repos add` links every GitHub remote of a clone** (`origin` and `upstream`), so a fork clone also serves jobs for the base repo. Names are stored as the remote spells them, and the server compares them exactly with GitHub's spelling, so a remote typed in another letter case won't match (rare: clone URLs copied from GitHub use its spelling).
+- **No agent adapter exists until Task 16.** `nitpilot start` declares `modes: []`, so the assigner gives it no jobs; it still connects, pings and shows notifications. Task 17 wires the real executor and the adapter's `detect()`. Likewise, `doctor`'s agent check only asks the binary for `--version` (`probeAgent`) until the adapters' `detect()` can check the login too.
+- **The daemon notices a dead socket itself.** A laptop back from sleep can hold a socket that looks open; when nothing (not even a pong) arrives for about two ping intervals, the daemon drops it and reconnects. Task 3's ledger noted the server skips a pong when a database read fails; that costs at most one needless reconnect.
+- **A refused upgrade looks like a network error** to a WebSocket client, so after a connection that never opened, the daemon asks `GET /api/me`; a 401 there stops it with "log in again" instead of retrying forever.
+- **Daemon tests use real sockets with short, injected timings** (`pingEveryMs`, `silentMs`, a fast `Backoff`) instead of fake timers, which don't mix reliably with real sockets. The backoff sequence and its jitter bounds are unit-tested on `Backoff` itself.
+- **Desktop notifications pass the text as an argument** (`osascript -e 'on run argv' …`, `notify-send`), never inside a script, so a PR title can't become AppleScript.
+- **`jobTimeoutMinutes` isn't enforced by the daemon.** Task 16's `runAgent` kills the agent at the timeout; the daemon only runs the executor.
 
 ## How to work in this repo
 
@@ -2868,118 +2886,3552 @@ Add a `Task 4 live check:` line to the ledger with the PR number, the comment's 
 
 ## Milestone M7: CLI commands
 
+M7 turns `apps/cli` from a stub into the `nitpilot` command: the personal config file and a typed client for the server's REST API (Task 5); `login`, `status`, `repos add` and `retry`, plus the server endpoints they still lack (Task 6); `start`, the daemon that keeps one WebSocket open and runs jobs (Task 7); and `doctor` (Task 8). Agents don't exist yet (M10–M11), so `nitpilot start` declares no agent modes: the server hands it no jobs, but it connects, pings and shows notifications. Task 17 plugs the real executor in.
+
+**Files at the end of M7:**
+```
+packages/protocol/package.json         + "./test-samples" export (samples leave the main entry)
+packages/protocol/src/api.ts           + RetryResponse, HealthResponse
+apps/cli/
+  package.json, tsconfig.json, vitest.config.ts, tsup.config.ts
+  src/index.ts           the `nitpilot` binary (calls runCli)
+  src/cli.ts             runCli, COMMANDS, usage
+  src/errors.ts          CliError
+  src/out.ts             Out (where commands print)
+  src/config/config.ts   PersonalConfigSchema, configDir, loadConfig, loadConfigFile, saveConfig
+  src/http.ts            ServerClient, ServerError
+  src/git/remotes.ts     parseGithubRemote, gitTopLevel, githubReposIn
+  src/commands/          login.ts, status.ts, repos.ts, retry.ts, start.ts, doctor.ts
+  src/connection/        backoff.ts (Backoff), ws-client.ts (openSocket)
+  src/daemon.ts          startDaemon, JobExecutor, JobOutcome, JobIo
+  src/state.ts           DailyJobCounter
+  src/notify-os.ts       notifyOs
+  test/                  out.ts, temp.ts, stub-server.ts, stub-hub.ts, build.test.ts
+apps/server/src/
+  lib/rate-limit.ts      RateLimiter
+  http/routes/cli.ts     + POST /api/chats/:id/retry, login starts rate-limited
+  ingest/record.ts       purgeOldRows also deletes old CLI login requests
+  engine/results.ts      + onRetryRequested
+docs/why/cli-config.md (new); docs/why/cli-login.md, docs/why/websockets.md (new sections)
+```
+
 ### Task 5: CLI skeleton, personal config, server client and build
 
 **Files:**
-- Create:
-  - `apps/cli/src/index.ts` (the `nitpilot <command>` dispatcher using `node:util` `parseArgs`);
-  - `apps/cli/src/config/config.ts` and `apps/cli/src/config/config.test.ts`;
-  - `apps/cli/src/http.ts`;
-  - `apps/cli/vitest.config.ts` and `apps/cli/tsup.config.ts`.
-- Modify: `apps/cli/package.json`:
-  - `bin: { nitpilot: dist/index.js }`, `files: [dist]`, `engines.node >=22`;
-  - `publishConfig.access: public`;
-  - scripts `build`, `test`, `typecheck`, `dev`.
-- Modify: `packages/protocol/src/index.ts` and `packages/protocol/package.json`: the test samples move to a separate `@nitpilot/protocol/test-samples` export, so the CLI bundle doesn't ship them (Plan 1a deferred minor M8). Update the server tests that import `samples`.
-- Port: `~/Desktop/PracticeProjects/hooksmith/cli/src/config.ts`.
+- Create: `packages/protocol/src/index.test.ts`
+- Modify: `packages/protocol/package.json`, `packages/protocol/src/index.ts` (the test samples get their own entry, Plan 1a deferred minor M8)
+- Modify: `apps/server/src/chats/dispatch.db.test.ts`, `apps/server/src/jobs/bundle.db.test.ts`, `apps/server/src/ws/handlers.db.test.ts` (import the samples from the new entry)
+- Modify: `apps/cli/package.json`, `apps/cli/tsconfig.json`
+- Create: `apps/cli/vitest.config.ts`, `apps/cli/tsup.config.ts`
+- Create: `apps/cli/src/index.ts`, `apps/cli/src/cli.ts`, `apps/cli/src/errors.ts`, `apps/cli/src/out.ts`, `apps/cli/src/config/config.ts`, `apps/cli/src/http.ts`
+- Create: `apps/cli/src/cli.test.ts`, `apps/cli/src/config/config.test.ts`, `apps/cli/src/http.test.ts`, `apps/cli/test/build.test.ts`, `apps/cli/test/out.ts`, `apps/cli/test/temp.ts`
+- Create: `docs/why/cli-config.md`
+- Modify: `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §13 (the personal config gains `apiBilling`)
+- Port: `~/Desktop/PracticeProjects/hooksmith/cli/src/config.ts` (XDG path, env overrides, 0600)
 
 **Interfaces:**
+- Consumes: `BRAND`, `AgentId`, `CliLoginStartResponse`, `CliLoginPollResponse`, `MeResponse`, `MyChatsResponse` (`packages/protocol`).
 - Produces:
-  - `PersonalConfigSchema` (zod; spec §13 shape: `server`, `token`, `agent`, `auto`, `concurrency`, `jobTimeoutMinutes`, `dailyJobCap`, `apiBilling`, `repos{ path, setup?, checks? }`);
-  - `configDir()` (`$NITPILOT_CONFIG_DIR` or `$XDG_CONFIG_HOME/nitpilot` or `~/.config/nitpilot`);
-  - `loadConfig({ env?, dir? }) → PersonalConfig`, with env overrides `NITPILOT_SERVER` and `NITPILOT_TOKEN`;
-  - `saveConfig(cfg, dir?)` (0600, `chmod` even if the file already existed);
-  - `ServerClient` (`loginStart`, `loginPoll`, `me`, `myChats`, `revoke`).
+  - `runCli(argv: string[], out: Out, commands?: Record<string, Command>) → Promise<number>` (the exit code) and `COMMANDS: Record<string, Command>`, where `Command = { usage: string; summary: string; run(args: string[], out: Out): Promise<number | void> }` (`src/cli.ts`). Later tasks add their commands to `COMMANDS`;
+  - `class CliError(message)` (`src/errors.ts`): a problem shown as a plain message, exit code 1;
+  - `type Out = { log(text): void; error(text): void }` and `terminal: Out` (`src/out.ts`);
+  - `PersonalConfigSchema`, `type PersonalConfig`, `DEFAULT_SERVER`, `configDir(env?)`, `configPath(dir)`, `loadConfig({ env?, dir? })`, `loadConfigFile(dir)`, `saveConfig(cfg, dir)` (`src/config/config.ts`);
+  - `class ServerClient(server: string, token: string | null, fetchImpl?)` with `loginStart(deviceName)`, `loginPoll(deviceCode)`, `me()`, `myChats()`, `revoke()`; `class ServerError extends CliError { status }` (`src/http.ts`);
+  - `@nitpilot/protocol/test-samples` (`jobResult()`, `jobBundle()`), no longer exported as `samples` from the main entry;
+  - test helpers `recordOut()` (`test/out.ts`) and `tempDir()` (`test/temp.ts`).
 
-**Tests this task must include:**
-- `NITPILOT_CONFIG_DIR` wins over XDG;
-- env overrides beat the file per field;
-- the file is written 0600 and re-chmodded;
-- invalid JSON → a clear error naming the file;
-- the defaults match spec §13;
-- `tsup` output runs `node dist/index.js --help` without `node_modules/@nitpilot/protocol`.
+**Behavior** (spec §7, §13):
+- The config lives in `$NITPILOT_CONFIG_DIR/config.json`, else `$XDG_CONFIG_HOME/nitpilot/config.json`, else `~/.config/nitpilot/config.json`. Every field has a default, so a missing file means "all defaults".
+- `NITPILOT_SERVER` and `NITPILOT_TOKEN` win over the file, one field at a time. `loadConfigFile` reads the file alone: commands that change the config load it that way and save it, so an environment override never ends up in the file.
+- `saveConfig` writes `config.json.tmp` with mode 0600 and renames it over `config.json`, so the file is 0600 even when an older one had looser permissions, and a crash halfway never leaves a half-written file.
+- A broken file is a `CliError` naming the file: not JSON, or the setting that's wrong.
+- `ServerClient` checks every answer against the protocol's zod schemas. A 401 says to run `nitpilot login`; other errors carry the server's own message; an unreachable server says so.
+- The published package bundles `@nitpilot/protocol` and zod into one file with tsup, so `npx nitpilot` needs nothing else, and the private protocol package is a dev dependency only.
+
+- [ ] **Step 1: Write the failing protocol test**
+
+`packages/protocol/src/index.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import * as protocol from './index';
+
+describe('the package entry', () => {
+  it("doesn't export the test samples: they have their own entry, @nitpilot/protocol/test-samples", () => {
+    expect(Object.keys(protocol)).not.toContain('samples');
+  });
+});
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm test -w packages/protocol -- src/index.test.ts`
+Expected: FAIL: `expected [ …, 'samples', … ] not to include 'samples'`.
+
+- [ ] **Step 3: Give the samples their own entry**
+
+In `packages/protocol/package.json`, replace:
+```json
+  "exports": {
+    ".": "./src/index.ts"
+  },
+```
+with:
+```json
+  "exports": {
+    ".": "./src/index.ts",
+    "./test-samples": "./src/test-samples.ts"
+  },
+```
+
+In `packages/protocol/src/index.ts`, delete the line `export * as samples from './test-samples';`.
+
+In `apps/server/src/chats/dispatch.db.test.ts` and `apps/server/src/jobs/bundle.db.test.ts`, replace `import { samples } from '@nitpilot/protocol';` with:
+```ts
+import * as samples from '@nitpilot/protocol/test-samples';
+```
+
+In `apps/server/src/ws/handlers.db.test.ts`, replace `import { samples, type JobResult, type RunningJob } from '@nitpilot/protocol';` with:
+```ts
+import type { JobResult, RunningJob } from '@nitpilot/protocol';
+import * as samples from '@nitpilot/protocol/test-samples';
+```
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm test -w packages/protocol && npm run typecheck -w apps/server`
+Expected: PASS (protocol 41); the server typechecks with the new import path.
+
+- [ ] **Step 5: Set up the CLI package**
+
+Replace `apps/cli/package.json` with:
+```json
+{
+  "name": "nitpilot",
+  "version": "0.1.0",
+  "description": "Your own AI agent reviews your teammates' pull requests, and theirs reviews yours.",
+  "type": "module",
+  "bin": {
+    "nitpilot": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@nitpilot/protocol": "*",
+    "tsup": "^8.5.1",
+    "zod": "^4.6.5"
+  }
+}
+```
+`@nitpilot/protocol` moves to `devDependencies`: it is private and never published, and tsup bundles it (and zod) into `dist/index.js`. With no `dependencies` at all, `npx nitpilot` installs one package and nothing else.
+
+Replace `apps/cli/tsconfig.json` with:
+```json
+{ "extends": "../../tsconfig.base.json", "include": ["src", "test", "tsup.config.ts", "vitest.config.ts"] }
+```
+
+`apps/cli/vitest.config.ts`:
+```ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({ test: { include: ['src/**/*.test.ts', 'test/**/*.test.ts'] } });
+```
+
+`apps/cli/tsup.config.ts`:
+```ts
+import { defineConfig, type Options } from 'tsup';
+
+/** One ESM file, dist/index.js, with everything it imports inside (spec §7). test/build.test.ts reuses these options. */
+export const buildOptions = {
+  entry: ['src/index.ts'],
+  format: ['esm'],
+  platform: 'node',
+  target: 'node22',
+  clean: true,
+  // Our own protocol package isn't on npm, so it goes inside the bundle (zod with it).
+  noExternal: ['@nitpilot/protocol'],
+} satisfies Options;
+
+export default defineConfig(buildOptions);
+```
+
+Run: `npm install`
+Expected: tsup is installed and `package-lock.json` updated; `@nitpilot/protocol` is still linked into `node_modules`.
+
+- [ ] **Step 6: Write the failing CLI tests**
+
+`apps/cli/test/out.ts`:
+```ts
+import type { Out } from '../src/out';
+
+/** An Out that remembers everything printed, for assertions. */
+export function recordOut(): Out & { lines: string[]; text(): string } {
+  const lines: string[] = [];
+  return {
+    lines,
+    log: (text) => void lines.push(text),
+    error: (text) => void lines.push(text),
+    text: () => lines.join('\n'),
+  };
+}
+```
+
+`apps/cli/test/temp.ts`:
+```ts
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { onTestFinished } from 'vitest';
+
+/** A fresh empty folder outside the repo, deleted when the test ends. Call it inside a test. */
+export function tempDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'nitpilot-test-'));
+  onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+```
+
+`apps/cli/src/cli.test.ts`:
+```ts
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { recordOut } from '../test/out';
+import { runCli, type Command } from './cli';
+import { CliError } from './errors';
+import { CLI_VERSION } from './version';
+
+const hello: Command = {
+  usage: 'nitpilot hello <name>',
+  summary: 'Say hello',
+  async run([name], out) {
+    if (!name) throw new CliError('Who should I greet?');
+    out.log(`hello ${name}`);
+  },
+};
+
+describe('runCli', () => {
+  it('lists the commands for --help, and when no command is given', async () => {
+    for (const argv of [['--help'], []]) {
+      const out = recordOut();
+      expect(await runCli(argv, out, { hello })).toBe(0);
+      expect(out.text()).toContain('Usage: nitpilot <command>');
+      expect(out.text()).toContain('nitpilot hello <name>  Say hello');
+    }
+  });
+
+  it('prints the version, which matches package.json', async () => {
+    const out = recordOut();
+    expect(await runCli(['--version'], out)).toBe(0);
+    expect(out.lines).toEqual([CLI_VERSION]);
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect(CLI_VERSION).toBe(pkg.version);
+  });
+
+  it('runs a command with the arguments after its name', async () => {
+    const out = recordOut();
+    expect(await runCli(['hello', 'maya'], out, { hello })).toBe(0);
+    expect(out.lines).toEqual(['hello maya']);
+  });
+
+  it('shows a CliError as a plain message and exits with 1', async () => {
+    const out = recordOut();
+    expect(await runCli(['hello'], out, { hello })).toBe(1);
+    expect(out.lines).toEqual(['Who should I greet?']);
+  });
+
+  it('rejects an unknown command with exit code 2', async () => {
+    const out = recordOut();
+    expect(await runCli(['nope'], out, { hello })).toBe(2);
+    expect(out.text()).toContain('Unknown command: nope');
+  });
+});
+```
+
+`apps/cli/src/config/config.test.ts`:
+```ts
+import { chmodSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { tempDir } from '../../test/temp';
+import { configDir, configPath, DEFAULT_SERVER, loadConfig, loadConfigFile, saveConfig } from './config';
+
+afterEach(() => vi.unstubAllEnvs());
+
+const writeConfig = (dir: string, content: string) => writeFileSync(configPath(dir), content);
+const modeOf = (path: string) => statSync(path).mode & 0o777;
+
+describe('configDir', () => {
+  it('uses NITPILOT_CONFIG_DIR first, then XDG_CONFIG_HOME, then ~/.config', () => {
+    expect(configDir({ NITPILOT_CONFIG_DIR: '/tmp/a', XDG_CONFIG_HOME: '/tmp/xdg' })).toBe('/tmp/a');
+    expect(configDir({ XDG_CONFIG_HOME: '/tmp/xdg' })).toBe(join('/tmp/xdg', 'nitpilot'));
+    expect(configDir({})).toBe(join(homedir(), '.config', 'nitpilot'));
+  });
+});
+
+describe('loadConfig', () => {
+  it('has the spec §13 defaults when there is no file', () => {
+    expect(loadConfig({ env: {}, dir: tempDir() })).toEqual({
+      server: DEFAULT_SERVER,
+      token: null,
+      agent: 'claude-code',
+      auto: { review: true, address: true },
+      concurrency: 1,
+      jobTimeoutMinutes: 15,
+      dailyJobCap: 40,
+      apiBilling: false,
+      repos: {},
+    });
+  });
+
+  it('lets NITPILOT_SERVER and NITPILOT_TOKEN win over the file, one field at a time', () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ server: 'https://file.example', token: 'nit_fromfile', concurrency: 2 }));
+    expect(loadConfig({ env: { NITPILOT_TOKEN: 'nit_fromenv' }, dir })).toMatchObject({ server: 'https://file.example', token: 'nit_fromenv', concurrency: 2 });
+    expect(loadConfig({ env: { NITPILOT_SERVER: 'http://localhost:8787' }, dir })).toMatchObject({ server: 'http://localhost:8787', token: 'nit_fromfile' });
+  });
+
+  it('names the file when it is not valid JSON', () => {
+    const dir = tempDir();
+    writeConfig(dir, '{ "server": ');
+    expect(() => loadConfig({ env: {}, dir })).toThrow(`${configPath(dir)} is not valid JSON`);
+  });
+
+  it('names the setting that is wrong', () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ concurrency: 9 }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow(/Invalid setting "concurrency" in .*config\.json/);
+  });
+});
+
+describe('loadConfigFile', () => {
+  it('reads the file alone, so saving what it returns never writes an environment override', () => {
+    vi.stubEnv('NITPILOT_TOKEN', 'nit_fromenv');
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ token: 'nit_fromfile' }));
+    expect(loadConfigFile(dir).token).toBe('nit_fromfile');
+  });
+});
+
+describe('saveConfig', () => {
+  it('writes a file only you can read, even over one with looser permissions', () => {
+    const dir = tempDir();
+    writeConfig(dir, '{}');
+    chmodSync(configPath(dir), 0o644);
+    const cfg = { ...loadConfigFile(dir), token: 'nit_saved' };
+    saveConfig(cfg, dir);
+    expect(modeOf(configPath(dir))).toBe(0o600);
+    expect(loadConfigFile(dir)).toEqual(cfg);
+  });
+
+  it('creates the folder when it does not exist yet', () => {
+    const dir = join(tempDir(), 'nested', 'nitpilot');
+    saveConfig(loadConfigFile(dir), dir);
+    expect(modeOf(configPath(dir))).toBe(0o600);
+    expect(JSON.parse(readFileSync(configPath(dir), 'utf8'))).toMatchObject({ server: DEFAULT_SERVER });
+  });
+});
+```
+
+`apps/cli/src/http.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { ServerClient } from './http';
+import { CLI_VERSION } from './version';
+
+type Call = { url: URL; init: RequestInit };
+
+/** A stand-in for fetch: records each call and answers with `reply`. */
+function fakeFetch(reply: (url: URL) => Response | Promise<Response>) {
+  const calls: Call[] = [];
+  const fn = async (input: string | URL | Request, init: RequestInit = {}) => {
+    const url = new URL(String(input));
+    calls.push({ url, init });
+    return reply(url);
+  };
+  return Object.assign(fn as typeof fetch, { calls });
+}
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const SERVER = 'http://nitpilot.test';
+
+describe('ServerClient', () => {
+  it("sends the device's token and returns the checked answer", async () => {
+    const fetch = fakeFetch(() => json({ login: 'maya', avatarUrl: null, githubAuth: 'ok' }));
+    expect(await new ServerClient(SERVER, 'nit_abc', fetch).me()).toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'ok' });
+    const { url, init } = fetch.calls[0]!;
+    expect(url.href).toBe(`${SERVER}/api/me`);
+    expect(init.headers).toMatchObject({ authorization: 'Bearer nit_abc', 'user-agent': `nitpilot/${CLI_VERSION}` });
+  });
+
+  it('posts JSON to start a login', async () => {
+    const fetch = fakeFetch(() => json({ deviceCode: 'd', userCode: 'WDJB-MJHT', verifyUrl: `${SERVER}/cli/approve?code=WDJB-MJHT`, interval: 2, expiresIn: 600 }));
+    await new ServerClient(SERVER, null, fetch).loginStart('laptop');
+    const { init } = fetch.calls[0]!;
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({ 'content-type': 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({ deviceName: 'laptop' });
+  });
+
+  it('says to log in again when the server rejects the token', async () => {
+    const fetch = fakeFetch(() => json({ error: { code: 'unauthorized', message: 'Missing or invalid CLI token.' } }, 401));
+    await expect(new ServerClient(SERVER, 'nit_old', fetch).me()).rejects.toThrow('Run `nitpilot login`');
+  });
+
+  it("passes on the server's own error message", async () => {
+    const fetch = fakeFetch(() => json({ error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } }, 409));
+    await expect(new ServerClient(SERVER, 'nit_abc', fetch).myChats()).rejects.toThrow('Nothing of yours failed on this PR. (HTTP 409)');
+  });
+
+  it('needs a token for calls that need one, and then asks nothing of the server', async () => {
+    const fetch = fakeFetch(() => json({}));
+    await expect(new ServerClient(SERVER, null, fetch).me()).rejects.toThrow('Not logged in. Run `nitpilot login`.');
+    expect(fetch.calls).toEqual([]);
+  });
+
+  it('says so when the server cannot be reached', async () => {
+    const fetch = fakeFetch(() => Promise.reject(new TypeError('fetch failed')));
+    await expect(new ServerClient(SERVER, 'nit_abc', fetch).me()).rejects.toThrow(`Can't reach ${SERVER}: fetch failed`);
+  });
+
+  it("rejects an answer that doesn't fit the protocol", async () => {
+    const fetch = fakeFetch(() => json({ hello: 'world' }));
+    await expect(new ServerClient(SERVER, 'nit_abc', fetch).me()).rejects.toThrow('Unexpected answer from /api/me');
+  });
+});
+```
+
+`apps/cli/test/build.test.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { build } from 'tsup';
+import { describe, expect, it } from 'vitest';
+import { buildOptions } from '../tsup.config';
+import { tempDir } from './temp';
+
+const run = promisify(execFile);
+const cliDir = fileURLToPath(new URL('..', import.meta.url));
+
+describe('the published bundle', () => {
+  it('is one file that runs on its own, without the workspace packages', async () => {
+    // Built into a folder outside the repo: from there Node can't find node_modules/@nitpilot/protocol.
+    const outDir = tempDir();
+    await build({ ...buildOptions, entry: [join(cliDir, 'src/index.ts')], outDir, config: false, silent: true });
+    const { stdout } = await run(process.execPath, [join(outDir, 'index.js'), '--help'], { cwd: outDir });
+    expect(stdout).toContain('Usage: nitpilot <command>');
+    // Test data isn't part of the product (Plan 1a deferred minor M8).
+    expect(readFileSync(join(outDir, 'index.js'), 'utf8')).not.toContain('Found a crash on empty input');
+  }, 60_000);
+});
+```
+
+- [ ] **Step 7: Run them to see them fail**
+
+Run: `npm test -w apps/cli`
+Expected: FAIL: `Failed to resolve import "./cli"` (and `./config`, `./http`, `../src/out`), since none of those files exist yet.
+
+- [ ] **Step 8: Write the entry point and the command runner**
+
+`apps/cli/src/errors.ts`:
+```ts
+/** A problem to show the person as a plain message (no stack trace). The CLI then exits with 1. */
+export class CliError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CliError';
+  }
+}
+```
+
+`apps/cli/src/out.ts`:
+```ts
+/** Where commands print. The real one is the terminal; tests pass one that records the lines. */
+export type Out = { log(text: string): void; error(text: string): void };
+
+export const terminal: Out = {
+  log: (text) => console.log(text),
+  error: (text) => console.error(text),
+};
+```
+
+`apps/cli/src/cli.ts`:
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { CliError } from './errors';
+import type { Out } from './out';
+import { CLI_VERSION } from './version';
+
+/** One `nitpilot <name>` command. `run` gets the arguments after the name and may return an exit code. */
+export type Command = { usage: string; summary: string; run(args: string[], out: Out): Promise<number | void> };
+
+/** Every command, in the order `--help` lists them. Each lives in src/commands/ and is added by the task that builds it. */
+export const COMMANDS: Record<string, Command> = {};
+
+/** Run the CLI with these arguments and return the exit code. src/index.ts calls it with process.argv. */
+export async function runCli(argv: string[], out: Out, commands: Record<string, Command> = COMMANDS): Promise<number> {
+  const [name, ...args] = argv;
+  if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
+    out.log(usage(commands));
+    return 0;
+  }
+  if (name === '--version' || name === '-v') {
+    out.log(CLI_VERSION);
+    return 0;
+  }
+  const command = commands[name];
+  if (!command) {
+    out.error(`Unknown command: ${name}\n`);
+    out.error(usage(commands));
+    return 2;
+  }
+  try {
+    return (await command.run(args, out)) ?? 0;
+  } catch (err) {
+    // A CliError is a message for the person; anything else is a bug, so show where it happened.
+    out.error(err instanceof CliError ? err.message : `Unexpected error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+    return 1;
+  }
+}
+
+export function usage(commands: Record<string, Command>): string {
+  const width = Math.max(0, ...Object.values(commands).map((c) => c.usage.length));
+  return [
+    `${BRAND.name}: your own AI agent reviews your teammates' pull requests, and theirs reviews yours.`,
+    '',
+    `Usage: ${BRAND.cli} <command>`,
+    '',
+    ...Object.values(commands).map((c) => `  ${c.usage.padEnd(width)}  ${c.summary}`),
+    '',
+    `  ${BRAND.cli} --version`,
+  ].join('\n');
+}
+```
+
+`apps/cli/src/index.ts`:
+```ts
+#!/usr/bin/env node
+import { runCli } from './cli';
+import { terminal } from './out';
+
+// The `nitpilot` binary. Everything lives in cli.ts, so tests can run the CLI without starting a process.
+process.exitCode = await runCli(process.argv.slice(2), terminal);
+```
+
+- [ ] **Step 9: Write the personal config**
+
+`apps/cli/src/config/config.ts`:
+```ts
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { AgentId, BRAND } from '@nitpilot/protocol';
+import { z } from 'zod';
+import { CliError } from '../errors';
+
+/** The hosted instance (Plan 3). For another server, set NITPILOT_SERVER or "server" in the file. */
+export const DEFAULT_SERVER = 'https://nitpilot.dev';
+
+const ENV = {
+  configDir: `${BRAND.envPrefix}CONFIG_DIR`,
+  server: `${BRAND.envPrefix}SERVER`,
+  token: `${BRAND.envPrefix}TOKEN`,
+} as const;
+
+type Env = Record<string, string | undefined>;
+
+/** One linked clone (spec §13): where it is, how to prepare a fresh checkout, and which checks the agent may run. */
+const RepoConfig = z.object({
+  path: z.string().min(1),
+  setup: z.array(z.string()).min(1).optional(),
+  checks: z.record(z.string(), z.array(z.string()).min(1)).optional(),
+});
+
+/** config.json (spec §13). Every field has a default, so a missing or empty file is valid. */
+export const PersonalConfigSchema = z.object({
+  server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
+  token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
+  agent: AgentId.default('claude-code'),
+  /** Defaults for new chats. Ignored in Plan 1, where Auto is always on. */
+  auto: z.object({ review: z.boolean(), address: z.boolean() }).default({ review: true, address: true }),
+  concurrency: z.number().int().min(1).max(4).default(1),
+  jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
+  dailyJobCap: z.number().int().min(1).default(40),
+  /** Let Claude Code bill your API key. Off: ANTHROPIC_API_KEY never reaches the agent (spec §12.2). */
+  apiBilling: z.boolean().default(false),
+  /** Linked clones, keyed `owner/name`. */
+  repos: z.record(z.string(), RepoConfig).default({}),
+});
+export type PersonalConfig = z.infer<typeof PersonalConfigSchema>;
+
+/** Where the config lives: $NITPILOT_CONFIG_DIR, else $XDG_CONFIG_HOME/nitpilot, else ~/.config/nitpilot. */
+export function configDir(env: Env = process.env): string {
+  const own = env[ENV.configDir];
+  if (own) return own;
+  return join(env.XDG_CONFIG_HOME || join(homedir(), '.config'), BRAND.configDirName);
+}
+
+export function configPath(dir: string): string {
+  return join(dir, 'config.json');
+}
+
+/** The settings in effect: the file, with NITPILOT_SERVER and NITPILOT_TOKEN winning one field at a time. */
+export function loadConfig(opts: { env?: Env; dir?: string } = {}): PersonalConfig {
+  const env = opts.env ?? process.env;
+  const dir = opts.dir ?? configDir(env);
+  const raw = readRaw(configPath(dir));
+  const server = env[ENV.server];
+  const token = env[ENV.token];
+  if (server) raw.server = server;
+  if (token) raw.token = token;
+  return parse(raw, `${configPath(dir)} (or ${ENV.server} / ${ENV.token})`);
+}
+
+/** The file alone, without the environment. Change what this returns and save it: no override ends up in the file. */
+export function loadConfigFile(dir: string): PersonalConfig {
+  return parse(readRaw(configPath(dir)), configPath(dir));
+}
+
+/** Save the config readable by you only (0600), even when the old file had looser permissions. */
+export function saveConfig(cfg: PersonalConfig, dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const path = configPath(dir);
+  const tmp = `${path}.tmp`;
+  // Write a new file, then swap it in: a crash halfway never leaves a half-written config behind.
+  writeFileSync(tmp, `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(tmp, 0o600); // mode only applies to new files; a leftover .tmp could have another one
+  renameSync(tmp, path);
+}
+
+function readRaw(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (err) {
+    throw new CliError(`${path} is not valid JSON: ${(err as Error).message}`);
+  }
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new CliError(`${path} must hold a JSON object.`);
+  return json as Record<string, unknown>;
+}
+
+function parse(raw: Record<string, unknown>, where: string): PersonalConfig {
+  const parsed = PersonalConfigSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0]!;
+  throw new CliError(`Invalid setting "${issue.path.join('.') || '(the whole file)'}" in ${where}: ${issue.message}`);
+}
+```
+
+- [ ] **Step 10: Write the server client**
+
+`apps/cli/src/http.ts`:
+```ts
+import { BRAND, CliLoginPollResponse, CliLoginStartResponse, MeResponse, MyChatsResponse } from '@nitpilot/protocol';
+import type { z } from 'zod';
+import { CliError } from './errors';
+import { CLI_VERSION } from './version';
+
+/** The server answered with an error, or couldn't be reached (status 0). */
+export class ServerError extends CliError {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ServerError';
+  }
+}
+
+type CallOptions = { body?: unknown; auth?: boolean };
+
+/** The Nitpilot server's REST API (spec §10). Every answer is checked against the protocol's schemas. */
+export class ServerClient {
+  constructor(
+    readonly server: string,
+    private readonly token: string | null,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  /** `nitpilot login`, step 1: a code for the person and a secret for this device. */
+  loginStart(deviceName: string) {
+    return this.call('POST', '/api/cli/login', CliLoginStartResponse, { body: { deviceName } });
+  }
+
+  /** `nitpilot login`, step 3: pending, approved (with the token), denied or expired. */
+  loginPoll(deviceCode: string) {
+    return this.call('POST', '/api/cli/login/poll', CliLoginPollResponse, { body: { deviceCode } });
+  }
+
+  me() {
+    return this.call('GET', '/api/me', MeResponse, { auth: true });
+  }
+
+  myChats() {
+    return this.call('GET', '/api/me/chats', MyChatsResponse, { auth: true });
+  }
+
+  /** Sign this device out: the server revokes the token that sent the request. */
+  async revoke(): Promise<void> {
+    await this.send('DELETE', '/api/cli/token', { auth: true });
+  }
+
+  private async call<S extends z.ZodType>(method: string, path: string, schema: S, opts: CallOptions = {}): Promise<z.infer<S>> {
+    const res = await this.send(method, path, opts);
+    const parsed = schema.safeParse(await res.json().catch(() => null));
+    if (!parsed.success) throw new ServerError(res.status, `Unexpected answer from ${path}. Is ${this.server} a ${BRAND.name} server of the same version?`);
+    return parsed.data;
+  }
+
+  private async send(method: string, path: string, opts: CallOptions): Promise<Response> {
+    const headers: Record<string, string> = { 'user-agent': `${BRAND.userAgent}/${CLI_VERSION}` };
+    if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    if (opts.auth) {
+      if (!this.token) throw new CliError(`Not logged in. Run \`${BRAND.cli} login\`.`);
+      headers.authorization = `Bearer ${this.token}`;
+    }
+    let res: Response;
+    try {
+      res = await this.fetchImpl(new URL(path, this.server), {
+        method,
+        headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      });
+    } catch (err) {
+      throw new ServerError(0, `Can't reach ${this.server}: ${(err as Error).message}`);
+    }
+    if (res.ok) return res;
+    if (res.status === 401) throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
+    throw new ServerError(res.status, `${await errorMessage(res)} (HTTP ${res.status})`);
+  }
+}
+
+/** The message in the server's `{ error: { message } }` body, or the status text. */
+async function errorMessage(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  return body?.error?.message ?? res.statusText;
+}
+```
+
+- [ ] **Step 11: Run them to see them pass**
+
+Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
+Expected: PASS (cli 5, config 8, http 7, build 1).
+
+- [ ] **Step 12: Explain the config file**
+
+`docs/why/cli-config.md`:
+```markdown
+# Where the CLI keeps your settings (and your token)
+
+**In one sentence:** `nitpilot` keeps one small JSON file per account, readable by you only, and environment variables can override two of its settings without touching it.
+
+## The file (`apps/cli/src/config/config.ts`)
+
+`~/.config/nitpilot/config.json` holds the server's address, this device's token from `nitpilot login`, which agent you use, your limits (`concurrency`, `jobTimeoutMinutes`, `dailyJobCap`) and your linked clones (`repos`). Every setting has a default (spec §13), so a missing file just means "all defaults". The file is checked with a zod schema when it's read; a typo gives an error that names the file and the setting.
+
+## One folder per account
+
+`NITPILOT_CONFIG_DIR` points the CLI at another folder. That's how one laptop runs two CLIs as two different GitHub accounts, which the live acceptance test needs (spec §17): `NITPILOT_CONFIG_DIR=~/.nitpilot-a nitpilot start` in one terminal, `~/.nitpilot-b` in another.
+
+## 0600: readable by you only
+
+The token is a password for your account, so the file gets Unix mode `0600`: the owner can read and write it, nobody else can even read it. (The three digits are owner / group / everyone; 6 means read + write, 0 means nothing.) Saving writes a new file and renames it over the old one: the rename is all-or-nothing, so a crash halfway never leaves half a config, and the new file is 0600 even if the old one wasn't.
+
+## Environment overrides
+
+`NITPILOT_SERVER` and `NITPILOT_TOKEN` win over the file, one setting at a time, like `.env.local` winning over `.env`. Commands that change the file read it *without* the overrides before saving, so an override never gets written into it by accident.
+
+## One file to install
+
+The published package is one bundled file, `dist/index.js` (`apps/cli/tsup.config.ts`). Our `@nitpilot/protocol` package isn't on npm, so tsup copies it (and zod) into the bundle, the way Vite bundles your app's imports into one script. `npx nitpilot` then downloads exactly one package.
+
+## The React analogy
+
+- The config file is `localStorage` for a terminal program, except we validate it on every read, like parsing an API response with zod before using it.
+- Write-then-rename is the immutable update: build the new state completely, then swap it in, instead of editing the old one in place.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §13, in the personal config example, replace:
+```jsonc
+  "dailyJobCap": 40,
+```
+with:
+```jsonc
+  "dailyJobCap": 40,
+  "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY (§12.2)
+```
+
+- [ ] **Step 13: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: all green: protocol 41, server unchanged, CLI 21.
+
+- [ ] **Step 14: Commit**
+
+```bash
+git add packages/protocol apps/server/src/chats/dispatch.db.test.ts apps/server/src/jobs/bundle.db.test.ts apps/server/src/ws/handlers.db.test.ts apps/cli package-lock.json docs/why/cli-config.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(cli): command runner, personal config, server client and one-file build
+
+The protocol's test samples move to their own entry, so the bundle never ships
+them (Plan 1a deferred minor M8).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 6: `login`, `status`, `repos add`, `retry`
 
 **Files:**
-- Create: `apps/cli/src/commands/login.ts`, `apps/cli/src/commands/status.ts`, `apps/cli/src/commands/repos.ts`, `apps/cli/src/commands/retry.ts`, `apps/cli/src/git/remotes.ts`, and a test for each.
-- Modify (server, Plan 1a carry-forwards): `apps/server/src/http/routes/cli.ts` (`POST /api/chats/:id/retry`, and at most 10 `POST /api/cli/login` per minute per client address, counted in memory); `apps/server/src/ingest/record.ts` (`purgeOldRows` also deletes `CliLoginRequest` rows older than a day); the engine gets a `retry_requested { who }` event that queues that participant's job again, with table tests.
+- Modify (server, Plan 1a carry-forwards):
+  - `apps/server/src/engine/types.ts`, `apps/server/src/engine/decide.ts`, `apps/server/src/engine/results.ts`, `apps/server/src/engine/failures.test.ts` (the `retry_requested` event);
+  - `apps/server/src/lib/rate-limit.ts`, `apps/server/src/lib/rate-limit.test.ts` (new);
+  - `apps/server/src/http/errors.ts` (`rate_limited` → 429), `apps/server/src/http/routes/cli.ts` (retry route, rate-limited login starts), `apps/server/src/http/routes/cli.db.test.ts`;
+  - `apps/server/src/http/app.ts`, `apps/server/test/app.ts`, `apps/server/src/main.ts` (the app gets `dispatch`);
+  - `apps/server/src/ingest/record.ts`, `apps/server/src/ingest/process.db.test.ts` (purge old CLI login requests);
+  - `packages/protocol/src/api.ts` (`RetryResponse`).
+- Create (CLI): `apps/cli/src/git/remotes.ts`, `apps/cli/src/commands/login.ts`, `apps/cli/src/commands/status.ts`, `apps/cli/src/commands/repos.ts`, `apps/cli/src/commands/retry.ts`, a test for each, and `apps/cli/test/stub-server.ts`.
+- Modify (CLI): `apps/cli/src/http.ts`, `apps/cli/src/http.test.ts` (`retry`), `apps/cli/src/cli.ts` (the four commands).
+- Modify: `docs/why/cli-login.md` (limits and cleanup).
 
 **Interfaces:**
-- Consumes: `ServerClient`, `CliLoginPollResponse`, `MeResponse`, `MyChatsResponse`, `safeGit` (Task 9; use plain `execFile` git here until then).
+- Consumes: `ServerClient`, `loadConfig`, `loadConfigFile`, `saveConfig`, `configDir`, `configPath`, `CliError`, `Out`, `recordOut`, `tempDir` (Task 5); `MyChat`, `Attention` (protocol); `Dispatch`, `DecideOutput` (Plan 1a); `startReview`, `advance` (engine).
 - Produces:
-  - `login({ open?, sleep? })`;
-  - `status()`;
-  - `reposAdd(path?)`;
-  - `parseGithubRemote(url) → 'owner/name' | null`, which accepts https, `git@github.com:` and SSH host aliases such as `git@github-a:owner/name.git` (spec §17).
+  - engine event `{ type: 'retry_requested'; who: Person }` and `onRetryRequested(ctx, e)` (`engine/results.ts`);
+  - `class RateLimiter(limit, windowMs, now?)` with `allow(key): boolean` (`lib/rate-limit.ts`);
+  - `POST /api/chats/:id/retry` → `200 RetryResponse` (`{ status: 'queued' }`) or `409`; `AppDeps.dispatch: Dispatch`; `LOGIN_STARTS_PER_MINUTE = 10`;
+  - `purgeOldRows()` → `{ rawEvents, seenComments, cliLoginRequests }`;
+  - CLI: `login(deps)`, `status(deps)`, `reposAdd(path, deps)`, `retry(ref, deps)`, `parsePrRef(ref)`, `prUrl(chat)`, `openInBrowser(url)`; `parseGithubRemote(url) → 'owner/name' | null`, `gitTopLevel(path)`, `githubReposIn(clone)`, `githubReposInRemoteList(text)` (the parsing half, for Task 8's `doctor`); `ServerClient.retry(chatId)`;
+  - test helpers `startStubServer(routes)` and `inTurn(...replies)` (`test/stub-server.ts`).
 
 **Behavior:**
-- **login** prints "enter WDJB-MJHT at https://…/cli/approve", opens the browser (`open`/`xdg-open` via `execFile`), polls every `interval` until approved, denied or expired, and saves the token.
-- **status** prints the login, a `needs_reauth` warning, and a table of chats; a chat whose attention is `failed` suggests `nitpilot retry <pr-url>`.
-- **repos add** records `repos["owner/name"] = { path }` from the clone's remotes.
-- **retry** asks the server to queue your failed job on that PR again (Plan 2 adds the Retry button).
+- **login** prints `To connect this device, enter WDJB-MJHT at https://…/cli/approve?code=WDJB-MJHT`, opens the browser (`open` / `xdg-open` through `execFile`; a failure is fine), waits `interval` seconds before each poll until approved, denied or expired, then saves the server and the token (0600) and prints the login it belongs to.
+- **status** prints the login, a warning when GitHub access needs a new sign-in, and a table of open chats. For a chat whose attention is `failed` it prints `nitpilot retry https://github.com/<repo>/pull/<n>`.
+- **repos add [path]** finds the clone's top folder (`git rev-parse --show-toplevel`) and links every GitHub repo its remotes point at (`origin`, `upstream`, …) to that folder, keeping any `setup` and `checks`. A fork clone links both the fork and the base repo; jobs come for the base repo.
+- **retry <pr-url>** finds the chat among your open chats and asks the server to queue your failed job again. It also takes `owner/name#12`.
+- **Server, retry:** allowed only when one of your roles in the chat is flagged `failed` *and* its newest job failed (a failed GitHub write is fixed by signing in again, not by re-running the agent). The engine clears the flag, starts a reviewer's review again (counting as "started by hand", so an outside contributor's PR doesn't stop it), or lets `advance` queue the author's address pass. `200 { status: 'queued' }` when a job was queued, else `409`.
+- **Server, login starts:** at most 10 per minute per client address, counted in memory (one process, spec §7); the 11th gets `429 rate_limited`. Behind a reverse proxy (Plan 3) every request has the proxy's address; Plan 3 reads `X-Forwarded-For` from its own proxy.
+- **Server, purge:** the hourly `purgeOldRows` also deletes CLI login requests older than a day (they expire after 10 minutes).
 
-**Tests this task must include:**
-- the login handshake against Plan 1a's app running in-process;
-- denied and expired paths;
-- remote parsing table (https, ssh, host alias, non-GitHub → null);
-- `repos add` outside a git repo gives a clear error;
-- retry re-queues a failed job and clears `attention: failed`; it refuses a chat where you have nothing failed;
-- the 11th login start in a minute gets 429; old login requests are purged.
+- [ ] **Step 1: Write the failing engine tests**
+
+In `apps/server/src/engine/failures.test.ts`, change the builders import to include `pointOf`:
+```ts
+import { T0, agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, pointOf, run, sam } from './test-builders';
+```
+add `import type { ChatState } from './types';` below the imports, and at the end of the file add:
+```ts
+describe('retry_requested', () => {
+  /** leo's review failed for good. */
+  const reviewFailed = (over: Partial<ChatState> = {}) =>
+    agentToAgent({ participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { attention: 'failed' })], ...over });
+
+  it("queues the reviewer's review again and clears the flag", () => {
+    const out = run(reviewFailed(), { type: 'retry_requested', who: leo });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending' },
+    ]);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
+    expect(out.chat.phase).toBe('reviewing');
+  });
+
+  it("queues the author's address pass again", () => {
+    const chat = agentToAgent({
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { attention: 'failed' }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+    const out = run(chat, { type: 'retry_requested', who: maya });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address' })]);
+  });
+
+  it("starts the review on an outside contributor's PR too: asking again counts as starting it by hand", () => {
+    const out = run(reviewFailed({ trusted: false }), { type: 'retry_requested', who: leo });
+    expect(commandsOf(out, 'enqueue_job')).toHaveLength(1);
+    expect(commandsOf(out, 'notify')).toEqual([]);
+  });
+
+  it('does nothing for someone with nothing failed, or on a closed PR', () => {
+    expect(run(reviewFailed(), { type: 'retry_requested', who: maya }).commands).toEqual([]);
+    expect(run(reviewFailed({ phase: 'closed', closed: true }), { type: 'retry_requested', who: leo }).commands).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/engine/failures`
+Expected: FAIL: `Unhandled event: {"type":"retry_requested",…}` from `decide()`'s exhaustive switch (typecheck would also reject the unknown event type).
+
+- [ ] **Step 3: Handle `retry_requested` in the engine**
+
+In `apps/server/src/engine/types.ts`, in `DomainEvent`, after the `job_failed` line, add:
+```ts
+  | { type: 'retry_requested'; who: Person }
+```
+
+In `apps/server/src/engine/decide.ts`, change the results import to:
+```ts
+import { onJobCompleted, onJobFailed, onRetryRequested } from './results';
+```
+and after `case 'job_failed': onJobFailed(ctx, event); break;` add:
+```ts
+    case 'retry_requested': onRetryRequested(ctx, event); break;
+```
+
+In `apps/server/src/engine/results.ts`, after the `onJobFailed` function, add:
+```ts
+/**
+ * A person asks to run their failed job again (`nitpilot retry`; Plan 2's Retry button). Only someone
+ * flagged `failed` can. The job starts over as a new job, with a fresh count of attempts.
+ */
+export function onRetryRequested(ctx: Ctx, e: Ev<'retry_requested'>): void {
+  const chat = ctx.chat;
+  if (chat.phase === 'closed') return;
+  const failed = chat.participants.filter((p) => p.githubId === e.who.githubId && p.attention === 'failed');
+  if (failed.length === 0) return;
+  system(ctx, `${e.who.login} asked their agent to try again`);
+  for (const p of failed) {
+    p.attention = 'none';
+    // The person asked for it, so on an outside contributor's PR this counts as starting the review by hand.
+    if (p.role === 'reviewer') startReview(ctx, p, { manual: true });
+  }
+  // The author's address pass (or anything else now due) is queued the usual way.
+  advance(ctx);
+}
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/engine && npm run typecheck -w apps/server`
+Expected: PASS.
+
+- [ ] **Step 5: Write the failing server tests**
+
+`apps/server/src/lib/rate-limit.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { RateLimiter } from './rate-limit';
+
+describe('RateLimiter', () => {
+  it('allows `limit` requests in the window and refuses the next one', () => {
+    const limiter = new RateLimiter(10, 60_000, () => 0);
+    for (let i = 0; i < 10; i++) expect(limiter.allow('1.2.3.4')).toBe(true);
+    expect(limiter.allow('1.2.3.4')).toBe(false);
+  });
+
+  it('counts each key on its own', () => {
+    const limiter = new RateLimiter(1, 60_000, () => 0);
+    expect(limiter.allow('1.2.3.4')).toBe(true);
+    expect(limiter.allow('5.6.7.8')).toBe(true);
+    expect(limiter.allow('1.2.3.4')).toBe(false);
+  });
+
+  it('allows again once the oldest request is out of the window', () => {
+    let now = 0;
+    const limiter = new RateLimiter(1, 60_000, () => now);
+    expect(limiter.allow('1.2.3.4')).toBe(true);
+    now = 59_999;
+    expect(limiter.allow('1.2.3.4')).toBe(false);
+    now = 60_001;
+    expect(limiter.allow('1.2.3.4')).toBe(true);
+  });
+});
+```
+
+In `apps/server/src/http/routes/cli.db.test.ts`:
+- change the `test/db` import to `import { makeChat, makeCliToken, makeRepo, makeUser, personOf } from '../../../test/db';`
+- add `import { Dispatcher } from '../../chats/dispatch';`
+- inside `describe('nitpilot login', …)`, after the last test, add:
+```ts
+  it('lets one address start 10 logins a minute, then answers 429', async () => {
+    const server = app(); // one app: the count lives in the running server
+    const start = () => server.request('/api/cli/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceName: 'laptop' }) });
+    for (let i = 0; i < 10; i++) expect((await start()).status).toBe(200);
+    const res = await start();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ error: { code: 'rate_limited' } });
+  });
+```
+- at the end of the file, add:
+```ts
+describe('POST /api/chats/:id/retry', () => {
+  /** leo's review of maya's PR failed for good. */
+  async function failedReview() {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const dispatcher = new Dispatcher();
+    await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+    const review = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });
+    await prisma.job.update({ where: { id: review.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: review.id, attempt: 1, reason: 'auth', retryable: false });
+    const server = testApp({ github: new GithubClient(fakeFetch({})), dispatch: dispatcher.dispatch });
+    const retry = (token: string) => server.request(`/api/chats/${chat.id}/retry`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+    return { chat, leo, retry, leoToken: (await makeCliToken(leo.id)).raw, mayaToken: (await makeCliToken(maya.id)).raw };
+  }
+
+  it("queues leo's failed review again and clears his failed flag", async () => {
+    const { chat, leo, retry, leoToken } = await failedReview();
+    const res = await retry(leoToken);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'queued' });
+    const jobs = await prisma.job.findMany({ where: { chatId: chat.id }, orderBy: { createdAt: 'asc' } });
+    expect(jobs.map((j) => [j.type, j.status])).toEqual([
+      ['review', 'failed'],
+      ['review', 'queued'],
+    ]);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } })).toMatchObject({ attention: 'none' });
+  });
+
+  it('refuses when nothing of yours failed there: the author, or leo once his job is queued again', async () => {
+    const { retry, leoToken, mayaToken } = await failedReview();
+    const asMaya = await retry(mayaToken);
+    expect(asMaya.status).toBe(409);
+    expect(await asMaya.json()).toMatchObject({ error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } });
+    expect((await retry(leoToken)).status).toBe(200);
+    expect((await retry(leoToken)).status).toBe(409);
+  });
+
+  it('needs a CLI token', async () => {
+    const { chat } = await failedReview();
+    expect((await app().request(`/api/chats/${chat.id}/retry`, { method: 'POST' })).status).toBe(401);
+  });
+});
+```
+
+In `apps/server/src/ingest/process.db.test.ts`:
+- add `import { startCliLogin } from '../auth/cli-login';`
+- in `describe('purgeOldRows', …)`, change `expect(await purgeOldRows()).toEqual({ rawEvents: 1, seenComments: 0 });` to:
+```ts
+    expect(await purgeOldRows()).toEqual({ rawEvents: 1, seenComments: 0, cliLoginRequests: 0 });
+```
+- and add, after that test:
+```ts
+  it('deletes CLI login requests older than a day', async () => {
+    const old = await startCliLogin('old laptop');
+    await prisma.cliLoginRequest.update({ where: { userCode: old.userCode }, data: { createdAt: new Date(Date.now() - 2 * 86_400_000) } });
+    await startCliLogin('new laptop');
+    expect(await purgeOldRows()).toMatchObject({ cliLoginRequests: 1 });
+    expect(await prisma.cliLoginRequest.count()).toBe(1);
+  });
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/lib/rate-limit && npm run test:db -w apps/server -- src/http/routes/cli src/ingest/process`
+Expected: FAIL. `rate-limit.test.ts`: `Failed to resolve import "./rate-limit"`. `cli.db.test.ts`: the 11th login start gets 200, not 429, and the retry route answers 404. `process.db.test.ts`: `cliLoginRequests` is missing from the result.
+
+- [ ] **Step 7: Rate-limit login starts, add the retry route, purge old login requests**
+
+`apps/server/src/lib/rate-limit.ts`:
+```ts
+/**
+ * Counts requests per key (a client address, say) and says no once `limit` of them came in during the
+ * last `windowMs`. In memory, which is enough for one server process (spec §7). See docs/why/cli-login.md.
+ */
+export class RateLimiter {
+  private readonly hits = new Map<string, number[]>();
+
+  constructor(
+    private readonly limit: number,
+    private readonly windowMs: number,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  /** Count one request for `key`. False means too many: refuse it. */
+  allow(key: string): boolean {
+    const now = this.now();
+    const recent = (this.hits.get(key) ?? []).filter((at) => at > now - this.windowMs);
+    if (recent.length >= this.limit) {
+      this.hits.set(key, recent);
+      return false;
+    }
+    recent.push(now);
+    this.hits.set(key, recent);
+    this.forgetIdle(now);
+    return true;
+  }
+
+  /** Forget keys with nothing recent, so addresses seen once don't pile up forever. */
+  private forgetIdle(now: number): void {
+    if (this.hits.size < 1_000) return;
+    for (const [key, times] of this.hits) {
+      if (times.every((at) => at <= now - this.windowMs)) this.hits.delete(key);
+    }
+  }
+}
+```
+
+In `apps/server/src/http/errors.ts`, add `| 'rate_limited'` to `ErrorCode` (after `'payload_too_large'`) and `rate_limited: 429,` to `STATUS` (after `payload_too_large: 413,`).
+
+In `packages/protocol/src/api.ts`, at the end, add:
+```ts
+// `nitpilot retry`
+export const RetryResponse = z.object({ status: z.literal('queued') });
+export type RetryResponse = z.infer<typeof RetryResponse>;
+```
+
+Replace `apps/server/src/http/routes/cli.ts` with:
+```ts
+import type { IncomingMessage } from 'node:http';
+import {
+  CliLoginPollRequest, CliLoginStartRequest,
+  type Attention, type MeResponse, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
+} from '@nitpilot/protocol';
+import { Hono, type Context } from 'hono';
+import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
+import { requireCliToken, type CliAuth } from '../../auth/cli-token';
+import type { Dispatch } from '../../chats/dispatch';
+import type { Person } from '../../engine/types';
+import { getEnv } from '../../lib/env';
+import { prisma } from '../../lib/prisma';
+import { RateLimiter } from '../../lib/rate-limit';
+import { transcriptUrl } from '../../lib/urls';
+import { HttpError } from '../errors';
+
+/** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
+export const LOGIN_STARTS_PER_MINUTE = 10;
+
+export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli: CliAuth } }> {
+  const app = new Hono<{ Variables: { cli: CliAuth } }>();
+  const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
+
+  app.post('/api/cli/login', async (c) => {
+    if (!loginStarts.allow(clientAddress(c))) throw new HttpError('rate_limited', 'Too many logins started from here. Wait a minute and try again.');
+    const { deviceName } = CliLoginStartRequest.parse(await c.req.json());
+    const login = await startCliLogin(deviceName);
+    return c.json({
+      deviceCode: login.deviceCode,
+      userCode: login.userCode,
+      verifyUrl: `${getEnv().PUBLIC_URL}/cli/approve?code=${login.userCode}`,
+      interval: POLL_INTERVAL_SEC,
+      expiresIn: LOGIN_TTL_MS / 1000,
+    });
+  });
+
+  app.post('/api/cli/login/poll', async (c) => {
+    const { deviceCode } = CliLoginPollRequest.parse(await c.req.json());
+    return c.json(await pollCliLogin(deviceCode));
+  });
+
+  app.get('/api/me', requireCliToken, async (c) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId }, include: { githubAuth: true } });
+    const body: MeResponse = { login: user.login, avatarUrl: user.avatarUrl, githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth' };
+    return c.json(body);
+  });
+
+  app.get('/api/me/chats', requireCliToken, async (c) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
+    const rows = await prisma.participant.findMany({
+      where: { githubId: user.githubId, chat: { closedAt: null } },
+      include: { chat: { include: { repo: true } } },
+      orderBy: { chat: { updatedAt: 'desc' } },
+      take: 100,
+    });
+    const chats: MyChat[] = rows.map((p) => ({
+      id: p.chat.id,
+      repo: p.chat.repo.fullName,
+      number: p.chat.number,
+      title: p.chat.title,
+      role: p.role as Role,
+      phase: p.chat.phase as Phase,
+      round: p.chat.round,
+      attention: p.attention as Attention,
+      url: transcriptUrl(p.chat.repo.fullName, p.chat.number),
+      updatedAt: p.chat.updatedAt.toISOString(),
+    }));
+    const body: MyChatsResponse = { chats };
+    return c.json(body);
+  });
+
+  app.delete('/api/cli/token', requireCliToken, async (c) => {
+    await prisma.cliToken.update({ where: { id: c.get('cli').tokenId }, data: { revokedAt: new Date() } });
+    return c.body(null, 204);
+  });
+
+  // `nitpilot retry` (spec §10): run my failed job on this PR again. Plan 2's Retry button uses it too.
+  app.post('/api/chats/:id/retry', requireCliToken, async (c) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
+    const chatId = c.req.param('id');
+    if (!(await newestJobFailed(chatId, user.githubId))) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
+    const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
+    const queued = out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId);
+    if (!queued) throw new HttpError('conflict', 'Nothing was queued: the PR may be closed, or your agent runs once the current step finishes.');
+    const body: RetryResponse = { status: 'queued' };
+    return c.json(body);
+  });
+
+  return app;
+}
+
+/**
+ * True when one of this person's roles in the chat is flagged `failed` because its newest job failed.
+ * A flag from a GitHub write that failed (spec §15) is fixed by signing in again, not by re-running the agent.
+ */
+async function newestJobFailed(chatId: string, githubId: string): Promise<boolean> {
+  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
+  for (const p of flagged) {
+    const newest = await prisma.job.findFirst({ where: { participantId: p.id }, orderBy: { createdAt: 'desc' }, select: { status: true } });
+    if (newest?.status === 'failed') return true;
+  }
+  return false;
+}
+
+/**
+ * The address a request came from: Hono's Node adapter puts the raw request in `c.env.incoming`.
+ * Tests call the app without a socket ('unknown'). Behind a reverse proxy (Plan 3) this is the
+ * proxy's address, until we read X-Forwarded-For from it.
+ */
+function clientAddress(c: Context): string {
+  const incoming = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming;
+  return incoming?.socket.remoteAddress ?? 'unknown';
+}
+```
+
+In `apps/server/src/http/app.ts`:
+- add `import type { Dispatch } from '../chats/dispatch';`
+- replace `export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest };` with:
+```ts
+export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest; dispatch: Dispatch };
+```
+- replace `app.route('/', cliRoutes());` with `app.route('/', cliRoutes(deps));`
+
+In `apps/server/test/app.ts`:
+- add `import { Dispatcher } from '../src/chats/dispatch';`
+- in `testDeps`, after the `ingest:` line, add:
+```ts
+    dispatch: new Dispatcher().dispatch,
+```
+
+In `apps/server/src/main.ts`, replace `const app = createApp({ github, appAuth, ingest });` with:
+```ts
+  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch });
+```
+
+In `apps/server/src/ingest/record.ts`, replace:
+```ts
+const KEEP_MS = 14 * 86_400_000;
+
+/** Raw deliveries and seen comment ids are kept 14 days (spec §8). */
+export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: number; seenComments: number }> {
+  const before = new Date(now.getTime() - KEEP_MS);
+  const rawEvents = await prisma.rawEvent.deleteMany({ where: { createdAt: { lt: before } } });
+  const seenComments = await prisma.seenComment.deleteMany({ where: { createdAt: { lt: before } } });
+  return { rawEvents: rawEvents.count, seenComments: seenComments.count };
+}
+```
+with:
+```ts
+const KEEP_MS = 14 * 86_400_000;
+const LOGIN_KEEP_MS = 86_400_000;
+
+/**
+ * Raw deliveries and seen comment ids are kept 14 days (spec §8). CLI login requests are kept a day:
+ * each one expires after 10 minutes anyway (spec §14).
+ */
+export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: number; seenComments: number; cliLoginRequests: number }> {
+  const before = new Date(now.getTime() - KEEP_MS);
+  const rawEvents = await prisma.rawEvent.deleteMany({ where: { createdAt: { lt: before } } });
+  const seenComments = await prisma.seenComment.deleteMany({ where: { createdAt: { lt: before } } });
+  const cliLoginRequests = await prisma.cliLoginRequest.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - LOGIN_KEEP_MS) } } });
+  return { rawEvents: rawEvents.count, seenComments: seenComments.count, cliLoginRequests: cliLoginRequests.count };
+}
+```
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/lib/rate-limit src/engine && npm run test:db -w apps/server -- src/http src/ingest && npm run typecheck -w apps/server`
+Expected: PASS (rate-limit 3; cli.db adds 4; process.db adds 1).
+
+- [ ] **Step 9: Write the failing CLI tests**
+
+`apps/cli/test/stub-server.ts`:
+```ts
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+export type StubReply = { status?: number; body?: unknown };
+export type StubRequest = { method: string; path: string; authorization: string | undefined; body: unknown };
+/** What a route answers: always the same reply, or a function of the request. */
+export type StubRoute = StubReply | ((req: StubRequest) => StubReply);
+/** Keyed `METHOD /path`, e.g. `'POST /api/cli/login'`. */
+export type StubRoutes = Record<string, StubRoute>;
+
+/**
+ * A pretend Nitpilot server on a random local port, for CLI tests: each test says what every route
+ * answers, and `requests` records what the CLI sent. Unknown routes answer 404.
+ */
+export async function startStubServer(routes: StubRoutes) {
+  const requests: StubRequest[] = [];
+  const server = createServer((req, res) => {
+    void readBody(req).then((text) => {
+      const request: StubRequest = {
+        method: req.method ?? 'GET',
+        path: new URL(req.url ?? '/', 'http://stub').pathname,
+        authorization: req.headers.authorization,
+        body: text ? JSON.parse(text) : undefined,
+      };
+      requests.push(request);
+      const route = routes[`${request.method} ${request.path}`] ?? { status: 404, body: { error: { code: 'not_found', message: 'no such route' } } };
+      const reply = typeof route === 'function' ? route(request) : route;
+      res.writeHead(reply.status ?? 200, { 'content-type': 'application/json' });
+      res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    server,
+    requests,
+    async close(): Promise<void> {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+/** A route that gives each reply in turn, then keeps repeating the last: pending, pending, approved. */
+export function inTurn(...replies: StubReply[]): StubRoute {
+  let next = 0;
+  return () => replies[Math.min(next++, replies.length - 1)]!;
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let text = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk: string) => (text += chunk));
+    req.on('end', () => resolve(text));
+  });
+}
+```
+
+`apps/cli/src/git/remotes.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { parseGithubRemote } from './remotes';
+
+describe('parseGithubRemote', () => {
+  it.each([
+    ['https://github.com/octo/sandbox.git', 'octo/sandbox'],
+    ['https://github.com/octo/sandbox', 'octo/sandbox'],
+    ['https://github.com/octo/sandbox/', 'octo/sandbox'],
+    ['https://maya:secret@github.com/octo/sandbox.git', 'octo/sandbox'],
+    ['git@github.com:octo/sandbox.git', 'octo/sandbox'],
+    ['git@github.com:octo-org/my.repo.git', 'octo-org/my.repo'],
+    ['ssh://git@github.com/octo/sandbox.git', 'octo/sandbox'],
+    ['ssh://git@github.com:22/octo/sandbox.git', 'octo/sandbox'],
+    // An SSH host alias from ~/.ssh/config, used to run two GitHub accounts on one machine (spec §17).
+    ['git@github-a:octo/sandbox.git', 'octo/sandbox'],
+    ['git@gitlab.com:octo/sandbox.git', null],
+    ['https://gitlab.com/octo/sandbox.git', null],
+    ['https://localhost/octo/sandbox', null],
+    ['/srv/git/sandbox.git', null],
+    ['https://github.com/octo', null],
+  ])('%s → %s', (url, expected) => {
+    expect(parseGithubRemote(url)).toBe(expected);
+  });
+});
+```
+
+`apps/cli/src/commands/login.test.ts`:
+```ts
+import { statSync } from 'node:fs';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { recordOut } from '../../test/out';
+import { inTurn, startStubServer, type StubReply } from '../../test/stub-server';
+import { tempDir } from '../../test/temp';
+import { configPath, loadConfigFile, saveConfig } from '../config/config';
+import { login } from './login';
+
+const START = { deviceCode: 'device-secret', userCode: 'WDJB-MJHT', verifyUrl: 'http://nitpilot.test/cli/approve?code=WDJB-MJHT', interval: 2, expiresIn: 600 };
+const pending: StubReply = { body: { status: 'pending' } };
+const approved: StubReply = { body: { status: 'approved', token: 'nit_newtoken' } };
+const noBrowser = async () => {};
+const noWait = async () => {};
+
+/** A server whose polls answer `polls` in turn, and an empty config folder. */
+async function setup(...polls: StubReply[]) {
+  const stub = await startStubServer({
+    'POST /api/cli/login': { body: START },
+    'POST /api/cli/login/poll': inTurn(...polls),
+    'GET /api/me': { body: { login: 'maya', avatarUrl: null, githubAuth: 'ok' } },
+  });
+  onTestFinished(() => stub.close());
+  const dir = tempDir();
+  return { stub, dir, env: { NITPILOT_CONFIG_DIR: dir, NITPILOT_SERVER: stub.url } };
+}
+
+describe('nitpilot login', () => {
+  it('shows the code, opens the browser, waits for approval and saves the token', async () => {
+    const { stub, dir, env } = await setup(pending, approved);
+    const out = recordOut();
+    const opened: string[] = [];
+    const waits: number[] = [];
+    await login({ env, out, open: async (url) => void opened.push(url), sleep: async (ms) => void waits.push(ms) });
+
+    expect(out.lines[0]).toBe('To connect this device, enter WDJB-MJHT at http://nitpilot.test/cli/approve?code=WDJB-MJHT');
+    expect(opened).toEqual([START.verifyUrl]);
+    expect(waits).toEqual([2_000, 2_000]); // `interval` seconds before each poll
+    expect(loadConfigFile(dir)).toMatchObject({ server: stub.url, token: 'nit_newtoken' });
+    expect(statSync(configPath(dir)).mode & 0o777).toBe(0o600);
+    expect(stub.requests.find((r) => r.path === '/api/me')?.authorization).toBe('Bearer nit_newtoken');
+    expect(out.text()).toContain('Logged in as maya.');
+  });
+
+  it('keeps the rest of the config file when it saves the token', async () => {
+    const { dir, env } = await setup(approved);
+    saveConfig({ ...loadConfigFile(dir), repos: { 'acme/shop-api': { path: '/code/shop-api' } } }, dir);
+    await login({ env, out: recordOut(), open: noBrowser, sleep: noWait });
+    expect(loadConfigFile(dir).repos).toEqual({ 'acme/shop-api': { path: '/code/shop-api' } });
+  });
+
+  it('stops with a clear message when the login is denied, and saves nothing', async () => {
+    const { dir, env } = await setup(pending, { body: { status: 'denied' } });
+    await expect(login({ env, out: recordOut(), open: noBrowser, sleep: noWait })).rejects.toThrow('The login was denied in the browser.');
+    expect(loadConfigFile(dir).token).toBeNull();
+  });
+
+  it('says to start over when the code expired', async () => {
+    const { env } = await setup({ body: { status: 'expired' } });
+    await expect(login({ env, out: recordOut(), open: noBrowser, sleep: noWait })).rejects.toThrow('The code expired. Run `nitpilot login` again.');
+  });
+});
+```
+
+`apps/cli/src/commands/status.test.ts`:
+```ts
+import type { MyChat } from '@nitpilot/protocol';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { recordOut } from '../../test/out';
+import { startStubServer } from '../../test/stub-server';
+import { tempDir } from '../../test/temp';
+import { status } from './status';
+
+const chat = (over: Partial<MyChat> = {}): MyChat => ({
+  id: 'chat_1',
+  repo: 'acme/shop-api',
+  number: 142,
+  title: 'Cursor pagination for orders',
+  role: 'reviewer',
+  phase: 'reviewing',
+  round: 1,
+  attention: 'none',
+  url: 'http://nitpilot.test/c/acme/shop-api/142',
+  updatedAt: '2026-10-10T08:00:00.000Z',
+  ...over,
+});
+
+/** Run `nitpilot status` against a server that answers with this account and these chats. */
+async function run(githubAuth: 'ok' | 'needs_reauth', chats: MyChat[], token: string | null = 'nit_abc') {
+  const stub = await startStubServer({
+    'GET /api/me': { body: { login: 'maya', avatarUrl: null, githubAuth } },
+    'GET /api/me/chats': { body: { chats } },
+  });
+  onTestFinished(() => stub.close());
+  const out = recordOut();
+  const env = { NITPILOT_CONFIG_DIR: tempDir(), NITPILOT_SERVER: stub.url, ...(token ? { NITPILOT_TOKEN: token } : {}) };
+  await status({ env, out });
+  return { out, stub };
+}
+
+describe('nitpilot status', () => {
+  it('shows who you are and one line per open PR', async () => {
+    const { out, stub } = await run('ok', [chat(), chat({ id: 'chat_2', number: 7, role: 'author', phase: 'addressing', round: 2 })]);
+    expect(out.lines[0]).toBe(`Logged in as maya on ${stub.url}`);
+    expect(out.text()).toMatch(/PR\s+ROLE\s+PHASE\s+ROUND\s+NEEDS YOU\s+TITLE/);
+    expect(out.text()).toMatch(/acme\/shop-api#142\s+reviewer\s+reviewing\s+1\s+Cursor pagination for orders/);
+    expect(out.text()).toMatch(/acme\/shop-api#7\s+author\s+addressing\s+2/);
+  });
+
+  it('warns when GitHub access needs a new sign-in', async () => {
+    const { out, stub } = await run('needs_reauth', []);
+    expect(out.text()).toContain(`! GitHub access expired. Sign in again at ${stub.url}/`);
+  });
+
+  it('suggests `nitpilot retry` for a PR where your agent failed', async () => {
+    const { out } = await run('ok', [chat({ attention: 'failed' })]);
+    expect(out.text()).toContain('agent failed');
+    expect(out.text()).toContain('To run it again: nitpilot retry https://github.com/acme/shop-api/pull/142');
+  });
+
+  it('says so when there are no PRs yet', async () => {
+    const { out } = await run('ok', []);
+    expect(out.text()).toContain('No open PRs with Nitpilot yet.');
+  });
+
+  it('asks you to log in first', async () => {
+    await expect(run('ok', [], null)).rejects.toThrow('Not logged in');
+  });
+});
+```
+
+`apps/cli/src/commands/repos.test.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+import { describe, expect, it } from 'vitest';
+import { recordOut } from '../../test/out';
+import { tempDir } from '../../test/temp';
+import { loadConfigFile, saveConfig } from '../config/config';
+import { reposAdd } from './repos';
+
+const run = promisify(execFile);
+
+/** A new git clone with these remotes. realpath: macOS's temp folder is a symlink, and git reports the real path. */
+async function cloneWith(remotes: Record<string, string>): Promise<string> {
+  const dir = realpathSync(tempDir());
+  await run('git', ['-C', dir, 'init', '-q']);
+  for (const [name, url] of Object.entries(remotes)) await run('git', ['-C', dir, 'remote', 'add', name, url]);
+  return dir;
+}
+
+describe('nitpilot repos add', () => {
+  it('links the clone to every GitHub repo its remotes point at', async () => {
+    const clone = await cloneWith({ origin: 'git@github.com:maya/shop-api.git', upstream: 'https://github.com/acme/shop-api.git' });
+    const dir = tempDir();
+    const out = recordOut();
+    await reposAdd(clone, { env: { NITPILOT_CONFIG_DIR: dir }, out });
+    expect(loadConfigFile(dir).repos).toEqual({ 'maya/shop-api': { path: clone }, 'acme/shop-api': { path: clone } });
+    expect(out.lines).toContain(`Linked acme/shop-api → ${clone}`);
+  });
+
+  it("works from a folder inside the clone, and keeps the repo's setup and checks", async () => {
+    const clone = await cloneWith({ origin: 'https://github.com/acme/shop-api.git' });
+    mkdirSync(join(clone, 'src'));
+    const dir = tempDir();
+    saveConfig({ ...loadConfigFile(dir), repos: { 'acme/shop-api': { path: '/old/place', setup: ['npm', 'ci'] } } }, dir);
+    await reposAdd(join(clone, 'src'), { env: { NITPILOT_CONFIG_DIR: dir }, out: recordOut() });
+    expect(loadConfigFile(dir).repos['acme/shop-api']).toEqual({ path: clone, setup: ['npm', 'ci'] });
+  });
+
+  it('explains when the folder is not a git clone', async () => {
+    await expect(reposAdd(tempDir(), { env: { NITPILOT_CONFIG_DIR: tempDir() }, out: recordOut() })).rejects.toThrow('is not inside a git clone');
+  });
+
+  it('explains when no remote is on GitHub', async () => {
+    const clone = await cloneWith({ origin: 'git@gitlab.com:acme/shop-api.git' });
+    await expect(reposAdd(clone, { env: { NITPILOT_CONFIG_DIR: tempDir() }, out: recordOut() })).rejects.toThrow('has no GitHub remote');
+  });
+});
+```
+
+`apps/cli/src/commands/retry.test.ts`:
+```ts
+import type { MyChat } from '@nitpilot/protocol';
+import { describe, expect, it, onTestFinished } from 'vitest';
+import { recordOut } from '../../test/out';
+import { startStubServer, type StubReply } from '../../test/stub-server';
+import { tempDir } from '../../test/temp';
+import { parsePrRef, retry } from './retry';
+
+const failedChat: MyChat = {
+  id: 'chat_1',
+  repo: 'acme/shop-api',
+  number: 142,
+  title: 'Cursor pagination for orders',
+  role: 'reviewer',
+  phase: 'reviewing',
+  round: 1,
+  attention: 'failed',
+  url: 'http://nitpilot.test/c/acme/shop-api/142',
+  updatedAt: '2026-10-10T08:00:00.000Z',
+};
+
+async function setup(retryReply: StubReply = { body: { status: 'queued' } }) {
+  const stub = await startStubServer({
+    'GET /api/me/chats': { body: { chats: [failedChat] } },
+    'POST /api/chats/chat_1/retry': retryReply,
+  });
+  onTestFinished(() => stub.close());
+  return { stub, env: { NITPILOT_CONFIG_DIR: tempDir(), NITPILOT_SERVER: stub.url, NITPILOT_TOKEN: 'nit_abc' } };
+}
+
+describe('nitpilot retry', () => {
+  it("finds the PR's chat and asks the server to queue your job again", async () => {
+    const { stub, env } = await setup();
+    const out = recordOut();
+    await retry('https://github.com/acme/shop-api/pull/142', { env, out });
+    expect(stub.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/chats/chat_1/retry', authorization: 'Bearer nit_abc' });
+    expect(out.lines[0]).toContain('Queued your agent again on acme/shop-api#142.');
+  });
+
+  it("passes on the server's answer when there is nothing to retry", async () => {
+    const { env } = await setup({ status: 409, body: { error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } } });
+    await expect(retry('acme/shop-api#142', { env, out: recordOut() })).rejects.toThrow('Nothing of yours failed on this PR.');
+  });
+
+  it("refuses a PR you're not part of", async () => {
+    const { env } = await setup();
+    await expect(retry('acme/shop-api#999', { env, out: recordOut() })).rejects.toThrow("You're not part of an open Nitpilot chat on acme/shop-api#999.");
+  });
+
+  it('explains the usage when it cannot read the PR', async () => {
+    const { env } = await setup();
+    await expect(retry('shop-api 142', { env, out: recordOut() })).rejects.toThrow('Usage: nitpilot retry <pr-url>');
+  });
+
+  it('reads PR links and the short owner/name#number form', () => {
+    expect(parsePrRef('https://github.com/acme/shop-api/pull/142')).toEqual({ repo: 'acme/shop-api', number: 142 });
+    expect(parsePrRef('https://github.com/acme/shop-api/pull/142/files')).toEqual({ repo: 'acme/shop-api', number: 142 });
+    expect(parsePrRef('acme/shop-api#142')).toEqual({ repo: 'acme/shop-api', number: 142 });
+    expect(parsePrRef('https://gitlab.com/acme/shop-api/pull/142')).toBeNull();
+  });
+});
+```
+
+In `apps/cli/src/http.test.ts`, inside `describe('ServerClient', …)`, add:
+```ts
+  it("asks the server to queue a chat's failed job again", async () => {
+    const fetch = fakeFetch(() => json({ status: 'queued' }));
+    expect(await new ServerClient(SERVER, 'nit_abc', fetch).retry('chat_1')).toEqual({ status: 'queued' });
+    expect(fetch.calls[0]!.url.pathname).toBe('/api/chats/chat_1/retry');
+    expect(fetch.calls[0]!.init.method).toBe('POST');
+  });
+```
+
+- [ ] **Step 10: Run them to see them fail**
+
+Run: `npm test -w apps/cli`
+Expected: FAIL: `Failed to resolve import "./remotes"` (and `./login`, `./status`, `./repos`, `./retry`); in `http.test.ts`, `retry is not a function`.
+
+- [ ] **Step 11: Write the git helpers and the four commands**
+
+`apps/cli/src/git/remotes.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { CliError } from '../errors';
+
+const run = promisify(execFile);
+
+/**
+ * `owner/name` for a GitHub remote URL, or null for anything else. Understands https, ssh:// and the
+ * short `git@host:owner/name.git` form. Over SSH the host may also be an alias without a dot, like the
+ * `github-a` and `github-b` aliases used to run two GitHub accounts on one machine (spec §17).
+ */
+export function parseGithubRemote(url: string): string | null {
+  const path = githubPath(url.trim());
+  const m = path ? /^\/?([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(path) : null;
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
+/** The path part of a remote URL (`owner/name.git`) when its host is GitHub, else null. */
+function githubPath(url: string): string | null {
+  const short = /^(?:[\w.-]+@)?([\w.-]+):(?!\/\/)(.+)$/.exec(url); // git@github.com:owner/name.git
+  if (short) return isGithubHost(short[1]!, { sshAlias: true }) ? short[2]! : null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null; // a local path, for example
+  }
+  if (parsed.protocol === 'ssh:') return isGithubHost(parsed.hostname, { sshAlias: true }) ? parsed.pathname : null;
+  if (['https:', 'http:', 'git:'].includes(parsed.protocol)) return isGithubHost(parsed.hostname, { sshAlias: false }) ? parsed.pathname : null;
+  return null;
+}
+
+function isGithubHost(host: string, opts: { sshAlias: boolean }): boolean {
+  return host === 'github.com' || (opts.sshAlias && !host.includes('.'));
+}
+
+/** The top folder of the git clone that contains `path`. */
+export async function gitTopLevel(path: string): Promise<string> {
+  try {
+    const { stdout } = await run('git', ['-C', path, 'rev-parse', '--show-toplevel']);
+    return stdout.trim();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') throw new CliError('git is not installed (or not on your PATH).');
+    throw new CliError(`${path} is not inside a git clone. Run this in a clone, or pass the clone's path.`);
+  }
+}
+
+/** The GitHub repos a clone's remotes point at (origin, upstream, …), each listed once. */
+export async function githubReposIn(clone: string): Promise<string[]> {
+  const { stdout } = await run('git', ['-C', clone, 'remote', '-v']);
+  return githubReposInRemoteList(stdout);
+}
+
+/** The GitHub repos in `git remote -v` output, each listed once. */
+export function githubReposInRemoteList(text: string): string[] {
+  // Each line looks like: origin<TAB>git@github.com:octo/sandbox.git (fetch)
+  const names = text
+    .split('\n')
+    .map((line) => line.split(/\s+/)[1])
+    .filter((url): url is string => Boolean(url))
+    .map((url) => parseGithubRemote(url))
+    .filter((name): name is string => name !== null);
+  return [...new Set(names)];
+}
+```
+These run git in the person's own clone for two read-only questions (`rev-parse`, `remote -v`), which run no hooks. Every git call on a PR's code goes through `safeGit` (Task 9).
+
+`apps/cli/src/commands/login.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { hostname } from 'node:os';
+import { BRAND } from '@nitpilot/protocol';
+import { configDir, configPath, loadConfig, loadConfigFile, saveConfig } from '../config/config';
+import { CliError } from '../errors';
+import { ServerClient } from '../http';
+import { terminal, type Out } from '../out';
+
+export type LoginDeps = {
+  env?: Record<string, string | undefined>;
+  out?: Out;
+  /** Opens the approval page. The default asks the OS; the URL is printed either way. */
+  open?: (url: string) => Promise<void>;
+  sleep?: (ms: number) => Promise<void>;
+  fetch?: typeof fetch;
+};
+
+/**
+ * `nitpilot login` (spec §10 "CLI login"): get a code, let the person approve it in the browser, keep
+ * the token. See docs/why/cli-login.md.
+ */
+export async function login(deps: LoginDeps = {}): Promise<void> {
+  const env = deps.env ?? process.env;
+  const out = deps.out ?? terminal;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const dir = configDir(env);
+  const { server } = loadConfig({ env, dir });
+  const client = new ServerClient(server, null, deps.fetch);
+
+  const start = await client.loginStart(deviceName());
+  out.log(`To connect this device, enter ${start.userCode} at ${start.verifyUrl}`);
+  await (deps.open ?? openInBrowser)(start.verifyUrl);
+  out.log('Waiting for you to approve it in the browser… (Ctrl-C cancels)');
+
+  for (;;) {
+    await sleep(start.interval * 1000);
+    const poll = await client.loginPoll(start.deviceCode);
+    if (poll.status === 'pending') continue;
+    if (poll.status === 'denied') throw new CliError('The login was denied in the browser.');
+    if (poll.status === 'expired') throw new CliError(`The code expired. Run \`${BRAND.cli} login\` again.`);
+    // Keep the rest of the file as it is, and remember which server this token belongs to.
+    saveConfig({ ...loadConfigFile(dir), server, token: poll.token }, dir);
+    const me = await new ServerClient(server, poll.token, deps.fetch).me();
+    out.log(`Logged in as ${me.login}. The token is in ${configPath(dir)}, readable by you only.`);
+    return;
+  }
+}
+
+/** This machine's name, as the server lists it among your devices. */
+function deviceName(): string {
+  return hostname().replace(/\.local$/, '').slice(0, 100) || 'unknown device';
+}
+
+/** Open a URL in the default browser (macOS `open`, Linux `xdg-open`). Never fails: the URL is printed anyway. */
+export async function openInBrowser(url: string): Promise<void> {
+  const command = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
+  if (!command) return;
+  await new Promise<void>((resolve) => execFile(command, [url], () => resolve()));
+}
+```
+
+`apps/cli/src/commands/status.ts`:
+```ts
+import { BRAND, type Attention, type MyChat } from '@nitpilot/protocol';
+import { loadConfig } from '../config/config';
+import { ServerClient } from '../http';
+import { terminal, type Out } from '../out';
+
+export type StatusDeps = { env?: Record<string, string | undefined>; out?: Out; fetch?: typeof fetch };
+
+/** What the NEEDS YOU column says for each attention flag. */
+const NEEDS: Record<Attention, string> = {
+  none: '',
+  decision: 'a decision',
+  manual_review: 'start review',
+  failed: 'agent failed',
+  drafts: 'drafts',
+};
+
+/** `nitpilot status` (spec §11): who you are on the server, and your open PRs with Nitpilot. */
+export async function status(deps: StatusDeps = {}): Promise<void> {
+  const out = deps.out ?? terminal;
+  const cfg = loadConfig({ env: deps.env });
+  const client = new ServerClient(cfg.server, cfg.token, deps.fetch);
+  const [me, { chats }] = await Promise.all([client.me(), client.myChats()]);
+
+  out.log(`Logged in as ${me.login} on ${cfg.server}`);
+  if (me.githubAuth === 'needs_reauth') {
+    out.log(`! GitHub access expired. Sign in again at ${new URL('/', cfg.server).href} so ${BRAND.name} can post in your name.`);
+  }
+  if (chats.length === 0) {
+    out.log(`No open PRs with ${BRAND.name} yet.`);
+    return;
+  }
+  out.log('');
+  out.log(table([['PR', 'ROLE', 'PHASE', 'ROUND', 'NEEDS YOU', 'TITLE'], ...chats.map(row)]));
+  for (const chat of chats.filter((c) => c.attention === 'failed')) {
+    out.log('');
+    out.log(`Your agent couldn't finish on ${chat.repo}#${chat.number}. To run it again: ${BRAND.cli} retry ${prUrl(chat)}`);
+  }
+}
+
+function row(c: MyChat): string[] {
+  const title = c.title.length > 50 ? `${c.title.slice(0, 49)}…` : c.title;
+  return [`${c.repo}#${c.number}`, c.role, c.phase, String(c.round), NEEDS[c.attention], title];
+}
+
+/** Columns padded to their widest cell. */
+function table(rows: string[][]): string {
+  const widths = rows[0]!.map((_, i) => Math.max(...rows.map((r) => r[i]!.length)));
+  return rows.map((r) => r.map((cell, i) => cell.padEnd(widths[i]!)).join('  ').trimEnd()).join('\n');
+}
+
+/** The PR on GitHub: the link `nitpilot retry` takes. */
+export function prUrl(chat: Pick<MyChat, 'repo' | 'number'>): string {
+  return `https://github.com/${chat.repo}/pull/${chat.number}`;
+}
+```
+
+`apps/cli/src/commands/repos.ts`:
+```ts
+import { resolve } from 'node:path';
+import { BRAND } from '@nitpilot/protocol';
+import { configDir, loadConfigFile, saveConfig } from '../config/config';
+import { CliError } from '../errors';
+import { gitTopLevel, githubReposIn } from '../git/remotes';
+import { terminal, type Out } from '../out';
+
+export type ReposDeps = { env?: Record<string, string | undefined>; out?: Out };
+
+/**
+ * `nitpilot repos add [path]` (spec §11): link a local clone to the GitHub repos its remotes point at,
+ * so jobs for them can come to this device. Keeps any `setup` and `checks` already configured.
+ */
+export async function reposAdd(path: string | undefined, deps: ReposDeps = {}): Promise<void> {
+  const out = deps.out ?? terminal;
+  const dir = configDir(deps.env ?? process.env);
+  const clone = await gitTopLevel(resolve(path ?? '.'));
+  const names = await githubReposIn(clone);
+  if (names.length === 0) throw new CliError(`${clone} has no GitHub remote. Add one (git remote add origin <url>) and try again.`);
+
+  const cfg = loadConfigFile(dir);
+  for (const name of names) {
+    cfg.repos[name] = { ...cfg.repos[name], path: clone };
+    out.log(`Linked ${name} → ${clone}`);
+  }
+  saveConfig(cfg, dir);
+  out.log(`A running \`${BRAND.cli} start\` picks this up when you restart it.`);
+}
+```
+
+`apps/cli/src/commands/retry.ts`:
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { loadConfig } from '../config/config';
+import { CliError } from '../errors';
+import { ServerClient } from '../http';
+import { terminal, type Out } from '../out';
+
+export type RetryDeps = { env?: Record<string, string | undefined>; out?: Out; fetch?: typeof fetch };
+
+/** `nitpilot retry <pr-url>` (spec §11): queue your failed job on that PR again. */
+export async function retry(ref: string | undefined, deps: RetryDeps = {}): Promise<void> {
+  const out = deps.out ?? terminal;
+  const pr = ref ? parsePrRef(ref) : null;
+  if (!pr) throw new CliError(`Usage: ${BRAND.cli} retry <pr-url>, for example ${BRAND.cli} retry https://github.com/octo/sandbox/pull/12`);
+  const cfg = loadConfig({ env: deps.env });
+  const client = new ServerClient(cfg.server, cfg.token, deps.fetch);
+  const { chats } = await client.myChats();
+  const chat = chats.find((c) => c.repo.toLowerCase() === pr.repo.toLowerCase() && c.number === pr.number);
+  if (!chat) throw new CliError(`You're not part of an open ${BRAND.name} chat on ${pr.repo}#${pr.number}.`);
+  await client.retry(chat.id);
+  out.log(`Queued your agent again on ${chat.repo}#${chat.number}. It runs on a device where \`${BRAND.cli} start\` is running.`);
+}
+
+/** `https://github.com/owner/name/pull/12` (anything after the number is ignored) or `owner/name#12`, else null. */
+export function parsePrRef(ref: string): { repo: string; number: number } | null {
+  const m = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/.exec(ref) ?? /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(ref);
+  return m ? { repo: m[1]!, number: Number(m[2]) } : null;
+}
+```
+
+In `apps/cli/src/http.ts`:
+- add `RetryResponse` to the protocol import;
+- after `myChats()`, add:
+```ts
+  /** `nitpilot retry`: queue my failed job on this chat again. */
+  retry(chatId: string) {
+    return this.call('POST', `/api/chats/${encodeURIComponent(chatId)}/retry`, RetryResponse, { auth: true });
+  }
+```
+
+In `apps/cli/src/cli.ts`, add these imports:
+```ts
+import { login } from './commands/login';
+import { reposAdd } from './commands/repos';
+import { retry } from './commands/retry';
+import { status } from './commands/status';
+```
+and replace `export const COMMANDS: Record<string, Command> = {};` with:
+```ts
+export const COMMANDS: Record<string, Command> = {
+  login: { usage: `${BRAND.cli} login`, summary: 'Connect this device to your account', run: (_args, out) => login({ out }) },
+  status: { usage: `${BRAND.cli} status`, summary: 'Your open PRs and what they need from you', run: (_args, out) => status({ out }) },
+  repos: {
+    usage: `${BRAND.cli} repos add [path]`,
+    summary: 'Link a local clone, so its jobs can come here',
+    run: async ([sub, path], out) => {
+      if (sub !== 'add') throw new CliError(`Usage: ${BRAND.cli} repos add [path]`);
+      await reposAdd(path, { out });
+    },
+  },
+  retry: { usage: `${BRAND.cli} retry <pr-url>`, summary: 'Run your failed job on that PR again', run: ([ref], out) => retry(ref, { out }) },
+};
+```
+
+- [ ] **Step 12: Run them to see them pass**
+
+Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
+Expected: PASS (remotes 14, login 4, status 5, repos 4, retry 5, http 8, plus Task 5's files).
+
+- [ ] **Step 13: Explain the limits on logging in**
+
+In `docs/why/cli-login.md`, before `## The React analogy`, add:
+```markdown
+## Limits and cleanup
+
+- **A rate limit.** Each `POST /api/cli/login` writes a row, so anyone could fill the table by calling it in a loop. One client address may start 10 logins a minute (`lib/rate-limit.ts`); the 11th gets `429 Too Many Requests`. The count lives in memory, which is fine because there is one server process (spec §7). It works like a "sliding window": we remember when each recent request came in and count the ones from the last 60 seconds.
+- **Cleanup.** A login request is useless 10 minutes after it was made, so the hourly purge (`ingest/record.ts`) deletes the ones older than a day.
+```
+
+- [ ] **Step 14: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: all green.
+
+- [ ] **Step 15: Commit**
+
+```bash
+git add apps/server apps/cli packages/protocol/src/api.ts docs/why/cli-login.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(cli): login, status, repos add and retry
+
+The server gets the retry endpoint (a retry_requested engine event), a rate limit
+on starting CLI logins, and purges old login requests (Plan 1a deferred minor M9).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 7: `start`: the daemon
 
 **Files:**
-- Create: `apps/cli/src/connection/ws-client.ts`, `apps/cli/src/connection/backoff.ts`, `apps/cli/src/daemon.ts`, `apps/cli/src/notify-os.ts`, `apps/cli/src/state.ts` (daily cap counter), and tests.
-- Port the reconnect loop from `hooksmith/cli/src/commands/listen.ts`.
+- Create: `apps/cli/src/connection/backoff.ts`, `apps/cli/src/connection/backoff.test.ts`
+- Create: `apps/cli/src/connection/ws-client.ts`
+- Create: `apps/cli/src/state.ts`, `apps/cli/src/state.test.ts`
+- Create: `apps/cli/src/notify-os.ts`, `apps/cli/src/notify-os.test.ts`
+- Create: `apps/cli/src/daemon.ts`, `apps/cli/src/daemon.test.ts`
+- Create: `apps/cli/src/commands/start.ts`, `apps/cli/src/commands/start.test.ts`
+- Create: `apps/cli/test/stub-hub.ts`
+- Modify: `apps/cli/src/cli.ts` (`start`), `apps/cli/package.json` (`ws` and `@types/ws` for the stub server)
+- Modify: `docs/why/websockets.md` (the CLI's end)
+- Port: the reconnect loop of `~/Desktop/PracticeProjects/hooksmith/cli/src/commands/listen.ts` (backoff doubling to 30 s, reset after a good connection)
 
 **Interfaces:**
-- Consumes: `ServerToCli`, `CliToServer`, `encode`, `CLOSE_CODES`, `PersonalConfig`.
+- Consumes: `PersonalConfig`, `PersonalConfigSchema`, `configDir`, `loadConfig`, `ServerClient`, `ServerError`, `CliError`, `Out`, `recordOut`, `tempDir`, `startStubServer` (Tasks 5–6); `ServerToCli`, `CliToServer`, `CLOSE_CODES`, `CLI_WS_PATH`, `PROTOCOL_VERSION`, `RunningJob`, `JobBundle`, `JobResult`, `FailureReason`, `AgentId`, `AgentMode` (protocol); `jobBundle()`, `jobResult()` (`@nitpilot/protocol/test-samples`).
 - Produces:
-  - `startDaemon({ config, executor: JobExecutor, notifier? })`;
-  - `type JobExecutor = (bundle, io: { progress(stage, text); pushing(from, to): Promise<'applied' | 'stale'>; signal: AbortSignal }) => Promise<JobOutcome>`;
-  - `nextBackoff(prevMs) → ms` (1 s doubling to 30 s, ±20% jitter, reset after welcome).
+  - `startDaemon(opts: DaemonOptions) → { stopped: Promise<StopReason>; stop(): void }`, with `StopReason = 'stopped' | 'reauth' | 'upgrade' | 'replaced'`;
+  - `type JobExecutor = (bundle: JobBundle, io: JobIo) => Promise<JobOutcome>`;
+  - `type JobIo = { progress(stage, text): void; pushing(from, to): Promise<'applied' | 'stale'>; signal: AbortSignal }`;
+  - `type JobOutcome = { kind: 'complete'; result } | { kind: 'fail'; reason; retryable; detail } | { kind: 'reject'; reason }`;
+  - `class Backoff({ startMs?, maxMs?, random? })` with `next(): number` and `reset()`;
+  - `openSocket(handlers) → ServerSocket` (`send`, `close`, `abandon`, `closed: Promise<{ code, reason, opened }>`);
+  - `class DailyJobCounter(dir, now?)` with `take(cap): boolean`, and `localDay(date)`;
+  - `notifyOs(message, { platform?, exec? })`;
+  - `start(deps) → Promise<number>` (`nitpilot start`);
+  - test helpers `startStubHub({ token, routes? })` and `StubConnection` (`test/stub-hub.ts`).
 
-**Behavior:**
-- `hello` reports the linked repos, the agent's id/version/modes from the adapter's `detect()`, `concurrency`, `running` and `defaults`. It pings every `pingSec` with the running jobs.
-- A job counts as running (in `hello` and every `ping`) from the moment its `job.assign` arrives until its result is acked. The server takes back a job that two pings in a row leave out (M6, Task 3).
-- The server never assigns more than `concurrency` jobs, so the daemon just runs what it gets.
-- `dailyJobCap` is counted per local day in `state.json`; a job over the cap gets `job.reject { reason: 'daily_cap' }`.
-- `job.complete`, `job.fail` and `job.reject` each wait for their `ack`; one not acked before a disconnect is sent again after the next `welcome`. `stale` means "not yours anymore": drop it. The server applies a result at most once (M6, Task 4).
-- `job.cancel` aborts the executor; a cancel for a job the daemon doesn't know is ignored.
-- `notify` prints and shows an OS notification (macOS `osascript`, Linux `notify-send`, both via `execFile`; otherwise print only).
-- `4401` → stop: "run `nitpilot login`". `4426` → stop: "upgrade the CLI". `4409` → stop: "another `nitpilot start` on this device took over". Anything else → reconnect with backoff.
+**Behavior** (spec §9.4, §10):
+- **hello** reports the protocol, CLI version, device name, agent `{ id, version, modes }`, the linked repos (`Object.keys(config.repos)`), `concurrency`, the running jobs and `defaults` (from `config.auto`). Then it pings every `pingSec` from `welcome` with the running jobs.
+- **Running** means from the moment a `job.assign` arrives until the server acks its result. It's what `hello.running` and every `ping` list, so the lease stays alive while an answer waits for a reconnect, and a laptop back from sleep gets its job bound again (Review Focus #1).
+- The server never assigns more than `concurrency` jobs, so the daemon runs what it gets. The same `(jobId, attempt)` handed out twice runs once; a newer attempt of a job aborts the older run.
+- **Daily cap:** `dailyJobCap` jobs per local day, counted in `<config dir>/state.json`. A job over the cap gets `job.reject { reason: 'daily_cap' }` without running.
+- **Acks:** `job.complete`, `job.fail`, `job.reject` and `job.pushing` each wait for their `ack`. One not acked before a disconnect is sent again, with the same id, after the next `welcome`. `stale` means "not yours anymore": drop it. The server applies a result at most once (Task 4).
+- **Executors:** a thrown error becomes `job.fail { reason: 'crash', retryable: true }`, so the engine's retry rules decide. `progress` goes out at most every 2 s and only while welcomed; it is never resent.
+- **job.cancel** for a running `(jobId, attempt)` aborts its executor's signal, stops listing it, and sends nothing for it. A cancel for a job the daemon doesn't know (or another attempt) is ignored.
+- **notify** prints `🔔 <title>  <url>` and shows a desktop notification (macOS `osascript`, Linux `notify-send`, both through `execFile` with the text as an argument; elsewhere print only).
+- **Closing:** `4401` → stop, "run `nitpilot login`". `4426` → stop, "upgrade". `4409` → stop, "another `nitpilot start` on this device took over". Anything else → reconnect after `Backoff.next()`: 1 s doubling to 30 s, ±20% jitter, back to 1 s after `welcome`.
+- **A connection that never opened** may be a token refused before the upgrade (a plain 401 the WebSocket client can't see), so the daemon asks `GET /api/me`: a 401 stops it with "run `nitpilot login`"; anything else means try again.
+- **A socket that went quiet:** when nothing (not even a pong) arrives for `silentMs` (default two ping intervals plus 10 s), the daemon abandons the socket and reconnects, without waiting for TCP to notice.
+- **`nitpilot start`** needs a token, declares `modes: []` until agents exist (Task 17 replaces this), stops cleanly on the first Ctrl-C, and exits with 1 when the server sent it away.
 
-**Tests this task must include** (fake timers and a fake WebSocket server):
-- backoff sequence and jitter bounds, and the reset after welcome;
-- hello contents;
-- the ping cadence;
-- the daily cap rejects the 41st job;
-- `job.cancel` aborts a running executor;
-- `4401` and `4409` stop without reconnecting;
-- a `job.complete` sent just before a disconnect is sent again after reconnecting, and a `stale` ack drops it;
-- after a reconnect, `hello.running` lists the job still in progress (Review Focus #1).
+- [ ] **Step 1: Install the WebSocket server the tests use**
+
+Run: `npm install -D -w apps/cli ws@^8.22.0 @types/ws@^8.18.2`
+Expected: both land in `apps/cli/package.json` `devDependencies` (the CLI itself uses Node's built-in `WebSocket` client; `ws` only plays the server in tests).
+
+- [ ] **Step 2: Write the failing tests for the small parts**
+
+`apps/cli/src/connection/backoff.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { Backoff } from './backoff';
+
+const waits = (backoff: Backoff, n: number) => Array.from({ length: n }, () => backoff.next());
+
+describe('Backoff', () => {
+  it('waits 1 s, then doubles each time up to 30 s', () => {
+    expect(waits(new Backoff({ random: () => 0.5 }), 7)).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
+  });
+
+  it('spreads each wait by up to 20% either way, so CLIs reconnecting together drift apart', () => {
+    expect(new Backoff({ random: () => 0 }).next()).toBe(800);
+    expect(new Backoff({ random: () => 1 }).next()).toBe(1_200);
+  });
+
+  it('starts over from 1 s after a good connection', () => {
+    const backoff = new Backoff({ random: () => 0.5 });
+    waits(backoff, 4);
+    backoff.reset();
+    expect(backoff.next()).toBe(1_000);
+  });
+});
+```
+
+`apps/cli/src/state.test.ts`:
+```ts
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { tempDir } from '../test/temp';
+import { DailyJobCounter, localDay } from './state';
+
+describe('DailyJobCounter', () => {
+  it('counts jobs and says no once the cap is reached', () => {
+    const counter = new DailyJobCounter(tempDir(), () => new Date(2026, 9, 10, 9, 0));
+    expect([counter.take(2), counter.take(2), counter.take(2)]).toEqual([true, true, false]);
+  });
+
+  it('starts again on the next local day', () => {
+    let now = new Date(2026, 9, 10, 23, 59);
+    const counter = new DailyJobCounter(tempDir(), () => now);
+    expect(counter.take(1)).toBe(true);
+    expect(counter.take(1)).toBe(false);
+    now = new Date(2026, 9, 11, 0, 1);
+    expect(counter.take(1)).toBe(true);
+  });
+
+  it('treats a missing or unreadable file as no jobs yet', () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, 'state.json'), 'not json');
+    expect(new DailyJobCounter(dir).take(1)).toBe(true);
+    expect(localDay(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+```
+
+`apps/cli/src/notify-os.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { notifyOs } from './notify-os';
+
+function recordExec() {
+  const calls: [string, string[]][] = [];
+  return { calls, exec: async (file: string, args: string[]) => void calls.push([file, args]) };
+}
+
+/** A title that would break out of an AppleScript string if it were pasted into the script. */
+const tricky = 'Ready: "acme/shop-api#142" & do shell script "rm -rf ~"';
+
+describe('notifyOs', () => {
+  it('on macOS, hands the text to osascript as an argument, never inside the script', async () => {
+    const { calls, exec } = recordExec();
+    await notifyOs(tricky, { platform: 'darwin', exec });
+    expect(calls).toHaveLength(1);
+    const [file, args] = calls[0]!;
+    expect(file).toBe('osascript');
+    expect(args.at(-1)).toBe(tricky);
+    expect(args.slice(0, -2).some((arg) => arg.includes('acme'))).toBe(false);
+  });
+
+  it('on Linux, uses notify-send', async () => {
+    const { calls, exec } = recordExec();
+    await notifyOs('Ready', { platform: 'linux', exec });
+    expect(calls).toEqual([['notify-send', ['Nitpilot', 'Ready']]]);
+  });
+
+  it('elsewhere, does nothing (the line in the terminal is enough)', async () => {
+    const { calls, exec } = recordExec();
+    await notifyOs('Ready', { platform: 'win32', exec });
+    expect(calls).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 3: Run them to see them fail**
+
+Run: `npm test -w apps/cli -- src/connection src/state src/notify-os`
+Expected: FAIL: `Failed to resolve import "./backoff"` (and `./state`, `./notify-os`).
+
+- [ ] **Step 4: Write backoff, the daily counter and desktop notifications**
+
+`apps/cli/src/connection/backoff.ts`:
+```ts
+/** Reconnect waits (spec §10): 1 s, doubling up to 30 s. */
+export const BACKOFF_START_MS = 1_000;
+export const BACKOFF_MAX_MS = 30_000;
+/** Each wait is nudged up to 20% either way, so CLIs that lost the server together don't all return at once. */
+const JITTER = 0.2;
+
+export class Backoff {
+  private readonly startMs: number;
+  private readonly maxMs: number;
+  private readonly random: () => number;
+  private base: number;
+
+  constructor(opts: { startMs?: number; maxMs?: number; random?: () => number } = {}) {
+    this.startMs = opts.startMs ?? BACKOFF_START_MS;
+    this.maxMs = opts.maxMs ?? BACKOFF_MAX_MS;
+    this.random = opts.random ?? Math.random;
+    this.base = this.startMs;
+  }
+
+  /** How long to wait before the next try. Each call doubles the wait, up to the maximum. */
+  next(): number {
+    const wait = Math.round(this.base * (1 - JITTER + 2 * JITTER * this.random()));
+    this.base = Math.min(this.base * 2, this.maxMs);
+    return wait;
+  }
+
+  /** After a good connection (`welcome`), start again from the shortest wait. */
+  reset(): void {
+    this.base = this.startMs;
+  }
+}
+```
+
+`apps/cli/src/state.ts`:
+```ts
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { z } from 'zod';
+
+const State = z.object({ day: z.string(), jobs: z.number().int().min(0) });
+
+/**
+ * Counts the jobs this CLI ran today, so `dailyJobCap` limits how much of your agent quota others can
+ * spend by requesting your review (spec §14, budget protection). Kept in <config dir>/state.json.
+ */
+export class DailyJobCounter {
+  constructor(
+    private readonly dir: string,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  /** Count one more job, unless `cap` jobs already ran today. False means: over the cap, turn it down. */
+  take(cap: number): boolean {
+    const today = localDay(this.now());
+    const saved = this.read();
+    const ran = saved?.day === today ? saved.jobs : 0;
+    if (ran >= cap) return false;
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    writeFileSync(this.file(), `${JSON.stringify({ day: today, jobs: ran + 1 })}\n`, { mode: 0o600 });
+    return true;
+  }
+
+  private file(): string {
+    return join(this.dir, 'state.json');
+  }
+
+  /** What was saved, or null when there's no file yet or it can't be read (then the count starts at zero). */
+  private read(): z.infer<typeof State> | null {
+    try {
+      return State.parse(JSON.parse(readFileSync(this.file(), 'utf8')));
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** YYYY-MM-DD in this machine's time zone: the cap resets at your midnight, not UTC's. */
+export function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+```
+
+`apps/cli/src/notify-os.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { BRAND } from '@nitpilot/protocol';
+
+type Exec = (file: string, args: string[]) => Promise<void>;
+
+/**
+ * Show a desktop notification (spec §16, Plan 1). macOS uses osascript, Linux notify-send; elsewhere
+ * the line in the terminal is all. The text goes in as an argument, never pasted into a script, so a PR
+ * title with quotes in it can't turn into AppleScript.
+ */
+export async function notifyOs(message: string, deps: { platform?: NodeJS.Platform; exec?: Exec } = {}): Promise<void> {
+  const platform = deps.platform ?? process.platform;
+  const exec = deps.exec ?? execQuietly;
+  if (platform === 'darwin') {
+    await exec('osascript', ['-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)', '-e', 'end run', BRAND.name, message]);
+  } else if (platform === 'linux') {
+    await exec('notify-send', [BRAND.name, message]);
+  }
+}
+
+/** Run a program and ignore how it went: a missing notify-send must never stop the daemon. */
+function execQuietly(file: string, args: string[]): Promise<void> {
+  return new Promise((resolve) => execFile(file, args, () => resolve()));
+}
+```
+
+- [ ] **Step 5: Run them to see them pass**
+
+Run: `npm test -w apps/cli -- src/connection src/state src/notify-os`
+Expected: PASS (backoff 3, state 3, notify-os 3).
+
+- [ ] **Step 6: Write the failing daemon tests**
+
+`apps/cli/test/stub-hub.ts`:
+```ts
+import type { IncomingMessage } from 'node:http';
+import { CLI_WS_PATH, type CliToServer, type ServerToCli } from '@nitpilot/protocol';
+import { WebSocketServer, type WebSocket } from 'ws';
+import { startStubServer, type StubRoutes } from './stub-server';
+
+type FromCli<T extends CliToServer['t']> = Extract<CliToServer, { t: T }>;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Resolves when something is added to `waiting`'s owner, or after `ms`. */
+function wake(waiting: Set<() => void>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      waiting.delete(done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    waiting.add(done);
+  });
+}
+
+/** One CLI connection as the pretend server sees it, with an inbox, so a test can wait for "the next ping". */
+export class StubConnection {
+  private readonly inbox: CliToServer[] = [];
+  private readonly waiting = new Set<() => void>();
+  /** Like the real hub, every ping gets a pong. Set false to play a server that went quiet. */
+  answerPings = true;
+
+  constructor(private readonly ws: WebSocket) {
+    ws.on('message', (data) => {
+      const msg = JSON.parse(String(data)) as CliToServer;
+      if (msg.t === 'ping' && this.answerPings) this.send({ v: 1, t: 'pong', d: {} });
+      this.inbox.push(msg);
+      for (const done of this.waiting) done();
+    });
+  }
+
+  send(msg: ServerToCli): void {
+    this.ws.send(JSON.stringify(msg));
+  }
+
+  close(code: number, reason = ''): void {
+    this.ws.close(code, reason);
+  }
+
+  /** Answer the hello the way the hub does. */
+  welcome(login = 'maya'): void {
+    this.send({ v: 1, t: 'welcome', d: { login, pingSec: 25, leaseSec: 90 } });
+  }
+
+  /** Take the next message of type `t` out of the inbox, waiting up to `ms`. Other messages stay. */
+  async next<T extends CliToServer['t']>(t: T, ms = 2_000): Promise<FromCli<T>> {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const i = this.inbox.findIndex((m) => m.t === t);
+      if (i >= 0) return this.inbox.splice(i, 1)[0] as FromCli<T>;
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error(`no ${t} within ${ms} ms; the inbox has: ${this.inbox.map((m) => m.t).join(', ') || 'nothing'}`);
+      await wake(this.waiting, left);
+    }
+  }
+
+  /** The next message of type `t` that `matches`, skipping the ones that don't. */
+  async nextMatching<T extends CliToServer['t']>(t: T, matches: (msg: FromCli<T>) => boolean, ms = 2_000): Promise<FromCli<T>> {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const msg = await this.next(t, Math.max(1, deadline - Date.now()));
+      if (matches(msg)) return msg;
+    }
+  }
+
+  /** Throw away the queued messages of type `t`, so the next wait only sees new ones. */
+  forget(t: CliToServer['t']): void {
+    for (let i = this.inbox.length - 1; i >= 0; i--) if (this.inbox[i]!.t === t) this.inbox.splice(i, 1);
+  }
+
+  /** Fail if a message of type `t` arrives within `ms`. */
+  async nothing(t: CliToServer['t'], ms = 300): Promise<void> {
+    await sleep(ms);
+    const got = this.inbox.find((m) => m.t === t);
+    if (got) throw new Error(`expected no ${t}, got ${JSON.stringify(got)}`);
+  }
+}
+
+/**
+ * A pretend Nitpilot server for daemon tests: the REST stub plus /ws/cli. Only `token` may connect;
+ * any other token gets a plain 401 before the upgrade, like the real hub.
+ */
+export async function startStubHub(opts: { token: string; routes?: StubRoutes }) {
+  const http = await startStubServer(opts.routes ?? {});
+  const arrivals: StubConnection[] = [];
+  const waiting = new Set<() => void>();
+  const wss = new WebSocketServer({
+    server: http.server,
+    path: CLI_WS_PATH,
+    verifyClient: (info: { req: IncomingMessage }, done: (ok: boolean, code?: number) => void) => done(info.req.headers.authorization === `Bearer ${opts.token}`, 401),
+  });
+  wss.on('connection', (ws) => {
+    arrivals.push(new StubConnection(ws));
+    for (const done of waiting) done();
+  });
+
+  return {
+    url: http.url,
+    requests: http.requests,
+    /** The next CLI that connects, waiting up to `ms` for it. */
+    async connection(ms = 2_000): Promise<StubConnection> {
+      const deadline = Date.now() + ms;
+      for (;;) {
+        const conn = arrivals.shift();
+        if (conn) return conn;
+        const left = deadline - Date.now();
+        if (left <= 0) throw new Error(`no CLI connected within ${ms} ms`);
+        await wake(waiting, left);
+      }
+    },
+    /** Fail if a CLI connects within `ms`. */
+    async noConnection(ms = 300): Promise<void> {
+      await sleep(ms);
+      if (arrivals.length > 0) throw new Error('a CLI connected');
+    },
+    async close(): Promise<void> {
+      for (const ws of wss.clients) ws.terminate();
+      wss.close();
+      await http.close();
+    },
+  };
+}
+```
+
+`apps/cli/src/daemon.test.ts`:
+```ts
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { JobBundle, RunningJob, ServerToCli } from '@nitpilot/protocol';
+import { jobBundle, jobResult } from '@nitpilot/protocol/test-samples';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { recordOut } from '../test/out';
+import { startStubHub, type StubConnection } from '../test/stub-hub';
+import type { StubRoutes } from '../test/stub-server';
+import { tempDir } from '../test/temp';
+import { PersonalConfigSchema } from './config/config';
+import { Backoff } from './connection/backoff';
+import { startDaemon, type DaemonOptions, type JobExecutor, type JobOutcome } from './daemon';
+import { localDay } from './state';
+import { CLI_VERSION } from './version';
+
+const TOKEN = 'nit_test';
+const JOB: RunningJob = { jobId: 'job_1', attempt: 1 }; // the sample bundle's
+const done: JobOutcome = { kind: 'complete', result: jobResult() };
+const assign = (bundle: JobBundle = jobBundle()): ServerToCli => ({ v: 1, t: 'job.assign', d: { bundle } });
+
+/** A promise the test settles by hand, e.g. an executor that finishes when told to. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+/** A stub server, and a daemon talking to it with fast timings. Both stop when the test ends. */
+async function setup(over: Partial<DaemonOptions> = {}, opts: { daemonToken?: string; routes?: StubRoutes } = {}) {
+  const hub = await startStubHub({ token: TOKEN, routes: opts.routes });
+  const out = recordOut();
+  const notified: string[] = [];
+  const daemon = startDaemon({
+    config: PersonalConfigSchema.parse({ server: hub.url, token: opts.daemonToken ?? TOKEN, repos: { 'acme/shop-api': { path: '/code/shop-api' } } }),
+    configDir: tempDir(),
+    agent: { id: 'fake', version: null, modes: ['reviewer', 'editor'] },
+    executor: async () => done,
+    out,
+    notify: async (message) => void notified.push(message),
+    device: 'test laptop',
+    backoff: new Backoff({ startMs: 20, maxMs: 100 }),
+    pingEveryMs: 50,
+    silentMs: 10_000,
+    ...over,
+  });
+  onTestFinished(async () => {
+    daemon.stop();
+    await daemon.stopped;
+    await hub.close();
+  });
+  return { hub, daemon, out, notified };
+}
+
+/** The daemon's next connection: wait for its hello and answer welcome. */
+async function welcomed(hub: Awaited<ReturnType<typeof startStubHub>>) {
+  const conn = await hub.connection();
+  const hello = await conn.next('hello');
+  conn.welcome();
+  return { conn, hello };
+}
+
+/** Wait for a ping (one every 50 ms) whose running list is exactly `expected`. */
+function pingListing(conn: StubConnection, expected: RunningJob[]) {
+  return conn.nextMatching('ping', (ping) => JSON.stringify(ping.d.running) === JSON.stringify(expected));
+}
+
+describe('startDaemon', () => {
+  it('says hello with what this device can do', async () => {
+    const { hub } = await setup();
+    const { hello } = await welcomed(hub);
+    expect(hello.d).toEqual({
+      protocol: 1,
+      cliVersion: CLI_VERSION,
+      device: 'test laptop',
+      agent: { id: 'fake', version: null, modes: ['reviewer', 'editor'] },
+      repos: ['acme/shop-api'],
+      concurrency: 1,
+      running: [],
+      defaults: { autoReview: true, autoAddress: true },
+    });
+  });
+
+  it('pings on a timer once welcomed', async () => {
+    const { hub } = await setup();
+    const { conn } = await welcomed(hub);
+    expect((await conn.next('ping')).d.running).toEqual([]);
+    expect((await conn.next('ping')).d.running).toEqual([]);
+  });
+
+  it('runs a job and sends its result; the job counts as running until the server acks it', async () => {
+    const finish = deferred<JobOutcome>();
+    const executor = vi.fn<JobExecutor>(() => finish.promise);
+    const { hub } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
+    expect(executor).toHaveBeenCalledWith(jobBundle(), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+
+    finish.resolve(done);
+    const complete = await conn.next('job.complete');
+    expect(complete.d).toEqual({ ...JOB, result: jobResult() });
+    conn.forget('ping');
+    await pingListing(conn, [JOB]); // sent, but not acked yet
+    conn.send({ v: 1, t: 'ack', re: complete.id, d: { status: 'applied' } });
+    await pingListing(conn, []);
+  });
+
+  it("turns down the day's 41st job without running it", async () => {
+    const configDir = tempDir();
+    writeFileSync(join(configDir, 'state.json'), JSON.stringify({ day: localDay(new Date()), jobs: 40 }));
+    const executor = vi.fn<JobExecutor>(async () => done);
+    const { hub } = await setup({ executor, configDir });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    expect((await conn.next('job.reject')).d).toEqual({ ...JOB, reason: 'daily_cap' });
+    expect(executor).not.toHaveBeenCalled();
+  });
+
+  it('stops a job the server cancels, and sends nothing for it', async () => {
+    let signal: AbortSignal | undefined;
+    const executor: JobExecutor = (_bundle, io) =>
+      new Promise((resolve) => {
+        signal = io.signal;
+        io.signal.addEventListener('abort', () => resolve({ kind: 'fail', reason: 'crash', retryable: true, detail: 'stopped' }));
+      });
+    const { hub } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
+    conn.send({ v: 1, t: 'job.cancel', d: { ...JOB, reason: 'pr_closed' } });
+    conn.forget('ping');
+    await pingListing(conn, []);
+    expect(signal?.aborted).toBe(true);
+    await conn.nothing('job.fail');
+  });
+
+  it("ignores a cancel for a job it doesn't know", async () => {
+    const { hub, out } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.send({ v: 1, t: 'job.cancel', d: { jobId: 'job_unknown', attempt: 3, reason: 'stale' } });
+    conn.forget('ping');
+    await pingListing(conn, []);
+    expect(out.text()).not.toContain('job_unknown');
+  });
+
+  it.each([
+    [4401, 'reauth', 'Run `nitpilot login`'],
+    [4426, 'upgrade', 'npm install -g nitpilot@latest'],
+    [4409, 'replaced', 'Another `nitpilot start` on this device took over'],
+  ] as const)('stops for good on %i (%s), saying what to do', async (code, reason, advice) => {
+    const { hub, daemon, out } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.close(code, 'bye');
+    expect(await daemon.stopped).toBe(reason);
+    expect(out.text()).toContain(advice);
+    await hub.noConnection();
+  });
+
+  it('reconnects after any other close, and says hello again', async () => {
+    const { hub } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.close(1012, 'server restarting');
+    const again = await hub.connection();
+    expect((await again.next('hello')).d.device).toBe('test laptop');
+  });
+
+  it('lists a job still in progress in its hello after a reconnect (Review Focus #1)', async () => {
+    const { hub } = await setup({ executor: () => new Promise<JobOutcome>(() => {}) }); // never finishes
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    await pingListing(conn, [JOB]);
+    conn.close(1012, 'server restarting');
+    const again = await hub.connection();
+    expect((await again.next('hello')).d.running).toEqual([JOB]);
+  });
+
+  it('sends a result again after reconnecting when it was never acked, and drops it on a stale ack', async () => {
+    const { hub, out } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    const first = await conn.next('job.complete');
+    conn.close(1012, 'server restarting');
+
+    const { conn: again, hello } = await welcomed(hub);
+    expect(hello.d.running).toEqual([JOB]); // still running: its result wasn't acked
+    const resent = await again.next('job.complete');
+    expect(resent).toEqual(first); // the same id, so it's recognizably the same answer
+    again.send({ v: 1, t: 'ack', re: resent.id, d: { status: 'stale' } });
+    again.forget('ping');
+    await pingListing(again, []);
+    expect(out.text()).toContain('stale');
+  });
+
+  it('drops a socket that went quiet and connects again, like a laptop back from sleep', async () => {
+    const { hub, out } = await setup({ silentMs: 200 });
+    const { conn } = await welcomed(hub);
+    conn.answerPings = false; // the socket looks open, but nothing comes back
+    const again = await hub.connection(3_000);
+    await again.next('hello');
+    expect(out.text()).toContain('The server went quiet.');
+  });
+
+  it("asks whether its token still works when it can't connect, and stops if not", async () => {
+    const routes: StubRoutes = { 'GET /api/me': { status: 401, body: { error: { code: 'unauthorized', message: 'Missing or invalid CLI token.' } } } };
+    const { daemon, out } = await setup({}, { daemonToken: 'nit_revoked', routes });
+    expect(await daemon.stopped).toBe('reauth');
+    expect(out.text()).toContain('Run `nitpilot login`');
+  });
+
+  it('shows notifications in the terminal and on the desktop', async () => {
+    const { hub, out, notified } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142' } });
+    await vi.waitFor(() => expect(notified).toEqual(['Ready for your approval: acme/shop-api#142']));
+    expect(out.text()).toContain('Ready for your approval: acme/shop-api#142  http://nitpilot.test/c/acme/shop-api/142');
+  });
+
+  it("asks before pushing, and gives the executor the server's answer", async () => {
+    const answer = deferred<'applied' | 'stale'>();
+    const executor: JobExecutor = async (_bundle, io) => {
+      answer.resolve(await io.pushing('a'.repeat(40), 'c'.repeat(40)));
+      return done;
+    };
+    const { hub } = await setup({ executor });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    const pushing = await conn.next('job.pushing');
+    expect(pushing.d).toEqual({ ...JOB, from: 'a'.repeat(40), to: 'c'.repeat(40) });
+    conn.send({ v: 1, t: 'ack', re: pushing.id, d: { status: 'applied' } });
+    expect(await answer.promise).toBe('applied');
+  });
+
+  it('reports an executor that throws as a crash, so the server can retry it', async () => {
+    const { hub } = await setup({
+      executor: async () => {
+        throw new Error('boom');
+      },
+    });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    expect((await conn.next('job.fail')).d).toMatchObject({ ...JOB, reason: 'crash', retryable: true, detail: expect.stringContaining('boom') });
+  });
+});
+```
+
+`apps/cli/src/commands/start.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { recordOut } from '../../test/out';
+import { tempDir } from '../../test/temp';
+import { start } from './start';
+
+describe('nitpilot start', () => {
+  it('asks you to log in first', async () => {
+    await expect(start({ env: { NITPILOT_CONFIG_DIR: tempDir() }, out: recordOut() })).rejects.toThrow('Not logged in. Run `nitpilot login` first.');
+  });
+});
+```
+
+- [ ] **Step 7: Run them to see them fail**
+
+Run: `npm test -w apps/cli -- src/daemon src/commands/start`
+Expected: FAIL: `Failed to resolve import "./daemon"` and `"./start"`.
+
+- [ ] **Step 8: Write the socket wrapper**
+
+`apps/cli/src/connection/ws-client.ts`:
+```ts
+import { CLI_WS_PATH, ServerToCli, type CliToServer } from '@nitpilot/protocol';
+
+/** How a socket ended. `opened` is false when it never connected (refused, unreachable). */
+export type Closed = { code: number; reason: string; opened: boolean };
+
+export type ServerSocket = {
+  send(msg: CliToServer): boolean;
+  close(code: number, reason: string): void;
+  /** Give up on a socket that looks open but is dead: `closed` resolves now instead of when TCP notices. */
+  abandon(): void;
+  /** Resolves exactly once. */
+  closed: Promise<Closed>;
+};
+
+export type SocketHandlers = {
+  server: string;
+  token: string;
+  onOpen(): void;
+  onMessage(msg: ServerToCli): void;
+  warn(text: string): void;
+};
+
+/**
+ * One WebSocket to the server's /ws/cli, carrying this device's token (Node's built-in client, spec §10).
+ * Messages that don't fit the protocol are reported and dropped.
+ */
+export function openSocket(h: SocketHandlers): ServerSocket {
+  const ws = new WebSocket(`${h.server.replace(/^http/, 'ws')}${CLI_WS_PATH}`, { headers: { authorization: `Bearer ${h.token}` } });
+  let opened = false;
+  let ended = false;
+  let settle!: (closed: Closed) => void;
+  const closed = new Promise<Closed>((resolve) => (settle = resolve));
+  const end = (how: Closed) => {
+    if (ended) return;
+    ended = true;
+    settle(how);
+  };
+
+  ws.addEventListener('open', () => {
+    opened = true;
+    h.onOpen();
+  });
+  ws.addEventListener('message', (event) => {
+    if (ended) return; // abandoned: ignore whatever still trickles in
+    let json: unknown;
+    try {
+      json = JSON.parse(String(event.data));
+    } catch {
+      h.warn('dropped a message that is not JSON');
+      return;
+    }
+    const parsed = ServerToCli.safeParse(json);
+    if (!parsed.success) {
+      h.warn(`dropped a message the protocol doesn't know: ${String(event.data).slice(0, 200)}`);
+      return;
+    }
+    h.onMessage(parsed.data);
+  });
+  // An 'error' is always followed by 'close', which says what we need to know.
+  ws.addEventListener('close', (event) => end({ code: event.code, reason: event.reason, opened }));
+
+  return {
+    send(msg) {
+      if (ended || ws.readyState !== WebSocket.OPEN) return false;
+      ws.send(JSON.stringify(msg));
+      return true;
+    },
+    close(code, reason) {
+      ws.close(code, reason);
+    },
+    abandon() {
+      end({ code: 4000, reason: 'the server went quiet', opened });
+      ws.close(4000, 'the server went quiet');
+    },
+    closed,
+  };
+}
+```
+
+- [ ] **Step 9: Write the daemon**
+
+`apps/cli/src/daemon.ts`:
+```ts
+import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
+import {
+  BRAND, CLOSE_CODES, PROTOCOL_VERSION,
+  type AgentId, type AgentMode, type CliToServer, type FailureReason, type JobBundle, type JobResult, type RunningJob, type ServerToCli,
+} from '@nitpilot/protocol';
+import type { PersonalConfig } from './config/config';
+import { Backoff } from './connection/backoff';
+import { openSocket, type Closed, type ServerSocket } from './connection/ws-client';
+import { CliError } from './errors';
+import { ServerClient, ServerError } from './http';
+import { notifyOs } from './notify-os';
+import { terminal, type Out } from './out';
+import { DailyJobCounter } from './state';
+import { CLI_VERSION } from './version';
+
+type Stage = Extract<CliToServer, { t: 'job.progress' }>['d']['stage'];
+type Welcome = Extract<ServerToCli, { t: 'welcome' }>['d'];
+/** The messages the server answers with an ack (spec §10). */
+type AckedMessage = Extract<CliToServer, { t: 'job.pushing' | 'job.complete' | 'job.fail' | 'job.reject' }> & { id: string };
+type AckStatus = 'applied' | 'stale';
+
+/** How a job ended, as the executor tells it. The daemon turns it into job.complete, job.fail or job.reject. */
+export type JobOutcome =
+  | { kind: 'complete'; result: JobResult }
+  | { kind: 'fail'; reason: FailureReason; retryable: boolean; detail: string }
+  | { kind: 'reject'; reason: FailureReason };
+
+/** What an executor may do while its job runs. */
+export type JobIo = {
+  /** Live status for Plan 2's status line. Sent at most every 2 s, and dropped while disconnected. */
+  progress(stage: Stage, text: string): void;
+  /** Ask before `git push` (spec §11 step 6). Push only on 'applied'. */
+  pushing(from: string, to: string): Promise<AckStatus>;
+  /** Aborted when the server cancels the job, a newer attempt arrives, or the daemon stops. */
+  signal: AbortSignal;
+};
+
+/** Runs one job. Task 17 builds the real one: worktree, MCP server, agent, push. */
+export type JobExecutor = (bundle: JobBundle, io: JobIo) => Promise<JobOutcome>;
+
+/** Why the daemon stopped for good. Every other end of a connection is a reason to reconnect. */
+export type StopReason = 'stopped' | 'reauth' | 'upgrade' | 'replaced';
+
+export type DaemonOptions = {
+  config: PersonalConfig;
+  /** Where state.json (the daily job count) lives. */
+  configDir: string;
+  agent: { id: AgentId; version: string | null; modes: AgentMode[] };
+  executor: JobExecutor;
+  out?: Out;
+  notify?: (message: string) => Promise<void>;
+  device?: string;
+  backoff?: Backoff;
+  counter?: DailyJobCounter;
+  /** Tests ping faster than welcome's pingSec. */
+  pingEveryMs?: number;
+  /** Silence after which the socket counts as dead. Default: two ping intervals plus 10 s. */
+  silentMs?: number;
+  fetch?: typeof fetch;
+};
+
+export type Daemon = { stopped: Promise<StopReason>; stop(): void };
+
+/** Live status goes out at most this often (spec §10). */
+const PROGRESS_EVERY_MS = 2_000;
+
+const STOP_CODES: Partial<Record<number, Exclude<StopReason, 'stopped'>>> = {
+  [CLOSE_CODES.reauth]: 'reauth',
+  [CLOSE_CODES.upgradeCli]: 'upgrade',
+  [CLOSE_CODES.replaced]: 'replaced',
+};
+
+const STOP_MESSAGES: Record<Exclude<StopReason, 'stopped'>, string> = {
+  reauth: `This device was signed out. Run \`${BRAND.cli} login\`.`,
+  upgrade: `This ${BRAND.cli} is too old for the server. Upgrade it: npm install -g ${BRAND.npmPackage}@latest`,
+  replaced: `Another \`${BRAND.cli} start\` on this device took over, so this one stops.`,
+};
+
+/** A job from its job.assign until the server acks its result. */
+type RunningEntry = RunningJob & { controller: AbortController };
+
+/**
+ * The engine of `nitpilot start` (spec §10, §11): keep one WebSocket to the server, say hello, ping,
+ * run the jobs it hands out, and send each answer until the server acks it. Reconnects on its own with
+ * backoff; stops for good on 4401, 4426 and 4409. See docs/why/websockets.md.
+ */
+export function startDaemon(opts: DaemonOptions): Daemon {
+  const { config, executor } = opts;
+  const token = config.token;
+  if (!token) throw new CliError(`Not logged in. Run \`${BRAND.cli} login\` first.`);
+  const out = opts.out ?? terminal;
+  const notify = opts.notify ?? ((message: string) => notifyOs(message));
+  const backoff = opts.backoff ?? new Backoff();
+  const counter = opts.counter ?? new DailyJobCounter(opts.configDir);
+  const device = (opts.device ?? hostname().replace(/\.local$/, '')).slice(0, 100) || 'unknown device';
+  const client = new ServerClient(config.server, token, opts.fetch);
+
+  /** Jobs this device holds, by jobId. */
+  const running = new Map<string, RunningEntry>();
+  /** Answers waiting for their ack, by message id. They go again after every welcome. */
+  const unacked = new Map<string, { msg: AckedMessage; done(status: AckStatus): void }>();
+  const stopping = new AbortController();
+  let socket: ServerSocket | null = null;
+  let welcomed = false;
+
+  async function loop(): Promise<StopReason> {
+    out.log(`Connecting to ${config.server}…`);
+    while (!stopping.signal.aborted) {
+      const closed = await connectOnce();
+      if (stopping.signal.aborted) break;
+      const stop = STOP_CODES[closed.code];
+      if (stop) {
+        out.error(STOP_MESSAGES[stop]);
+        return stop;
+      }
+      // A token refused before the upgrade looks like a network error from here, so ask the server directly.
+      if (!closed.opened && (await tokenRejected())) {
+        out.error(STOP_MESSAGES.reauth);
+        return 'reauth';
+      }
+      const wait = backoff.next();
+      const why = closed.code ? ` (${closed.code}${closed.reason ? ` ${closed.reason}` : ''})` : '';
+      out.log(`Disconnected${why}. Trying again in ${(wait / 1000).toFixed(1)} s…`);
+      await sleep(wait, stopping.signal);
+    }
+    return 'stopped';
+  }
+
+  /** One connection, from opening to closing. */
+  function connectOnce(): Promise<Closed> {
+    let lastHeard = Date.now();
+    let pingTimer: ReturnType<typeof setInterval> | undefined;
+    const s = openSocket({
+      server: config.server,
+      token,
+      warn: (text) => out.error(`[connection] ${text}`),
+      onOpen: () => s.send(helloMessage()),
+      onMessage: (msg) => {
+        lastHeard = Date.now();
+        if (msg.t !== 'welcome') return onMessage(msg);
+        onWelcome(msg.d);
+        const pingMs = opts.pingEveryMs ?? msg.d.pingSec * 1000;
+        const silentMs = opts.silentMs ?? 2 * pingMs + 10_000;
+        pingTimer = setInterval(() => {
+          // Nothing back for a while, not even a pong: the socket is dead even if it looks open,
+          // which is what a laptop gets back from sleep. Drop it and connect again.
+          if (Date.now() - lastHeard > silentMs) {
+            out.log('The server went quiet.');
+            s.abandon();
+            return;
+          }
+          s.send({ v: 1, t: 'ping', d: { running: runningList() } });
+        }, pingMs);
+      },
+    });
+    socket = s;
+    return s.closed.finally(() => {
+      clearInterval(pingTimer);
+      welcomed = false;
+      socket = null;
+    });
+  }
+
+  function onWelcome(d: Welcome): void {
+    welcomed = true;
+    backoff.reset();
+    const repos = Object.keys(config.repos);
+    const linked = repos.length > 0 ? `Linked: ${repos.join(', ')}.` : `No repos linked yet: run \`${BRAND.cli} repos add\` in a clone.`;
+    out.log(`Connected as ${d.login}. ${linked}`);
+    // Answers that weren't acked before the last disconnect go again; the server applies each at most once.
+    for (const { msg } of unacked.values()) socket?.send(msg);
+  }
+
+  function onMessage(msg: ServerToCli): void {
+    switch (msg.t) {
+      case 'job.assign': {
+        const { bundle } = msg.d;
+        runJob(bundle).catch((err) => out.error(`[job] ${bundle.jobId}: ${(err as Error).message}`));
+        return;
+      }
+      case 'job.cancel':
+        cancelJob(msg.d);
+        return;
+      case 'ack': {
+        const waiting = msg.re ? unacked.get(msg.re) : undefined;
+        if (!waiting) return; // an answer to something we no longer wait for
+        unacked.delete(msg.re!);
+        waiting.done(msg.d.status);
+        return;
+      }
+      case 'notify':
+        out.log(`🔔 ${msg.d.title}  ${msg.d.url}`);
+        notify(msg.d.title).catch(() => {});
+        return;
+      case 'welcome': // handled by connectOnce
+      case 'pong': // only shows the server is alive, which connectOnce already noted
+        return;
+    }
+  }
+
+  async function runJob(bundle: JobBundle): Promise<void> {
+    const previous = running.get(bundle.jobId);
+    if (previous?.attempt === bundle.attempt) return; // the same hand-out twice: already on it
+    previous?.controller.abort('a newer attempt of this job arrived');
+    const job: RunningEntry = { jobId: bundle.jobId, attempt: bundle.attempt, controller: new AbortController() };
+    running.set(job.jobId, job);
+    const name = `${bundle.type.replace('_', '-')} of ${bundle.pr.repoFullName}#${bundle.pr.number}`;
+
+    let outcome: JobOutcome;
+    if (counter.take(config.dailyJobCap)) {
+      out.log(`→ ${name} (attempt ${bundle.attempt})`);
+      outcome = await execute(bundle, job);
+    } else {
+      out.log(`✗ Turned down the ${name}: today's ${config.dailyJobCap} jobs are done (dailyJobCap).`);
+      outcome = { kind: 'reject', reason: 'daily_cap' };
+    }
+    if (job.controller.signal.aborted) return; // cancelled or replaced meanwhile: the server has moved on
+
+    const status = await sendAcked(answerFor(job, outcome));
+    if (running.get(job.jobId) === job) running.delete(job.jobId);
+    out.log(status === 'applied' ? `✓ ${name}: ${describeOutcome(outcome)}` : `· ${name}: the server had moved on (stale), so this answer was dropped.`);
+  }
+
+  async function execute(bundle: JobBundle, job: RunningEntry): Promise<JobOutcome> {
+    let lastProgress = 0;
+    const io: JobIo = {
+      progress(stage, text) {
+        const now = Date.now();
+        if (!welcomed || now - lastProgress < PROGRESS_EVERY_MS) return;
+        lastProgress = now;
+        socket?.send({ v: 1, t: 'job.progress', d: { jobId: job.jobId, attempt: job.attempt, stage, text: text.slice(0, 200) } });
+      },
+      pushing: (from, to) => sendAcked({ v: 1, t: 'job.pushing', id: randomUUID(), d: { jobId: job.jobId, attempt: job.attempt, from, to } }),
+      signal: job.controller.signal,
+    };
+    try {
+      return await executor(bundle, io);
+    } catch (err) {
+      // A bug in the executor. Report it, so the engine's retry rules decide what happens next.
+      return { kind: 'fail', reason: 'crash', retryable: true, detail: String((err as Error)?.stack ?? err) };
+    }
+  }
+
+  function cancelJob(ref: RunningJob & { reason: string }): void {
+    const job = running.get(ref.jobId);
+    if (!job || job.attempt !== ref.attempt) return; // not ours (anymore): nothing to stop
+    running.delete(ref.jobId);
+    job.controller.abort(ref.reason);
+    out.log(`■ Stopped ${ref.jobId}: ${ref.reason.replaceAll('_', ' ')}.`);
+  }
+
+  /** Send an answer the server acks, and keep it until it does: it goes again after every reconnect. */
+  function sendAcked(msg: AckedMessage): Promise<AckStatus> {
+    return new Promise((resolve) => {
+      unacked.set(msg.id, { msg, done: resolve });
+      if (welcomed) socket?.send(msg);
+    });
+  }
+
+  function helloMessage(): CliToServer {
+    return {
+      v: 1,
+      t: 'hello',
+      d: {
+        protocol: PROTOCOL_VERSION,
+        cliVersion: CLI_VERSION,
+        device,
+        agent: opts.agent,
+        repos: Object.keys(config.repos),
+        concurrency: config.concurrency,
+        // Jobs still in progress from before a disconnect: the server binds them to this device again (spec §9.4).
+        running: runningList(),
+        defaults: { autoReview: config.auto.review, autoAddress: config.auto.address },
+      },
+    };
+  }
+
+  function runningList(): RunningJob[] {
+    return [...running.values()].map(({ jobId, attempt }) => ({ jobId, attempt }));
+  }
+
+  async function tokenRejected(): Promise<boolean> {
+    try {
+      await client.me();
+      return false;
+    } catch (err) {
+      return err instanceof ServerError && err.status === 401;
+    }
+  }
+
+  const stopped = loop().finally(() => {
+    // Whatever ended it, no job keeps running for a daemon that's gone.
+    for (const job of running.values()) job.controller.abort('the daemon stopped');
+  });
+  return {
+    stopped,
+    stop() {
+      stopping.abort();
+      socket?.close(1000, 'stopped');
+    },
+  };
+}
+
+function answerFor(job: RunningJob, outcome: JobOutcome): AckedMessage {
+  const ref = { jobId: job.jobId, attempt: job.attempt };
+  const id = randomUUID();
+  switch (outcome.kind) {
+    case 'complete':
+      return { v: 1, t: 'job.complete', id, d: { ...ref, result: outcome.result } };
+    case 'fail':
+      return { v: 1, t: 'job.fail', id, d: { ...ref, reason: outcome.reason, retryable: outcome.retryable, detail: outcome.detail.slice(0, 2_000) } };
+    case 'reject':
+      return { v: 1, t: 'job.reject', id, d: { ...ref, reason: outcome.reason } };
+  }
+}
+
+function describeOutcome(outcome: JobOutcome): string {
+  if (outcome.kind === 'complete') return 'done';
+  if (outcome.kind === 'fail') return `failed (${outcome.reason.replaceAll('_', ' ')})`;
+  return `turned down (${outcome.reason.replaceAll('_', ' ')})`;
+}
+
+/** Wait `ms`, or less if `signal` fires first. */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+```
+
+- [ ] **Step 10: Write `nitpilot start`**
+
+`apps/cli/src/commands/start.ts`:
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { configDir, loadConfig } from '../config/config';
+import { startDaemon, type JobExecutor } from '../daemon';
+import { CliError } from '../errors';
+import { terminal, type Out } from '../out';
+
+export type StartDeps = { env?: Record<string, string | undefined>; out?: Out };
+
+/**
+ * No agent adapter exists until Plan 1b Task 16, so the daemon declares no agent modes and the server
+ * hands it no jobs. One that arrives anyway is turned down. Task 17 replaces this with the real executor.
+ */
+const noAgentYet: JobExecutor = async () => ({ kind: 'reject', reason: 'unsupported_mode' });
+
+/** `nitpilot start` (spec §11): stay connected and run jobs until Ctrl-C. Exits with 1 when the server sends it away. */
+export async function start(deps: StartDeps = {}): Promise<number> {
+  const env = deps.env ?? process.env;
+  const out = deps.out ?? terminal;
+  const dir = configDir(env);
+  const config = loadConfig({ env, dir });
+  if (!config.token) throw new CliError(`Not logged in. Run \`${BRAND.cli} login\` first.`);
+  out.log('Agents are not wired in yet: this device shows notifications, but takes no jobs.');
+
+  const daemon = startDaemon({ config, configDir: dir, out, agent: { id: config.agent, version: null, modes: [] }, executor: noAgentYet });
+  // The first Ctrl-C stops cleanly. The listener is gone after it, so a second one quits at once.
+  const stop = () => daemon.stop();
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+  const reason = await daemon.stopped;
+  process.off('SIGINT', stop);
+  process.off('SIGTERM', stop);
+  return reason === 'stopped' ? 0 : 1;
+}
+```
+
+In `apps/cli/src/cli.ts`, add `import { start } from './commands/start';` and, in `COMMANDS`, right after the `login` entry, add:
+```ts
+  start: { usage: `${BRAND.cli} start`, summary: 'Stay connected and run jobs (Ctrl-C stops)', run: (_args, out) => start({ out }) },
+```
+
+- [ ] **Step 11: Run them to see them pass**
+
+Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
+Expected: PASS (daemon 17, start 1, plus everything before).
+
+- [ ] **Step 12: Explain the CLI's end of the socket**
+
+In `docs/why/websockets.md`, before `## The React analogy`, add:
+```markdown
+## The CLI's end (`apps/cli/src/daemon.ts`)
+
+`nitpilot start` holds the other end of the socket, and has to cope with everything a laptop does:
+
+- **Reconnecting.** When the socket closes for an ordinary reason (the server restarted, the Wi-Fi dropped), the daemon waits and tries again: 1 s, then 2, 4, 8… up to 30 s (`connection/backoff.ts`). Each wait is nudged up to 20% either way at random ("jitter"): after a server restart, a hundred CLIs that all waited exactly 1 s would knock at the same instant. The wait goes back to 1 s once a `welcome` arrives.
+- **Stopping.** `4401`, `4426` and `4409` mean "don't come back" (log in again, upgrade, another `nitpilot start` took over), so the daemon stops and says what to do. A rejected token is refused before the upgrade, which a WebSocket client can't tell from a network error, so after a connection that never opened the daemon asks `GET /api/me`: a 401 there means "log in again".
+- **A socket that only looks alive.** After a laptop sleeps, its socket can look open while nothing gets through, and TCP may take many minutes to notice. The server answers every ping with a pong; when nothing at all has come back for about two pings, the daemon drops the socket and connects again.
+- **Answers wait for an ack.** `job.complete`, `job.fail`, `job.reject` and `job.pushing` stay in an "unacked" list until the server acks them, and go again (same id) after every new `welcome`. Sending twice is safe because the server applies a result at most once and acks a second copy as `stale`. Together that gives "exactly once" where it matters: in the database.
+- **"Running" until acked.** A job is listed in `hello` and in every `ping` from its `job.assign` until its answer is acked. Its lease stays alive while the answer waits for a reconnect, and after a reconnect the server binds it to this device again.
+
+In React terms, the unacked list is an offline-first mutation queue: pending changes are kept and replayed when the app is back online, and the server's confirmation (the ack) is what removes them.
+```
+
+- [ ] **Step 13: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: all green.
+
+- [ ] **Step 14: Commit**
+
+```bash
+git add apps/cli package-lock.json docs/why/websockets.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(cli): nitpilot start keeps one socket open, pings, and resends answers until acked
+
+Reconnects with backoff and jitter, stops on 4401/4426/4409, notices a dead
+socket after sleep, enforces the daily job cap, and shows notifications.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 8: `doctor`
 
 **Files:**
-- Create: `apps/cli/src/commands/doctor.ts`, `apps/cli/src/commands/doctor.test.ts`.
+- Create: `apps/cli/src/commands/doctor.ts`, `apps/cli/src/commands/doctor.test.ts`
+- Modify: `packages/protocol/src/api.ts` (`HealthResponse`), `apps/server/src/http/app.ts` (`/healthz` typed with it)
+- Modify: `apps/cli/src/http.ts`, `apps/cli/src/http.test.ts` (`health()`), `apps/cli/src/cli.ts` (`doctor`)
 
 **Interfaces:**
-- Produces: `runDoctor(deps) → Check[]`, where `Check = { name, status: 'ok' | 'warn' | 'fail', detail }`; it prints a checklist.
+- Consumes: `PersonalConfig`, `PersonalConfigSchema`, `loadConfig`, `ServerClient`, `ServerError`, `CliError`, `Out`, `recordOut` (Task 5); `githubReposInRemoteList` (Task 6).
+- Produces:
+  - `runDoctor(deps: DoctorDeps) → Promise<Check[]>`, where `Check = { name: string; status: 'ok' | 'warn' | 'fail'; detail: string }`;
+  - `type DoctorDeps = { nodeVersion; platform; run(file, args) → Promise<RunResult>; loadConfig(); client(config) → Pick<ServerClient, 'health' | 'me'>; detectAgent(id) → Promise<AgentCheck>; exists(path) }`;
+  - `printChecks(checks, out) → number` (exit code: 1 when something failed);
+  - `probeAgent(id, run) → Promise<AgentCheck>`, the stand-in for the adapters' `detect()` until Tasks 16, 19, 20;
+  - `doctor(deps) → Promise<number>` (`nitpilot doctor`);
+  - `ServerClient.health() → HealthResponse` (`GET /healthz`, no token).
 
-**Checks** (spec §11, §22):
-- Node ≥ 22;
-- git installed (version);
-- the configured agent installed and logged in (`adapter.detect()`);
-- config valid and token accepted (`/api/me`);
-- `needs_reauth` → warn;
-- each linked repo path exists and its remote matches;
-- `commit.gpgsign=true` → warn about passphrase prompts;
-- Windows → warn unsupported;
-- server reachable.
+**Checks** (spec §11, §18, §22), in this order, one line each:
+- **Node:** major version 22 or newer, else fail.
+- **Platform:** Windows → warn (unsupported in v1).
+- **git:** `git --version` answers, else fail.
+- **Config:** loads and is valid, else fail with the config's own message; nothing after this runs without a config.
+- **Server:** `GET /healthz` answers, else fail; the account checks are skipped then.
+- **Account:** no token → fail "run `nitpilot login`"; `GET /api/me` rejected → fail. **GitHub access:** `needs_reauth` → warn.
+- **Agent:** the configured agent's binary answers `--version` (`claude`, `gemini`; the fake agent is built in), else fail. Whether it's logged in waits for the adapters' `detect()`.
+- **Repo `<owner/name>`,** one per linked clone: the folder exists, else fail; one of its remotes points at that repo, else fail; `commit.gpgsign` is `true` → warn (a passphrase prompt would stall an address job until it times out).
 
-**Tests this task must include:** one passing and one failing case per check, using injected fakes.
+- [ ] **Step 1: Write the failing tests**
+
+`apps/cli/src/commands/doctor.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { recordOut } from '../../test/out';
+import { PersonalConfigSchema } from '../config/config';
+import { CliError } from '../errors';
+import { ServerError } from '../http';
+import { printChecks, probeAgent, runDoctor, type Check, type DoctorDeps, type RunResult } from './doctor';
+
+const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' });
+const missing: RunResult = { code: null, stdout: '', stderr: 'spawn ENOENT' };
+
+/** A pretend `run`, answering by command line ('git --version'). Anything else exits with 1. */
+function fakeRun(answers: Record<string, RunResult>): DoctorDeps['run'] {
+  return async (file, args) => answers[[file, ...args].join(' ')] ?? { code: 1, stdout: '', stderr: '' };
+}
+
+const GIT: Record<string, RunResult> = {
+  'git --version': ok('git version 2.47.0\n'),
+  'git -C /code/shop-api remote -v': ok('origin\tgit@github.com:acme/shop-api.git (fetch)\norigin\tgit@github.com:acme/shop-api.git (push)\n'),
+};
+
+const server = {
+  health: async () => ({ ok: true, version: '0.1.0' }),
+  me: async () => ({ login: 'maya', avatarUrl: null, githubAuth: 'ok' as const }),
+};
+
+/** A machine where everything is fine. Each test breaks one thing. */
+function healthy(over: Partial<DoctorDeps> = {}): DoctorDeps {
+  return {
+    nodeVersion: 'v22.12.0',
+    platform: 'darwin',
+    run: fakeRun(GIT),
+    loadConfig: () => PersonalConfigSchema.parse({ server: 'https://nitpilot.test', token: 'nit_abc', repos: { 'acme/shop-api': { path: '/code/shop-api' } } }),
+    client: () => server,
+    detectAgent: async () => ({ ok: true, version: '2.1.29 (Claude Code)' }),
+    exists: () => true,
+    ...over,
+  };
+}
+
+const find = (checks: Check[], name: string) => checks.find((c) => c.name === name);
+
+describe('runDoctor', () => {
+  it('passes every check on a healthy machine', async () => {
+    const checks = await runDoctor(healthy());
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ['Node', 'ok'],
+      ['Platform', 'ok'],
+      ['git', 'ok'],
+      ['Config', 'ok'],
+      ['Server', 'ok'],
+      ['Account', 'ok'],
+      ['GitHub access', 'ok'],
+      ['Agent', 'ok'],
+      ['Repo acme/shop-api', 'ok'],
+    ]);
+  });
+
+  it('fails on a Node older than 22', async () => {
+    expect(find(await runDoctor(healthy({ nodeVersion: 'v20.18.0' })), 'Node')).toMatchObject({ status: 'fail', detail: expect.stringContaining('needs Node 22') });
+  });
+
+  it('warns on Windows', async () => {
+    expect(find(await runDoctor(healthy({ platform: 'win32' })), 'Platform')).toMatchObject({ status: 'warn' });
+  });
+
+  it('fails without git', async () => {
+    expect(find(await runDoctor(healthy({ run: fakeRun({ ...GIT, 'git --version': missing }) })), 'git')).toMatchObject({ status: 'fail' });
+  });
+
+  it('stops at a broken config, showing its message', async () => {
+    const loadConfig = () => {
+      throw new CliError('Invalid setting "concurrency" in config.json');
+    };
+    const checks = await runDoctor(healthy({ loadConfig }));
+    expect(find(checks, 'Config')).toEqual({ name: 'Config', status: 'fail', detail: 'Invalid setting "concurrency" in config.json' });
+    expect(find(checks, 'Server')).toBeUndefined();
+  });
+
+  it("fails when the server can't be reached, and skips the account checks", async () => {
+    const unreachable = {
+      ...server,
+      health: async (): Promise<never> => {
+        throw new ServerError(0, "Can't reach https://nitpilot.test: fetch failed");
+      },
+    };
+    const checks = await runDoctor(healthy({ client: () => unreachable }));
+    expect(find(checks, 'Server')).toMatchObject({ status: 'fail', detail: expect.stringContaining("Can't reach") });
+    expect(find(checks, 'Account')).toBeUndefined();
+  });
+
+  it('fails when not logged in', async () => {
+    const config = PersonalConfigSchema.parse({ server: 'https://nitpilot.test' });
+    expect(find(await runDoctor(healthy({ loadConfig: () => config })), 'Account')).toMatchObject({ status: 'fail', detail: 'Not logged in. Run `nitpilot login`.' });
+  });
+
+  it('fails when the server rejects the token', async () => {
+    const rejected = {
+      ...server,
+      me: async (): Promise<never> => {
+        throw new ServerError(401, "The server didn't accept this device's token. Run `nitpilot login`.");
+      },
+    };
+    expect(find(await runDoctor(healthy({ client: () => rejected })), 'Account')).toMatchObject({ status: 'fail', detail: expect.stringContaining('nitpilot login') });
+  });
+
+  it('warns when GitHub access needs a new sign-in', async () => {
+    const expired = { ...server, me: async () => ({ login: 'maya', avatarUrl: null, githubAuth: 'needs_reauth' as const }) };
+    expect(find(await runDoctor(healthy({ client: () => expired })), 'GitHub access')).toMatchObject({ status: 'warn' });
+  });
+
+  it('fails when the agent is not installed', async () => {
+    const checks = await runDoctor(healthy({ detectAgent: async () => ({ ok: false, problem: '`claude` is not installed (or not on your PATH)' }) }));
+    expect(find(checks, 'Agent')).toEqual({ name: 'Agent', status: 'fail', detail: 'claude-code: `claude` is not installed (or not on your PATH)' });
+  });
+
+  it("fails when a linked clone's folder is gone", async () => {
+    expect(find(await runDoctor(healthy({ exists: () => false })), 'Repo acme/shop-api')).toMatchObject({
+      status: 'fail',
+      detail: expect.stringContaining("/code/shop-api doesn't exist"),
+    });
+  });
+
+  it("fails when a linked clone's remotes point elsewhere", async () => {
+    const run = fakeRun({ ...GIT, 'git -C /code/shop-api remote -v': ok('origin\tgit@github.com:maya/other.git (fetch)\n') });
+    expect(find(await runDoctor(healthy({ run })), 'Repo acme/shop-api')).toMatchObject({ status: 'fail', detail: 'no remote in /code/shop-api points at acme/shop-api' });
+  });
+
+  it('warns when commit signing could stall a job on a passphrase prompt', async () => {
+    const run = fakeRun({ ...GIT, 'git -C /code/shop-api config --get commit.gpgsign': ok('true\n') });
+    expect(find(await runDoctor(healthy({ run })), 'Repo acme/shop-api')).toMatchObject({ status: 'warn', detail: expect.stringContaining('commit.gpgsign') });
+  });
+});
+
+describe('probeAgent', () => {
+  it("asks the agent's binary for its version", async () => {
+    expect(await probeAgent('claude-code', fakeRun({ 'claude --version': ok('2.1.29 (Claude Code)\n') }))).toEqual({ ok: true, version: '2.1.29 (Claude Code)' });
+    expect(await probeAgent('gemini-cli', fakeRun({ 'gemini --version': missing }))).toEqual({ ok: false, problem: '`gemini` is not installed (or not on your PATH)' });
+    expect(await probeAgent('fake', fakeRun({}))).toEqual({ ok: true, version: '(built in)' });
+  });
+});
+
+describe('printChecks', () => {
+  it('prints one line per check, and exits with 1 only when something failed', () => {
+    const out = recordOut();
+    const checks: Check[] = [
+      { name: 'Node', status: 'ok', detail: 'v22.12.0' },
+      { name: 'Platform', status: 'warn', detail: 'Windows' },
+    ];
+    expect(printChecks(checks, out)).toBe(0);
+    expect(out.lines).toEqual(['✓ Node: v22.12.0', '! Platform: Windows', '', 'Ready, with warnings above.']);
+    expect(printChecks([{ name: 'git', status: 'fail', detail: 'missing' }], recordOut())).toBe(1);
+  });
+});
+```
+
+In `apps/cli/src/http.test.ts`, inside `describe('ServerClient', …)`, add:
+```ts
+  it('checks the server is up, without a token', async () => {
+    const fetch = fakeFetch(() => json({ ok: true, version: '0.1.0' }));
+    expect(await new ServerClient(SERVER, null, fetch).health()).toEqual({ ok: true, version: '0.1.0' });
+    expect(fetch.calls[0]!.url.pathname).toBe('/healthz');
+  });
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/cli -- src/commands/doctor src/http`
+Expected: FAIL: `Failed to resolve import "./doctor"`; in `http.test.ts`, `health is not a function`.
+
+- [ ] **Step 3: Write the health check and the doctor**
+
+In `packages/protocol/src/api.ts`, at the end, add:
+```ts
+// `GET /healthz` (`nitpilot doctor`)
+export const HealthResponse = z.object({ ok: z.boolean(), version: z.string() });
+export type HealthResponse = z.infer<typeof HealthResponse>;
+```
+
+In `apps/server/src/http/app.ts`, add `import type { HealthResponse } from '@nitpilot/protocol';` and replace `app.get('/healthz', (c) => c.json({ ok: true, version: SERVER_VERSION }));` with:
+```ts
+  app.get('/healthz', (c) => {
+    const body: HealthResponse = { ok: true, version: SERVER_VERSION };
+    return c.json(body);
+  });
+```
+
+In `apps/cli/src/http.ts`, add `HealthResponse` to the protocol import, and before `loginStart`, add:
+```ts
+  /** Is the server up, and which version? No token needed. */
+  health() {
+    return this.call('GET', '/healthz', HealthResponse);
+  }
+```
+
+`apps/cli/src/commands/doctor.ts`:
+```ts
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { BRAND, type AgentId } from '@nitpilot/protocol';
+import { loadConfig, type PersonalConfig } from '../config/config';
+import { githubReposInRemoteList } from '../git/remotes';
+import { ServerClient } from '../http';
+import { terminal, type Out } from '../out';
+
+export type Check = { name: string; status: 'ok' | 'warn' | 'fail'; detail: string };
+export type RunResult = { code: number | null; stdout: string; stderr: string };
+export type AgentCheck = { ok: boolean; version?: string; problem?: string };
+
+/** Everything doctor looks at, so tests can hand it a pretend machine. */
+export type DoctorDeps = {
+  nodeVersion: string;
+  platform: NodeJS.Platform;
+  /** Runs a program without a shell, and never throws: a missing program gives code null. */
+  run(file: string, args: string[]): Promise<RunResult>;
+  loadConfig(): PersonalConfig;
+  client(config: PersonalConfig): Pick<ServerClient, 'health' | 'me'>;
+  detectAgent(id: AgentId): Promise<AgentCheck>;
+  exists(path: string): boolean;
+};
+
+const MIN_NODE = 22;
+
+/** `nitpilot doctor` (spec §11, §22): can this machine run jobs? One check per line, in a fixed order. */
+export async function runDoctor(deps: DoctorDeps): Promise<Check[]> {
+  const checks: Check[] = [checkNode(deps.nodeVersion), checkPlatform(deps.platform), await checkGit(deps)];
+  let config: PersonalConfig;
+  try {
+    config = deps.loadConfig();
+  } catch (err) {
+    // Without a config there's nothing more to check.
+    return [...checks, { name: 'Config', status: 'fail', detail: (err as Error).message }];
+  }
+  checks.push({ name: 'Config', status: 'ok', detail: 'valid' });
+
+  const client = deps.client(config);
+  const server = await checkServer(client, config.server);
+  checks.push(server);
+  if (server.status === 'ok') checks.push(...(await checkAccount(client, config)));
+  checks.push(await checkAgent(deps, config.agent));
+  for (const [name, repo] of Object.entries(config.repos)) checks.push(await checkRepo(deps, name, repo.path));
+  return checks;
+}
+
+function checkNode(version: string): Check {
+  const major = Number(version.replace(/^v/, '').split('.')[0]);
+  if (major >= MIN_NODE) return { name: 'Node', status: 'ok', detail: version };
+  return { name: 'Node', status: 'fail', detail: `${version}: ${BRAND.cli} needs Node ${MIN_NODE} or newer` };
+}
+
+function checkPlatform(platform: NodeJS.Platform): Check {
+  if (platform === 'win32') return { name: 'Platform', status: 'warn', detail: 'Windows is not supported in v1; use macOS, Linux or WSL' };
+  return { name: 'Platform', status: 'ok', detail: platform === 'darwin' ? 'macOS' : platform };
+}
+
+async function checkGit(deps: DoctorDeps): Promise<Check> {
+  const r = await deps.run('git', ['--version']);
+  if (r.code === 0) return { name: 'git', status: 'ok', detail: r.stdout.trim() };
+  return { name: 'git', status: 'fail', detail: 'git is not installed (or not on your PATH)' };
+}
+
+async function checkServer(client: Pick<ServerClient, 'health'>, server: string): Promise<Check> {
+  try {
+    const health = await client.health();
+    return { name: 'Server', status: 'ok', detail: `${server} (version ${health.version})` };
+  } catch (err) {
+    return { name: 'Server', status: 'fail', detail: (err as Error).message };
+  }
+}
+
+async function checkAccount(client: Pick<ServerClient, 'me'>, config: PersonalConfig): Promise<Check[]> {
+  if (!config.token) return [{ name: 'Account', status: 'fail', detail: `Not logged in. Run \`${BRAND.cli} login\`.` }];
+  try {
+    const me = await client.me();
+    const access: Check =
+      me.githubAuth === 'ok'
+        ? { name: 'GitHub access', status: 'ok', detail: `${BRAND.name} can post in your name` }
+        : { name: 'GitHub access', status: 'warn', detail: `expired: sign in again at ${new URL('/', config.server).href} so ${BRAND.name} can post in your name` };
+    return [{ name: 'Account', status: 'ok', detail: `logged in as ${me.login}` }, access];
+  } catch (err) {
+    return [{ name: 'Account', status: 'fail', detail: (err as Error).message }];
+  }
+}
+
+async function checkAgent(deps: DoctorDeps, id: AgentId): Promise<Check> {
+  const r = await deps.detectAgent(id);
+  if (r.ok) return { name: 'Agent', status: 'ok', detail: `${id} ${r.version ?? ''}`.trim() };
+  return { name: 'Agent', status: 'fail', detail: `${id}: ${r.problem ?? 'not usable'}` };
+}
+
+async function checkRepo(deps: DoctorDeps, name: string, path: string): Promise<Check> {
+  const result = (status: Check['status'], detail: string): Check => ({ name: `Repo ${name}`, status, detail });
+  if (!deps.exists(path)) return result('fail', `${path} doesn't exist. Link the clone again: ${BRAND.cli} repos add <path>`);
+  const remotes = await deps.run('git', ['-C', path, 'remote', '-v']);
+  if (!githubReposInRemoteList(remotes.stdout).includes(name)) return result('fail', `no remote in ${path} points at ${name}`);
+  const signing = await deps.run('git', ['-C', path, 'config', '--get', 'commit.gpgsign']);
+  if (signing.stdout.trim() === 'true') {
+    return result('warn', 'commit.gpgsign is on: a passphrase prompt would stall address jobs until they time out');
+  }
+  return result('ok', path);
+}
+
+const MARK: Record<Check['status'], string> = { ok: '✓', warn: '!', fail: '✗' };
+
+/** Print the checklist. The exit code is 1 when something must be fixed. */
+export function printChecks(checks: Check[], out: Out): number {
+  for (const c of checks) out.log(`${MARK[c.status]} ${c.name}: ${c.detail}`);
+  const failed = checks.filter((c) => c.status === 'fail').length;
+  const warned = checks.filter((c) => c.status === 'warn').length;
+  out.log('');
+  if (failed > 0) {
+    out.log(`${failed} problem${failed === 1 ? '' : 's'} to fix.`);
+    return 1;
+  }
+  out.log(warned > 0 ? 'Ready, with warnings above.' : 'All good.');
+  return 0;
+}
+
+/** Each agent's binary. The fake agent (Task 16) ships inside the CLI. */
+const AGENT_BINARIES: Record<AgentId, string | null> = { 'claude-code': 'claude', 'gemini-cli': 'gemini', fake: null };
+
+/**
+ * Is the agent installed? Until the adapters' detect() exists (Tasks 16, 19, 20) this only asks the
+ * binary for its version; whether it's logged in comes with the adapter.
+ */
+export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<AgentCheck> {
+  const binary = AGENT_BINARIES[id];
+  if (!binary) return { ok: true, version: '(built in)' };
+  const r = await run(binary, ['--version']);
+  if (r.code === 0) return { ok: true, version: r.stdout.trim() };
+  return { ok: false, problem: `\`${binary}\` is not installed (or not on your PATH)` };
+}
+
+/** Run a program without a shell. Never throws: a missing program, or one past the 10 s timeout, gives code null. */
+function runProgram(file: string, args: string[]): Promise<RunResult> {
+  return new Promise((resolve) =>
+    execFile(file, args, { timeout: 10_000 }, (err, stdout, stderr) =>
+      resolve({ code: err ? (typeof err.code === 'number' ? err.code : null) : 0, stdout, stderr: stderr || (err?.message ?? '') }),
+    ),
+  );
+}
+
+/** `nitpilot doctor`, on this machine. */
+export async function doctor(deps: { env?: Record<string, string | undefined>; out?: Out } = {}): Promise<number> {
+  const out = deps.out ?? terminal;
+  const env = deps.env ?? process.env;
+  const checks = await runDoctor({
+    nodeVersion: process.version,
+    platform: process.platform,
+    run: runProgram,
+    loadConfig: () => loadConfig({ env }),
+    client: (config) => new ServerClient(config.server, config.token),
+    detectAgent: (id) => probeAgent(id, runProgram),
+    exists: existsSync,
+  });
+  return printChecks(checks, out);
+}
+```
+
+In `apps/cli/src/cli.ts`, add `import { doctor } from './commands/doctor';` and, in `COMMANDS`, right after the `status` entry, add:
+```ts
+  doctor: { usage: `${BRAND.cli} doctor`, summary: 'Check this machine is ready to run jobs', run: (_args, out) => doctor({ out }) },
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm test -w apps/cli && npm run typecheck -w apps/cli -w apps/server && npm run lint`
+Expected: PASS (doctor 15, http 9, plus everything before).
+
+- [ ] **Step 5: Try the CLI by hand**
+
+Run: `npm run build -w apps/cli && node apps/cli/dist/index.js --help && NITPILOT_CONFIG_DIR="$(mktemp -d)" NITPILOT_SERVER=http://127.0.0.1:9 node apps/cli/dist/index.js doctor`
+Expected: `--help` lists `login`, `start`, `status`, `doctor`, `repos add [path]` and `retry <pr-url>` in that order. `doctor` prints ✓ for Node, Platform, git and Config, ✗ for Server (`Can't reach http://127.0.0.1:9…`: nothing listens on port 9), no Account lines, ✓ or ✗ for Agent depending on whether `claude` is installed, and ends with `… to fix.` (exit code 1). The temporary config folder keeps your real `~/.config/nitpilot` out of it, and port 9 keeps the check off the network.
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: all green.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/cli apps/server/src/http/app.ts packages/protocol/src/api.ts docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(cli): nitpilot doctor checks Node, git, config, server, account, agent and linked repos
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
