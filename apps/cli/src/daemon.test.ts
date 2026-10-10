@@ -191,6 +191,18 @@ describe('startDaemon', () => {
     expect(out.text()).toContain('stale');
   });
 
+  it('sends an answer again on the same connection when no ack came, so a server that failed to handle it does not hold the job', async () => {
+    const { hub } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    const first = await conn.next('job.complete'); // the stub says nothing back
+    const again = await conn.next('job.complete'); // two ping intervals (about 100 ms) later
+    expect(again).toEqual(first); // the same id
+    conn.send({ v: 1, t: 'ack', re: again.id, d: { status: 'applied' } });
+    conn.forget('ping');
+    await pingListing(conn, []);
+  });
+
   it('drops a socket that went quiet and connects again, like a laptop back from sleep', async () => {
     const { hub, out } = await setup({ silentMs: 200 });
     const { conn } = await welcomed(hub);
@@ -239,5 +251,20 @@ describe('startDaemon', () => {
     const { conn } = await welcomed(hub);
     conn.send(assign());
     expect((await conn.next('job.fail')).d).toMatchObject({ ...JOB, reason: 'crash', retryable: true, detail: expect.stringContaining('boom') });
+  });
+
+  it("fails a job as a crash, without running it, when the day's count can't be saved", async () => {
+    const configDir = join(tempDir(), 'config');
+    writeFileSync(configDir, 'a file where the config folder should be'); // state.json can't be written under a file
+    const executor = vi.fn<JobExecutor>(async () => done);
+    const { hub } = await setup({ executor, configDir });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    const fail = await conn.next('job.fail');
+    expect(fail.d).toMatchObject({ ...JOB, reason: 'crash', retryable: true });
+    expect(executor).not.toHaveBeenCalled();
+    conn.send({ v: 1, t: 'ack', re: fail.id, d: { status: 'applied' } });
+    conn.forget('ping');
+    await pingListing(conn, []);
   });
 });

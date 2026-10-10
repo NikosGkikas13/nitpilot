@@ -272,6 +272,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
   - The CLI needs no event cursor: the Job table holds the state, and `hello` brings both sides back in sync.
   - Each CLI token (one per device) has at most one live connection; a newer one replaces the older.
   - Close codes: `4401` means log in again, `4426` means upgrade the CLI, `4409` means another connection from the same device took over (a second `nitpilot start`), so stop, and `1012` means reconnect.
+  - Answers the server acknowledges (`job.pushing`, `job.complete`, `job.fail`, `job.reject`) are kept until their `ack` arrives. They go again, with the same id, after every `welcome`, and on the same connection when no ack came within two ping intervals. The server applies each at most once and acks a second copy as `stale`.
   - Backoff starts at 1s and doubles up to 30s, with jitter, and resets after `welcome` (Odyhook's `listen.ts` pattern).
 - **Agent tool calls stay local.** They are **not** forwarded to the server as they happen. The CLI buffers the agent's output and sends it all at once in `job.complete`. That makes a job all-or-nothing, makes retries safe, and survives brief disconnects. Progress text is still streamed live.
 

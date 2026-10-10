@@ -80,6 +80,9 @@ const STOP_MESSAGES: Record<Exclude<StopReason, 'stopped'>, string> = {
 /** A job from its job.assign until the server acks its result. */
 type RunningEntry = RunningJob & { controller: AbortController };
 
+/** An answer the server hasn't acked yet. `sentAt` is when it last went out (0: not yet on this connection). */
+type Unacked = { msg: AckedMessage; done(status: AckStatus): void; sentAt: number };
+
 /**
  * The engine of `nitpilot start` (spec §10, §11): keep one WebSocket to the server, say hello, ping,
  * run the jobs it hands out, and send each answer until the server acks it. Reconnects on its own with
@@ -98,8 +101,8 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 
   /** Jobs this device holds, by jobId. */
   const running = new Map<string, RunningEntry>();
-  /** Answers waiting for their ack, by message id. They go again after every welcome. */
-  const unacked = new Map<string, { msg: AckedMessage; done(status: AckStatus): void }>();
+  /** Answers waiting for their ack, by message id, with when each last went out. They go again after every welcome. */
+  const unacked = new Map<string, Unacked>();
   const stopping = new AbortController();
   let socket: ServerSocket | null = null;
   let welcomed = false;
@@ -151,6 +154,10 @@ export function startDaemon(opts: DaemonOptions): Daemon {
             return;
           }
           s.send({ v: 1, t: 'ping', d: { running: runningList() } });
+          // The server may have failed while handling an answer, and then it sends no ack and the socket stays
+          // open. So an answer with no ack after two pings goes again. The server applies each answer at most
+          // once, so a second copy is acked as stale.
+          for (const entry of unacked.values()) if (Date.now() - entry.sentAt >= 2 * pingMs) transmit(entry);
         }, pingMs);
       },
     });
@@ -169,7 +176,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     const linked = repos.length > 0 ? `Linked: ${repos.join(', ')}.` : `No repos linked yet: run \`${BRAND.cli} repos add\` in a clone.`;
     out.log(`Connected as ${d.login}. ${linked}`);
     // Answers that weren't acked before the last disconnect go again; the server applies each at most once.
-    for (const { msg } of unacked.values()) socket?.send(msg);
+    for (const entry of unacked.values()) transmit(entry);
   }
 
   function onMessage(msg: ServerToCli): void {
@@ -208,12 +215,18 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     const name = `${bundle.type.replace('_', '-')} of ${bundle.pr.repoFullName}#${bundle.pr.number}`;
 
     let outcome: JobOutcome;
-    if (counter.take(config.dailyJobCap)) {
-      out.log(`→ ${name} (attempt ${bundle.attempt})`);
-      outcome = await execute(bundle, job);
-    } else {
-      out.log(`✗ Turned down the ${name}: today's ${config.dailyJobCap} jobs are done (dailyJobCap).`);
-      outcome = { kind: 'reject', reason: 'daily_cap' };
+    try {
+      if (counter.take(config.dailyJobCap)) {
+        out.log(`→ ${name} (attempt ${bundle.attempt})`);
+        outcome = await execute(bundle, job);
+      } else {
+        out.log(`✗ Turned down the ${name}: today's ${config.dailyJobCap} jobs are done (dailyJobCap).`);
+        outcome = { kind: 'reject', reason: 'daily_cap' };
+      }
+    } catch (err) {
+      // Something broke before there was an answer, e.g. the day's count couldn't be saved. The job doesn't run,
+      // and the server is told, so the job isn't left listed in every ping with nobody working on it.
+      outcome = crashed(err);
     }
     if (job.controller.signal.aborted) return; // cancelled or replaced meanwhile: the server has moved on
 
@@ -238,7 +251,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
       return await executor(bundle, io);
     } catch (err) {
       // A bug in the executor. Report it, so the engine's retry rules decide what happens next.
-      return { kind: 'fail', reason: 'crash', retryable: true, detail: String((err as Error)?.stack ?? err) };
+      return crashed(err);
     }
   }
 
@@ -250,12 +263,18 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     out.log(`■ Stopped ${ref.jobId}: ${ref.reason.replaceAll('_', ' ')}.`);
   }
 
-  /** Send an answer the server acks, and keep it until it does: it goes again after every reconnect. */
+  /** Send an answer the server acks, and keep it until it does: it goes again after every reconnect, and when no ack comes. */
   function sendAcked(msg: AckedMessage): Promise<AckStatus> {
     return new Promise((resolve) => {
-      unacked.set(msg.id, { msg, done: resolve });
-      if (welcomed) socket?.send(msg);
+      const entry: Unacked = { msg, done: resolve, sentAt: 0 };
+      unacked.set(msg.id, entry);
+      if (welcomed) transmit(entry);
     });
+  }
+
+  /** Put an unacked answer on the socket and note when, so the ping timer knows when it's been waiting too long. */
+  function transmit(entry: Unacked): void {
+    if (socket?.send(entry.msg)) entry.sentAt = Date.now();
   }
 
   function helloMessage(): CliToServer {
@@ -300,6 +319,11 @@ export function startDaemon(opts: DaemonOptions): Daemon {
       socket?.close(1000, 'stopped');
     },
   };
+}
+
+/** A job that blew up inside the daemon or its executor, as a retryable crash. */
+function crashed(err: unknown): JobOutcome {
+  return { kind: 'fail', reason: 'crash', retryable: true, detail: String((err as Error)?.stack ?? err) };
 }
 
 function answerFor(job: RunningJob, outcome: JobOutcome): AckedMessage {
