@@ -58,6 +58,7 @@ Plan 1a's final review handed these to Plan 1b. Each has a home:
 | Force-push "full re-review" fallback (`sinceSha` no longer an ancestor) | Task 13 |
 | `pull_request.edited` is ignored, so a base retarget never refreshes `baseRef`, `baseSha` or `trusted` | Task 22 |
 | A CLI retry for permanently failed jobs (Plan 2 adds the Retry button) | Task 6 |
+| From Task 6's review (not Plan 1a): after a GitHub post fails (`write_failed`), nothing clears that person's `failed` flag: `nitpilot retry` refuses it by design, `advance` skips it, and signing in again clears nothing | Task 22: when the person signs in again, clear their `write_failed` flags and let `advance` resume (one engine event per affected chat) |
 | Deferred minor M7: `home.tsx` and `layout.tsx` hard-code the CLI name instead of using `BRAND` | Task 23 (it touches the layout) |
 | Deferred minor M8: the protocol package exports its test samples, which the CLI bundle would include | Task 5 |
 | Deferred minor M9: `CliLoginRequest` rows are never purged, and `POST /api/cli/login` has no rate limit | Task 6 |
@@ -4878,12 +4879,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **A socket that went quiet:** when nothing (not even a pong) arrives for `silentMs` (default two ping intervals plus 10 s), the daemon abandons the socket and reconnects, without waiting for TCP to notice.
 - **`nitpilot start`** needs a token, declares `modes: []` until agents exist (Task 17 replaces this), stops cleanly on the first Ctrl-C, and exits with 1 when the server sent it away.
 
-- [ ] **Step 1: Install the WebSocket server the tests use**
+- [x] **Step 1: Install the WebSocket server the tests use**
 
 Run: `npm install -D -w apps/cli ws@^8.22.0 @types/ws@^8.18.2`
 Expected: both land in `apps/cli/package.json` `devDependencies` (the CLI itself uses Node's built-in `WebSocket` client; `ws` only plays the server in tests).
 
-- [ ] **Step 2: Write the failing tests for the small parts**
+- [x] **Step 2: Write the failing tests for the small parts**
 
 `apps/cli/src/connection/backoff.test.ts`:
 ```ts
@@ -4981,12 +4982,12 @@ describe('notifyOs', () => {
 });
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/connection src/state src/notify-os`
 Expected: FAIL: `Failed to resolve import "./backoff"` (and `./state`, `./notify-os`).
 
-- [ ] **Step 4: Write backoff, the daily counter and desktop notifications**
+- [x] **Step 4: Write backoff, the daily counter and desktop notifications**
 
 `apps/cli/src/connection/backoff.ts`:
 ```ts
@@ -5100,12 +5101,12 @@ function execQuietly(file: string, args: string[]): Promise<void> {
 }
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/connection src/state src/notify-os`
 Expected: PASS (backoff 3, state 3, notify-os 3).
 
-- [ ] **Step 6: Write the failing daemon tests**
+- [x] **Step 6: Write the failing daemon tests**
 
 `apps/cli/test/stub-hub.ts`:
 ```ts
@@ -5501,12 +5502,12 @@ describe('nitpilot start', () => {
 });
 ```
 
-- [ ] **Step 7: Run them to see them fail**
+- [x] **Step 7: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/daemon src/commands/start`
 Expected: FAIL: `Failed to resolve import "./daemon"` and `"./start"`.
 
-- [ ] **Step 8: Write the socket wrapper**
+- [x] **Step 8: Write the socket wrapper**
 
 `apps/cli/src/connection/ws-client.ts`:
 ```ts
@@ -5589,7 +5590,7 @@ export function openSocket(h: SocketHandlers): ServerSocket {
 }
 ```
 
-- [ ] **Step 9: Write the daemon**
+- [x] **Step 9: Write the daemon**
 
 `apps/cli/src/daemon.ts`:
 ```ts
@@ -5932,7 +5933,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 ```
 
-- [ ] **Step 10: Write `nitpilot start`**
+- [x] **Step 10: Write `nitpilot start`**
 
 `apps/cli/src/commands/start.ts`:
 ```ts
@@ -5976,12 +5977,12 @@ In `apps/cli/src/cli.ts`, add `import { start } from './commands/start';` and, i
   start: { usage: `${BRAND.cli} start`, summary: 'Stay connected and run jobs (Ctrl-C stops)', run: (_args, out) => start({ out }) },
 ```
 
-- [ ] **Step 11: Run them to see them pass**
+- [x] **Step 11: Run them to see them pass**
 
 Run: `npm test -w apps/cli && npm run typecheck -w apps/cli && npm run lint`
 Expected: PASS (daemon 17, start 1, plus everything before).
 
-- [ ] **Step 12: Explain the CLI's end of the socket**
+- [x] **Step 12: Explain the CLI's end of the socket**
 
 In `docs/why/websockets.md`, before `## The React analogy`, add:
 ```markdown
@@ -5998,12 +5999,12 @@ In `docs/why/websockets.md`, before `## The React analogy`, add:
 In React terms, the unacked list is an offline-first mutation queue: pending changes are kept and replayed when the app is back online, and the server's confirmation (the ack) is what removes them.
 ```
 
-- [ ] **Step 13: Run the full suite**
+- [x] **Step 13: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green.
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add apps/cli package-lock.json docs/why/websockets.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

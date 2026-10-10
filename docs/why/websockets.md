@@ -35,6 +35,18 @@ The job travels as a self-contained **bundle** (`jobs/bundle.ts`): the PR, how t
 
 A laptop can vanish without saying goodbye: the lid closes, the Wi-Fi drops. So a job given to a CLI comes with a **lease**: 90 seconds, renewed by a ping every 25. When the pings stop, the lease runs out and the job goes back to the queue. [leases-and-fencing.md](leases-and-fencing.md) has the details.
 
+## The CLI's end (`apps/cli/src/daemon.ts`)
+
+`nitpilot start` holds the other end of the socket, and has to cope with everything a laptop does:
+
+- **Reconnecting.** When the socket closes for an ordinary reason (the server restarted, the Wi-Fi dropped), the daemon waits and tries again: 1 s, then 2, 4, 8… up to 30 s (`connection/backoff.ts`). Each wait is nudged up to 20% either way at random ("jitter"): after a server restart, a hundred CLIs that all waited exactly 1 s would knock at the same instant. The wait goes back to 1 s once a `welcome` arrives.
+- **Stopping.** `4401`, `4426` and `4409` mean "don't come back" (log in again, upgrade, another `nitpilot start` took over), so the daemon stops and says what to do. A rejected token is refused before the upgrade, which a WebSocket client can't tell from a network error, so after a connection that never opened the daemon asks `GET /api/me`: a 401 there means "log in again".
+- **A socket that only looks alive.** After a laptop sleeps, its socket can look open while nothing gets through, and TCP may take many minutes to notice. The server answers every ping with a pong; when nothing at all has come back for about two pings, the daemon drops the socket and connects again.
+- **Answers wait for an ack.** `job.complete`, `job.fail`, `job.reject` and `job.pushing` stay in an "unacked" list until the server acks them, and go again (same id) after every new `welcome`. Sending twice is safe because the server applies a result at most once and acks a second copy as `stale`. Together that gives "exactly once" where it matters: in the database.
+- **"Running" until acked.** A job is listed in `hello` and in every `ping` from its `job.assign` until its answer is acked. Its lease stays alive while the answer waits for a reconnect, and after a reconnect the server binds it to this device again.
+
+In React terms, the unacked list is an offline-first mutation queue: pending changes are kept and replayed when the app is back online, and the server's confirmation (the ack) is what removes them.
+
 ## The React analogy
 
 - Polling is `setInterval(() => fetch('/jobs'), 5000)`. A WebSocket is a subscription, like Firebase's `onSnapshot` or a GraphQL subscription: you register once and updates are pushed to you.

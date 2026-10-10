@@ -2,6 +2,7 @@ import { BRAND } from '@nitpilot/protocol';
 import { login } from './commands/login';
 import { reposAdd } from './commands/repos';
 import { retry } from './commands/retry';
+import { start } from './commands/start';
 import { status } from './commands/status';
 import { CliError } from './errors';
 import type { Out } from './out';
@@ -13,6 +14,7 @@ export type Command = { usage: string; summary: string; run(args: string[], out:
 /** Every command, in the order `--help` lists them. Each lives in src/commands/ and is added by the task that builds it. */
 export const COMMANDS: Record<string, Command> = {
   login: { usage: `${BRAND.cli} login`, summary: 'Connect this device to your account', run: (_args, out) => login({ out }) },
+  start: { usage: `${BRAND.cli} start`, summary: 'Stay connected and run jobs (Ctrl-C stops)', run: (_args, out) => start({ out }) },
   status: { usage: `${BRAND.cli} status`, summary: 'Your open PRs and what they need from you', run: (_args, out) => status({ out }) },
   repos: {
     usage: `${BRAND.cli} repos add [path]`,
