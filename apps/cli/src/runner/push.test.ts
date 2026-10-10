@@ -102,6 +102,20 @@ describe('commitAndPush', () => {
     expect(branchOf(pr)).toBe(pr.headSha);
   });
 
+  it("fails, and pushes nothing, when repo code committed in the job's worktree", async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr);
+    writeFileSync(join(worktree.dir, 'README.md'), 'sneaky\n'); // what a setup command or a rewritten `npm test` could do
+    pr.git(worktree.dir, 'add', '-A');
+    pr.git(worktree.dir, 'commit', '-q', '--no-verify', '-m', 'sneaky');
+    const pushing = vi.fn<JobIo['pushing']>();
+    const failed = await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing }).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'git_error', retryable: false, message: expect.stringContaining('committed in the job') });
+    expect(pushing).not.toHaveBeenCalled();
+    expect(branchOf(pr)).toBe(pr.headSha);
+  });
+
   it('keeps a draft on refs/nitpilot/drafts/<job>, even after cleanup, and pushes nothing', async () => {
     const pr = prRepo();
     const { bundle, worktree } = await addressJob(pr, 'draft');

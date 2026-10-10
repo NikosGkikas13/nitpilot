@@ -50,6 +50,12 @@ export async function commitAndPush(ctx: PushContext): Promise<{ push: PushInfo 
 
 async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }: PushContext): Promise<{ push: PushInfo | null }> {
   const git = (args: string[]) => safeGit(worktree.git, args);
+  // Repo code runs in the worktree (setup, checks like `npm test`) and could commit by itself. Those
+  // commits would be pushed without the trailer, or dropped as "no change", so stop. A rerun would run the same code.
+  const head = (await git(['rev-parse', 'HEAD'])).stdout.trim();
+  if (head !== worktree.headSha) {
+    throw new JobFailure('git_error', false, `Something other than ${BRAND.name} committed in the job's worktree (HEAD is ${head.slice(0, 7)}, not ${worktree.headSha.slice(0, 7)}), so nothing was pushed. Look at what ran there.`);
+  }
   if ((await git(['status', '--porcelain'])).stdout === '') return { push: null }; // the agent changed nothing
   await git(['add', '-A']);
   await unstageAgentFiles(worktree.git, scrubPaths);

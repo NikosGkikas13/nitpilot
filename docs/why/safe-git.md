@@ -28,6 +28,7 @@ For an address job, the CLI commits and pushes, never the agent:
 
 1. `git status`: nothing changed means nothing to push.
 2. `git add -A` and `git commit --no-verify`, under your own name, with a `Nitpilot-Job: <id>` trailer, so anyone can tell which commits an agent made. Scrubbed files stay out, even if the agent wrote one again. A new one the agent creates (like `.claude/settings.local.json` or `.env`) is dropped from the commit too: it stays on disk, untracked.
+   If anything other than the CLI committed in the worktree (repo code run by `setup` or a check like `npm test` can do that), the job fails and nothing is pushed.
 3. Before pushing, it sends `job.pushing` and waits for the server's ack. `stale` means the job was cancelled or handed out again meanwhile, so nothing is pushed.
 4. `git push` to the PR's branch, never forced. If someone pushed in the meantime, git refuses ("non-fast-forward"): the job fails with `branch_moved`, and the server runs it again on the new head. A teammate's commit is never overwritten.
 
