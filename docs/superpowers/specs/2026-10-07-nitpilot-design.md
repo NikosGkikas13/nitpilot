@@ -346,7 +346,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 | `add_point` | review, re_review | `{path?, line?, side?, severity, category, title, body}` → `{ref}`. Validated; in re_review, only for new commits |
 | `decide_point` | re_review | `{point, decision: resolve\|keep_open, comment}` |
 | `reply_to_point` | address | `{point, resolution: fixed\|answered\|declined, comment}` |
-| `run_check` | address | `{name}` → `{ok, exitCode, outputTail}`. Runs a command from the repo's `checks` in the personal config through `spawn` (no shell), in the worktree, with an allowlisted environment plus `CI=true`. It runs in its own process group: a 10-minute timeout, a cancel or its own exit stops everything it started. `outputTail` is the last 4 KB of output |
+| `run_check` | address | `{name}` → `{ok, exitCode, outputTail}`. Runs a command from the repo's `checks` in the personal config through `spawn` (no shell), in the worktree, with an allowlisted environment plus `CI=true`. It runs in its own process group: a 10-minute timeout, a cancel or its own exit stops everything it started (a program that leaves the group on purpose isn't stopped, but Nitpilot stops waiting for it a second after the check ends). `outputTail` is the last 4 KB of output |
 | `finish` | all | `{summary}`. Optional; derived from the results if missing |
 
 Untrusted text (the PR's title and body, human notes, points and their comments) is wrapped in `<untrusted source="…">` in tool results, and a `<untrusted` or `</untrusted` inside it is escaped. The read tools run git on the job's objects only, and every diff runs with `--no-ext-diff --no-textconv`, so no diff program from the user's git config or the PR's `.gitattributes` runs.

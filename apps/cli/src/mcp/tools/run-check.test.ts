@@ -77,6 +77,31 @@ describe('runCheck', () => {
     expect(result.outputTail).toContain('[stopped waiting: a program the check started still holds its output]');
   }, 8000);
 
+  it("stops what a check started when the check itself exits", async () => {
+    const pr = prRepo();
+    const marker = join(pr.home, 'left-behind');
+    // The check starts a child (same group, not detached) that would write the marker after 1 s, and exits at once (process.exit: node would otherwise wait for its child).
+    const grandchild = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 1000)`;
+    const ctx = await withChecks({ leave: node(`require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); process.exit(0)`) });
+    expect(await runCheck(ctx, { name: 'leave' })).toMatchObject({ ok: true, exitCode: 0 });
+    await sleep(1500);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it('never starts a check for a job that was cancelled already', async () => {
+    const pr = prRepo();
+    const marker = join(pr.home, 'ran-anyway');
+    const base = await withChecks({ touch: node(`require("fs").writeFileSync(${JSON.stringify(marker)}, "x")`) });
+    const stop = new AbortController();
+    stop.abort();
+    const ctx = { ...base, worktree: { ...base.worktree, git: { ...base.worktree.git, signal: stop.signal } } };
+    const started = Date.now();
+    expect(await runCheck(ctx, { name: 'touch' })).toEqual({ ok: false, exitCode: null, outputTail: '[stopped: the job was cancelled]' });
+    expect(Date.now() - started).toBeLessThan(1000);
+    await sleep(300);
+    expect(existsSync(marker)).toBe(false);
+  });
+
   it('stops a check when the job is cancelled', async () => {
     const stop = new AbortController();
     const base = await withChecks({ hang: node('setInterval(() => {}, 1000)') });
@@ -88,10 +113,15 @@ describe('runCheck', () => {
   });
 
   it('sends back only the last 4 KB of output, and says so when a program is missing', async () => {
-    const ctx = await withChecks({ loud: node('for (let i = 0; i < 5000; i++) console.log("noise " + i); console.log("THE END")'), missing: ['no-such-program-nitpilot'] });
+    const ctx = await withChecks({ loud: node('for (let i = 0; i < 5000; i++) console.log("noise " + i); console.log("THE END")'), missing: ['no-such-program-nitpilot'], accents: node('process.stdout.write("é".repeat(3000) + "!END\\n")') });
     const loud = await runCheck(ctx, { name: 'loud' });
     expect(Buffer.byteLength(loud.outputTail)).toBeLessThanOrEqual(OUTPUT_TAIL_BYTES);
     expect(loud.outputTail.endsWith('noise 4999\nTHE END\n')).toBe(true);
+    // The cut lands inside a two-byte character (4,091 bytes of é before "!END\n"); the tail must start on a whole one.
+    const accents = await runCheck(ctx, { name: 'accents' });
+    expect(accents.outputTail.startsWith('\uFFFD')).toBe(false);
+    expect(accents.outputTail.endsWith('END\n')).toBe(true);
+    expect(Buffer.byteLength(accents.outputTail)).toBeLessThanOrEqual(OUTPUT_TAIL_BYTES);
     expect(await runCheck(ctx, { name: 'missing' })).toEqual({ ok: false, exitCode: null, outputTail: "Couldn't start no-such-program-nitpilot: spawn no-such-program-nitpilot ENOENT" });
   });
 });

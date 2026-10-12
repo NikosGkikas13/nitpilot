@@ -52,8 +52,14 @@ function checkEnv(from: Record<string, string | undefined>): Record<string, stri
 export function runInWorktree(argv: readonly string[], opts: { cwd: string; env: Record<string, string>; timeoutMs: number; signal?: AbortSignal }): Promise<CheckResult> {
   const [command, ...args] = argv;
   return new Promise((done) => {
+    // addEventListener('abort') never fires for a signal that is already aborted, so look first.
+    if (opts.signal?.aborted) {
+      done({ ok: false, exitCode: null, outputTail: '[stopped: the job was cancelled]' });
+      return;
+    }
     let tail = Buffer.alloc(0);
     let timedOut = false;
+    let aborted = false;
     let settled = false;
     let exitCode: number | null = null;
     let drainTimer: NodeJS.Timeout | undefined;
@@ -73,14 +79,24 @@ export function runInWorktree(argv: readonly string[], opts: { cwd: string; env:
       timedOut = true;
       stopAll();
     }, opts.timeoutMs);
-    opts.signal?.addEventListener('abort', stopAll, { once: true });
-    const stoppedNote = () => (timedOut ? `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]` : opts.signal?.aborted ? '\n[stopped: the job was cancelled]' : '');
+    const cancel = () => {
+      aborted = true;
+      stopAll();
+    };
+    opts.signal?.addEventListener('abort', cancel, { once: true });
+    const stoppedNote = () => (timedOut ? `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]` : aborted ? '\n[stopped: the job was cancelled]' : '');
+    // The tail is cut by bytes, so it can start in the middle of a character: drop the leftover bytes of that one.
+    const tailText = () => {
+      let start = 0;
+      while (start < tail.length && (tail[start]! & 0xc0) === 0x80) start++;
+      return tail.subarray(start).toString();
+    };
     const finish = (result: CheckResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       clearTimeout(drainTimer);
-      opts.signal?.removeEventListener('abort', stopAll);
+      opts.signal?.removeEventListener('abort', cancel);
       done(result);
     };
     child.stdout.on('data', keep);
@@ -93,12 +109,12 @@ export function runInWorktree(argv: readonly string[], opts: { cwd: string; env:
       drainTimer = setTimeout(() => {
         child.stdout.destroy();
         child.stderr.destroy();
-        finish({ ok: exitCode === 0 && !timedOut, exitCode, outputTail: `${tail.toString()}${stoppedNote()}\n[stopped waiting: a program the check started still holds its output]` });
+        finish({ ok: exitCode === 0 && !timedOut && !aborted, exitCode, outputTail: `${tailText()}${stoppedNote()}\n[stopped waiting: a program the check started still holds its output]` });
       }, DRAIN_GRACE_MS);
     });
     child.on('error', (err) => finish({ ok: false, exitCode: null, outputTail: `Couldn't start ${command}: ${err.message}` }));
     child.on('close', (code) => {
-      finish({ ok: code === 0 && !timedOut, exitCode: code, outputTail: tail.toString() + stoppedNote() });
+      finish({ ok: code === 0 && !timedOut && !aborted, exitCode: code, outputTail: tailText() + stoppedNote() });
     });
   });
 }
