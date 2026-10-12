@@ -340,16 +340,16 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 | Tool | Job types | Input → output |
 |---|---|---|
 | `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes, points with their replies, rules (ignored paths, categories, max points) |
-| `list_changed_files` | all | `{since?}` → `[{path, status, adds, dels, binary, ignored}]` |
-| `get_diff` | all | `{path, since?}` → a unified diff (merge-base..head, or since..head), size-capped |
-| `get_file` | all | `{path, ref: base\|head, from?, to?}` → the content, read with `git show`, never from the filesystem |
+| `list_changed_files` | all | `{since?}` → `[{path, oldPath?, status, adds, dels, binary, ignored}]`. `since` is a full commit sha; if it's no longer in head's history (a force-push), the whole PR, with a note saying so |
+| `get_diff` | all | `{path, since?}` → a unified diff of one changed file (merge-base..head, or since..head), capped at 100 KB |
+| `get_file` | all | `{path, ref: base\|head, from?, to?}` → the content with line numbers, read with `git cat-file blob`, never from the filesystem, capped at 100 KB |
 | `add_point` | review, re_review | `{path?, line?, side?, severity, category, title, body}` → `{ref}`. Validated; in re_review, only for new commits |
 | `decide_point` | re_review | `{pointId, decision: resolve\|keep_open, comment}` |
 | `reply_to_point` | address | `{pointId, resolution: fixed\|answered\|declined, comment}` |
 | `run_check` | address | `{name}` → `{ok, exitCode, outputTail}`. Runs a command from the personal config's allowlist through `execFile` (no shell) |
 | `finish` | all | `{summary}`. Optional; derived from the results if missing |
 
-Untrusted text (PR title, body, comments) is wrapped in `<untrusted source="…">` in tool results.
+Untrusted text (the PR's title and body, human notes, points and their comments) is wrapped in `<untrusted source="…">` in tool results, and a `<untrusted` or `</untrusted` inside it is escaped. The read tools run git on the job's objects only, and every diff runs with `--no-ext-diff --no-textconv`, so no diff program from the user's git config or the PR's `.gitattributes` runs.
 
 ## 12. Adapters
 

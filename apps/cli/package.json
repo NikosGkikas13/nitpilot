@@ -26,7 +26,9 @@
     "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
     "@nitpilot/protocol": "*",
+    "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.2",
+    "picomatch": "^4.0.7",
     "tsup": "^8.5.1",
     "ws": "^8.22.0",
     "zod": "^4.6.5"

@@ -1,12 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { JobBundle } from '@nitpilot/protocol';
 import { jobBundle } from '@nitpilot/protocol/test-samples';
 import { tempDir } from './temp';
 
-/** What one file in a test commit holds: text, a symlink, or an executable script (a hook). */
-export type FileSpec = string | { symlink: string } | { script: string };
+/** What one file in a test commit holds: text, a symlink, or an executable script (a hook). `null` deletes it. */
+export type FileSpec = string | { symlink: string } | { script: string } | null;
 
 /** A hook that leaves a mark when it runs: `hook-ran` in the sandbox's HOME. */
 export const CANARY_HOOK: FileSpec = { script: '#!/bin/sh\ntouch "$HOME/hook-ran"\n' };
@@ -29,6 +29,10 @@ export function gitSandbox() {
   function write(dir: string, files: Record<string, FileSpec>): void {
     for (const [path, spec] of Object.entries(files)) {
       const file = join(dir, path);
+      if (spec === null) {
+        rmSync(file);
+        continue;
+      }
       mkdirSync(dirname(file), { recursive: true });
       if (typeof spec === 'string') writeFileSync(file, spec);
       else if ('symlink' in spec) symlinkSync(spec.symlink, file);

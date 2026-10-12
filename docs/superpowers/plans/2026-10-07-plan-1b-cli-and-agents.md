@@ -8210,12 +8210,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `get_diff` only takes a path that is among the changed files. It passes the path to git as `:(literal)<path>`, so a name like `src/[id].ts` is never a pattern. A rename names both sides.
 - `get_file` reads with `git cat-file blob <sha>:<path>`, which refuses a folder and never runs a converter. Lines come numbered; `from` and `to` pick a range; a binary file is described, not shown.
 
-- [ ] **Step 1: Install picomatch**
+- [x] **Step 1: Install picomatch**
 
 Run: `npm install -D -w apps/cli picomatch@^4.0.7 @types/picomatch@^4.0.3`
 Expected: `apps/cli/package.json` gains both; `package-lock.json` changes.
 
-- [ ] **Step 2: Let test commits delete files, and add the MCP job helper**
+- [x] **Step 2: Let test commits delete files, and add the MCP job helper**
 
 In `apps/cli/test/git-fixtures.ts`:
 - the import becomes `import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';`;
@@ -8261,7 +8261,7 @@ export function moveHead(pr: ReturnType<typeof prRepo>, files: Parameters<Return
 }
 ```
 
-- [ ] **Step 3: Write the failing tests**
+- [x] **Step 3: Write the failing tests**
 
 `apps/cli/src/mcp/untrusted.test.ts`:
 ```ts
@@ -8460,12 +8460,12 @@ describe('the read tools and diff programs', () => {
 });
 ```
 
-- [ ] **Step 4: Run them to see them fail**
+- [x] **Step 4: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/mcp/untrusted src/mcp/tools/read`
 Expected: FAIL: `Cannot find module './untrusted'` and `Cannot find module './read'`. (`context.ts` is imported for its type only, so it isn't looked for at run time.)
 
-- [ ] **Step 5: Write the job context, the wrapper and the read tools**
+- [x] **Step 5: Write the job context, the wrapper and the read tools**
 
 `apps/cli/src/mcp/context.ts`:
 ```ts
@@ -8694,12 +8694,12 @@ export function getJob(ctx: McpJobContext) {
 }
 ```
 
-- [ ] **Step 6: Run them to see them pass**
+- [x] **Step 6: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/mcp/untrusted src/mcp/tools/read`
 Expected: PASS (untrusted 2, read 11).
 
-- [ ] **Step 7: Explain prompt injection, and bring the spec in line**
+- [x] **Step 7: Explain prompt injection, and bring the spec in line**
 
 `docs/why/prompt-injection.md`:
 ```markdown
@@ -8738,12 +8738,12 @@ Replace the line ``Untrusted text (PR title, body, comments) is wrapped in `<unt
 Untrusted text (the PR's title and body, human notes, points and their comments) is wrapped in `<untrusted source="…">` in tool results, and a `<untrusted` or `</untrusted` inside it is escaped. The read tools run git on the job's objects only, and every diff runs with `--no-ext-diff --no-textconv`, so no diff program from the user's git config or the PR's `.gitattributes` runs.
 ```
 
-- [ ] **Step 8: Run the full suite**
+- [x] **Step 8: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 189, protocol 41, server 398).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/cli/package.json package-lock.json apps/cli/src/mcp apps/cli/test/mcp-job.ts apps/cli/test/git-fixtures.ts docs/why/prompt-injection.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
