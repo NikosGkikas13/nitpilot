@@ -22,6 +22,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@nitpilot/protocol": "*",
     "@types/ws": "^8.18.2",
     "tsup": "^8.5.1",

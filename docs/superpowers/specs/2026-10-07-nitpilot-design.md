@@ -335,7 +335,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - an allowlisted environment (`PATH`, `HOME`, the SSH agent, locale, proxies), and ssh runs with `-o BatchMode=yes` (added to the user's own `core.sshCommand`, if any) unless the user set `GIT_SSH_COMMAND` or `GIT_SSH`, so nothing waits for a password
 - in a worktree, its `.git` link is checked first: a changed link, or a real clone, stops the command
 
-**Local MCP server.** One per daemon, on `127.0.0.1:<random port>`, built with MCP TS SDK v2 (`createMcpHandler`, with localhost host and origin validation). Each job gets its own 32-byte bearer token, compared with `timingSafeEqual`. The token picks the job and its tool set, and it stops working when the job ends.
+**Local MCP server.** One per daemon, on `127.0.0.1:<random port>`, built with the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`'s `createMcpHandler`, served through `@modelcontextprotocol/node`), which answers both the 2026-07-28 protocol and the 2025 one. A request whose `Host` or `Origin` isn't localhost gets 403 (DNS rebinding). Each job gets its own 32-byte bearer token, compared with `timingSafeEqual`; a missing or unknown token gets 401. The token picks the job and its tool set, and it stops working when the job ends. A tool's mistakes go back to the agent as tool errors, so it can correct itself.
 
 | Tool | Job types | Input → output |
 |---|---|---|

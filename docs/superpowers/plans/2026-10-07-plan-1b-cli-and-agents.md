@@ -7743,12 +7743,12 @@ docs/why/local-mcp-server.md, docs/why/prompt-injection.md (new); docs/why/child
 
 The SDK was checked against what's published before this task was written (2026-10-12): `@modelcontextprotocol/server` 2.3.1 (`createMcpHandler`, `McpServer.registerTool` with a zod object as `inputSchema`), `@modelcontextprotocol/node` 2.1.1 (`toNodeHandler`, `localhostHostValidation`, `localhostOriginValidation`) and `@modelcontextprotocol/client` 2.3.1 (`Client`, `StreamableHTTPClientTransport`). See "Checked against the code (M9)".
 
-- [ ] **Step 1: Install the SDK**
+- [x] **Step 1: Install the SDK**
 
 Run: `npm install -D -w apps/cli @modelcontextprotocol/server@^2.3.1 @modelcontextprotocol/node@^2.1.1 @modelcontextprotocol/client@^2.3.1`
 Expected: `apps/cli/package.json` gains the three dev dependencies and `package-lock.json` changes. Nothing else.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/cli/test/mcp-agent.ts`:
 ```ts
@@ -7930,12 +7930,12 @@ describe('startMcpServer', () => {
 });
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/mcp`
 Expected: FAIL: `Cannot find module './tokens'` (and `./tool-sets`, `./server`).
 
-- [ ] **Step 4: Write the tokens, the tool type, the tool sets and the server**
+- [x] **Step 4: Write the tokens, the tool type, the tool sets and the server**
 
 `apps/cli/src/mcp/tokens.ts`:
 ```ts
@@ -8118,12 +8118,12 @@ async function answer(tool: McpTool, args: unknown): Promise<CallToolResult> {
 }
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/mcp`
 Expected: PASS (tokens 2, tool-sets 1, server 6).
 
-- [ ] **Step 6: Explain the local MCP server, and bring the spec in line**
+- [x] **Step 6: Explain the local MCP server, and bring the spec in line**
 
 `docs/why/local-mcp-server.md`:
 ```markdown
@@ -8165,12 +8165,12 @@ In the spec, §11, replace the paragraph that starts `**Local MCP server.** One 
 **Local MCP server.** One per daemon, on `127.0.0.1:<random port>`, built with the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`'s `createMcpHandler`, served through `@modelcontextprotocol/node`), which answers both the 2026-07-28 protocol and the 2025 one. A request whose `Host` or `Origin` isn't localhost gets 403 (DNS rebinding). Each job gets its own 32-byte bearer token, compared with `timingSafeEqual`; a missing or unknown token gets 401. The token picks the job and its tool set, and it stops working when the job ends. A tool's mistakes go back to the agent as tool errors, so it can correct itself.
 ```
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 176, protocol 41, server 398).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/cli/package.json package-lock.json apps/cli/src/mcp apps/cli/test/mcp-agent.ts docs/why/local-mcp-server.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
