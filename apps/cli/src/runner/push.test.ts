@@ -6,7 +6,7 @@ import { CANARY_HOOK, prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
 import type { JobIo } from '../daemon';
 import { JobFailure } from './job-failure';
-import { commitAndPush, pickPushRemote } from './push';
+import { commitAndPush, pickPushRemote, pushTarget } from './push';
 import { emptyHooksDir } from './safe-git';
 import { SCRUB_PATHS } from './scrub';
 import { prepareWorktree } from './worktree';
@@ -46,6 +46,10 @@ describe('commitAndPush', () => {
     writeFileSync(join(worktree.dir, '.env'), 'SECRET=1\n'); // scrubbed paths the agent made new: never committed either
     mkdirSync(join(worktree.dir, '.claude'));
     writeFileSync(join(worktree.dir, '.claude/settings.local.json'), '{}\n');
+    mkdirSync(join(worktree.dir, 'pkg')); // deeper, and in another letter case
+    writeFileSync(join(worktree.dir, 'pkg/Claude.md'), 'Another one.\n');
+    mkdirSync(join(worktree.dir, 'docs/.claude'), { recursive: true });
+    writeFileSync(join(worktree.dir, 'docs/.claude/x.json'), '{}\n');
     let branchWhenAsked = '';
     const pushing = vi.fn<JobIo['pushing']>(async () => {
       branchWhenAsked = branchOf(pr);
@@ -102,6 +106,36 @@ describe('commitAndPush', () => {
     expect(branchOf(pr)).toBe(pr.headSha);
   });
 
+  it('keeps scrubbed files out of the commit even when repo code un-hid them', async () => {
+    const pr = prRepo({ base: { 'AGENTS.md': 'Be nice.\n' } });
+    const { bundle, worktree } = await addressJob(pr);
+    pr.git(worktree.dir, 'update-index', '--no-skip-worktree', '--', 'CLAUDE.md', 'AGENTS.md'); // what repo code could do
+    writeFileSync(join(worktree.dir, 'AGENTS.md'), 'An agent wrote this.\n'); // CLAUDE.md stays deleted
+    writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
+    const { push } = await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing: applied });
+    expect(pr.git(pr.base, 'show', '--name-only', '--format=', push!.to)).toBe('src/orders.ts');
+  });
+
+  it('fails with git_error, retryable, when git cannot push', async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr);
+    writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
+    const failed = await commitAndPush({ bundle, worktree, remote: join(pr.root, 'nowhere.git'), scrubPaths: SCRUB_PATHS, pushing: applied }).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'git_error', retryable: true });
+    expect(branchOf(pr)).toBe(pr.headSha);
+  });
+
+  it("does not relabel a pushing() that rejects (the socket closed): the daemon reports the real error", async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr);
+    writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
+    const socketClosed = new Error('socket closed');
+    const failed = await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing: async () => { throw socketClosed; } }).catch((err: unknown) => err);
+    expect(failed).toBe(socketClosed);
+    expect(branchOf(pr)).toBe(pr.headSha);
+  });
+
   it("fails, and pushes nothing, when repo code committed in the job's worktree", async () => {
     const pr = prRepo();
     const { bundle, worktree } = await addressJob(pr);
@@ -126,6 +160,17 @@ describe('commitAndPush', () => {
     expect(pushing).not.toHaveBeenCalled();
     expect(branchOf(pr)).toBe(pr.headSha);
     expect(pr.git(pr.clone, 'show', '--name-only', '--format=', 'refs/nitpilot/drafts/job_1')).toBe('src/orders.ts');
+  });
+});
+
+describe('pushTarget', () => {
+  it("finds the clone's remote for the PR's head repo, and rejects for a deleted fork", async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr);
+    pr.git(pr.clone, 'remote', 'add', 'fork', 'git@github.com:acme/shop-api.git');
+    expect(await pushTarget(bundle, worktree.git)).toBe('fork');
+    const deleted = await pushTarget({ ...bundle, git: { ...bundle.git, headRepoPath: null } }, worktree.git).catch((err: unknown) => err);
+    expect(deleted).toMatchObject({ reason: 'git_error', retryable: false });
   });
 });
 

@@ -13,7 +13,10 @@ export type PushContext = {
   remote: string;
   /** The list prepareWorktree scrubbed with. Files matching it stay out of the commit, even ones the agent created. */
   scrubPaths: readonly string[];
-  /** Ask the server before pushing (JobIo.pushing). Push only on 'applied'. */
+  /**
+   * Ask the server before pushing (JobIo.pushing). Push only on 'applied'. If it rejects (the socket
+   * closed, the daemon stopped), that error is passed on as it is: the daemon reports it as a retryable `crash`.
+   */
   pushing: JobIo['pushing'];
 };
 
@@ -43,8 +46,10 @@ export async function commitAndPush(ctx: PushContext): Promise<{ push: PushInfo 
   try {
     return await commitThenPush(ctx);
   } catch (err) {
-    if (err instanceof JobFailure) throw err;
-    throw new JobFailure('git_error', true, (err as Error).message);
+    // Only git's own failure is a `git_error`. A JobFailure is already the right answer, and anything else
+    // (`pushing()` rejecting) goes up unchanged so the daemon reports what really happened.
+    if (err instanceof SafeGitError) throw new JobFailure('git_error', true, err.message);
+    throw err;
   }
 }
 
@@ -82,14 +87,17 @@ async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }:
 }
 
 /**
- * `git add -A` skips the scrubbed files the PR already had (they're skip-worktree), but not one the
- * agent created: a new `.claude/settings.local.json` or `.env` would be added. Take those back out of
- * the index. The files stay on disk, untracked.
+ * `git add -A` skips the scrubbed files the PR already had (they're skip-worktree), but not a file the
+ * agent created (a new `.claude/settings.local.json` or `.env`), nor one repo code un-hid with
+ * `git update-index --no-skip-worktree`. So after the add, put every staged scrubbed path back to the
+ * PR head's version: a new file leaves the index, a changed or deleted one is restored. The files on
+ * disk are left alone.
  */
 async function unstageAgentFiles(place: GitPlace, scrubPaths: readonly string[]): Promise<void> {
-  const added = (await safeGit(place, ['diff', '--cached', '--name-only', '--no-renames', '--diff-filter=A', '-z'])).stdout.split('\0').filter(Boolean);
-  const { hide } = scrubPlan(added, scrubPaths);
-  if (hide.length > 0) await safeGit(place, ['update-index', '--force-remove', '--', ...hide]);
+  const staged = (await safeGit(place, ['diff', '--cached', '--name-only', '--no-renames', '-z'])).stdout.split('\0').filter(Boolean);
+  const { hide } = scrubPlan(staged, scrubPaths);
+  // `:(literal)`: a file name with `*` or `[` in it is a name, not a pattern.
+  if (hide.length > 0) await safeGit(place, ['reset', '-q', '--', ...hide.map((path) => `:(literal)${path}`)]);
 }
 
 /** `git push --porcelain` marks a refused ref with `!`. "fetch first" and "non-fast-forward" mean the branch has commits we don't. */
