@@ -14,7 +14,7 @@ export async function mcpJob(pr: ReturnType<typeof prRepo>, bundle: Partial<JobB
   const configDir = tempDir();
   const worktree = await prepareWorktree(job, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env });
   onTestFinished(() => worktree.cleanup());
-  return { bundle: job, worktree, buffer: new ResultBuffer() };
+  return { bundle: job, worktree, buffer: new ResultBuffer(), checks: {} };
 }
 
 /** Another commit on the PR's head (pushed where GitHub keeps it, refs/pull/142/head). Returns the bundle for the new head. */
