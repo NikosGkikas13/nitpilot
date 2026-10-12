@@ -7,6 +7,9 @@ import { wrapUntrusted } from '../untrusted';
 /** The most a diff or a file can send back at once: 100 KB is about 25,000 tokens. */
 export const MAX_TOOL_OUTPUT_BYTES = 100 * 1024;
 
+/** A file bigger than this isn't read at all: it wouldn't fit in a reply, and git's output buffer has a limit too. */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
 /**
  * Never run a program the repo or your git config picks: `--no-ext-diff` ignores `diff.external` and
  * `--no-textconv` ignores the converters a PR's `.gitattributes` can name. `--no-color`: plain text for the agent.
@@ -138,15 +141,19 @@ export async function getDiff(ctx: McpJobContext, args: { path: string; since?: 
 /** `get_file`: a file as it is on the PR's head or its base, read from git (never from the folder), with line numbers. */
 export async function getFile(ctx: McpJobContext, args: { path: string; ref: 'base' | 'head'; from?: number; to?: number }): Promise<string> {
   const sha = args.ref === 'head' ? ctx.worktree.headSha : await diffBaseSha(ctx);
+  let size: number;
   let content: string;
   try {
+    // `cat-file -s`: the size in bytes, before reading anything. (A folder passes this and fails at `blob` below.)
+    size = Number((await git(ctx, ['cat-file', '-s', `${sha}:${args.path}`])).stdout);
+    if (size > MAX_FILE_BYTES) return `${args.path} is ${size} bytes, too large to read.`;
     // `cat-file blob`: the file's bytes exactly as committed. It refuses a folder, and never runs a converter (textconv).
     content = (await git(ctx, ['cat-file', 'blob', `${sha}:${args.path}`])).stdout;
   } catch (err) {
     if (err instanceof SafeGitError && err.code === 128) throw new ToolError(`${args.path} isn't a file on the PR's ${args.ref}.`);
     throw err;
   }
-  if (content.includes('\0')) return `${args.path} is a binary file (${Buffer.byteLength(content)} bytes).`;
+  if (content.includes('\0')) return `${args.path} is a binary file (${size} bytes).`;
   const lines = content.split('\n');
   if (lines.at(-1) === '') lines.pop(); // the newline at the end of the file isn't a line of its own
   const first = Math.max(1, args.from ?? 1);
@@ -155,11 +162,17 @@ export async function getFile(ctx: McpJobContext, args: { path: string; ref: 'ba
   return capped(`${args.path} (${args.ref}), lines ${first}-${last} of ${lines.length}:\n${numbered.join('\n')}`, 'Ask for fewer lines with from and to.');
 }
 
-/** Text cut at MAX_TOOL_OUTPUT_BYTES, on a line break, with a note saying so. */
+/**
+ * Text cut at MAX_TOOL_OUTPUT_BYTES, with a note saying so. It cuts on a line break when that keeps at
+ * least half of the allowance; a minified bundle or one-line JSON has none, so then it cuts at the byte
+ * limit (dropping a character the cut split in two) and ends that line itself.
+ */
 function capped(text: string, hint: string): string {
   if (Buffer.byteLength(text) <= MAX_TOOL_OUTPUT_BYTES) return text;
   const cut = Buffer.from(text).subarray(0, MAX_TOOL_OUTPUT_BYTES).toString();
-  return `${cut.slice(0, cut.lastIndexOf('\n') + 1)}[cut at ${MAX_TOOL_OUTPUT_BYTES / 1024} KB. ${hint}]`;
+  const lineEnd = cut.lastIndexOf('\n') + 1;
+  const kept = Buffer.byteLength(cut.slice(0, lineEnd)) >= MAX_TOOL_OUTPUT_BYTES / 2 ? cut.slice(0, lineEnd) : `${cut.replace(/\uFFFD$/, '')}\n`;
+  return `${kept}[cut at ${MAX_TOOL_OUTPUT_BYTES / 1024} KB. ${hint}]`;
 }
 
 /** `get_job`: the job, the PR and its conversation. Text anyone could have written is wrapped as untrusted. */

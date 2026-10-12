@@ -1,11 +1,12 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BundlePoint } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { prRepo } from '../../../test/git-fixtures';
 import { mcpJob, moveHead } from '../../../test/mcp-job';
 import { ToolError } from '../tool';
-import { getDiff, getFile, getJob, listChangedFiles, MAX_TOOL_OUTPUT_BYTES } from './read';
+import { getDiff, getFile, getJob, listChangedFiles, MAX_FILE_BYTES, MAX_TOOL_OUTPUT_BYTES } from './read';
 
 const lines = (n: number, text = 'line') => Array.from({ length: n }, (_, i) => `${text} ${i + 1}`).join('\n') + '\n';
 
@@ -98,6 +99,18 @@ describe('getDiff', () => {
     expect(Buffer.byteLength(diff)).toBeLessThan(MAX_TOOL_OUTPUT_BYTES + 200);
     expect(diff).toMatch(/\n\[cut at 100 KB\. Ask get_file for a part of the file instead\.\]$/);
   });
+
+  it('keeps most of a single line longer than 100 KB, cut at the byte limit', async () => {
+    const ctx = await mcpJob(prRepo({ head: { 'dist/bundle.min.js': `${'x'.repeat(150_000)}\n` } }));
+    const file = await getFile(ctx, { path: 'dist/bundle.min.js', ref: 'head' });
+    expect(file.length).toBeGreaterThan(50_000);
+    expect(Buffer.byteLength(file)).toBeLessThan(MAX_TOOL_OUTPUT_BYTES + 200);
+    expect(file).toMatch(/\n\[cut at 100 KB\. Ask for fewer lines with from and to\.\]$/);
+    const diff = await getDiff(ctx, { path: 'dist/bundle.min.js' });
+    expect(diff.length).toBeGreaterThan(50_000);
+    expect(Buffer.byteLength(diff)).toBeLessThan(MAX_TOOL_OUTPUT_BYTES + 200);
+    expect(diff).toMatch(/\n\[cut at 100 KB\. Ask get_file for a part of the file instead\.\]$/);
+  });
 });
 
 describe('getFile', () => {
@@ -124,6 +137,18 @@ describe('getFile', () => {
     const ctx = await mcpJob(prRepo({ head: { 'img/logo.png': 'PNG\0\0binary' } }));
     expect(await getFile(ctx, { path: 'img/logo.png', ref: 'head' })).toBe('img/logo.png is a binary file (11 bytes).');
     for (const path of ['src', 'nope.ts']) expect(await thrownBy(getFile(ctx, { path, ref: 'head' }))).toBeInstanceOf(ToolError);
+  });
+
+  it('describes a real binary by its true size, and declines a file over 10 MB without reading it', async () => {
+    const pr = prRepo();
+    mkdirSync(join(pr.work, 'img'));
+    writeFileSync(join(pr.work, 'img/raw.bin'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0xfe, 0x80]));
+    const bundle = moveHead(pr, {});
+    const ctx = await mcpJob(pr, bundle);
+    expect(await getFile(ctx, { path: 'img/raw.bin', ref: 'head' })).toBe('img/raw.bin is a binary file (8 bytes).');
+
+    const big = await mcpJob(prRepo({ head: { 'data/huge.txt': 'a'.repeat(MAX_FILE_BYTES + 1) } }));
+    expect(await getFile(big, { path: 'data/huge.txt', ref: 'head' })).toBe('data/huge.txt is 10485761 bytes, too large to read.');
   });
 });
 
@@ -152,21 +177,49 @@ describe('getJob', () => {
 });
 
 describe('the read tools and diff programs', () => {
-  it('never run a diff program that your git config names and the PR picks (textconv, diff.external)', async () => {
-    const pr = prRepo({ head: { '.gitattributes': '*.ts diff=trap\n' } });
-    const ctx = await mcpJob(pr);
+  /** Git as the tools run it (bare, cwd = the job's git dir), but with no safety flags: what a diff program would see. */
+  const bareDiff = (pr: ReturnType<typeof prRepo>, ctx: Awaited<ReturnType<typeof mcpJob>>) =>
+    execFileSync('git', [`--git-dir=${ctx.worktree.git.gitDir}`, '--bare', 'diff', pr.baseSha, pr.headSha], { cwd: ctx.worktree.git.gitDir, env: pr.env, encoding: 'utf8' });
+
+  /** A program that leaves a mark when git runs it. */
+  function trapProgram(pr: ReturnType<typeof prRepo>) {
     const program = join(pr.home, 'diff-program.sh');
-    writeFileSync(program, '#!/bin/sh\ntouch "$HOME/diff-program-ran"\ncat "$1"\n', { mode: 0o755 });
-    const ran = join(pr.home, 'diff-program-ran');
-    pr.git(pr.home, 'config', '--global', 'diff.trap.textconv', program);
-    // The trap works: plain git in the worktree runs it.
-    pr.git(ctx.worktree.dir, 'diff', pr.baseSha, pr.headSha);
-    expect(existsSync(ran)).toBe(true);
-    rmSync(ran);
-    pr.git(pr.home, 'config', '--global', 'diff.external', program);
+    writeFileSync(program, '#!/bin/sh\ntouch "$HOME/diff-program-ran"\ncat "$1" 2>/dev/null\nexit 0\n', { mode: 0o755 });
+    return { program, ran: join(pr.home, 'diff-program-ran') };
+  }
+
+  async function useAllReadTools(ctx: Awaited<ReturnType<typeof mcpJob>>) {
     await listChangedFiles(ctx);
     await getDiff(ctx, { path: 'src/orders.ts' });
     await getFile(ctx, { path: 'src/orders.ts', ref: 'head' });
+  }
+
+  it("never run a textconv converter that your git config names and the PR's .gitattributes picks", async () => {
+    const pr = prRepo({ head: { '.gitattributes': '*.ts diff=trap\n' } });
+    const ctx = await mcpJob(pr);
+    const { program, ran } = trapProgram(pr);
+    // Bare git (cwd = the git dir) doesn't read the tree's .gitattributes, so the trap needs your own attributes file to pick the converter.
+    writeFileSync(join(pr.home, 'attributes'), '*.ts diff=trap\n');
+    pr.git(pr.home, 'config', '--global', 'core.attributesFile', join(pr.home, 'attributes'));
+    pr.git(pr.home, 'config', '--global', 'diff.trap.textconv', program);
+    // The trap works: git run the way the tools run it, without the safety flags, runs the converter.
+    bareDiff(pr, ctx);
+    expect(existsSync(ran)).toBe(true);
+    rmSync(ran);
+    await useAllReadTools(ctx);
+    expect(existsSync(ran)).toBe(false);
+  });
+
+  it('never run a diff.external program that your git config names', async () => {
+    const pr = prRepo();
+    const ctx = await mcpJob(pr);
+    const { program, ran } = trapProgram(pr);
+    pr.git(pr.home, 'config', '--global', 'diff.external', program);
+    // The trap works: git run the way the tools run it, without the safety flags, runs the program.
+    bareDiff(pr, ctx);
+    expect(existsSync(ran)).toBe(true);
+    rmSync(ran);
+    await useAllReadTools(ctx);
     expect(existsSync(ran)).toBe(false);
   });
 });
