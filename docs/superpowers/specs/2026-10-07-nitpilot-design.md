@@ -322,7 +322,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
    1. `git status --porcelain`, `git add -A`, then `git commit --no-verify --trailer "Nitpilot-Job: <id>"` with the message `Address review feedback (round N)`, using the user's own git identity. Files matching the scrub list stay out of the commit, even ones the agent created or repo code un-hid. If anything other than the CLI committed in the worktree (repo code run by setup or a check), the job fails with `git_error` and nothing is pushed.
    2. Send `job.pushing` and wait for the ack. A `stale` ack means nothing is pushed.
    3. `git push --no-verify -- <headRemote> HEAD:refs/heads/<headRef>`, where `<headRemote>` is the clone's remote for the PR's head repo. A deleted fork, or a clone with no such remote, fails the job (`git_error`) before the agent runs. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
-7. Attach ±5 lines of surrounding code to each new point, read with `git show <sha>:<path>`. These are the snippets the UI shows.
+7. Attach ±5 lines of surrounding code to each new point, read with `git cat-file blob <sha>:<path>` (the head for a `RIGHT` point, the merge-base for a `LEFT` one). These are the snippets the UI shows.
 8. Send `job.complete`, then remove the worktree and the job's refs. On startup the CLI also deletes the worktrees a crash left behind and has each linked clone forget them (`git worktree remove`, never `git worktree prune`, which would also drop the user's own worktrees on a drive that isn't mounted).
 
 **Safe git.** Every git call gets these settings, so hooks from the PR (husky, for example) never run during checkout, commit or push, and symlinks can't point at secrets:

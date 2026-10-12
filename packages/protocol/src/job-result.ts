@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Category, Decision, Resolution, Severity, Side } from './enums';
 
-/** ±5 lines of code around a point, read by the CLI with `git show` (spec §11 step 7). */
+/** ±5 lines of code around a point, read by the CLI with `git cat-file blob` (spec §11 step 7). */
 export const Snippet = z.object({
   startLine: z.number().int().positive(),
   lines: z.array(z.string()).max(40),

@@ -8780,7 +8780,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `isEmpty()` is true when the agent wrote nothing at all: Task 16 reports that as `no_result`.
 - Snippets: up to 5 lines on each side, fewer at the start or end of the file, read with `git cat-file blob`. `null` when the file isn't at that commit, is binary, or is shorter than the line.
 
-- [ ] **Step 1: Give test jobs a buffer, and write the failing tests**
+- [x] **Step 1: Give test jobs a buffer, and write the failing tests**
 
 In `apps/cli/test/mcp-job.ts`, add `import { ResultBuffer } from '../src/mcp/buffer';` above the `McpJobContext` import, and `mcpJob` returns `{ bundle: job, worktree, buffer: new ResultBuffer() }`.
 
@@ -8957,12 +8957,12 @@ describe('snippetFor', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/mcp/buffer src/mcp/tools/write src/runner/snippets`
 Expected: FAIL: `Cannot find module './buffer'` (buffer.test.ts), and `Cannot find module '../src/mcp/buffer'` (test/mcp-job.ts, which write.test.ts and snippets.test.ts load first).
 
-- [ ] **Step 3: Write the buffer, the write tools and snippets**
+- [x] **Step 3: Write the buffer, the write tools and snippets**
 
 `apps/cli/src/mcp/buffer.ts`:
 ```ts
@@ -9153,21 +9153,21 @@ export async function snippetFor(place: GitPlace, sha: string, path: string, lin
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/mcp/buffer src/mcp/tools/write src/runner/snippets`
 Expected: PASS (buffer 2, write 7, snippets 1).
 
-- [ ] **Step 5: Bring the spec in line**
+- [x] **Step 5: Bring the spec in line**
 
 In the spec, §11 "Job steps", step 7 becomes: ``7. Attach ±5 lines of surrounding code to each new point, read with `git cat-file blob <sha>:<path>` (the head for a `RIGHT` point, the merge-base for a `LEFT` one). These are the snippets the UI shows.``
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 199, protocol 41, server 398).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/mcp apps/cli/src/runner/snippets.ts apps/cli/src/runner/snippets.test.ts apps/cli/test/mcp-job.ts docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

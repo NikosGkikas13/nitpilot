@@ -1,5 +1,6 @@
 import type { JobBundle } from '@nitpilot/protocol';
 import { onTestFinished } from 'vitest';
+import { ResultBuffer } from '../src/mcp/buffer';
 import type { McpJobContext } from '../src/mcp/context';
 import { emptyHooksDir } from '../src/runner/safe-git';
 import { SCRUB_PATHS } from '../src/runner/scrub';
@@ -13,7 +14,7 @@ export async function mcpJob(pr: ReturnType<typeof prRepo>, bundle: Partial<JobB
   const configDir = tempDir();
   const worktree = await prepareWorktree(job, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env });
   onTestFinished(() => worktree.cleanup());
-  return { bundle: job, worktree };
+  return { bundle: job, worktree, buffer: new ResultBuffer() };
 }
 
 /** Another commit on the PR's head (pushed where GitHub keeps it, refs/pull/142/head). Returns the bundle for the new head. */
