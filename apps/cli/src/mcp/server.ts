@@ -22,13 +22,17 @@ const MCP_PATH = '/mcp';
 /**
  * The daemon's local MCP server (spec §11): one per daemon, on 127.0.0.1 and a random free port.
  * Every request must come from this machine (Host and Origin checked, against DNS rebinding) and carry
- * a job's token, which picks the tools it may call. See docs/why/local-mcp-server.md.
+ * a job's token, which picks the tools it may call. Errors the agent can't see (the SDK's own, and
+ * unexpected tool failures) go to `onError`. See docs/why/local-mcp-server.md.
  */
-export async function startMcpServer(): Promise<LocalMcpServer> {
+export async function startMcpServer(options: { onError?: (err: Error) => void } = {}): Promise<LocalMcpServer> {
+  const onError = options.onError ?? (() => {});
   const jobs = new JobTokens<readonly McpTool[]>();
   // The SDK builds a fresh MCP server for every request, from the tools of the job whose token came with it.
-  const mcp = createMcpHandler(({ authInfo }) => toolServer((authInfo?.extra?.tools as readonly McpTool[] | undefined) ?? []));
-  const serveMcp = toNodeHandler(mcp);
+  const mcp = createMcpHandler(({ authInfo }) => toolServer((authInfo?.extra?.tools as readonly McpTool[] | undefined) ?? [], onError), {
+    onerror: onError,
+  });
+  const serveMcp = toNodeHandler(mcp, { onerror: onError });
   const checkHost = localhostHostValidation();
   const checkOrigin = localhostOriginValidation();
 
@@ -64,21 +68,24 @@ function refuse(res: ServerResponse, status: number, message: string): void {
 }
 
 /** An MCP server with exactly these tools. */
-function toolServer(tools: readonly McpTool[]): McpServer {
+function toolServer(tools: readonly McpTool[], onError: (err: Error) => void): McpServer {
   const server = new McpServer({ name: BRAND.mcpServerName, version: CLI_VERSION });
   for (const tool of tools) {
-    server.registerTool(tool.name, { description: tool.description, inputSchema: tool.input }, (args) => answer(tool, args));
+    server.registerTool(tool.name, { description: tool.description, inputSchema: tool.input }, (args) => answer(tool, args, onError));
   }
   return server;
 }
 
 /** Run a tool. Whatever goes wrong goes back to the agent as a tool error it can read, never as a crash of the server. */
-async function answer(tool: McpTool, args: unknown): Promise<CallToolResult> {
+async function answer(tool: McpTool, args: unknown, onError: (err: Error) => void): Promise<CallToolResult> {
   try {
     const value = await tool.run(args);
     return { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] };
   } catch (err) {
-    const message = err instanceof ToolError ? err.message : `${tool.name} failed: ${(err as Error).message}`;
+    if (err instanceof ToolError) return { isError: true, content: [{ type: 'text', text: err.message }] };
+    // Not the agent's mistake: tell the daemon's log, and give the agent a message it can read.
+    onError(err instanceof Error ? err : new Error(String(err)));
+    const message = `${tool.name} failed: ${err instanceof Error ? err.message : String(err)}`;
     return { isError: true, content: [{ type: 'text', text: message }] };
   }
 }
