@@ -6,6 +6,8 @@ import { ToolError } from '../tool';
 export const CHECK_TIMEOUT_MS = 10 * 60_000;
 /** How much of a check's output goes back to the agent: the end, where the failures are. */
 export const OUTPUT_TAIL_BYTES = 4 * 1024;
+/** How long to wait for the output to close after the check has ended. */
+const DRAIN_GRACE_MS = 1000;
 
 /** The only variables a check gets from your environment: enough to find programs and your tool settings, no tokens. */
 const CHECK_ENV_ALLOWLIST = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR'];
@@ -43,7 +45,9 @@ function checkEnv(from: Record<string, string | undefined>): Record<string, stri
 /**
  * Run a command in a folder with `spawn` and an argument list: no shell, so `;` or `$(…)` in an
  * argument is just text. It gets its own process group, so a timeout or a cancel stops everything it
- * started, and so does its own exit (a test runner's leftover server goes too). See docs/why/child-processes.md.
+ * started, and so does its own exit (a test runner's leftover server goes too). A program that left the
+ * group on purpose (a daemon) isn't stopped, but we stop waiting for its output a second after the check ends.
+ * See docs/why/child-processes.md.
  */
 export function runInWorktree(argv: readonly string[], opts: { cwd: string; env: Record<string, string>; timeoutMs: number; signal?: AbortSignal }): Promise<CheckResult> {
   const [command, ...args] = argv;
@@ -51,6 +55,8 @@ export function runInWorktree(argv: readonly string[], opts: { cwd: string; env:
     let tail = Buffer.alloc(0);
     let timedOut = false;
     let settled = false;
+    let exitCode: number | null = null;
+    let drainTimer: NodeJS.Timeout | undefined;
     const child = spawn(command!, args, { cwd: opts.cwd, env: opts.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     // A negative pid means "the whole group": the command and everything it started.
     const stopAll = () => {
@@ -68,20 +74,31 @@ export function runInWorktree(argv: readonly string[], opts: { cwd: string; env:
       stopAll();
     }, opts.timeoutMs);
     opts.signal?.addEventListener('abort', stopAll, { once: true });
+    const stoppedNote = () => (timedOut ? `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]` : opts.signal?.aborted ? '\n[stopped: the job was cancelled]' : '');
     const finish = (result: CheckResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(drainTimer);
       opts.signal?.removeEventListener('abort', stopAll);
       done(result);
     };
     child.stdout.on('data', keep);
     child.stderr.on('data', keep);
-    child.on('exit', stopAll);
+    child.on('exit', (code) => {
+      exitCode = code;
+      stopAll();
+      // The output only closes when every program holding it has ended. One that left the group keeps it
+      // open, so after a short grace we let go of the pipes and answer anyway.
+      drainTimer = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish({ ok: exitCode === 0 && !timedOut, exitCode, outputTail: `${tail.toString()}${stoppedNote()}\n[stopped waiting: a program the check started still holds its output]` });
+      }, DRAIN_GRACE_MS);
+    });
     child.on('error', (err) => finish({ ok: false, exitCode: null, outputTail: `Couldn't start ${command}: ${err.message}` }));
     child.on('close', (code) => {
-      const note = timedOut ? `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]` : opts.signal?.aborted ? '\n[stopped: the job was cancelled]' : '';
-      finish({ ok: code === 0 && !timedOut, exitCode: code, outputTail: tail.toString() + note });
+      finish({ ok: code === 0 && !timedOut, exitCode: code, outputTail: tail.toString() + stoppedNote() });
     });
   });
 }

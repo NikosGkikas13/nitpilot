@@ -31,7 +31,7 @@ Git that runs on PR code goes through `safeGit()` (`apps/cli/src/runner/safe-git
 
 ## Process groups: stopping everything a check started
 
-A check like `npm test` starts programs of its own: the test runner, maybe a test server. Killing `npm` alone would leave those running. So `run_check` (`apps/cli/src/mcp/tools/run-check.ts`) starts each check with `spawn(…, { detached: true })`, which puts it in a new *process group*, and stops it with `process.kill(-pid)`: a negative pid means "the whole group". That happens after 10 minutes (`CHECK_TIMEOUT_MS`), when the job is cancelled, and when the check exits, so a server it left behind goes too. The agent gets the last 4 KB of the output, where the failures are.
+A check like `npm test` starts programs of its own: the test runner, maybe a test server. Killing `npm` alone would leave those running. So `run_check` (`apps/cli/src/mcp/tools/run-check.ts`) starts each check with `spawn(…, { detached: true })`, which puts it in a new *process group*, and stops it with `process.kill(-pid)`: a negative pid means "the whole group". That happens after 10 minutes (`CHECK_TIMEOUT_MS`), when the job is cancelled, and when the check exits, so a server it left behind goes too. The agent gets the last 4 KB of the output, where the failures are. A program that leaves its group on purpose (a daemon) isn't stopped, but Nitpilot stops waiting for it a second after the check ends, so it can't hold up the job.
 
 A check also gets a short environment (`PATH`, `HOME`, the locale; no tokens), plus `CI=true`, so a test runner runs once instead of waiting in watch mode.
 

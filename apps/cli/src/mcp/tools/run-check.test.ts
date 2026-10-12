@@ -65,6 +65,18 @@ describe('runCheck', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it('stops waiting for a program the check started in its own session, which keeps the output open', async () => {
+    // The grandchild leaves the check's process group (detached) but shares its output pipes; it ends on its own after 4 s.
+    const grandchild = `setTimeout(() => {}, 4000)`;
+    const ctx = await withChecks({ daemon: node(`require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { detached: true, stdio: 'inherit' }); setInterval(() => {}, 1000)`) });
+    const started = Date.now();
+    const result = await runCheck(ctx, { name: 'daemon' }, { timeoutMs: 300 });
+    expect(Date.now() - started).toBeLessThan(2500);
+    expect(result).toMatchObject({ ok: false, exitCode: null });
+    expect(result.outputTail).toContain('[stopped after 0 s]');
+    expect(result.outputTail).toContain('[stopped waiting: a program the check started still holds its output]');
+  }, 8000);
+
   it('stops a check when the job is cancelled', async () => {
     const stop = new AbortController();
     const base = await withChecks({ hang: node('setInterval(() => {}, 1000)') });
