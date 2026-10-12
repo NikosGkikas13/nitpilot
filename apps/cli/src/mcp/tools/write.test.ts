@@ -26,7 +26,7 @@ async function toolError(call: () => unknown): Promise<string> {
 }
 
 describe('addPoint', () => {
-  it('keeps a point on a changed line (side RIGHT unless told), or on the whole PR', async () => {
+  it('keeps a point on a changed file (side RIGHT unless told), or on the whole PR', async () => {
     const ctx = await mcpJob(prRepo());
     expect(await addPoint(ctx, { ...point, path: 'src/orders.ts', line: 1 })).toEqual({ ref: 'N1' });
     expect(await addPoint(ctx, { ...point, path: 'src/orders.ts', line: 1, side: 'LEFT' })).toEqual({ ref: 'N2' });
@@ -54,6 +54,11 @@ describe('addPoint', () => {
     expect(await addPoint(ctx, { ...point, path: 'src/later.ts' })).toEqual({ ref: 'N1' });
   });
 
+  it('in a re-review with no sinceSha, the whole PR counts', async () => {
+    const ctx = await mcpJob(prRepo(), { type: 're_review', sinceSha: null });
+    expect(await addPoint(ctx, { ...point, path: 'src/orders.ts' })).toEqual({ ref: 'N1' });
+  });
+
   it("stops at the team's max_points_per_review, and never goes past the 20 a result holds", async () => {
     const pr = prRepo();
     const two = await mcpJob(pr, { rules: { ...pr.bundle.rules, maxPoints: 2 } });
@@ -71,12 +76,20 @@ describe('decidePoint', () => {
     const pr = prRepo();
     const ctx = await mcpJob(pr, {
       type: 're_review',
-      points: [bundlePoint({ number: 1 }), bundlePoint({ number: 2, raisedBy: 'sam' }), bundlePoint({ number: 3, origin: 'github', raisedBy: 'leo' })],
+      points: [
+        bundlePoint({ number: 1 }),
+        bundlePoint({ number: 2, raisedBy: 'sam' }),
+        bundlePoint({ number: 3, origin: 'github', raisedBy: 'leo' }),
+        bundlePoint({ number: 4, status: 'resolved' }),
+        bundlePoint({ number: 5, status: 'escalated' }),
+      ],
     });
     expect(decidePoint(ctx, { point: 1, decision: 'keep_open', comment: 'Still 50.' })).toBe('P1: kept open.');
     expect(decidePoint(ctx, { point: 1, decision: 'resolve', comment: 'Fixed now.' })).toBe('P1: resolved.');
     expect(await toolError(() => decidePoint(ctx, { point: 2, decision: 'resolve', comment: '' }))).toBe("P2 was raised by @sam's agent, not by you, so it isn't yours to decide.");
     expect(await toolError(() => decidePoint(ctx, { point: 3, decision: 'resolve', comment: '' }))).toBe("P3 was raised by @leo on GitHub, not by you, so it isn't yours to decide.");
+    expect(await toolError(() => decidePoint(ctx, { point: 4, decision: 'keep_open', comment: '' }))).toBe("P4 is resolved, so there's nothing to decide.");
+    expect(await toolError(() => decidePoint(ctx, { point: 5, decision: 'resolve', comment: '' }))).toBe("P5 is escalated, so there's nothing to decide.");
     expect(await toolError(() => decidePoint(ctx, { point: 9, decision: 'resolve', comment: '' }))).toBe("There's no P9 in this PR. get_job lists its points.");
     expect(ctx.buffer.toJobResult(null).decisions).toEqual([{ point: 1, decision: 'resolve', comment: 'Fixed now.' }]);
   });

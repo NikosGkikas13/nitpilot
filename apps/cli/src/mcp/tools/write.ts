@@ -54,6 +54,7 @@ export function decidePoint(ctx: McpJobContext, decision: PointDecision): string
   if (point.origin !== 'agent' || point.raisedBy !== ctx.bundle.you.login) {
     throw new ToolError(`P${point.number} was raised by ${point.origin === 'agent' ? `@${point.raisedBy}'s agent` : `@${point.raisedBy} on GitHub`}, not by you, so it isn't yours to decide.`);
   }
+  if (point.status === 'resolved' || point.status === 'escalated') throw new ToolError(`P${point.number} is ${point.status}, so there's nothing to decide.`);
   ctx.buffer.decide(decision);
   return `P${point.number}: ${decision.decision === 'resolve' ? 'resolved' : 'kept open'}.`;
 }

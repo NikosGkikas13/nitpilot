@@ -4,10 +4,13 @@ import { safeGit, type GitPlace } from './safe-git';
 /** Lines shown on each side of a point's line (spec §11 step 7). */
 const AROUND = 5;
 
+/** Keeps job.complete well under the server hub's 1 MB message limit: 20 points x 11 lines x 500 characters. */
+export const MAX_SNIPPET_LINE_CHARS = 500;
+
 /**
  * The code around a point, read from git (never from the folder the agent edited): up to 5 lines on
- * each side of `line`, fewer at the start or end of the file. Null when there's nothing to show: the
- * file isn't at `sha`, is binary, or is shorter than `line`.
+ * each side of `line`, fewer at the start or end of the file, each line cut at 500 characters. Null
+ * when there's nothing to show: the file isn't at `sha`, is binary, or is shorter than `line`.
  */
 export async function snippetFor(place: GitPlace, sha: string, path: string, line: number): Promise<Snippet | null> {
   let content: string;
@@ -21,5 +24,11 @@ export async function snippetFor(place: GitPlace, sha: string, path: string, lin
   if (lines.at(-1) === '') lines.pop();
   if (line > lines.length) return null;
   const startLine = Math.max(1, line - AROUND);
-  return { startLine, lines: lines.slice(startLine - 1, Math.min(lines.length, line + AROUND)) };
+  return { startLine, lines: lines.slice(startLine - 1, Math.min(lines.length, line + AROUND)).map(tidyLine) };
+}
+
+/** One line of a snippet: without a CRLF file's trailing \r, and cut at MAX_SNIPPET_LINE_CHARS. */
+function tidyLine(line: string): string {
+  const text = line.endsWith('\r') ? line.slice(0, -1) : line;
+  return text.length > MAX_SNIPPET_LINE_CHARS ? `${text.slice(0, MAX_SNIPPET_LINE_CHARS)}…` : text;
 }
