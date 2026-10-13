@@ -89,3 +89,18 @@ export function prRepo(opts: { base?: Record<string, FileSpec>; head?: Record<st
 
   return { ...box, base, clone, work, baseSha, headSha, bundle, pushAsHuman };
 }
+
+/**
+ * Point the clone's `origin` at a GitHub-looking SSH address (`git@github-test:<repo>.git`, a host alias
+ * like the ones spec §17 uses), so remoteFor and pushTarget find it the way they find a real one. Git
+ * then runs `ssh`, so the returned env names a stand-in for it (GIT_SSH_COMMAND) that serves the bare
+ * `base` folder instead. Use the env for every git call of the test.
+ */
+export function overSsh(pr: ReturnType<typeof prRepo>, repo = pr.bundle.pr.repoFullName): Record<string, string | undefined> {
+  const script = join(pr.root, 'fake-ssh.sh');
+  // Git runs: <script> -o BatchMode=yes github-test "git-upload-pack 'acme/shop-api.git'". The last word
+  // before the space is the program; run it on `base`. Git's own variables for the job's worktree must not reach it.
+  writeFileSync(script, `#!/bin/sh\nfor last; do :; done\nunset GIT_DIR GIT_WORK_TREE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT\nexec "\${last%% *}" '${pr.base}'\n`, { mode: 0o755 });
+  pr.git(pr.clone, 'remote', 'set-url', 'origin', `git@github-test:${repo}.git`);
+  return { ...pr.env, GIT_SSH_COMMAND: script };
+}

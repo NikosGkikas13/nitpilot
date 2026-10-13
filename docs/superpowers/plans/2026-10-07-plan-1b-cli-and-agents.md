@@ -10285,7 +10285,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 10. The worktree is always removed (`finally`).
 11. `nitpilot start`: the adapter (`getAdapter(config.agent)`, or the one a test passes) must pass `detect()`; then `cleanUpWorktrees` for the linked clones, `startMcpServer({ onError })` (errors go to the terminal), and the executor. Without an adapter (Claude Code and Gemini CLI until M11) it says so and declares no modes, as before. The MCP server closes when the daemon stops.
 
-- [ ] **Step 1: Let test clones reach "GitHub" over ssh**
+- [x] **Step 1: Let test clones reach "GitHub" over ssh**
 
 `pushTarget` and the fetch only use a remote that points at GitHub, and `git remote -v` shows a URL after `insteadOf` rewriting (checked on git 2.39.5), so a local path can't pass for GitHub. Instead the clone gets an SSH address with a host alias, and `GIT_SSH_COMMAND` names a stand-in for `ssh` that serves the bare repo. `safeGit` passes `GIT_SSH_COMMAND` through.
 
@@ -10307,7 +10307,7 @@ export function overSsh(pr: ReturnType<typeof prRepo>, repo = pr.bundle.pr.repoF
 }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `apps/cli/src/agents/prompt.test.ts`:
 ```ts
@@ -10564,12 +10564,12 @@ describe('nitpilot start', () => {
 });
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/agents/prompt src/runner/execute src/commands/start`
 Expected: FAIL: `Cannot find module './prompt'` and `Cannot find module './execute'`. The two new `start` tests fail too, because today's `start` ignores `adapter` and `stop`: `expected { Object (id, version, ...) } to deeply equal { id: 'fake', … }` and `expected 'Agents are not wired in yet: …' to contain …`, each followed by `Hook timed out in 10000ms` (the test can't stop the old `start`).
 
-- [ ] **Step 4: Write the prompt, the executor and the new `start`**
+- [x] **Step 4: Write the prompt, the executor and the new `start`**
 
 In `apps/cli/src/mcp/tools/run-check.ts`, `function checkEnv(` becomes `export function checkEnv(` (the setup command gets the same short environment as a check).
 
@@ -10803,12 +10803,12 @@ export async function start(deps: StartDeps = {}): Promise<number> {
 }
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/agents/prompt src/runner/execute src/commands/start`
 Expected: PASS (prompt 1, execute 9, start 3).
 
-- [ ] **Step 6: Explain how a job runs, and bring the spec in line**
+- [x] **Step 6: Explain how a job runs, and bring the spec in line**
 
 `docs/why/running-a-job.md`:
 ```markdown
@@ -10839,12 +10839,12 @@ The executor is an async function with a `try/finally`, like a `useEffect` whose
 
 In the spec, §11 "Job steps", step 5 becomes: ``5. Give the job its own token on the local MCP server, build the command through the agent adapter, and run the agent. On a timeout or cancel, the whole process tree is killed. The token stops working when the agent exits, and an agent that used no Nitpilot tool fails the job with `no_result`. A job for a repo that isn't linked on this device is turned down (`repo_not_linked`), and so is one the agent's modes don't cover (`unsupported_mode`).``
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 243, protocol 41, server 398). `test/build.test.ts` now bundles the executor: `dist/index.js` grows from about 0.8 MB to about 1.6 MB (the MCP SDK), and the fake agent isn't in it.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/cli/src apps/cli/test/git-fixtures.ts docs/why/running-a-job.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

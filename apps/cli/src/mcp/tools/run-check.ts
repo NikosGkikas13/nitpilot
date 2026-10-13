@@ -34,7 +34,7 @@ export async function runCheck(ctx: McpJobContext, args: { name: string }, opts:
 }
 
 /** The allowlist, plus `CI=true` so test runners run once and never wait for input, and `NO_COLOR` for plain output. */
-function checkEnv(from: Record<string, string | undefined>): Record<string, string> {
+export function checkEnv(from: Record<string, string | undefined>): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of CHECK_ENV_ALLOWLIST) {
     const value = from[name];
