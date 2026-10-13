@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -24,8 +25,11 @@ import { installationEvent, people, prEvent, pull } from '../fixtures/github';
 import { sendWebhook } from '../webhooks';
 import { localGithub, type Who } from './github';
 
-/** A running `nitpilot start`: what it printed, and how to stop it (resolves with its exit code). */
-export type RunningCli = { lines: string[]; configDir: string; stop(): Promise<number> };
+/**
+ * A running `nitpilot start`: what it printed, where its config lives, whether it has started an agent yet
+ * (so its checkout is over), and how to stop it (resolves with its exit code).
+ */
+export type RunningCli = { lines: string[]; configDir: string; agentStarted: boolean; stop(): Promise<number> };
 
 /**
  * Plan 1 end to end (spec §19): the server, wired exactly like main.ts with GitHub replaced by
@@ -56,78 +60,108 @@ export async function startE2e() {
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
   const app = testApp({ ingest, dispatch: dispatcher.dispatch });
-  const server = await new Promise<Server>((listening) => {
-    const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => listening(s as Server));
-  });
-  hub.attach(server);
-  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  runner.start();
-  cliJobs.start();
-
-  const users = {
-    maya: await prisma.user.create({ data: { githubId: String(people.maya.id), login: people.maya.login } }),
-    leo: await prisma.user.create({ data: { githubId: String(people.leo.id), login: people.leo.login } }),
-  };
-  /** Send a webhook as GitHub would, and wait until it's handled. */
-  const deliver = async (event: string, payload: unknown) => {
-    const res = await sendWebhook(app, event, payload);
-    if (res.status !== 202) throw new Error(`webhook ${event} answered ${res.status}`);
-    await ingest.idle();
-  };
-  await deliver('installation', installationEvent('created'));
-
   const clis: RunningCli[] = [];
-  const people_ = { maya: github.personFor('maya'), leo: github.personFor('leo') };
-
-  return {
-    url,
-    github,
-    platform,
-    hub,
-    notified,
-    users,
-    deliver,
-    /** Run code on each CLI message before the server sees it. */
-    intercept(listener: MessageListener | null): void {
-      intercept = listener;
-    },
-    /** The PR's chat, once the server has one. */
-    chat: () => prisma.prChat.findFirstOrThrow({ include: { jobs: true } }),
-    /** Open the PR with leo as reviewer, at the local head. */
-    openPr: () => deliver('pull_request', prEvent('opened', { pull: { head: { ...pull().head, sha: github.headSha }, base: { ...pull().base, sha: github.baseSha } } })),
-    /** `nitpilot start` for one person, running the fake agent with a scenario from agents/fake/scenarios. */
-    async startCli(who: Who, scenario = 'happy.json'): Promise<RunningCli> {
-      const { clone, env } = people_[who];
-      const configDir = join(github.root, 'config', who);
-      const { raw } = await makeCliToken(users[who].id);
-      saveConfig(PersonalConfigSchema.parse({ server: url, token: raw, agent: 'fake', repos: { [pull().base.repo.full_name]: { path: clone } } }), configDir);
-      const lines: string[] = [];
-      const out: Out = { log: (text) => void lines.push(text), error: (text) => void lines.push(text) };
-      const stop = new AbortController();
-      const exit = start({ env: { ...env, NITPILOT_CONFIG_DIR: configDir }, out, stop: stop.signal, adapter: fakeAdapter({ scenario: join(FAKE_SCENARIOS, scenario) }) });
-      const cli: RunningCli = {
-        lines,
-        configDir,
-        async stop() {
-          stop.abort();
-          return exit;
-        },
-      };
-      clis.push(cli);
-      // Connected once the server has its hello.
-      await waitFor(async () => hub.connectionsFor(users[who].id).length > 0, `${who}'s CLI to connect`);
-      return cli;
-    },
-    async close(): Promise<void> {
+  let server: Server | null = null;
+  /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
+  async function close(): Promise<void> {
+    try {
       for (const cli of clis) await cli.stop().catch(() => {});
       cliJobs.stop();
       runner.stop();
       await hub.idle();
       hub.closeAll(1001, 'test over');
-      server.closeAllConnections();
-      await new Promise((closed) => server.close(closed));
-    },
-  };
+      const listening = server;
+      if (listening) {
+        listening.closeAllConnections();
+        await new Promise((closed) => listening.close(closed));
+      }
+    } finally {
+      // Even when a step above failed: the bare repo, the clones, the configs and the worktrees go too.
+      rmSync(github.root, { recursive: true, force: true });
+    }
+  }
+
+  // If anything below throws, stop what already started (otherwise the server and its timers keep running).
+  try {
+    const listening = await new Promise<Server>((resolve) => {
+      const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => resolve(s as Server));
+    });
+    server = listening;
+    hub.attach(listening);
+    const url = `http://127.0.0.1:${(listening.address() as AddressInfo).port}`;
+    runner.start();
+    cliJobs.start();
+
+    const users = {
+      maya: await prisma.user.create({ data: { githubId: String(people.maya.id), login: people.maya.login } }),
+      leo: await prisma.user.create({ data: { githubId: String(people.leo.id), login: people.leo.login } }),
+    };
+    /** Send a webhook as GitHub would, and wait until it's handled. */
+    const deliver = async (event: string, payload: unknown) => {
+      const res = await sendWebhook(app, event, payload);
+      if (res.status !== 202) throw new Error(`webhook ${event} answered ${res.status}`);
+      await ingest.idle();
+    };
+    await deliver('installation', installationEvent('created'));
+
+    const people_ = { maya: github.personFor('maya'), leo: github.personFor('leo') };
+
+    return {
+      url,
+      github,
+      platform,
+      hub,
+      notified,
+      users,
+      deliver,
+      /** Run code on each CLI message before the server sees it. */
+      intercept(listener: MessageListener | null): void {
+        intercept = listener;
+      },
+      /** The PR's chat, once the server has one. */
+      chat: () => prisma.prChat.findFirstOrThrow({ include: { jobs: true } }),
+      /** Open the PR with leo as reviewer, at the local head. */
+      openPr: () => deliver('pull_request', prEvent('opened', { pull: { head: { ...pull().head, sha: github.headSha }, base: { ...pull().base, sha: github.baseSha } } })),
+      /** `nitpilot start` for one person, running the fake agent with a scenario from agents/fake/scenarios. */
+      async startCli(who: Who, scenario = 'happy.json'): Promise<RunningCli> {
+        const { clone, env } = people_[who];
+        const configDir = join(github.root, 'config', who);
+        const { raw } = await makeCliToken(users[who].id);
+        saveConfig(PersonalConfigSchema.parse({ server: url, token: raw, agent: 'fake', repos: { [pull().base.repo.full_name]: { path: clone } } }), configDir);
+        const lines: string[] = [];
+        const out: Out = { log: (text) => void lines.push(text), error: (text) => void lines.push(text) };
+        const stop = new AbortController();
+        // buildInvocation runs right before the agent starts, after the checkout has finished: that is when
+        // `agentStarted` turns true, so a test can tell "still checking out" from "the agent is running".
+        const fake = fakeAdapter({ scenario: join(FAKE_SCENARIOS, scenario) });
+        const adapter = {
+          ...fake,
+          buildInvocation: (...args: Parameters<typeof fake.buildInvocation>) => {
+            cli.agentStarted = true;
+            return fake.buildInvocation(...args);
+          },
+        };
+        const exit = start({ env: { ...env, NITPILOT_CONFIG_DIR: configDir }, out, stop: stop.signal, adapter });
+        const cli: RunningCli = {
+          lines,
+          configDir,
+          agentStarted: false,
+          async stop() {
+            stop.abort();
+            return exit;
+          },
+        };
+        clis.push(cli);
+        // Connected once the server has its hello.
+        await waitFor(async () => hub.connectionsFor(users[who].id).length > 0, `${who}'s CLI to connect`);
+        return cli;
+      },
+      close,
+    };
+  } catch (err) {
+    await close();
+    throw err;
+  }
 }
 
 export type E2e = Awaited<ReturnType<typeof startE2e>>;

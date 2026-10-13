@@ -5,14 +5,16 @@ import { startE2e, waitFor, type E2e } from './harness';
 
 const ref = { installationId: '77', repoId: '501', repoFullName: 'octo/sandbox', number: 42 };
 
-let e2e: E2e;
+let current: E2e | undefined;
 beforeEach(async () => {
-  e2e = await startE2e();
+  current = undefined; // if startE2e() throws, afterEach has nothing to close (and never closes the last test's)
+  current = await startE2e();
 });
-afterEach(() => e2e.close());
+afterEach(() => current?.close());
 
 describe('Plan 1 end to end', () => {
   it("takes a PR from opened to ready between two people's agents: one summary comment, fixes pushed by the author, only the reviewer told", async () => {
+    const e2e = current!;
     await e2e.startCli('maya');
     await e2e.startCli('leo');
     // GitHub's webhook for the author's push, the way GitHub sends it: after the push, before the result arrives.
@@ -48,6 +50,8 @@ describe('Plan 1 end to end', () => {
     ]);
     // Only the reviewer hears about it.
     await waitFor(() => e2e.notified.length > 0, 'a notification');
+    // Any other notification would be a task not run yet: wait until none is left (pending or running).
+    await waitFor(async () => (await prisma.task.count({ where: { status: { in: ['pending', 'running'] } } })) === 0, 'the tasks to be done');
     expect(e2e.notified.map((n) => [n.kind, n.userIds])).toEqual([['ready', [e2e.users.leo.id]]]);
     expect(await prisma.rawEvent.count({ where: { status: { not: 'processed' } } })).toBe(0);
   });
