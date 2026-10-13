@@ -10881,7 +10881,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - the PR is closed mid-review → `job.cancel` (`pr_closed`), and leo's CLI removes the worktree;
 - a human pushes just before maya's CLI pushes its fix → the address job is cancelled (`branch_moved`), a new address pass runs on the new head, and maya's fix lands on top of the human's commit: nothing is force-pushed (Review Focus #2).
 
-- [ ] **Step 1: Give the end-to-end test its own project and scripts**
+- [x] **Step 1: Give the end-to-end test its own project and scripts**
 
 In `apps/server/vitest.config.ts`, add a third project after the `db` one:
 ```ts
@@ -10910,7 +10910,7 @@ In `.github/workflows/ci.yml`, after `- run: npm test` add:
       - run: npm run test:e2e
 ```
 
-- [ ] **Step 2: Write the pretend GitHub and the harness**
+- [x] **Step 2: Write the pretend GitHub and the harness**
 
 `apps/server/test/e2e/github.ts`:
 ```ts
@@ -11150,7 +11150,7 @@ export async function waitFor(ready: () => Promise<boolean> | boolean, what: str
 }
 ```
 
-- [ ] **Step 3: Write the tests**
+- [x] **Step 3: Write the tests**
 
 `apps/server/test/e2e/agent-to-agent.e2e.test.ts`:
 ```ts
@@ -11293,17 +11293,17 @@ describe('Plan 1 end to end: when things go differently', () => {
 });
 ```
 
-- [ ] **Step 4: Run them**
+- [x] **Step 4: Run them**
 
 Run: `npm run test:e2e`
 Expected: PASS (agent-to-agent 1, scenarios 4), in about 15 s. These tests cover code from Tasks 1–17, so they pass as soon as they're written; Step 5 shows they can fail.
 
-- [ ] **Step 5: Watch one fail**
+- [x] **Step 5: Watch one fail**
 
 Temporarily delete `await worktree?.cleanup();` from the `finally` in `apps/cli/src/runner/execute.ts`, and run `npm run test:e2e` again.
 Expected: FAIL: the closed-PR scenario fails with `timed out waiting for leo's worktree to be removed` (1 failed, 4 passed). Put the line back, and run it once more: PASS.
 
-- [ ] **Step 6: Explain the end-to-end test, and bring the spec in line**
+- [x] **Step 6: Explain the end-to-end test, and bring the spec in line**
 
 `docs/why/end-to-end-test.md`:
 ```markdown
@@ -11334,12 +11334,12 @@ It's a Playwright test for the backend: unit tests check each component with pro
 
 In the spec, §19, the "End to end in CI" item becomes: ``- **End to end in CI** (`npm run test:e2e`): the server, two `nitpilot start` daemons, the fake agent and `FakePlatform` together reach READY, with the PR in local git repos that the CLIs reach through a stand-in for ssh. Further scenarios: escalation, a CLI offline, a PR closed mid-job, a human push mid-job.``
 
-- [ ] **Step 7: Run everything**
+- [x] **Step 7: Run everything**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: all green (CLI 243, protocol 41, server 398; end to end 5). Docker must be running.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/server/test/e2e apps/server/vitest.config.ts apps/server/package.json package.json .github/workflows/ci.yml docs/why/end-to-end-test.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

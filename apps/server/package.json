@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --project unit --project db",
     "typecheck": "tsc -p tsconfig.json",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
@@ -12,6 +12,7 @@
     "postinstall": "prisma generate",
     "test:unit": "vitest run --project unit",
     "test:db": "vitest run --project db",
+    "test:e2e": "vitest run --project e2e",
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "dev:tunnel": "tsx scripts/dev-tunnel.ts",

@@ -673,7 +673,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   - A `FakePlatform` stands in for GitHub writes.
 - **CLI hub:** an in-process WebSocket client tests hello, assign, ping, leases, fencing and rebinding.
 - **Safe git and adapters:** the suites in §12.3.
-- **End to end in CI:** the server, two CLIs, the fake agent and `FakePlatform` together reach READY. Further scenarios: escalation, a CLI offline, a PR closed mid-job, a human push mid-job.
+- **End to end in CI** (`npm run test:e2e`): the server, two `nitpilot start` daemons, the fake agent and `FakePlatform` together reach READY, with the PR in local git repos that the CLIs reach through a stand-in for ssh. Further scenarios: escalation, a CLI offline, a PR closed mid-job, a human push mid-job.
 - **Live acceptance:** see §20.
 
 ## 20. Delivery

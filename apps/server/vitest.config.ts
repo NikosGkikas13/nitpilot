@@ -39,6 +39,19 @@ export default defineConfig({
           globalSetup: ['./test/global-setup.ts'],
         },
       },
+      {
+        // Plan 1 end to end (spec §19): the server, two CLIs and the fake agent. Slower, so it runs on its own
+        // (npm run test:e2e), against the same test database.
+        extends: true,
+        test: {
+          name: 'e2e',
+          include: ['test/e2e/**/*.e2e.test.ts'],
+          fileParallelism: false,
+          testTimeout: 90_000,
+          hookTimeout: 30_000,
+          globalSetup: ['./test/global-setup.ts'],
+        },
+      },
     ],
   },
 });

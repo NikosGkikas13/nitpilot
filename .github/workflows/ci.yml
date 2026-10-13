@@ -39,3 +39,5 @@ jobs:
       - run: npm run lint
       # Runs every workspace's tests: protocol, server and CLI.
       - run: npm test
+      # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
+      - run: npm run test:e2e

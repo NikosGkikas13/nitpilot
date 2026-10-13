@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w apps/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "dev:tunnel": "npm run dev:tunnel -w apps/server"
