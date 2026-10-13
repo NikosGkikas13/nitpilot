@@ -1,0 +1,6 @@
+{
+  "review": [
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "blocker", "category": "security", "title": "The page size comes from the query string unchecked", "body": "A huge value loads every order at once." } },
+    { "finish": "One security point." }
+  ]
+}

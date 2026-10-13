@@ -9663,7 +9663,7 @@ docs/why/running-a-job.md, docs/why/end-to-end-test.md (new); docs/why/child-pro
 - The fake agent reads `--mcp-config` (a 0600 file with the URL and token, never on its command line) and `--scenario`, calls `get_job`, then follows the steps for that job type: `add_point`, `decide`, `reply`, `edit` (a file inside its folder), `run_check`, `finish`, `sleep`, `exit`. A tool error ends the run as a failure. It prints one JSON line per step.
 - The fake agent runs with Node's type stripping (`node --experimental-strip-types`, Node 22.6 and up), so it imports packages only. It exists only in a source checkout: the published CLI doesn't ship it, and `detect()` says so.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/cli/src/agents/runner.test.ts`:
 ```ts
@@ -9811,12 +9811,12 @@ describe('getAdapter', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/agents`
 Expected: FAIL: `Cannot find module './runner'` (runner.test.ts) and `Cannot find module '../registry'` (fake/adapter.test.ts).
 
-- [ ] **Step 3: Write the types, the runner, the fake agent and the registry**
+- [x] **Step 3: Write the types, the runner, the fake agent and the registry**
 
 `apps/cli/src/agents/types.ts`:
 ```ts
@@ -10219,12 +10219,12 @@ The scenarios. Each lists what the fake agent does for each job type; a type tha
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/agents`
 Expected: PASS (runner 7, fake adapter 4).
 
-- [ ] **Step 5: Explain stopping an agent, and bring the spec in line**
+- [x] **Step 5: Explain stopping an agent, and bring the spec in line**
 
 In `docs/why/child-processes.md`, before `## The React analogy`, add:
 ```markdown
@@ -10243,12 +10243,12 @@ and the paragraph that starts `**Fake agent.**` with:
 **Fake agent.** A small Node script (`apps/cli/src/agents/fake/agent.ts`, run with Node's type stripping) that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and answer P2; on re-review, resolve both". It talks to the MCP server exactly like a real agent, reads its token from a 0600 file, and is used in CI. It only runs from a source checkout.
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 231, protocol 41, server 398).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/agents docs/why/child-processes.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

@@ -405,7 +405,7 @@ interface AgentAdapter {
 }
 ```
 
-A shared `AgentRunner` handles spawning (in a separate process group), timeouts, and killing the whole process tree. Adapters only build the command and parse the output, so they can be unit-tested without spawning anything.
+A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process group), timeouts, and killing the whole process tree: `SIGTERM`, then `SIGKILL` 5 seconds later, and whatever an agent leaves in its group dies when it exits. Adapters only build the command and parse the output, so they can be unit-tested without spawning anything. `AgentEvent` is `{type: 'progress', text}` (sent on as `job.progress`) or `{type: 'result', ok, text}`; `outcome` sees the last one.
 
 **Claude Code** (flags verified against v2.1.29x; the conformance suite catches any drift)
 - **Reviewer:**
@@ -427,7 +427,7 @@ A shared `AgentRunner` handles spawning (in a separate process group), timeouts,
   - a `tools.core` allowlist. Reviewer: `read_file, read_many_files, list_directory, glob, grep_search`. Editor adds `replace, write_file`.
 - **Policy:** denies `run_shell_command`, `web_fetch` and `google_web_search` at priority 999.
 
-**Fake agent.** A small Node script that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and decline P2; on re-review, resolve P1 and keep P2". It talks to the MCP server exactly like a real agent and is used in CI.
+**Fake agent.** A small Node script (`apps/cli/src/agents/fake/agent.ts`, run with Node's type stripping) that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and answer P2; on re-review, resolve both". It talks to the MCP server exactly like a real agent, reads its token from a 0600 file, and is used in CI. It only runs from a source checkout.
 
 ### 12.3 Conformance suite (every adapter must pass)
 

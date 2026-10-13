@@ -35,6 +35,10 @@ A check like `npm test` starts programs of its own: the test runner, maybe a tes
 
 A check also gets a short environment (`PATH`, `HOME`, the locale; no tokens), plus `CI=true`, so a test runner runs once instead of waiting in watch mode.
 
+## Agents: asked to stop, then made to
+
+An agent (Claude Code, Gemini CLI, or the test's fake agent) runs the same way, in its own process group, through `runAgent` (`apps/cli/src/agents/runner.ts`). Stopping it is gentler, because an agent may be halfway through writing a file. On a timeout (the job's `jobTimeoutMinutes`) or a cancel, it first gets `SIGTERM`, a *signal* that means "please stop now": a well-behaved program tidies up and exits. Five seconds later (`KILL_GRACE_MS`) the whole group gets `SIGKILL`, which no program can ignore. When the agent exits by itself, anything it left running in its group is killed at once. Each line it prints goes to its adapter, which turns the lines it understands into progress and a final result.
+
 ## The React analogy
 
 - A shell string is `innerHTML`; an argument list is `textContent`. One parses what you give it as code, the other only shows it.
