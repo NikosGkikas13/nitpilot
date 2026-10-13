@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { decodeTail } from '../../utf8';
 import type { McpJobContext } from '../context';
 import { ToolError } from '../tool';
 
@@ -85,12 +86,7 @@ export function runInWorktree(argv: readonly string[], opts: { cwd: string; env:
     };
     opts.signal?.addEventListener('abort', cancel, { once: true });
     const stoppedNote = () => (timedOut ? `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]` : aborted ? '\n[stopped: the job was cancelled]' : '');
-    // The tail is cut by bytes, so it can start in the middle of a character: drop the leftover bytes of that one.
-    const tailText = () => {
-      let start = 0;
-      while (start < tail.length && (tail[start]! & 0xc0) === 0x80) start++;
-      return tail.subarray(start).toString();
-    };
+    const tailText = () => decodeTail(tail);
     const finish = (result: CheckResult) => {
       if (settled) return;
       settled = true;

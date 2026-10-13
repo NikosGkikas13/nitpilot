@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tempDir } from '../../test/temp';
@@ -36,8 +36,9 @@ describe('runAgent', () => {
   it('kills a hanging agent and everything it started within the timeout plus 5 s, even one that ignores SIGTERM (spec §12.3 L5)', async () => {
     const marker = join(tempDir(), 'child-still-ran');
     // The agent ignores SIGTERM and starts a child that would write the marker after 7 s, then both hang.
-    const child = `setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 7000)`;
-    const agent = node(`process.on('SIGTERM', () => {}); require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], { stdio: 'ignore' }); setInterval(() => {}, 1000)`);
+    // The child ignores SIGTERM too, and the agent exits by itself after 20 s, so an interrupted run can't leave it forever.
+    const child = `process.on('SIGTERM', () => {}); setTimeout(() => require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'), 7000)`;
+    const agent = node(`process.on('SIGTERM', () => {}); setTimeout(() => process.exit(), 20000); require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(child)}], { stdio: 'ignore' }); setInterval(() => {}, 1000)`);
     const started = Date.now();
     const run = await runAgent(lines, agent, { cwd: tempDir(), timeoutMs: 300 });
     expect(Date.now() - started).toBeLessThan(300 + KILL_GRACE_MS + 1_000);
@@ -68,6 +69,34 @@ describe('runAgent', () => {
     const again = await runAgent(lines, node(`require('fs').writeFileSync(${JSON.stringify(marker)}, 'x')`), { cwd: tempDir(), timeoutMs: 10_000, signal: stop.signal });
     expect(again.outcome).toMatchObject({ ok: false });
     expect(existsSync(marker)).toBe(false);
+  });
+
+  it("keeps the end of stderr on a whole character, even when the cut lands inside one", async () => {
+    const run = await runAgent(lines, node(`process.stderr.write('é'.repeat(3000) + '!END\\n'); process.exitCode = 1`), { cwd: tempDir(), timeoutMs: 10_000 });
+    expect(run.stderrTail.startsWith('\uFFFD')).toBe(false);
+    expect(run.stderrTail.endsWith('!END\n')).toBe(true);
+    expect(Buffer.byteLength(run.stderrTail)).toBeLessThanOrEqual(4096);
+  });
+
+  it('never times out an agent that has ended, while a program it left holds its output', async () => {
+    // The agent starts a detached program that holds stdout for 3 s, then ends at once: the run is done, only the output is still open.
+    const holder = `setTimeout(() => {}, 3000)`;
+    const code = `require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(holder)}], { detached: true, stdio: ['ignore', 'inherit', 'inherit'] }); console.log('done:ok'); process.exit(0)`;
+    const started = Date.now();
+    const run = await runAgent(lines, node(code), { cwd: tempDir(), timeoutMs: 400 });
+    expect(run.outcome).toEqual({ ok: true });
+    expect(Date.now() - started).toBeLessThan(2_500);
+    expect(run.stderrTail).not.toContain('[stopped');
+  });
+
+  it('never writes its files through a link that is already there', async () => {
+    const dir = tempDir();
+    const target = join(dir, 'target');
+    const link = join(dir, 'mcp.json');
+    writeFileSync(target, 'original');
+    symlinkSync(target, link);
+    await expect(runAgent(lines, node('console.log("done:ok")', [{ path: link, content: 'secret' }]), { cwd: dir, timeoutMs: 10_000 })).rejects.toThrow(/EEXIST/);
+    expect(readFileSync(target, 'utf8')).toBe('original');
   });
 
   it("says so when the agent's program doesn't exist", async () => {

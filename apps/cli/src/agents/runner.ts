@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { decodeTail } from '../utf8';
 import type { AgentAdapter, AgentEvent, AgentInvocation, AgentOutcome } from './types';
 
 /** After SIGTERM, how long an agent gets to stop before SIGKILL (spec §12.3 L5: the tree is gone within timeout + 5 s). */
@@ -44,13 +45,13 @@ const CANCELLED: AgentOutcome = { ok: false, reason: 'crash', retryable: true };
  * in its group is killed too. See docs/why/child-processes.md.
  */
 export function runAgent(adapter: Pick<AgentAdapter, 'parseLine' | 'outcome'>, invocation: AgentInvocation, opts: RunOptions): Promise<AgentRun> {
-  // `wx`: never write through a file (or a link) that is already there.
-  for (const file of invocation.files) writeFileSync(file.path, file.content, { mode: 0o600, flag: 'wx' });
   return new Promise((done) => {
     if (opts.signal?.aborted) {
       done({ outcome: CANCELLED, stderrTail: '[stopped: the job was cancelled]' });
       return;
     }
+    // `wx`: never write through a file (or a link) that is already there.
+    for (const file of invocation.files) writeFileSync(file.path, file.content, { mode: 0o600, flag: 'wx' });
     let pending = ''; // stdout after the last line break
     let stderr = Buffer.alloc(0);
     let last: AgentEvent | undefined;
@@ -98,7 +99,7 @@ export function runAgent(adapter: Pick<AgentAdapter, 'parseLine' | 'outcome'>, i
       clearTimeout(drainTimer);
       opts.signal?.removeEventListener('abort', cancel);
       if (pending) read(pending);
-      let stderrTail = stderr.toString();
+      let stderrTail = decodeTail(stderr);
       if (timedOut) stderrTail += `\n[stopped after ${Math.round(opts.timeoutMs / 1000)} s]`;
       if (cancelled) stderrTail += '\n[stopped: the job was cancelled]';
       if (spawnError) done({ outcome: { ok: false, reason: 'crash', retryable: false }, stderrTail: `Couldn't start ${invocation.command}: ${spawnError.message}` });
@@ -118,6 +119,10 @@ export function runAgent(adapter: Pick<AgentAdapter, 'parseLine' | 'outcome'>, i
     child.on('error', (err) => finish(err));
     child.on('exit', (code, signal) => {
       exit = { code, signal };
+      // The agent has ended: only the wait for its output is left, so a timeout or cancel now changes nothing.
+      clearTimeout(timer);
+      clearTimeout(killTimer);
+      opts.signal?.removeEventListener('abort', cancel);
       signalAll('SIGKILL'); // anything the agent left running in its group
       // The output only closes once every program holding it has ended; one that left the group keeps it open.
       drainTimer = setTimeout(() => {
