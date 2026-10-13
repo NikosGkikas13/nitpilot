@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BundlePoint, JobBundle } from '@nitpilot/protocol';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { overSsh, prRepo } from '../../test/git-fixtures';
 import { rawPost } from '../../test/mcp-agent';
 import { tempDir } from '../../test/temp';
@@ -131,11 +131,12 @@ describe('createExecutor', () => {
 
   it('fails early, before the agent runs, when there is nowhere to push (a deleted fork)', async () => {
     const pr = prRepo();
-    const { execute } = await executorFor(pr, { env: overSsh(pr) });
+    const { execute, leftovers } = await executorFor(pr, { env: overSsh(pr) });
     const { io, stages } = jobIo();
     const outcome = await execute(addressJob(pr, { git: { ...pr.bundle.git, headRepoPath: null } }), io);
     expect(outcome).toMatchObject({ kind: 'fail', reason: 'git_error', retryable: false });
     expect(stages).toEqual(['preparing']);
+    expect(leftovers()).toEqual([]);
   });
 
   it('answers no_result when the agent used no Nitpilot tool (spec §12.3 L6)', async () => {
@@ -146,8 +147,22 @@ describe('createExecutor', () => {
 
   it('removes the worktree even when the agent crashes', async () => {
     const pr = prRepo();
-    const { execute, leftovers } = await executorFor(pr, { scenario: 'crash.json' });
+    const { execute, registrations, leftovers } = await executorFor(pr, { scenario: 'crash.json' });
     expect(await execute(pr.bundle, jobIo().io)).toMatchObject({ kind: 'fail', reason: 'crash', retryable: true });
+    expect(leftovers()).toEqual([]);
+    expect(await rawPost(registrations[0]!.url, { authorization: `Bearer ${registrations[0]!.token}` })).toBe(401);
+  });
+
+  it('registers no job when the agent has no folder for its files (the temp folder cannot be made)', async () => {
+    const pr = prRepo();
+    const { execute, registrations, leftovers } = await executorFor(pr);
+    // os.tmpdir() reads TMPDIR on every call, so mkdtemp fails. Stubbed after the setup, which makes its own folders.
+    vi.stubEnv('TMPDIR', join(pr.root, 'no-such-folder'));
+    onTestFinished(() => {
+      vi.unstubAllEnvs();
+    });
+    await expect(execute(pr.bundle, jobIo().io)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(registrations).toEqual([]);
     expect(leftovers()).toEqual([]);
   });
 
@@ -156,9 +171,18 @@ describe('createExecutor', () => {
     const { execute, leftovers } = await executorFor(pr, { scenario: 'slow.json' });
     const cancel = new AbortController();
     const { io } = jobIo({ signal: cancel.signal });
-    setTimeout(() => cancel.abort('pr_closed'), 1_000);
+    // Cancel 300 ms after the agent starts, not after a fixed time from the test's start.
+    const recordStage = io.progress;
+    let armed = false;
+    io.progress = (stage, text) => {
+      recordStage(stage, text);
+      if (stage === 'running_agent' && !armed) {
+        armed = true;
+        setTimeout(() => cancel.abort('pr_closed'), 300);
+      }
+    };
     const started = Date.now();
-    expect(await execute(pr.bundle, io)).toMatchObject({ kind: 'fail' });
+    expect(await execute(pr.bundle, io)).toMatchObject({ kind: 'fail', reason: 'crash', retryable: true, detail: expect.stringContaining('[stopped: the job was cancelled]') });
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(leftovers()).toEqual([]);
   });

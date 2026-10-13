@@ -116,6 +116,18 @@ describe('commitAndPush', () => {
     expect(pr.git(pr.base, 'show', '--name-only', '--format=', push!.to)).toBe('src/orders.ts');
   });
 
+  it('throws a plain error, before asking the server, when a job that pushes has no remote (a bug, not a JobFailure)', async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr);
+    writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
+    const pushing = vi.fn<JobIo['pushing']>(async () => 'applied');
+    const failed = await commitAndPush({ bundle, worktree, remote: null, scrubPaths: SCRUB_PATHS, pushing }).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(Error);
+    expect(failed).not.toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ message: 'An address job that pushes needs a remote (pushTarget).' });
+    expect(pushing).not.toHaveBeenCalled();
+  });
+
   it('fails with git_error, retryable, when git cannot push', async () => {
     const pr = prRepo();
     const { bundle, worktree } = await addressJob(pr);

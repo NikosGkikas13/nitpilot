@@ -10,7 +10,7 @@ import type { JobExecutor, JobIo, JobOutcome } from '../daemon';
 import type { McpJobContext } from '../mcp/context';
 import { ResultBuffer } from '../mcp/buffer';
 import { jobTools } from '../mcp/job-tools';
-import type { LocalMcpServer } from '../mcp/server';
+import type { JobRegistration, LocalMcpServer } from '../mcp/server';
 import { diffBaseSha, listChangedFiles } from '../mcp/tools/read';
 import { checkEnv, CHECK_TIMEOUT_MS, runInWorktree } from '../mcp/tools/run-check';
 import { JobFailure } from './job-failure';
@@ -61,8 +61,8 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
       let push = null;
       if (bundle.type === 'address') {
         io.progress('pushing', bundle.apply === 'auto' ? 'Committing and pushing the fixes' : 'Committing the fixes as a draft');
-        // A draft never pushes, so it needs no remote.
-        ({ push } = await commitAndPush({ bundle, worktree, remote: remote ?? '', scrubPaths: adapter.scrubPaths, pushing: io.pushing }));
+        // A draft never pushes, so it has no remote (null); an auto job always has one, from pushTarget above.
+        ({ push } = await commitAndPush({ bundle, worktree, remote, scrubPaths: adapter.scrubPaths, pushing: io.pushing }));
       }
       io.progress('finishing', 'Sending the result');
       return { kind: 'complete', result: await withSnippets(ctx, ctx.buffer.toJobResult(push)) };
@@ -84,10 +84,11 @@ async function runSetup(argv: readonly string[], worktree: Worktree, env: Record
 
 /** Give the job its tools and token, run the agent, and take them away again. Null when the agent's run went fine. */
 async function runAgentFor(ctx: McpJobContext, mode: AgentMode, io: JobIo, deps: ExecutorDeps, env: Record<string, string | undefined>): Promise<JobOutcome | null> {
-  const job = deps.mcp.registerJob(jobTools(ctx));
   // A folder only you can open (mkdtemp makes it 0700) for the agent's config files, which hold the token.
   const tmpDir = mkdtempSync(join(tmpdir(), 'nitpilot-'));
+  let job: JobRegistration | null = null;
   try {
+    job = deps.mcp.registerJob(jobTools(ctx));
     const invocation = deps.adapter.buildInvocation({
       mode, cwd: ctx.worktree.dir, prompt: jobPrompt(ctx.bundle), mcp: { url: job.url, token: job.token }, tmpDir, baseEnv: agentBaseEnv(env), maxTurns: MAX_TURNS,
     });
@@ -104,7 +105,7 @@ async function runAgentFor(ctx: McpJobContext, mode: AgentMode, io: JobIo, deps:
     return { kind: 'fail', reason: run.outcome.reason, retryable: run.outcome.retryable, detail: run.stderrTail };
   } finally {
     // The token stops working the moment the agent is done (spec §11), and its files go with the folder.
-    job.unregister();
+    job?.unregister();
     rmSync(tmpDir, { recursive: true, force: true });
   }
 }

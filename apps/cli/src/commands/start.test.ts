@@ -45,6 +45,17 @@ describe('nitpilot start', () => {
     expect(await exit).toBe(0);
   });
 
+  it('stops at once when it is told to stop before it starts', { timeout: 5_000 }, async () => {
+    const hub = await startStubHub({ token: TOKEN });
+    onTestFinished(() => hub.close());
+    const dir = tempDir();
+    saveConfig(PersonalConfigSchema.parse({ server: hub.url, token: TOKEN, agent: 'fake' }), dir);
+    const stop = new AbortController();
+    stop.abort();
+    const exit = await start({ env: { NITPILOT_CONFIG_DIR: dir, PATH: process.env.PATH, HOME: process.env.HOME }, out: recordOut(), stop: stop.signal, adapter: fakeAdapter() });
+    expect(exit).toBe(0);
+  });
+
   it("takes no jobs when its agent isn't wired in yet, and says so", async () => {
     const { out, hello } = await started(null);
     expect(hello.d.agent.modes).toEqual([]);

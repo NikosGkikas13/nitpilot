@@ -2,7 +2,7 @@ import { BRAND } from '@nitpilot/protocol';
 import { getAdapter } from '../agents/registry';
 import type { AgentAdapter } from '../agents/types';
 import { configDir, loadConfig } from '../config/config';
-import { startDaemon, type DaemonOptions, type JobExecutor } from '../daemon';
+import { startDaemon, type Daemon, type DaemonOptions, type JobExecutor } from '../daemon';
 import { CliError } from '../errors';
 import { startMcpServer, type LocalMcpServer } from '../mcp/server';
 import { terminal, type Out } from '../out';
@@ -49,13 +49,15 @@ export async function start(deps: StartDeps = {}): Promise<number> {
     out.log(`${config.agent} isn't wired in yet: this device shows notifications, but takes no jobs.`);
   }
 
-  const daemon = startDaemon({ config, configDir: dir, out, agent, executor });
   // The first Ctrl-C stops cleanly. The listener is gone after it, so a second one quits at once.
-  const stop = () => daemon.stop();
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
-  deps.stop?.addEventListener('abort', stop, { once: true });
+  let daemon: Daemon | undefined;
+  const stop = () => daemon?.stop();
   try {
+    daemon = startDaemon({ config, configDir: dir, out, agent, executor });
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    deps.stop?.addEventListener('abort', stop, { once: true });
+    if (deps.stop?.aborted) stop(); // told to stop before we got here: an abort event never fires twice
     const reason = await daemon.stopped;
     return reason === 'stopped' ? 0 : 1;
   } finally {

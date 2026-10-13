@@ -9,8 +9,8 @@ import type { Worktree } from './worktree';
 export type PushContext = {
   bundle: JobBundle;
   worktree: Pick<Worktree, 'git' | 'headSha'>;
-  /** Where the PR's branch lives: a remote name (pushTarget) or a URL. */
-  remote: string;
+  /** Where the PR's branch lives: a remote name (pushTarget) or a URL. Null for a draft, which never pushes. */
+  remote: string | null;
   /** The list prepareWorktree scrubbed with. Files matching it stay out of the commit, even ones the agent created. */
   scrubPaths: readonly string[];
   /**
@@ -71,6 +71,8 @@ async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }:
     await git(['update-ref', `${BRAND.gitRefNamespace}/drafts/${bundle.jobId}`, to]);
     return { push: null };
   }
+  // The executor asks pushTarget before the agent runs, so an auto job always has a remote. Not having one is a bug.
+  if (remote === null) throw new Error('An address job that pushes needs a remote (pushTarget).');
   if ((await pushing(worktree.headSha, to)) === 'stale') {
     throw new JobFailure('stale_head', true, 'The server moved on before the push, so nothing was pushed.');
   }
