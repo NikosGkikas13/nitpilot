@@ -33,6 +33,8 @@ staticConformance({
       { file: 'auth.jsonl', code: 1, signal: null, outcome: { ok: false, reason: 'auth', retryable: false } },
       { file: 'quota.jsonl', code: 1, signal: null, outcome: { ok: false, reason: 'quota', retryable: false } },
       { file: 'crash.jsonl', code: 1, signal: null, stderr: 'Error: Invalid MCP configuration:\nMCP config file not found: /tmp/nitpilot-x/mcp.json\n', outcome: { ok: false, reason: 'crash', retryable: true } },
+      // A crash whose stderr merely mentions login and 401/429 (a file path, an MCP error): still a crash, not auth or quota.
+      { file: 'crash.jsonl', code: 1, signal: null, stderr: "SyntaxError: Unexpected token in /Users/me/.config/nitpilot/worktrees/acme/login-service/429-reviewer-j1-1/src/login.ts\nMCP server nitpilot failed: 401 Unauthorized\n", outcome: { ok: false, reason: 'crash', retryable: true } },
       { file: 'signal.jsonl', code: null, signal: 'SIGTERM', outcome: { ok: false, reason: 'crash', retryable: true } },
     ],
   },
@@ -72,6 +74,13 @@ describe('the Claude Code adapter', () => {
       { type: 'progress', text: 'Now let me look at the changed files.' },
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'result', ok: true });
+  });
+
+  it("reads only a failed result and Claude Code's own messages, never the agent's words", () => {
+    const adapter = claudeCodeAdapter();
+    const okResult: AgentEvent = { type: 'result', ok: true, text: 'Fixed the login flow; a 429 or 401 is retried now.' };
+    expect(adapter.outcome({ code: 1, signal: null, last: okResult, stderrTail: '' })).toEqual({ ok: false, reason: 'crash', retryable: true });
+    expect(adapter.outcome({ code: 1, signal: null, stderrTail: 'Invalid API key · Please run /login\n' })).toEqual({ ok: false, reason: 'auth', retryable: false });
   });
 
   describe('detect', () => {

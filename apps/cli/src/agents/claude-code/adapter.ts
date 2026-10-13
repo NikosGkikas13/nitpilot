@@ -74,7 +74,8 @@ export function claudeCodeAdapter(opts: ClaudeCodeOptions = {}): AgentAdapter {
     parseLine,
     outcome({ code, last, stderrTail }) {
       if (code === 0 && last?.type === 'result' && last.ok) return { ok: true };
-      return failure(`${last?.type === 'result' ? last.text : ''}\n${stderrTail}`);
+      // Only a result that itself failed is read: an ok result is the agent's own words, which may say anything.
+      return failure(`${last?.type === 'result' && !last.ok ? last.text : ''}\n${stderrTail}`);
     },
   };
 }
@@ -108,11 +109,15 @@ function parseLine(line: string): AgentEvent | null {
   return null;
 }
 
-/** Why a run failed, from its result line and stderr. Only a crash is worth trying again at once. */
+/**
+ * Why a run failed, from a failed result line and stderr. This reads Claude Code's own wording and a failed
+ * result's status ("subtype: 429: …" at the start of a line), never the agent's own words. Only a crash is
+ * worth trying again at once.
+ */
 function failure(text: string): AgentOutcome {
   if (/error_max_turns|maximum number of turns/i.test(text)) return { ok: false, reason: 'max_turns', retryable: false };
-  if (/\b429\b|hit your (?:\w+ )*limit|usage limit|rate limit/i.test(text)) return { ok: false, reason: 'quota', retryable: false };
-  if (/\b401\b|authenticat|not logged in|log ?in|invalid api key/i.test(text)) return { ok: false, reason: 'auth', retryable: false };
+  if (/^\w+: 429\b|hit your (?:\w+ )*limit/im.test(text)) return { ok: false, reason: 'quota', retryable: false };
+  if (/^\w+: 401\b|failed to authenticate|invalid api key|not logged in|please run \/login/im.test(text)) return { ok: false, reason: 'auth', retryable: false };
   return { ok: false, reason: 'crash', retryable: true };
 }
 

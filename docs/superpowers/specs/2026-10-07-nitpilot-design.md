@@ -419,7 +419,7 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
 - **MCP config:** `{"mcpServers":{"nitpilot":{"type":"http","url":…,"headers":{"Authorization":"Bearer …"},"alwaysLoad":true}}}`, written to a 0600 file. The token never appears in the command-line arguments.
 - **Environment:** built from an allowlist. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing.
 - **"Your setup" still applies:** user-level settings and the personal `~/.claude/CLAUDE.md`. Project-level files from the PR are scrubbed.
-- **Outcome:** a `result` line that isn't an error is success. `error_max_turns` is `max_turns`, a 401 or a login error is `auth`, a 429 or "You've hit your limit" is `quota`: none is retried at once, because the same run would fail the same way. A crash or a signal (no `result` line) is a retryable `crash`.
+- **Outcome:** a `result` line that isn't an error is success. Otherwise Nitpilot reads the failed `result` line and stderr, never the agent's own words: `error_max_turns` is `max_turns`; a 401 status, "Failed to authenticate", "Invalid API key" or "/login" is `auth`; a 429 status or "You've hit your limit" is `quota`. None is retried at once, because the same run would fail the same way. Anything else, a crash or a signal included, is a retryable `crash`.
 - **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed.
 
 **Gemini CLI** (verified against v0.63; **on hold**, see §22)
