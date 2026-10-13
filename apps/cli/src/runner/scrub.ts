@@ -10,6 +10,14 @@ import { safeGit, type GitPlace } from './safe-git';
 export const SCRUB_PATHS: readonly string[] = ['.claude/', '.gemini/', '.mcp.json', '.env', 'CLAUDE.md', 'GEMINI.md', 'AGENTS.md'];
 
 /**
+ * What a job scrubs: every agent's files (spec §11 step 3), whichever agent runs, plus any the job's own
+ * adapter adds. An adapter can add to the list, never shorten it.
+ */
+export function scrubPathsFor(agentPaths: readonly string[]): readonly string[] {
+  return [...new Set([...SCRUB_PATHS, ...agentPaths])];
+}
+
+/**
  * A name the way macOS compares it: in any letter case, and look-alikes too (`.mcp.jſon`, with a long
  * s, opens as `.mcp.json`). Folding to upper case and back catches those. Matching too much only
  * scrubs one extra file, so this errs on the wide side.

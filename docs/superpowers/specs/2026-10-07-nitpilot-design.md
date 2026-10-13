@@ -315,7 +315,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 **Job steps**
 1. `git fetch --no-tags --no-recurse-submodules --refmap= --no-write-fetch-head -- <baseRemote> +<fetchRef>:refs/nitpilot/<jobId>-<attempt>/head +refs/heads/<baseRef>:refs/nitpilot/<jobId>-<attempt>/base`. `<baseRemote>` is the clone's remote for the base repo, or `baseCloneUrl` when it has none; `baseCloneUrl` must be an `https://` URL (or an absolute local path, which tests use), and `--` keeps it from ever being read as an option. `--refmap=` and `--no-write-fetch-head` leave the user's remote-tracking branches and `FETCH_HEAD` alone. The platform adapter supplies `fetchRef`: `refs/pull/N/head` on GitHub, `refs/merge-requests/N/head` on GitLab. This works for PRs from forks too. If the head sha doesn't match the job's, fail with `stale_head`.
 2. `git worktree add --detach <configDir>/worktrees/<owner>/<name>/<pr>-<role>-<jobId>-<attempt> <headSha>`. The job id and the repo's owner and name become folder and ref names, so each must be a plain name (`[A-Za-z0-9._-]`, not `.` or `..`), or the job fails before git runs. The user's own working folder is never touched.
-3. **Scrub the files agents load automatically:** `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case (on macOS `claude.md` is `CLAUDE.md`). They are marked `skip-worktree` and then deleted, so a commit never records the deletion. The repo's conventions are read from the **base branch** (`git show <base>:CLAUDE.md`, and so on) and handed to the agent through `get_job`.
+3. **Scrub the files agents load automatically:** `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case (on macOS `claude.md` is `CLAUDE.md`). They are marked `skip-worktree` and then deleted, so a commit never records the deletion. Every job scrubs all of them, whichever agent runs; an adapter's `scrubPaths` can add to the list, never shorten it. The repo's conventions are read from the **base branch** (`git show <base>:CLAUDE.md`, and so on) and handed to the agent through `get_job`.
 4. **Address jobs only:** run the repo's optional `setup` command (e.g. `npm ci`). The CLI runs it, not the agent.
 5. Give the job its own token on the local MCP server, build the command through the agent adapter, and run the agent. On a timeout or cancel, the whole process tree is killed. The token stops working when the agent exits, and an agent that used no Nitpilot tool fails the job with `no_result`. A job for a repo that isn't linked on this device is turned down (`repo_not_linked`), and so is one the agent's modes don't cover (`unsupported_mode`).
 6. **Address jobs:**
@@ -407,7 +407,7 @@ interface AgentAdapter {
 
 A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process group), timeouts, and killing the whole process tree: `SIGTERM`, then `SIGKILL` 5 seconds later, and whatever an agent leaves in its group dies when it exits. Adapters only build the command and parse the output, so they can be unit-tested without spawning anything. `AgentEvent` is `{type: 'progress', text}` (sent on as `job.progress`) or `{type: 'result', ok, text}`; `outcome` sees the last one.
 
-**Claude Code** (flags verified against v2.1.29x; the conformance suite catches any drift)
+**Claude Code** (flags verified against v2.1.277, where `--max-turns` works but is hidden from `--help`; the conformance suite catches any drift)
 - **Reviewer:**
   ```
   claude -p <prompt> --output-format stream-json --verbose --max-turns <n>
@@ -419,8 +419,10 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
 - **MCP config:** `{"mcpServers":{"nitpilot":{"type":"http","url":…,"headers":{"Authorization":"Bearer …"},"alwaysLoad":true}}}`, written to a 0600 file. The token never appears in the command-line arguments.
 - **Environment:** built from an allowlist. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing.
 - **"Your setup" still applies:** user-level settings and the personal `~/.claude/CLAUDE.md`. Project-level files from the PR are scrubbed.
+- **Outcome:** a `result` line that isn't an error is success. `error_max_turns` is `max_turns`, a 401 or a login error is `auth`, a 429 or "You've hit your limit" is `quota`: none is retried at once, because the same run would fail the same way. A crash or a signal (no `result` line) is a retryable `crash`.
+- **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed.
 
-**Gemini CLI** (verified against v0.63)
+**Gemini CLI** (verified against v0.63; **on hold**, see §22)
 - **Command:** `gemini -p <prompt> -o stream-json --skip-trust -e none --allowed-mcp-server-names nitpilot --policy <tmp>/policy.toml`
 - **Settings:** `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<tmp>/settings.json`, containing:
   - `mcpServers.nitpilot`: `{httpUrl, headers, trust: true}`
@@ -743,6 +745,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 
 - **Name squatting.** `nitpilot` was free on npm and nitpilot.dev looked unregistered on 2026-10-07. Claim both early.
 - **Agent CLI flags change quickly.** The conformance suite and the version checks in `nitpilot doctor` catch drift. If an adapter can't pass the suite for a mode, it doesn't declare that mode.
+- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run can't put CLI B on Gemini CLI.
 - **Re-requested reviews.** Whether `review_requested` fires again is undocumented. Verify it in the sandbox repo; the design doesn't depend on it.
 - **Rate limits.** GitHub's secondary limit is about 80 content-creating requests per minute, which could matter on busy PRs.
 - **Claude subscription policy** could change.

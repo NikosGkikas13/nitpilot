@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","cwd":"/work","session_id":"00000000-0000-4000-8000-000000000002","tools":["Glob","Grep","Read"],"mcp_servers":[],"model":"claude-sonnet-5","permissionMode":"dontAsk","slash_commands":[],"apiKeySource":"none","claude_code_version":"2.1.277","output_style":"default"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"text","text":"I need to locate orders.ts first."}]},"session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"tool_use","id":"toolu_01KPLnYMHuMBpn3YhFR1z7WA","name":"Glob","input":{"pattern":"**/orders.ts"}}]},"session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1791941400,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false},"session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"system","subtype":"task_summary","detail":"Finding **/orders.ts","session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01KPLnYMHuMBpn3YhFR1z7WA","content":"orders.ts"}]},"session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"result","subtype":"error_max_turns","is_error":true,"num_turns":2,"errors":["Reached maximum number of turns (1)"],"stop_reason":"tool_use","terminal_reason":"max_turns","permission_denials":[],"session_id":"00000000-0000-4000-8000-000000000002"}
+{"type":"system","subtype":"task_summary","detail":null,"session_id":"00000000-0000-4000-8000-000000000002"}

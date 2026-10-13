@@ -4,7 +4,8 @@ import { recordOut } from '../../test/out';
 import { PersonalConfigSchema } from '../config/config';
 import { CliError } from '../errors';
 import { ServerError } from '../http';
-import { printChecks, probeAgent, runDoctor, runProgram, type Check, type DoctorDeps, type RunResult } from './doctor';
+import type { RunResult } from '../run-program';
+import { printChecks, probeAgent, runDoctor, type Check, type DoctorDeps } from './doctor';
 
 const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' });
 const missing: RunResult = { code: null, stdout: '', stderr: 'spawn ENOENT' };
@@ -191,21 +192,5 @@ describe('printChecks', () => {
     const two = recordOut();
     expect(printChecks([git, node], two)).toBe(1);
     expect(two.lines.at(-1)).toBe('2 problems to fix.');
-  });
-});
-
-describe('runProgram', () => {
-  it('runs a real program and gives what it printed', async () => {
-    expect(await runProgram(process.execPath, ['-e', "process.stdout.write('hi')"])).toMatchObject({ code: 0, stdout: 'hi' });
-  });
-
-  it('gives the exit code of a program that ran and failed', async () => {
-    expect(await runProgram(process.execPath, ['-e', 'process.exit(3)'])).toMatchObject({ code: 3 });
-  });
-
-  it('gives code null, not an exception, when the program does not exist', async () => {
-    const r = await runProgram('nitpilot-no-such-program', []);
-    expect(r.code).toBeNull();
-    expect(r.stderr).toContain('ENOENT');
   });
 });

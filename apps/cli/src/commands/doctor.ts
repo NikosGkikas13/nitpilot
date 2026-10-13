@@ -1,13 +1,13 @@
-import { execFile } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { BRAND, type AgentId } from '@nitpilot/protocol';
+import { adapterFor } from '../agents/registry';
 import { loadConfig, type PersonalConfig } from '../config/config';
 import { githubReposInRemoteList } from '../git/remotes';
 import { ServerClient } from '../http';
 import { terminal, type Out } from '../out';
+import { runProgram, type RunResult } from '../run-program';
 
 export type Check = { name: string; status: 'ok' | 'warn' | 'fail'; detail: string };
-export type RunResult = { code: number | null; stdout: string; stderr: string };
 export type AgentCheck = { ok: boolean; version?: string; problem?: string };
 
 /** Everything doctor looks at, so tests can hand it a pretend machine. */
@@ -18,7 +18,8 @@ export type DoctorDeps = {
   run(file: string, args: string[]): Promise<RunResult>;
   loadConfig(): PersonalConfig;
   client(config: PersonalConfig): Pick<ServerClient, 'health' | 'me'>;
-  detectAgent(id: AgentId): Promise<AgentCheck>;
+  /** Is the agent the config names installed and logged in? */
+  detectAgent(config: PersonalConfig): Promise<AgentCheck>;
   isFolder(path: string): boolean;
 };
 
@@ -42,7 +43,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<Check[]> {
   const server = await checkServer(client, config.server);
   checks.push(server);
   if (server.status === 'ok') checks.push(...(await checkAccount(client, config)));
-  checks.push(await checkAgent(deps, config.agent));
+  checks.push(await checkAgent(deps, config));
   for (const [name, repo] of Object.entries(config.repos)) checks.push(await checkRepo(deps, name, repo.path));
   return checks;
 }
@@ -87,8 +88,9 @@ async function checkAccount(client: Pick<ServerClient, 'me'>, config: PersonalCo
   }
 }
 
-async function checkAgent(deps: DoctorDeps, id: AgentId): Promise<Check> {
-  const r = await deps.detectAgent(id);
+async function checkAgent(deps: DoctorDeps, config: PersonalConfig): Promise<Check> {
+  const id = config.agent;
+  const r = await deps.detectAgent(config);
   if (r.ok) return { name: 'Agent', status: 'ok', detail: `${id} ${r.version ?? ''}`.trim() };
   return { name: 'Agent', status: 'fail', detail: `${id}: ${r.problem ?? 'not usable'}` };
 }
@@ -132,8 +134,8 @@ export function printChecks(checks: Check[], out: Out): number {
 const AGENT_BINARIES: Record<AgentId, string | null> = { 'claude-code': 'claude', 'gemini-cli': 'gemini', fake: null };
 
 /**
- * Is the agent installed? Until the adapters' detect() exists (Tasks 16, 19, 20) this only asks the
- * binary for its version; whether it's logged in comes with the adapter.
+ * Is the agent installed? For an agent without an adapter yet (Gemini CLI, Task 20) this only asks the
+ * binary for its version; an adapter's detect() also checks the login.
  */
 export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<AgentCheck> {
   const binary = AGENT_BINARIES[id];
@@ -141,15 +143,6 @@ export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<A
   const r = await run(binary, ['--version']);
   if (r.code === 0) return { ok: true, version: r.stdout.trim() };
   return { ok: false, problem: `\`${binary}\` is not installed (or not on your PATH)` };
-}
-
-/** Run a program without a shell. Never throws: a missing program, or one past the timeout, gives code null. */
-export function runProgram(file: string, args: string[]): Promise<RunResult> {
-  return new Promise((resolve) =>
-    execFile(file, args, { timeout: CHECK_TIMEOUT_MS }, (err, stdout, stderr) =>
-      resolve({ code: err ? (typeof err.code === 'number' ? err.code : null) : 0, stdout, stderr: stderr || (err?.message ?? '') }),
-    ),
-  );
 }
 
 /** `nitpilot doctor`, on this machine. */
@@ -162,7 +155,7 @@ export async function doctor(deps: { env?: Record<string, string | undefined>; o
     run: runProgram,
     loadConfig: () => loadConfig({ env }),
     client: (config) => new ServerClient(config.server, config.token),
-    detectAgent: (id) => probeAgent(id, runProgram),
+    detectAgent: (config) => adapterFor(config, env)?.detect() ?? probeAgent(config.agent, runProgram),
     isFolder: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
   });
   return printChecks(checks, out);

@@ -1,5 +1,5 @@
 import { BRAND } from '@nitpilot/protocol';
-import { getAdapter } from '../agents/registry';
+import { adapterFor } from '../agents/registry';
 import type { AgentAdapter } from '../agents/types';
 import { configDir, loadConfig } from '../config/config';
 import { startDaemon, type Daemon, type DaemonOptions, type JobExecutor } from '../daemon';
@@ -33,7 +33,7 @@ export async function start(deps: StartDeps = {}): Promise<number> {
   const config = loadConfig({ env, dir });
   if (!config.token) throw new CliError(`Not logged in. Run \`${BRAND.cli} login\` first.`);
 
-  const adapter = deps.adapter !== undefined ? deps.adapter : getAdapter(config.agent);
+  const adapter = deps.adapter !== undefined ? deps.adapter : adapterFor(config, env);
   let agent: DaemonOptions['agent'] = { id: config.agent, version: null, modes: [] };
   let executor = noAgentYet;
   let mcp: LocalMcpServer | null = null;

@@ -16,6 +16,7 @@ import { checkEnv, CHECK_TIMEOUT_MS, runInWorktree } from '../mcp/tools/run-chec
 import { JobFailure } from './job-failure';
 import { commitAndPush, pushTarget } from './push';
 import { emptyHooksDir } from './safe-git';
+import { scrubPathsFor } from './scrub';
 import { snippetFor } from './snippets';
 import { prepareWorktree, type Worktree } from './worktree';
 
@@ -39,6 +40,8 @@ export type ExecutorDeps = {
 export function createExecutor(deps: ExecutorDeps): JobExecutor {
   const { config, configDir, adapter } = deps;
   const env = deps.env ?? process.env;
+  // Every agent's files go, not only this agent's: a PR's .env or AGENTS.md has no business in a job (spec §11 step 3).
+  const scrubPaths = scrubPathsFor(adapter.scrubPaths);
   return async (bundle, io) => {
     const repo = Object.hasOwn(config.repos, bundle.pr.repoFullName) ? config.repos[bundle.pr.repoFullName]! : null;
     if (!repo) return { kind: 'reject', reason: 'repo_not_linked' };
@@ -48,7 +51,7 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
     let worktree: Worktree | null = null;
     try {
       io.progress('preparing', 'Checking out the PR');
-      worktree = await prepareWorktree(bundle, repo.path, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: adapter.scrubPaths, signal: io.signal, env });
+      worktree = await prepareWorktree(bundle, repo.path, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths, signal: io.signal, env });
       // Where fixes will go, asked before the agent runs: a deleted fork or a missing remote fails now, not after the work.
       const remote = bundle.type === 'address' && bundle.apply === 'auto' ? await pushTarget(bundle, worktree.git) : null;
       if (bundle.type === 'address' && repo.setup) await runSetup(repo.setup, worktree, env, io.signal);
@@ -62,7 +65,7 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
       if (bundle.type === 'address') {
         io.progress('pushing', bundle.apply === 'auto' ? 'Committing and pushing the fixes' : 'Committing the fixes as a draft');
         // A draft never pushes, so it has no remote (null); an auto job always has one, from pushTarget above.
-        ({ push } = await commitAndPush({ bundle, worktree, remote, scrubPaths: adapter.scrubPaths, pushing: io.pushing }));
+        ({ push } = await commitAndPush({ bundle, worktree, remote, scrubPaths, pushing: io.pushing }));
       }
       io.progress('finishing', 'Sending the result');
       return { kind: 'complete', result: await withSnippets(ctx, ctx.buffer.toJobResult(push)) };

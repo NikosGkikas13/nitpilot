@@ -11411,14 +11411,14 @@ docs/why/agent-adapters.md, docs/why/agent-conformance.md (new)
 6. `scrubPaths` is `.claude/`, `.mcp.json`, `CLAUDE.md`, but every job scrubs `scrubPathsFor(adapter.scrubPaths)`: all of `SCRUB_PATHS` (spec §11 step 3) plus whatever an adapter adds. Until now the executor used the adapter's list alone, which only worked because the fake agent declares all seven.
 7. `nitpilot start` and `nitpilot doctor` find the agent through `adapterFor(config, env)`; doctor falls back to `probeAgent` (the version only) for Gemini CLI, which has no adapter yet.
 
-- [ ] **Step 1: Check the installed Claude Code**
+- [x] **Step 1: Check the installed Claude Code**
 
 Run: `claude --version`
 Expected: `2.1.277 (Claude Code)` or newer.
 
 Run: `claude --help`, and check that `-p`, `--output-format`, `--verbose`, `--tools`, `--allowedTools`, `--permission-mode` (with `dontAsk` and `acceptEdits` among its choices), `--mcp-config`, `--strict-mcp-config`, `--setting-sources`, `--settings`, `--disable-slash-commands` and `--model` are all listed. `--max-turns` isn't listed in 2.1.277 but works (hidden): the `max_turns` fixture was recorded with it, and Task 21's live suite uses it. If the version is newer than 2.1.277, finish this task, run Task 21's live suite once, and only then raise `CLAUDE_CODE_CHECKED_VERSION` and spec §12.2's version.
 
-- [ ] **Step 2: Write the failing tests, the shared suite and the recorded runs**
+- [x] **Step 2: Write the failing tests, the shared suite and the recorded runs**
 
 `runProgram` moves to its own file, because the adapter's `detect()` needs it and `doctor.ts` will import the registry. Its three tests move with it.
 
@@ -11767,12 +11767,12 @@ describe('the Claude Code adapter', () => {
 });
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `npm test -w apps/cli -- src/run-program src/commands/doctor src/agents src/runner/scrub src/runner/execute`
 Expected: FAIL (5 files): `Cannot find module './run-program'` and `Cannot find module './adapter'`; `TypeError: scrubPathsFor is not a function`; `expected undefined to be 'claude-code'` (the registry); and the executor test `expected [ '.env', 'AGENTS.md' ] to deeply equal []`: today a job scrubs only its adapter's list. `doctor.test.ts` still passes (its new import is a type).
 
-- [ ] **Step 4: Write the adapter, and wire it in**
+- [x] **Step 4: Write the adapter, and wire it in**
 
 `apps/cli/src/run-program.ts`:
 ```ts
@@ -12019,12 +12019,12 @@ In `apps/cli/src/commands/doctor.ts`:
       detectAgent: (config) => adapterFor(config, env)?.detect() ?? probeAgent(config.agent, runProgram),
   ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `npm test -w apps/cli -- src/run-program src/commands/doctor src/agents src/runner/scrub src/runner/execute`
 Expected: PASS (8 files, 64 tests; Claude Code's conformance file is 15: S1, S2 and S3 and S4 for each mode, S5, S6, and six of the adapter's own).
 
-- [ ] **Step 6: Explain adapters, and bring the spec in line**
+- [x] **Step 6: Explain adapters, and bring the spec in line**
 
 `docs/why/agent-adapters.md`:
 ```markdown
@@ -12072,12 +12072,12 @@ In the spec:
 - §12.2: "**Gemini CLI** (verified against v0.63)" becomes "**Gemini CLI** (verified against v0.63; **on hold**, see §22)".
 - §22, after "**Agent CLI flags change quickly.** …", add: "- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run can't put CLI B on Gemini CLI."
 
-- [ ] **Step 7: Run the full suite**
+- [x] **Step 7: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 266, protocol 41, server 398).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/cli/src docs/why/agent-adapters.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

@@ -1,0 +1,9 @@
+{"type":"system","subtype":"init","cwd":"/work","session_id":"00000000-0000-4000-8000-000000000004","tools":["Glob","Grep","Read"],"mcp_servers":[],"model":"claude-sonnet-5","permissionMode":"dontAsk","slash_commands":[],"apiKeySource":"none","claude_code_version":"2.1.277","output_style":"default"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[]},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"tool_use","id":"toolu_018Ki9EV39j6Ee9Jfom76SdK","name":"Glob","input":{"pattern":"**/orders.ts"}}]},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1791941400,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"system","subtype":"task_summary","detail":"Finding **/orders.ts","session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_018Ki9EV39j6Ee9Jfom76SdK","content":"orders.ts"}]},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[{"type":"tool_use","id":"toolu_01M6vJRnsy2YhLBkSsVddGLY","name":"Read","input":{"file_path":"/work/orders.ts"}}]},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01M6vJRnsy2YhLBkSsVddGLY","content":"1\texport const pageSize = 50;\n2\t"}]},"session_id":"00000000-0000-4000-8000-000000000004"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","role":"assistant","content":[]},"session_id":"00000000-0000-4000-8000-000000000004"}

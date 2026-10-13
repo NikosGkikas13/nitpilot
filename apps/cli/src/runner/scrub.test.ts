@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCRUB_PATHS, scrubPlan } from './scrub';
+import { SCRUB_PATHS, scrubPathsFor, scrubPlan } from './scrub';
 
 describe('scrubPlan', () => {
   it('finds agent files and folders at any depth, in any letter case and look-alike spelling', () => {
@@ -16,5 +16,12 @@ describe('scrubPlan', () => {
 
   it('scrubs only what the adapter asks for', () => {
     expect(scrubPlan(['CLAUDE.md', 'GEMINI.md', '.gemini/settings.json'], ['CLAUDE.md'])).toEqual({ hide: ['CLAUDE.md'], remove: ['CLAUDE.md'] });
+  });
+});
+
+describe('scrubPathsFor', () => {
+  it("scrubs every agent's files whichever agent runs, plus any an adapter adds", () => {
+    expect(scrubPathsFor(['.claude/', '.mcp.json', 'CLAUDE.md'])).toEqual(SCRUB_PATHS);
+    expect(scrubPathsFor(['.cursor/'])).toEqual([...SCRUB_PATHS, '.cursor/']);
   });
 });
