@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDb } from '../../test/db';
+import { makeChat, resetDb } from '../../test/db';
 import { issueCommentEvent, people, prEvent, pull, repository, repositoryEvent, reviewComment, reviewCommentEvent, reviewEvent } from '../../test/fixtures/github';
 import { createDeliveryHandler } from '../ingest/handle';
 import { syncFromEvent } from '../ingest/installations';
@@ -151,12 +151,25 @@ describe('a comment that arrives twice (Review Focus #3)', () => {
 });
 
 describe('a PR that is already tracked', () => {
-  it('says "opened" once: a second pr_opened (a redelivery, or a catch-up that met it first) is ignored', async () => {
+  it('says "opened" once: a second pr_opened (a redelivery, or a catch-up that met it first) changes nothing', async () => {
     const { deliver } = await setup();
     expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'processed' });
-    expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'ignored', note: 'opened PR that is already tracked' });
-    const messages = await prisma.message.findMany({ where: { chatId: (await chat()).id } });
+    expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'processed' });
+    const c = await chat();
+    const messages = await prisma.message.findMany({ where: { chatId: c.id } });
     expect(messages.filter((m) => m.body.startsWith('Pull request opened by'))).toHaveLength(1);
+    expect(c.jobs).toHaveLength(1);
+  });
+
+  it("still starts a chat whose row was saved but whose first 'opened' never ran (a retried webhook)", async () => {
+    const { leo, deliver } = await setup();
+    await makeChat('501', { number: 42, authorGithubId: String(people.maya.id) });
+    expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'processed' });
+    const c = await chat();
+    expect(c.participants.map((p) => [p.login, p.role])).toEqual(expect.arrayContaining([['maya', 'author'], ['leo', 'reviewer']]));
+    const messages = await prisma.message.findMany({ where: { chatId: c.id } });
+    expect(messages.filter((m) => m.body.startsWith('Pull request opened by'))).toHaveLength(1);
+    expect(c.jobs).toEqual([expect.objectContaining({ type: 'review', userId: leo.id, status: 'queued' })]);
   });
 });
 

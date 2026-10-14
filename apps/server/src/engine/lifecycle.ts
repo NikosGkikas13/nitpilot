@@ -1,9 +1,13 @@
 import { advance } from './advance';
 import { say, system, type Ctx, type Ev } from './context';
 import { cancelJobs, startReview } from './jobs';
-import { activeJobFor, activeJobs, ensureParticipant, pointList, reviewers, who } from './state';
+import { activeJobFor, activeJobs, author, ensureParticipant, pointList, reviewers, who } from './state';
 
 export function onPrOpened(ctx: Ctx, e: Ev<'pr_opened'>): void {
+  // GitHub sends `opened` once, but a catch-up and a webhook can both meet a new PR. Only this adds the
+  // author, so a chat with one has had its "opened": a second changes nothing. One whose first try
+  // failed before saving has no author yet, so the webhook's retry still starts it.
+  if (author(ctx.chat)) return;
   ensureParticipant(ctx.chat, e.author, 'author');
   const requested = e.reviewers.map((person) => {
     const r = ensureParticipant(ctx.chat, person, 'reviewer');

@@ -33,9 +33,6 @@ export async function routePrEvent(ne: PrNormalizedEvent, deps: RouterDeps): Pro
   const rules = rulesFromJson(repo.rulesJson);
   let event = await withPeople(fresh, rules);
 
-  // GitHub sends `opened` once. A chat that already exists has had it (from a catch-up, or from the event we first met the PR through).
-  if (chat && event.type === 'pr_opened') return 'opened PR that is already tracked';
-
   if (!chat) {
     if (event.type === 'pr_closed') return 'closed PR that was never tracked';
     if (event.type === 'pr_retargeted') return 'retargeted PR that was never tracked';

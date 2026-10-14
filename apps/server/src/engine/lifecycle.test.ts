@@ -16,6 +16,13 @@ describe('pr_opened', () => {
     ]);
   });
 
+  it('changes nothing for a chat that has had its "opened" (a catch-up and a webhook met the same PR)', () => {
+    const chat = agentToAgent({ participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer')] });
+    const out = run(chat, { type: 'pr_opened', author: maya, reviewers: [leo] });
+    expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
+  });
+
   it('stays idle when no reviewer uses Nitpilot', () => {
     const out = run(chatState(), { type: 'pr_opened', author: maya, reviewers: [sam] });
     expect(out.chat.phase).toBe('idle');

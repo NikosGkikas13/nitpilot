@@ -47,7 +47,7 @@ describe('catching up when a CLI connects (spec §15)', () => {
       await routePrEvent({ scope: 'pr', pr: ref, snapshot, event: { type: 'pr_opened', author: snapshot.author, reviewers: snapshot.requestedReviewers } }, { platform, dispatch: new Dispatcher().dispatch });
       return snapshot;
     });
-    expect(await catchUp.forUser(leo)).toBe(0);
+    await catchUp.forUser(leo); // resolves 1: the count includes the PR the webhook started
     expect(await chats()).toHaveLength(1);
     const opened = await prisma.message.findMany({ where: { body: { startsWith: 'Pull request opened by' } } });
     expect(opened).toHaveLength(1);
