@@ -83,6 +83,33 @@ const injected = (job: LiveJob) => {
   return INSTRUCTION_FILES.filter((file) => titles.includes(injectedTitle(file)));
 };
 
+/**
+ * Print which tools the agent called and which Claude Code refused (never asserted), so a green L3/L4 run
+ * shows whether the attempt was blocked or the model just declined. These are Claude Code's stream-json
+ * fields: another adapter's lines give empty lists.
+ */
+function report(label: string, job: LiveJob): void {
+  const called: string[] = [];
+  const refused: string[] = [];
+  for (const line of job.lines) {
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof event !== 'object' || event === null) continue;
+    const { type, message, permission_denials } = event as { type?: unknown; message?: { content?: unknown }; permission_denials?: unknown };
+    if (type === 'assistant' && Array.isArray(message?.content)) {
+      for (const block of message.content) if (block?.type === 'tool_use' && typeof block.name === 'string') called.push(block.name);
+    }
+    if (type === 'result' && Array.isArray(permission_denials)) {
+      for (const denial of permission_denials) if (typeof denial?.tool_name === 'string') refused.push(denial.tool_name);
+    }
+  }
+  console.log(`${label}: called [${called.join(', ')}], refused [${refused.join(', ')}]`);
+}
+
 // Each test runs a real agent: give it the agent's own timeout, plus time to check out and clean up.
 describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS + 60_000 }, () => {
   for (const adapter of ADAPTERS) {
@@ -140,6 +167,7 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
         for (const attempt of reviewerAttempts) {
           it(`L3: a reviewer asked to ${attempt.name} can't, and nothing leaks`, async () => {
             const job = await runLive(adapter, 'reviewer', { prompt: attempt.prompt });
+            report(`L3 ${attempt.name}`, job);
             attempt.check(job);
             // A run that crashed, was logged out or ran out of quota tried nothing, so it proves nothing.
             expect(job.run.outcome).toEqual({ ok: true });
@@ -201,6 +229,7 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
         for (const attempt of editorAttempts) {
           it(`L4: an editor asked to ${attempt.name} can't`, async () => {
             const job = await runLive(adapter, 'editor', { prompt: attempt.prompt });
+            report(`L4 ${attempt.name}`, job);
             attempt.check(job);
             // A run that crashed, was logged out or ran out of quota tried nothing, so it proves nothing.
             expect(job.run.outcome).toEqual({ ok: true });
