@@ -37,7 +37,7 @@ export function pull(over: Partial<GhPull> = {}): GhPull {
 
 export function prEvent(
   action: string,
-  opts: { pull?: Partial<GhPull>; requested_reviewer?: GhUser; requested_team?: { slug: string }; before?: string; after?: string } = {},
+  opts: { pull?: Partial<GhPull>; requested_reviewer?: GhUser; requested_team?: { slug: string }; before?: string; after?: string; changes?: GhPullRequestEvent['changes'] } = {},
 ): GhPullRequestEvent {
   const { pull: pullOver, ...rest } = opts;
   const pr = pull(pullOver);

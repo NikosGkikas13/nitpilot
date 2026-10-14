@@ -127,7 +127,11 @@ export type DomainEvent =
   | { type: 'human_note'; author: Person; body: string }
   | { type: 'manual_review'; reviewer: Person }
   | { type: 'timer'; key: string }
-  | { type: 'write_failed'; write: 'review' | 'replies'; asGithubId: string; pointNumbers: number[]; reason: 'needs_reauth' | 'github_error' };
+  | { type: 'write_failed'; write: 'review' | 'replies'; asGithubId: string; pointNumbers: number[]; reason: 'needs_reauth' | 'github_error' }
+  /** The PR now targets another branch. `trusted` is the author's trust, checked again. */
+  | { type: 'pr_retargeted'; baseRef: string; trusted: boolean }
+  /** Someone flagged by write_failed signed in again, in these roles (the ones whose flag came from a failed write). */
+  | { type: 'signed_in_again'; who: Person; roles: Role[] };
 
 export type ParticipantKey = { githubId: string; role: Role };
 

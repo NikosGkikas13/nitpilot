@@ -41,6 +41,8 @@ export type GhPullRequestEvent = Envelope & {
   requested_team?: { slug: string };
   before?: string;
   after?: string;
+  /** On `edited`: what changed, with the old values. `base` is there when the PR now targets another branch. */
+  changes?: { base?: { ref: { from: string }; sha: { from: string } }; title?: { from: string }; body?: { from: string } };
 };
 export type GhReviewCommentEvent = Envelope & { action: string; comment: GhReviewComment; pull_request: GhPull };
 export type GhReviewEvent = Envelope & {

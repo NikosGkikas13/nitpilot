@@ -41,6 +41,9 @@ export type AnchoredComment = {
 
 export type RepoInfo = { id: string; fullName: string; private: boolean; defaultBranch: string };
 
+/** A PR a search found: enough to look it up. */
+export type FoundPr = { repoFullName: string; number: number };
+
 export type PrNormalizedEvent = {
   scope: 'pr';
   pr: PrRef;
@@ -63,6 +66,11 @@ export interface PlatformReads {
   getPr(pr: PrRef): Promise<PrSnapshot>;
   readDefaultBranchFile(repo: RepoRef, path: string, etag?: string): Promise<{ text: string; etag: string } | 'not_modified' | null>;
   gitSpec(pr: GitSpecInput): GitSpec;
+  /**
+   * Open PRs this person authored, was asked to review, or reviewed, found with their own token
+   * (spec §15 "Catching up"). Each PR once.
+   */
+  findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
 }
 
 /** On a retry, first look for an earlier write whose body contains this marker, and reuse it. */

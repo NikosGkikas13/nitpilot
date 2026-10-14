@@ -147,3 +147,15 @@ describe('decide()', () => {
     expect(commandsOf(out, 'upsert_summary')).toEqual([]);
   });
 });
+
+describe('pr_retargeted', () => {
+  it('says which branch the PR now targets', () => {
+    const out = run(chatState(), { type: 'pr_retargeted', baseRef: 'release', trusted: true });
+    expect(out.timeline).toEqual([expect.objectContaining({ kind: 'system', body: 'Now targets release' })]);
+  });
+
+  it('checks again whether the author is trusted', () => {
+    expect(run(chatState({ trusted: true }), { type: 'pr_retargeted', baseRef: 'release', trusted: false }).chat.trusted).toBe(false);
+    expect(run(chatState({ trusted: false }), { type: 'pr_retargeted', baseRef: 'main', trusted: true }).chat.trusted).toBe(true);
+  });
+});

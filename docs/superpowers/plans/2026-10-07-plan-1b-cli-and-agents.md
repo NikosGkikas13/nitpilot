@@ -12571,7 +12571,7 @@ docs/why/catching-up.md, docs/why/transcript-page.md (new)
 2. **A retargeted PR.** `pull_request.edited` with `changes.base` becomes `pr_retargeted { baseRef, trusted }`; any other edit is still ignored. The router refreshes the chat's `title`, `body`, `baseRef` and `baseSha` from every snapshot (so a missed retarget is fixed by the next `pull_request` event), sets `trusted` the way a new chat gets it (trusted bots included), and ignores a retarget of a PR it never tracked. The engine stores `trusted` and says `Now targets <branch>`; nothing restarts.
 3. **Signing in again.** After the GitHub callback saves the user, `resumeAfterSignIn` finds each chat where they're flagged `failed` because a write in their name never reached GitHub (their newest job in that role didn't fail; `failureKind`'s rule), and dispatches `signed_in_again { who, roles }` there. The engine clears those roles' flags, says `<login> signed in again`, and calls `advance`. A flag from a failed job stays (that's `nitpilot retry`). What failed isn't posted again.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `apps/server/src/engine/lifecycle.test.ts`:
 ```ts
@@ -12895,7 +12895,7 @@ describe('signing in again (spec §15)', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/server -- src/engine/lifecycle src/engine/failures src/platform/github/normalize/pull-request src/platform/github/reads src/chats/route-event src/jobs/catch-up src/http/routes/auth`
 Expected: FAIL: 9 tests in 6 files, and `src/jobs/catch-up.db.test.ts` doesn't load (`Cannot find module './catch-up'`):
@@ -12905,7 +12905,7 @@ Expected: FAIL: 9 tests in 6 files, and `src/jobs/catch-up.db.test.ts` doesn't l
 - route-event (2): the retarget is `ignored`, so the base is still `main`;
 - auth (1): maya's flag is still `failed`.
 
-- [ ] **Step 3: Write the code**
+- [x] **Step 3: Write the code**
 
 In `apps/server/src/engine/types.ts`, add the two events after `write_failed`:
 Replace:
@@ -13479,12 +13479,12 @@ with:
     await startSession(c, user.id);
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: the command from Step 2.
 Expected: PASS (7 files, 107 tests).
 
-- [ ] **Step 5: Explain catching up, and bring the spec in line**
+- [x] **Step 5: Explain catching up, and bring the spec in line**
 
 `docs/why/catching-up.md`:
 ```markdown
@@ -13572,14 +13572,14 @@ with:
 - **A retargeted PR** (`pull_request.edited` with a new base): the chat's `baseRef` and `baseSha` are refreshed and the author's trust is checked again (`pr_retargeted`). Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Docker must be running (container `nitpilot-postgres-1`).
 
 Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
 Expected: all green: protocol 41, CLI 274 passed and 14 skipped, server 415; end to end 5 passed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/jobs/catch-up.ts apps/server/src/jobs/catch-up.db.test.ts apps/server/src/chats/failed-flags.ts apps/server/src/chats/route-event.ts apps/server/src/chats/route-event.db.test.ts apps/server/src/engine apps/server/src/http/routes/auth.ts apps/server/src/http/routes/auth.db.test.ts apps/server/src/http/routes/cli.ts apps/server/src/platform apps/server/src/ws/wire.ts apps/server/test/fixtures/github.ts apps/server/test/ws.ts docs/why/catching-up.md docs/why/outbox-and-restarts.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

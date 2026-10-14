@@ -149,3 +149,36 @@ describe('a comment that arrives twice (Review Focus #3)', () => {
     expect((await chat()).points.map((p) => p.githubCommentId)).toEqual(['9700']);
   });
 });
+
+describe('a base retarget (pull_request.edited)', () => {
+  const retarget = (over: Parameters<typeof pull>[0] = {}) =>
+    prEvent('edited', {
+      pull: { base: { sha: 'c'.repeat(40), ref: 'release', repo: repository }, ...over },
+      changes: { base: { ref: { from: 'main' }, sha: { from: 'b'.repeat(40) } } },
+    });
+
+  it('refreshes the base, checks trust again and says so in the chat', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    expect(await deliver('pull_request', retarget({ author_association: 'CONTRIBUTOR' }))).toEqual({ status: 'processed' });
+    const c = await chat();
+    expect(c).toMatchObject({ baseRef: 'release', baseSha: 'c'.repeat(40), trusted: false });
+    const last = await prisma.message.findFirstOrThrow({ where: { chatId: c.id }, orderBy: { seq: 'desc' } });
+    expect(last.body).toBe('Now targets release');
+  });
+
+  it('keeps a PR from a bot the team trusts trusted', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened', { pull: { user: people.rabbit, author_association: 'NONE' } }));
+    await deliver('pull_request', retarget({ user: people.rabbit, author_association: 'NONE' }));
+    expect(await chat()).toMatchObject({ baseRef: 'release', trusted: true });
+  });
+
+  it('ignores an edit that only changes the title', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    const retitled = prEvent('edited', { pull: { title: 'Keyset pagination' }, changes: { title: { from: 'Cursor pagination for orders' } } });
+    expect(await deliver('pull_request', retitled)).toEqual({ status: 'ignored', note: 'nothing to do for pull_request.edited' });
+    expect(await chat()).toMatchObject({ baseRef: 'main', baseSha: 'b'.repeat(40), trusted: true });
+  });
+});

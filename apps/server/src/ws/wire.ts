@@ -1,6 +1,7 @@
 import type { Dispatcher } from '../chats/dispatch';
 import { JobAssigner } from '../jobs/assign';
 import { buildJobBundle } from '../jobs/bundle';
+import { CatchUp } from '../jobs/catch-up';
 import { cancelMessage, Leases } from '../jobs/leases';
 import type { PlatformReads } from '../platform/types';
 import type { CliHub } from './cli-hub';
@@ -12,7 +13,7 @@ export const SWEEP_MS = 5_000;
 export type CliHubDeps = {
   hub: CliHub;
   dispatcher: Dispatcher;
-  platform: Pick<PlatformReads, 'gitSpec'>;
+  platform: PlatformReads;
   now?: () => Date;
 };
 
@@ -23,13 +24,18 @@ export type CliHubDeps = {
 export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }: CliHubDeps) {
   const assigner = new JobAssigner(hub, (jobId) => buildJobBundle(jobId, platform), now);
   const leases = new Leases(hub, dispatcher.dispatch, now);
+  const catchUp = new CatchUp({ platform, dispatch: dispatcher.dispatch });
 
   // Every message from a CLI goes through these listeners, in this order.
   hub.onMessage(leases.handle); // hello and ping: renew leases, cancel what's no longer theirs
   hub.onMessage(jobMessageHandler({ dispatch: dispatcher.dispatch })); // pushes, results, failures, refusals
-  hub.onMessage(async (_conn, msg) => {
+  hub.onMessage(async (conn, msg) => {
+    if (msg.t !== 'hello') return;
     // A CLI that just said hello may be able to take queued jobs.
-    if (msg.t === 'hello') assigner.wake();
+    assigner.wake();
+    // The first hello since the server started: look for PRs of theirs we missed (spec §15). Not awaited,
+    // so this CLI's next messages don't wait for GitHub's search; the jobs it queues wake the assigner.
+    void catchUp.forUser({ id: conn.userId, login: conn.login }).catch((err) => console.error(`[catch-up] ${conn.login}:`, err));
   });
 
   dispatcher.onCommit((_chatId, effects) => {
@@ -51,6 +57,7 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
   return {
     assigner,
     leases,
+    catchUp,
     start(): void {
       timer ??= setInterval(() => {
         assigner.wake();

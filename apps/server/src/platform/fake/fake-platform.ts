@@ -2,7 +2,7 @@ import { GithubError } from '../github/client';
 import { parseGithubWebhook } from '../github/normalize/index';
 import type { GhReviewComment } from '../github/payloads';
 import { gitSpecFor } from '../github/mapping';
-import type { AnchoredComment, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
+import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
 
 export type FakeWrite = {
   kind: 'summary' | 'review' | 'reply';
@@ -30,6 +30,10 @@ export class FakePlatform implements PlatformAdapter {
   /** review id → that review's comments, for parseWebhook */
   readonly reviewComments = new Map<string, GhReviewComment[]>();
   readonly writes: FakeWrite[] = [];
+  /** userId → the open PRs a catch-up search finds for them */
+  readonly openPrs = new Map<string, FoundPr[]>();
+  /** Whose PRs were searched, in order. */
+  readonly searches: string[] = [];
   /** Make the next postReview with inline comments fail like GitHub does for lines outside the diff. */
   rejectNextInlineReview = false;
   private nextId = Date.now() * 1000;
@@ -61,6 +65,11 @@ export class FakePlatform implements PlatformAdapter {
 
   gitSpec(pr: GitSpecInput): GitSpec {
     return gitSpecFor(pr);
+  }
+
+  async findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]> {
+    this.searches.push(user.id);
+    return this.openPrs.get(user.id) ?? [];
   }
 
   async upsertSummary(pr: PrRef, body: string, existingId?: string, opts?: WriteOptions): Promise<{ id: string }> {

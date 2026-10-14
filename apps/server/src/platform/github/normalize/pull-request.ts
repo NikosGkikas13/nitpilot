@@ -1,7 +1,7 @@
 import type { DomainEvent } from '../../../engine/types';
 import type { NormalizedEvent, PrRef } from '../../types';
 import type { GhPullRequestEvent } from '../payloads';
-import { snapshotFromPull, toPerson } from '../mapping';
+import { isTrustedAssociation, snapshotFromPull, toPerson } from '../mapping';
 
 /** The PrRef for any event that has `installation` and `repository`. */
 export function prRefFrom(payload: { installation: { id: number }; repository: { id: number; full_name: string } }, number: number): PrRef {
@@ -37,6 +37,9 @@ export function normalizePullRequest(p: GhPullRequestEvent): NormalizedEvent[] {
       return p.requested_reviewer ? one({ type: 'review_request_removed', reviewer: toPerson(p.requested_reviewer) }) : [];
     case 'synchronize':
       return one({ type: 'head_updated', before: p.before ?? '', after: p.after ?? p.pull_request.head.sha, ours: false });
+    case 'edited':
+      // Only a new base branch matters (a retarget). The router adds trusted bots to `trusted`.
+      return p.changes?.base ? one({ type: 'pr_retargeted', baseRef: snapshot.baseRef, trusted: isTrustedAssociation(snapshot.authorAssociation) }) : [];
     default:
       return [];
   }

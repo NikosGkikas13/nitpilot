@@ -44,6 +44,16 @@ export function onPrReopened(ctx: Ctx): void {
   startReviewsOrAdvance(ctx);
 }
 
+/**
+ * The PR now targets another branch (spec §15). The chat row already has the new base; the engine
+ * records whether the author is still trusted. Nothing starts: a running job finishes on the base it
+ * began with, and the next one gets the new base.
+ */
+export function onPrRetargeted(ctx: Ctx, e: Ev<'pr_retargeted'>): void {
+  ctx.chat.trusted = e.trusted;
+  system(ctx, `Now targets ${e.baseRef}`);
+}
+
 export function onReviewRequested(ctx: Ctx, e: Ev<'review_requested'>): void {
   const r = ensureParticipant(ctx.chat, e.reviewer, 'reviewer');
   r.requested = true;

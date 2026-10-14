@@ -1,3 +1,4 @@
+import { advance } from './advance';
 import { emit, system, type Ctx, type Ev } from './context';
 import { onNitpilot } from './state';
 
@@ -16,4 +17,17 @@ export function onWriteFailed(ctx: Ctx, e: Ev<'write_failed'>): void {
   for (const p of people) p.attention = 'failed';
   const userIds = people.filter(onNitpilot).map((p) => p.userId!);
   if (userIds.length > 0) emit(ctx, { type: 'notify', userIds, kind: 'failed', pointNumbers: e.pointNumbers });
+}
+
+/**
+ * Someone whose review or replies never reached GitHub signed in to Nitpilot again (spec §15), so writes
+ * in their name work again: their flag goes, and the chat carries on. What failed isn't posted again;
+ * the chat keeps it, and a point without a GitHub thread gets no reply there.
+ */
+export function onSignedInAgain(ctx: Ctx, e: Ev<'signed_in_again'>): void {
+  const flagged = ctx.chat.participants.filter((p) => p.githubId === e.who.githubId && e.roles.includes(p.role) && p.attention === 'failed');
+  if (flagged.length === 0) return;
+  for (const p of flagged) p.attention = 'none';
+  system(ctx, `${e.who.login} signed in again`);
+  advance(ctx);
 }

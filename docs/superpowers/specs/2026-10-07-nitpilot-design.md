@@ -182,7 +182,7 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 ```
 
 - **Purity rule.** `apps/server/src/engine/**` must not import database, platform or WebSocket code. ESLint `no-restricted-imports` enforces this.
-- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, attempt, result} | job_failed{jobId, attempt, reason, retryable} | retry_requested{who} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error}`. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15). `retry_requested` is a person asking to run their failed job again (`nitpilot retry`; the web app's Retry button in Plan 2). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested. Job events carry the attempt they report on, and the engine ignores one whose attempt is no longer the job's current one (fencing, §9.4).
+- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, attempt, result} | job_failed{jobId, attempt, reason, retryable} | retry_requested{who} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error} | pr_retargeted{baseRef, trusted} | signed_in_again{who, roles}`. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15), and `signed_in_again` when that person signs in again. `pr_retargeted` is a PR that now targets another branch. `retry_requested` is a person asking to run their failed job again (`nitpilot retry`; the web app's Retry button in Plan 2). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested. Job events carry the attempt they report on, and the engine ignores one whose attempt is no longer the job's current one (fencing, §9.4).
 - **`Command`**: `enqueue_job | cancel_jobs | complete_job | retry_job | fail_job | schedule{key, at} | unschedule | upsert_summary | post_review{reviewerGithubId, pointNumbers} | post_thread_replies | notify{userIds, kind, pointNumbers}`. Every job change is a command, so it shows up in table tests. The engine refers to people by `githubId + role` and to points by their chat-local number, so `decide` never has to generate ids.
 - **Drafts.** Whether a result is applied or becomes a draft is decided here: if Auto is off or forbidden, the job result gets `applyState = draft`.
 - **The dispatcher**, `dispatch(chatId, event)`, runs these steps:
@@ -365,7 +365,7 @@ interface PlatformAdapter {
   listThreads(pr: PrRef): Promise<ExternalThread[]>;
   readDefaultBranchFile(repo: RepoRef, path: string, etag?: string):
     Promise<{ text: string; etag: string } | 'not_modified' | null>;
-  findOpenPrsFor(userId: string): Promise<PrRef[]>;
+  findOpenPrsFor(user: { id: string; login: string }): Promise<{ repoFullName: string; number: number }[]>;  // with the user's own token
   gitSpec(pr: PrSnapshot): { baseCloneUrl: string; fetchRef: string; headRepoPath: string; headBranch: string };
   upsertSummary(pr: PrRef, body: string, existingId?: string): Promise<{ id: string }>;   // as the app bot
   postReview(asUser: string, pr: PrRef,
@@ -551,7 +551,7 @@ max_points_per_review: 20
 - **User tokens:**
   - Obtained with the web flow and PKCE. An access token lasts 8 hours; a refresh token lasts 6 months and can be used once, so refreshes run one at a time per user.
   - If a refresh fails, the user is marked `needs_reauth` and writes in their name stop. Nitpilot never quietly posts as the bot instead.
-- **When a write fails for good** (GitHub kept failing for about an hour, or the user must sign in again), a review or replies in someone's name becomes a `write_failed` engine event: a timeline message, that person's attention set to `failed`, and a notification. Summary failures are only logged; the next chat change rewrites the summary.
+- **When a write fails for good** (GitHub kept failing for about an hour, or the user must sign in again), a review or replies in someone's name becomes a `write_failed` engine event: a timeline message, that person's attention set to `failed`, and a notification. When that person signs in again, the flag is cleared (`signed_in_again`) and the chat carries on; what failed isn't posted again. Summary failures are only logged; the next chat change rewrites the summary.
 - **Ignoring our own writes:**
   - Every body we write carries a hidden marker, `<!-- nitpilot:v1 chat=… -->`, and every id we create is stored in `GithubWrite`. Webhook events for those are ignored.
   - Our own pushes are announced in advance with `job.pushing` and matched by sha.
@@ -560,7 +560,8 @@ max_points_per_review: 20
 - **Re-requested reviews:**
   - GitHub doesn't document whether re-requesting a review fires `review_requested` again. So in single-player reviewer mode, a re-review also starts on `synchronize` (debounced) while that reviewer has open points, and when the author replies in one of their threads.
   - Team review requests are ignored in v1.
-- **Catching up when a CLI connects** (once, not polling): three searches, `is:pr is:open author:<login>`, `review-requested:<login>` and `reviewed-by:<login>`. Search allows 30 requests per minute.
+- **Catching up when a CLI connects** (once per person per server start, not polling): three searches with the person's own token, `is:pr is:open author:<login>`, `is:pr is:open review-requested:<login>` and `is:pr is:open reviewed-by:<login>`, one page of 100 each. Search allows 30 requests per minute per person. Each open PR in a repo the app is on and without a chat starts as if it had just been opened. A failed search is tried again at that person's next connect.
+- **A retargeted PR** (`pull_request.edited` with a new base): the chat's `baseRef` and `baseSha` are refreshed and the author's trust is checked again (`pr_retargeted`). Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
 - **Recovering after a restart:**
   - Replay `RawEvent` rows still marked `received`. Rows marked `retrying` run again once their `retryAt` passes (a 30-second sweep).
   - Redeliver GitHub deliveries that failed in the last 3 days (`GET /app/hook/deliveries`, `POST …/attempts`).

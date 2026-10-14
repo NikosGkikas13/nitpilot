@@ -34,6 +34,8 @@ A review or a set of replies that fails for good is worse than it looks: the cha
 - sets that person's attention to `failed`, which is what the inbox will show (Plan 2);
 - notifies them.
 
+When that person signs in again (`http/routes/auth.ts`), writes in their name work again. `chats/failed-flags.ts` finds each chat where a failed write flagged them and sends it a `signed_in_again` event: the flag goes and the chat carries on. What failed isn't posted again; the chat still has it. A flag from a failed *job* stays: running the agent again is what fixes that (`nitpilot retry`).
+
 The summary comment is left out on purpose. The next change to the chat writes it again anyway, and reporting it would add a timeline message, which is itself a change that asks for a new summary.
 
 ## Making "run it again" safe

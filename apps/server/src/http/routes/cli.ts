@@ -7,6 +7,7 @@ import { Hono, type Context } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
 import { requireCliToken, type CliAuth } from '../../auth/cli-token';
 import type { Dispatch } from '../../chats/dispatch';
+import { failureKind } from '../../chats/failed-flags';
 import type { Person } from '../../engine/types';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
@@ -104,23 +105,6 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
   });
 
   return app;
-}
-
-/**
- * Why this person is flagged `failed` in the chat, if they are:
- * - null: none of their roles is flagged;
- * - 'agent': a flagged role's newest job failed, so running it again can help;
- * - 'github_post': otherwise. A write that never reached GitHub (spec §15, `write_failed`) is the only other
- *   thing that sets the flag, and it is fixed by signing in again, not by re-running the agent.
- */
-async function failureKind(chatId: string, githubId: string): Promise<'agent' | 'github_post' | null> {
-  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
-  if (flagged.length === 0) return null;
-  for (const p of flagged) {
-    const newest = await prisma.job.findFirst({ where: { participantId: p.id }, orderBy: { createdAt: 'desc' }, select: { status: true } });
-    if (newest?.status === 'failed') return 'agent';
-  }
-  return 'github_post';
 }
 
 /**

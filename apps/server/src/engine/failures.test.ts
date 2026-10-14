@@ -156,3 +156,29 @@ describe('an author whose address pass failed for good', () => {
     expect(out.chat.phase).toBe('addressing');
   });
 });
+
+describe('signed_in_again (a person whose GitHub write failed signed in again)', () => {
+  /** maya's replies never reached GitHub, so she's flagged; leo's P1 is still open. */
+  const repliesFailed = () =>
+    agentToAgent({
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { attention: 'failed' }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+
+  it('clears the flag and lets the chat carry on', () => {
+    const out = run(repliesFailed(), { type: 'signed_in_again', who: maya, roles: ['author'] });
+    expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('none');
+    expect(out.timeline[0]).toEqual(expect.objectContaining({ kind: 'system', body: 'maya signed in again' }));
+    expect(commandsOf(out, 'enqueue_job')).toEqual([
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+    ]);
+  });
+
+  it('leaves a role the event does not name: that flag is a failed job, which `nitpilot retry` handles', () => {
+    const out = run(repliesFailed(), { type: 'signed_in_again', who: maya, roles: ['reviewer'] });
+    expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('failed');
+    expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
+  });
+});

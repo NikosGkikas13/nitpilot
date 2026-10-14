@@ -166,7 +166,8 @@ export class TestCli {
 export async function startCliServer(opts: { now?: () => Date } = {}) {
   const hub = new CliHub();
   const dispatcher = new Dispatcher(opts.now);
-  const wired = wireCliHub({ hub, dispatcher, platform: new FakePlatform(), now: opts.now });
+  const platform = new FakePlatform();
+  const wired = wireCliHub({ hub, dispatcher, platform, now: opts.now });
   const server = await listen(hub);
   /** Wait until every message received so far is handled and the assigner is idle. */
   const settle = async (): Promise<void> => {
@@ -177,6 +178,7 @@ export async function startCliServer(opts: { now?: () => Date } = {}) {
     ...wired,
     hub,
     dispatcher,
+    platform,
     url: server.url,
     settle,
     async close(): Promise<void> {

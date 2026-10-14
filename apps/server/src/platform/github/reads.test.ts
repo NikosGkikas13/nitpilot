@@ -28,7 +28,7 @@ const pull: GhPull = {
 function reads(routes: Parameters<typeof fakeFetch>[0]) {
   const fetch = fakeFetch({ 'POST /app/installations/77/access_tokens': () => ({ token: 'ghs_x', expires_at: '2099-01-01T00:00:00Z' }), ...routes });
   const github = new GithubClient(fetch);
-  return { fetch, platform: new GithubReads(github, new AppAuth(github, '12345', pem)) };
+  return { fetch, platform: new GithubReads(github, new AppAuth(github, '12345', pem), async (userId) => `ghu_${userId}`) };
 }
 
 describe('snapshotFromPull', () => {
@@ -97,5 +97,22 @@ describe('GithubReads', () => {
     const [ne] = await platform.parseWebhook(new Headers({ 'x-github-event': 'pull_request_review' }), JSON.stringify(reviewEvent('COMMENTED', { id: 7001 })));
     expect(ne).toMatchObject({ event: { type: 'external_review_submitted', review: { id: '7001', comments: [{ id: '9101' }] } } });
     expect(fetch.calls.at(-1)!.headers.get('authorization')).toBe('Bearer ghs_x');
+  });
+});
+
+describe('findOpenPrsFor (spec §15 "Catching up")', () => {
+  const item = (repo: string, number: number) => ({ number, repository_url: `https://api.github.com/repos/${repo}` });
+
+  it("runs the three searches with the person's own token and lists each PR once", async () => {
+    const { fetch, platform } = reads({
+      'GET /search/issues': (req) => ({ items: req.url.searchParams.get('q')!.includes('author:') ? [item('octo/api', 7)] : [item('octo/sandbox', 42)] }),
+    });
+    expect(await platform.findOpenPrsFor({ id: 'user-leo', login: 'leo' })).toEqual([
+      { repoFullName: 'octo/api', number: 7 },
+      { repoFullName: 'octo/sandbox', number: 42 },
+    ]);
+    const searches = fetch.calls.filter((c) => c.url.pathname === '/search/issues');
+    expect(searches.map((c) => c.url.searchParams.get('q'))).toEqual(['is:pr is:open author:leo', 'is:pr is:open review-requested:leo', 'is:pr is:open reviewed-by:leo']);
+    expect(searches.map((c) => c.headers.get('authorization'))).toEqual(Array(3).fill('Bearer ghu_user-leo'));
   });
 });

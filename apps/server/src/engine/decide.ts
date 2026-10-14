@@ -3,13 +3,13 @@ import {
   onCommentDeleted, onExternalComment, onHeadUpdated, onReviewSubmitted, onThreadResolved, onThreadUnresolved, onTimer,
 } from './external';
 import {
-  onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrToDraft,
+  onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrRetargeted, onPrToDraft,
   onReviewRequestRemoved, onReviewRequested,
 } from './lifecycle';
 import { onJobCompleted, onJobFailed, onRetryRequested } from './results';
 import { author, onNitpilot } from './state';
 import type { DecideInput, DecideOutput } from './types';
-import { onWriteFailed } from './writes';
+import { onSignedInAgain, onWriteFailed } from './writes';
 
 /**
  * The workflow rules, as one pure function (spec §9): (state, event) → (state, timeline, commands).
@@ -46,6 +46,8 @@ export function decide(input: DecideInput): DecideOutput {
     case 'job_failed': onJobFailed(ctx, event); break;
     case 'retry_requested': onRetryRequested(ctx, event); break;
     case 'write_failed': onWriteFailed(ctx, event); break;
+    case 'pr_retargeted': onPrRetargeted(ctx, event); break;
+    case 'signed_in_again': onSignedInAgain(ctx, event); break;
     default: {
       // If a new DomainEvent type is added without a case, this line stops compiling.
       const unhandled: never = event;

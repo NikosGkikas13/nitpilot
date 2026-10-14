@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { people, prEvent } from '../../../../test/fixtures/github';
+import { people, prEvent, repository } from '../../../../test/fixtures/github';
 import { normalizePullRequest } from './pull-request';
 
 const ref = { installationId: '77', repoId: '501', repoFullName: 'octo/sandbox', number: 42 };
@@ -50,5 +50,21 @@ describe('normalizePullRequest', () => {
 
   it.each(['edited', 'labeled', 'assigned', 'auto_merge_enabled'])('ignores %s', (action) => {
     expect(normalizePullRequest(prEvent(action))).toEqual([]);
+  });
+});
+
+describe('normalizePullRequest: edited', () => {
+  it('turns a new base branch into pr_retargeted; the router decides who is trusted', () => {
+    const retarget = prEvent('edited', {
+      pull: { base: { sha: 'c'.repeat(40), ref: 'release', repo: repository } },
+      changes: { base: { ref: { from: 'main' }, sha: { from: 'b'.repeat(40) } } },
+    });
+    const [ne] = normalizePullRequest(retarget);
+    expect(ne).toMatchObject({ scope: 'pr', pr: ref, event: { type: 'pr_retargeted', baseRef: 'release', trusted: true } });
+    expect(ne!.scope === 'pr' && ne!.snapshot?.baseSha).toBe('c'.repeat(40));
+  });
+
+  it('ignores an edit that leaves the base alone (a new title, say)', () => {
+    expect(normalizePullRequest(prEvent('edited', { pull: { title: 'Keyset pagination' }, changes: { title: { from: 'Cursor pagination for orders' } } }))).toEqual([]);
   });
 });

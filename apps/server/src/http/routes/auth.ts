@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { authorizeUrl, exchangeCode, fetchGithubUser, pkceChallenge } from '../../auth/github-oauth';
 import { cookieOptions, endSession, startSession } from '../../auth/session';
 import { saveGithubUser } from '../../auth/users';
+import type { Dispatch } from '../../chats/dispatch';
+import { resumeAfterSignIn } from '../../chats/failed-flags';
 import { isAllowedOrigin } from '../../lib/csrf';
 import { decrypt, encrypt } from '../../lib/crypto';
 import { getEnv } from '../../lib/env';
@@ -34,7 +36,7 @@ function readOAuthCookie(value: string | undefined): z.infer<typeof OAuthCookie>
   }
 }
 
-export function authRoutes(deps: { github: GithubClient }): Hono {
+export function authRoutes(deps: { github: GithubClient; dispatch: Dispatch }): Hono {
   const app = new Hono();
 
   app.get('/auth/github/login', (c) => {
@@ -76,6 +78,8 @@ export function authRoutes(deps: { github: GithubClient }): Hono {
     }
 
     const user = await saveGithubUser(ghUser, tokens);
+    // Writes in their name work again: chats that waited on one that failed carry on (spec §15).
+    await resumeAfterSignIn(user, deps.dispatch);
     await startSession(c, user.id);
     return c.redirect(saved.next);
   });

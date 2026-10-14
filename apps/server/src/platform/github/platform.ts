@@ -9,7 +9,7 @@ export class GithubPlatform extends GithubReads implements PlatformAdapter {
   private readonly writeCtx: WriteContext;
 
   constructor(github: GithubClient, appAuth: AppAuth, userToken: (userId: string) => Promise<string>) {
-    super(github, appAuth);
+    super(github, appAuth, userToken);
     this.writeCtx = { github, appAuth, userToken };
   }
 

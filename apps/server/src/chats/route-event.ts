@@ -35,6 +35,7 @@ export async function routePrEvent(ne: PrNormalizedEvent, deps: RouterDeps): Pro
 
   if (!chat) {
     if (event.type === 'pr_closed') return 'closed PR that was never tracked';
+    if (event.type === 'pr_retargeted') return 'retargeted PR that was never tracked';
     const snapshot = ne.snapshot ?? (await deps.platform.getPr(ne.pr));
     chat = await createChat(repo.id, snapshot, rules);
     // A PR we first meet through a comment or review still starts with "opened".
@@ -42,16 +43,24 @@ export async function routePrEvent(ne: PrNormalizedEvent, deps: RouterDeps): Pro
       await deps.dispatch(chat.id, await withPeople({ type: 'pr_opened', author: snapshot.author, reviewers: snapshot.requestedReviewers }, rules));
     }
   } else if (ne.snapshot) {
-    await prisma.prChat.update({ where: { id: chat.id }, data: { title: ne.snapshot.title, body: ne.snapshot.body } });
+    // The base too: a PR can be retargeted, and the next job must fetch the branch it targets now.
+    const { title, body, baseRef, baseSha } = ne.snapshot;
+    await prisma.prChat.update({ where: { id: chat.id }, data: { title, body, baseRef, baseSha } });
   }
 
   if (event.type === 'head_updated') event = { ...event, ours: await isOurPush(chat, event.after) };
+  if (event.type === 'pr_retargeted' && ne.snapshot) event = { ...event, trusted: isTrustedAuthor(ne.snapshot, rules) };
   await deps.dispatch(chat.id, event, { seenCommentIds: commentIdsOf(fresh) });
   return null;
 }
 
+/** OWNER, MEMBER or COLLABORATOR of the repo, or a bot the team trusts (spec §6.1). */
+function isTrustedAuthor(s: PrSnapshot, rules: TeamRules): boolean {
+  return isTrustedAssociation(s.authorAssociation) || (s.author.isBot && rules.trusted_bots.includes(s.author.login));
+}
+
 async function createChat(repoId: string, s: PrSnapshot, rules: TeamRules): Promise<PrChat> {
-  const trusted = isTrustedAssociation(s.authorAssociation) || (s.author.isBot && rules.trusted_bots.includes(s.author.login));
+  const trusted = isTrustedAuthor(s, rules);
   return prisma.prChat.create({
     data: {
       repoId,
