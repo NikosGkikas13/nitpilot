@@ -27,7 +27,7 @@ The fixtures in `claude-code/fixtures/` are real runs, recorded once (the quota 
 
 ## Your login, not a key
 
-Claude Code uses your own login (`claude auth login`), which `detect()` checks with `claude auth status`. Nitpilot never passes `ANTHROPIC_API_KEY` to it unless you set `"apiBilling": true`, because a key would bill your API account instead of your plan.
+Claude Code uses your own login (`claude auth login`), which `detect()` checks with `claude auth status`. Nitpilot never passes `ANTHROPIC_API_KEY` to it unless you set `"apiBilling": true`, because a key would bill your API account instead of your plan. With `apiBilling` on and no key set, `detect()` says so, so `nitpilot doctor` points at the key, not the login.
 
 ## The React analogy
 

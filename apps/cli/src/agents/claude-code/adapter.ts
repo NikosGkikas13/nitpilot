@@ -23,6 +23,8 @@ const PROGRESS_MAX = 200;
 export type ClaudeCodeOptions = {
   /** Your ANTHROPIC_API_KEY, only when you opted into API billing (`apiBilling`). Otherwise Claude Code uses your login. */
   apiKey?: string;
+  /** You opted into API billing (`apiBilling`): then `apiKey` must be set. */
+  apiBilling?: boolean;
   /** Runs a program (tests pass a pretend one). */
   run?: RunProgram;
 };
@@ -43,6 +45,7 @@ export function claudeCodeAdapter(opts: ClaudeCodeOptions = {}): AgentAdapter {
       if (version.code !== 0) return { ok: false, problem: '`claude` is not installed (or not on your PATH)' };
       const found = version.stdout.trim();
       if (opts.apiKey) return { ok: true, version: found };
+      if (opts.apiBilling) return { ok: false, version: found, problem: 'apiBilling is on, but ANTHROPIC_API_KEY is not set: set it, or turn apiBilling off to use your Claude login' };
       const auth = await run('claude', ['auth', 'status']);
       if (!isLoggedIn(auth.stdout)) return { ok: false, version: found, problem: 'Claude Code is not logged in: run `claude auth login`' };
       return { ok: true, version: found };

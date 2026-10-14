@@ -420,7 +420,7 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
 - **Environment:** built from an allowlist. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing.
 - **"Your setup" still applies:** user-level settings and the personal `~/.claude/CLAUDE.md`. Project-level files from the PR are scrubbed.
 - **Outcome:** a `result` line that isn't an error is success. Otherwise Nitpilot reads the failed `result` line and stderr, never the agent's own words: `error_max_turns` is `max_turns`; a 401 status, "Failed to authenticate", "Invalid API key" or "/login" is `auth`; a 429 status or "You've hit your limit" is `quota`. None is retried at once, because the same run would fail the same way. Anything else, a crash or a signal included, is a retryable `crash`.
-- **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed.
+- **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed, but `ANTHROPIC_API_KEY` must be set.
 
 **Gemini CLI** (verified against v0.63; **on hold**, see §22)
 - **Command:** `gemini -p <prompt> -o stream-json --skip-trust -e none --allowed-mcp-server-names nitpilot --policy <tmp>/policy.toml`

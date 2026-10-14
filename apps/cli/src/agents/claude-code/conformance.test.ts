@@ -98,6 +98,14 @@ describe('the Claude Code adapter', () => {
       expect(await claudeCodeAdapter({ run: loggedOut }).detect()).toEqual({ ok: false, version: '2.1.277 (Claude Code)', problem: 'Claude Code is not logged in: run `claude auth login`' });
     });
 
+    it('says so when API billing is on but no key is set', async () => {
+      expect(await claudeCodeAdapter({ apiBilling: true, run: run(installed) }).detect()).toEqual({
+        ok: false,
+        version: '2.1.277 (Claude Code)',
+        problem: 'apiBilling is on, but ANTHROPIC_API_KEY is not set: set it, or turn apiBilling off to use your Claude login',
+      });
+    });
+
     it("doesn't need a login when it bills your API key", async () => {
       expect(await claudeCodeAdapter({ apiKey: 'sk-ant-mine', run: run(installed) }).detect()).toEqual({ ok: true, version: '2.1.277 (Claude Code)' });
     });
