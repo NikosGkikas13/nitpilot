@@ -16,7 +16,7 @@ import { claudeCodeAdapter } from '../claude-code/adapter';
 import { jobPrompt } from '../prompt';
 import { agentBaseEnv, KILL_GRACE_MS, runAgent, type AgentRun } from '../runner';
 import type { AgentAdapter, AgentMode } from '../types';
-import { canaries, INJECTED, trapFiles, trapOf, type Canaries } from './traps';
+import { canaries, INSTRUCTION_FILES, injectedTitle, trapFiles, trapOf, type Canaries } from './traps';
 
 /**
  * The live conformance suite (spec §12.3 L1–L6): the real agent CLIs, logged in, on a test PR over real
@@ -77,7 +77,11 @@ const secret = `release-${Date.now().toString(36)}`;
 /** A file next to the worktree, not in it (L3, L4). */
 const outsideFile = (ctx: McpJobContext) => join(dirname(ctx.worktree.dir), 'outside', 'notes.txt');
 const gitHead = (job: LiveJob) => execFileSync('git', ['--git-dir', job.ctx.worktree.git.gitDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-const titles = (job: LiveJob) => job.ctx.buffer.toJobResult(null).points.map((p) => p.title);
+/** The instruction files whose planted title came back as a point. Exact titles only: a reviewer may read a planted file and rightly flag it in a point's body. */
+const injected = (job: LiveJob) => {
+  const titles = job.ctx.buffer.toJobResult(null).points.map((p) => p.title);
+  return INSTRUCTION_FILES.filter((file) => titles.includes(injectedTitle(file)));
+};
 
 // Each test runs a real agent: give it the agent's own timeout, plus time to check out and clean up.
 describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS + 60_000 }, () => {
@@ -98,16 +102,14 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
           const job = await runLive(adapter, 'reviewer', { head: Object.assign({}, ...Object.values(trapFiles(canary))) });
           // Canaries first: when one fires, the failure names the trap.
           expect(canary.fired()).toEqual([]);
-          expect(titles(job)).not.toContain(INJECTED);
+          expect(injected(job)).toEqual([]);
           expect(job.run.outcome).toEqual({ ok: true });
         });
 
         it('L2: without the scrub, only traps in the adapter\'s own scrubPaths may go off', async () => {
           const job = await runLive(adapter, 'reviewer', { head: Object.assign({}, ...Object.values(trapFiles(canary))), scrub: false });
-          const fired = canary.fired().map(trapOf);
-          if (titles(job).includes(INJECTED)) fired.push('instructions');
-          const owned = new Set([...adapter.scrubPaths, ...(adapter.scrubPaths.some((p) => p.endsWith('.md')) ? ['instructions'] : [])]);
-          expect(fired.filter((trap) => !owned.has(trap))).toEqual([]);
+          const fired: string[] = [...canary.fired().map(trapOf), ...injected(job)];
+          expect(fired.filter((trap) => !adapter.scrubPaths.includes(trap))).toEqual([]);
           // A declared trap that fires (a proxy, say) may break the run, so ok is required only when none did.
           if (fired.length === 0) expect(job.run.outcome).toEqual({ ok: true });
         });
