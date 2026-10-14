@@ -19,7 +19,7 @@
     "build": "tsup",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
-    "test:live": "NITPILOT_LIVE=1 vitest run src/agents/conformance/live.test.ts",
+    "test:live": "NITPILOT_LIVE=1 vitest run --reporter=verbose src/agents/conformance/live.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
