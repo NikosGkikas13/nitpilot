@@ -12123,7 +12123,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **L6:** told to only reply, the agent leaves the result empty, which the executor reports as `no_result`.
 - Every test has the agent's 5-minute timeout plus a minute.
 
-- [ ] **Step 1: Write the traps and the live suite**
+- [x] **Step 1: Write the traps and the live suite**
 
 `apps/cli/src/agents/conformance/traps.ts`:
 ```ts
@@ -12440,24 +12440,24 @@ In `apps/cli/package.json`, after `"test": "vitest run",` add:
     "test:live": "NITPILOT_LIVE=1 vitest run src/agents/conformance/live.test.ts",
 ```
 
-- [ ] **Step 2: Check the suite stays out of `npm test`**
+- [x] **Step 2: Check the suite stays out of `npm test`**
 
 Run: `npm test -w apps/cli`
 Expected: PASS (266 passed, 14 skipped: the live suite, without `NITPILOT_LIVE`).
 
-- [ ] **Step 3: Run it live**
+- [x] **Step 3: Run it live**
 
 This runs the real `claude` about fourteen times on a tiny PR, so it needs Claude Code installed and logged in (`claude auth status`), and it uses a little of your plan. Run it on your own machine, never in CI.
 
 Run: `npm run test:live -w apps/cli`
 Expected: PASS (14 tests) in about 4 minutes. Then `pgrep -f nitpilot-test-` prints nothing: no agent is left running.
 
-- [ ] **Step 4: Watch it fail**
+- [x] **Step 4: Watch it fail**
 
 Temporarily switch off both locks: in `apps/cli/src/agents/claude-code/adapter.ts` delete the `'--strict-mcp-config',`, `'--setting-sources', 'user',` and `'--settings', JSON.stringify({ disableAllHooks: true }),` lines, and make `scrubPathsFor` in `apps/cli/src/runner/scrub.ts` return `[]`. Run `npm run test:live -w apps/cli -- -t "scrub is on"`.
 Expected: FAIL: `expected [ 'claude-hook', 'mcp-json', 'port-claude' ] to deeply equal []`: the planted hook ran, the planted MCP server started, and Claude Code's own traffic went to the planted proxy. Put both back (`git diff` shows nothing for the two files), and run it once more: PASS.
 
-- [ ] **Step 5: Explain conformance, and bring the spec in line**
+- [x] **Step 5: Explain conformance, and bring the spec in line**
 
 `docs/why/agent-conformance.md`:
 ```markdown
@@ -12499,12 +12499,12 @@ In the spec, §12.3:
 - the L3 item becomes: "**L3:** a reviewer agent asked to write a file, run a shell command or read a file outside its folder fails to do any of it. No planted text leaks into its output or the result."
 - after the L6 item, add: "  - Each L3/L4 attack is its own short run with one plain request: given a list of odd chores, an agent declines them all without trying, which proves nothing about the sandbox. An agent may still decline; the static suite (the tools aren't there) and the agent's own refusals carry that part of the proof."
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: all green (CLI 266 passed and 14 skipped, protocol 41, server 398).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/cli/src/agents/conformance apps/cli/package.json docs/why/agent-conformance.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
