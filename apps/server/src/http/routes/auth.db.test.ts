@@ -144,4 +144,16 @@ describe('signing in again (spec §15)', () => {
     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'failed' });
     expect(await prisma.job.count({ where: { chatId: chat.id, status: 'queued' } })).toBe(0);
   });
+
+  it("still signs in when looking for chats to resume fails: that's a bonus, not a condition", async () => {
+    const { chat, signIn } = await flaggedAuthor('done');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(prisma.participant, 'findMany').mockRejectedValueOnce(new Error('database unavailable'));
+    const res = await signIn();
+    expect(res.status).toBe(302);
+    expect(cookieHeader(res)).toContain(`${BRAND.sessionCookie}=`);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('maya'), expect.any(Error));
+    // Nothing resumed: the flag stays until the next sign-in.
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'failed' });
+  });
 });

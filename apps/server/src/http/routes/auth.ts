@@ -79,7 +79,12 @@ export function authRoutes(deps: { github: GithubClient; dispatch: Dispatch }): 
 
     const user = await saveGithubUser(ghUser, tokens);
     // Writes in their name work again: chats that waited on one that failed carry on (spec §15).
-    await resumeAfterSignIn(user, deps.dispatch);
+    // That's a bonus: if it fails, signing in must still work.
+    try {
+      await resumeAfterSignIn(user, deps.dispatch);
+    } catch (err) {
+      console.error(`[sign-in] couldn't look for chats to resume for ${user.login}:`, err);
+    }
     await startSession(c, user.id);
     return c.redirect(saved.next);
   });
