@@ -26,10 +26,10 @@ const result = (over: Partial<JobResult>): JobResult => ({ summary: 'Done.', poi
 
 /**
  * maya's PR: leo's agent raised P1 and P2, maya's agent fixed P1 and declined P2, and leo's re-review is
- * queued, but leo's CLI isn't connected. `canRead` is what GitHub says about the viewer and the repo;
- * `clis` are the connected CLIs (none by default).
+ * queued, but leo's CLI isn't connected. `canRead` is what GitHub says about the viewer and the repo
+ * (`revoked`: GitHub no longer takes the viewer's token); `clis` are the connected CLIs (none by default).
  */
-async function scene(opts: { canRead?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
+async function scene(opts: { canRead?: boolean; revoked?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
   const maya = await makeUser({ login: 'maya' });
   const leo = await makeUser({ login: 'leo' });
   const repo = await makeRepo();
@@ -51,7 +51,7 @@ async function scene(opts: { canRead?: boolean; clis?: (leoId: string) => LiveCl
   }));
   await runJob(result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Now 20.' }, { point: 2, resolution: 'declined', comment: 'Kept for the API.' }] }));
 
-  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
+  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
   const app = testApp({ github: new GithubClient(github), dispatch: dispatcher.dispatch, ...(opts.clis ? { clis: opts.clis(leo.id) } : {}) });
   const path = `/c/${repo.fullName}/${chat.number}`;
   const view = async (viewerId: string | null, at = path) => app.request(at, { headers: viewerId ? { cookie: await sessionCookieFor(viewerId) } : {} });
@@ -71,6 +71,30 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
     await githubAuthFor(maya.id);
     expect((await view(maya.id)).status).toBe(404);
     expect((await view(maya.id, `/c/${repo.fullName}/999`)).status).toBe(404);
+  });
+
+  it("answers a chat that doesn't exist like one that does, for a viewer who must sign in again (it must not tell which chats exist)", async () => {
+    const { maya, repo, view } = await scene({ revoked: true });
+    await githubAuthFor(maya.id);
+    expect((await view(maya.id)).status).toBe(401);
+    const missing = await view(maya.id, `/c/${repo.fullName}/999`);
+    expect(missing.status).toBe(401);
+    expect(await missing.text()).toContain(`href="/auth/github/login?next=${encodeURIComponent(`/c/${repo.fullName}/999`)}"`);
+  });
+
+  it("answers 404 for a chat number that doesn't exist, to a viewer who can read the repo", async () => {
+    const { maya, repo, view } = await scene();
+    await githubAuthFor(maya.id);
+    expect((await view(maya.id, `/c/${repo.fullName}/999`)).status).toBe(404);
+  });
+
+  it("doesn't ask GitHub about an owner or repo that isn't shaped like a GitHub name", async () => {
+    const { maya, view, github } = await scene();
+    await githubAuthFor(maya.id);
+    expect((await view(maya.id, '/c/octo/re%3Fpo/1')).status).toBe(404);
+    expect((await view(maya.id, '/c/oc%20to/repo/1')).status).toBe(404);
+    expect((await view(maya.id, '/c/octo/..%2Fx/1')).status).toBe(404);
+    expect(github.calls).toEqual([]);
   });
 
   it('asks a viewer whose GitHub sign-in expired to sign in again', async () => {

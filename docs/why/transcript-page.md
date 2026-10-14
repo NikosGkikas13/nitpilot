@@ -12,6 +12,8 @@ The summary comment on GitHub links here, so anyone could click it. A chat repea
 
 "No such chat" and "you can't see it" get the **same** 404 page. Otherwise someone could try URLs and learn which private repos have chats. If your GitHub sign-in expired, the page asks you to sign in again instead.
 
+To keep those two answers identical for everyone, Nitpilot asks GitHub about the repo in the URL **before** it looks for the chat. Otherwise someone whose sign-in expired would get "sign in again" for a chat that exists and a 404 for one that doesn't, and could use that to find out which private chats exist. The cost: a made-up URL costs one GitHub call, with your own token, and the answer is kept for 5 minutes. Owner and repo names that aren't shaped like GitHub's (letters, digits, `-`, `_`, `.`) are turned away before any call, since they go into a GitHub API path.
+
 ## What it's waiting on (`chats/activity.ts`)
 
 "leo's agent is waiting: offline since 09:30" is never stored. It's **derived** each time the page is shown, from the chat's queued and running jobs and the CLIs connected right then. Storing it would mean updating it whenever a laptop goes to sleep, which no event tells us about. `deriveActivity` is a pure function (facts in, status out), so every case has a plain table test; `loadActivity` gathers the facts from the database and the CLI hub.

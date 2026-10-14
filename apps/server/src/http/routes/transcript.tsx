@@ -9,6 +9,9 @@ import type { GithubClient } from '../../platform/github/client';
 import { renderPage } from '../pages/layout';
 import { SignInAgain, TranscriptNotFound, TranscriptPage } from '../pages/transcript';
 
+/** GitHub owner and repo names: letters, digits, `-`, `_` and `.`. They go into a GitHub API path, so nothing else is let through. */
+const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !== '.' && s !== '..';
+
 /**
  * The read-only chat transcript (spec §10), linked from the summary comment. Only for people signed in
  * to Nitpilot whose GitHub account can read the repo (spec §16 "Who can see a chat").
@@ -22,13 +25,19 @@ export function transcriptRoutes(deps: { github: GithubClient; clis: LiveClis })
     const user = await currentUser(c);
     if (!user) return c.redirect(`/auth/github/login?next=${encodeURIComponent(path)}`);
 
-    const number = Number(c.req.param('number'));
-    const fullName = `${c.req.param('owner')}/${c.req.param('repo')}`;
-    const chat = Number.isSafeInteger(number) ? await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, include: { repo: true } }) : null;
-    if (!chat) return renderPage(c, <TranscriptNotFound />, 404);
-    const allowed = await access.check(user.id, chat.repo.fullName);
+    // "No such chat" and "you can't see it" must look the same to everyone, including someone whose
+    // GitHub sign-in expired (spec §10). So ask GitHub about the repo in the URL before looking for the chat.
+    const owner = c.req.param('owner');
+    const repo = c.req.param('repo');
+    if (!isGithubName(owner) || !isGithubName(repo)) return renderPage(c, <TranscriptNotFound />, 404);
+    const fullName = `${owner}/${repo}`;
+    const allowed = await access.check(user.id, fullName);
     if (allowed === 'reauth') return renderPage(c, <SignInAgain next={path} />, 401);
     if (allowed === 'none') return renderPage(c, <TranscriptNotFound />, 404);
+
+    const number = Number(c.req.param('number'));
+    const chat = Number.isSafeInteger(number) ? await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, include: { repo: true } }) : null;
+    if (!chat) return renderPage(c, <TranscriptNotFound />, 404);
 
     const [messages, points, activity] = await Promise.all([
       prisma.message.findMany({ where: { chatId: chat.id }, orderBy: { seq: 'asc' } }),
