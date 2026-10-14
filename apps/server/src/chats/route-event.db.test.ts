@@ -150,6 +150,16 @@ describe('a comment that arrives twice (Review Focus #3)', () => {
   });
 });
 
+describe('a PR that is already tracked', () => {
+  it('says "opened" once: a second pr_opened (a redelivery, or a catch-up that met it first) is ignored', async () => {
+    const { deliver } = await setup();
+    expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'processed' });
+    expect(await deliver('pull_request', prEvent('opened'))).toEqual({ status: 'ignored', note: 'opened PR that is already tracked' });
+    const messages = await prisma.message.findMany({ where: { chatId: (await chat()).id } });
+    expect(messages.filter((m) => m.body.startsWith('Pull request opened by'))).toHaveLength(1);
+  });
+});
+
 describe('a base retarget (pull_request.edited)', () => {
   const retarget = (over: Parameters<typeof pull>[0] = {}) =>
     prEvent('edited', {

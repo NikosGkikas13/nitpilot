@@ -3,6 +3,7 @@ import { makeChat, makeCliToken, resetDb } from '../../test/db';
 import { people, pull } from '../../test/fixtures/github';
 import { startCliServer, TestCli, type CliServer } from '../../test/ws';
 import { Dispatcher } from '../chats/dispatch';
+import { routePrEvent } from '../chats/route-event';
 import { syncFromEvent } from '../ingest/installations';
 import { prisma } from '../lib/prisma';
 import { FakePlatform } from '../platform/fake/fake-platform';
@@ -35,6 +36,21 @@ describe('catching up when a CLI connects (spec §15)', () => {
     const [chat] = await chats();
     expect(chat).toMatchObject({ number: 42, phase: 'reviewing' });
     expect(chat!.jobs).toEqual([expect.objectContaining({ type: 'review', userId: leo.id })]);
+  });
+
+  it('does not say "opened" twice when a webhook creates the chat while the catch-up is reading the PR', async () => {
+    const { leo, platform, catchUp } = await setup();
+    const realGetPr = platform.getPr.bind(platform);
+    // The webhook for the same PR lands in the catch-up's gap between "no chat yet" and "start one".
+    vi.spyOn(platform, 'getPr').mockImplementationOnce(async (r) => {
+      const snapshot = await realGetPr(r);
+      await routePrEvent({ scope: 'pr', pr: ref, snapshot, event: { type: 'pr_opened', author: snapshot.author, reviewers: snapshot.requestedReviewers } }, { platform, dispatch: new Dispatcher().dispatch });
+      return snapshot;
+    });
+    expect(await catchUp.forUser(leo)).toBe(0);
+    expect(await chats()).toHaveLength(1);
+    const opened = await prisma.message.findMany({ where: { body: { startsWith: 'Pull request opened by' } } });
+    expect(opened).toHaveLength(1);
   });
 
   it('searches once per person per server start', async () => {
