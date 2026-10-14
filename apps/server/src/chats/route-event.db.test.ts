@@ -184,6 +184,12 @@ describe('a base retarget (pull_request.edited)', () => {
     expect(await chat()).toMatchObject({ baseRef: 'release', trusted: true });
   });
 
+  it('ignores a retarget of a PR it never tracked', async () => {
+    const { deliver } = await setup();
+    expect(await deliver('pull_request', retarget())).toEqual({ status: 'ignored', note: 'retargeted PR that was never tracked' });
+    expect(await prisma.prChat.count()).toBe(0);
+  });
+
   it('ignores an edit that only changes the title', async () => {
     const { deliver } = await setup();
     await deliver('pull_request', prEvent('opened'));

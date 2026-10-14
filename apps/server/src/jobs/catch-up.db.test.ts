@@ -75,6 +75,28 @@ describe('catching up when a CLI connects (spec §15)', () => {
     expect(await prisma.message.count()).toBe(0);
   });
 
+  it('shares one catch-up between two hellos at once', async () => {
+    const { leo, platform, catchUp } = await setup();
+    expect(await Promise.all([catchUp.forUser(leo), catchUp.forUser(leo)])).toEqual([1, 1]);
+    expect(platform.searches).toEqual([leo.id]);
+    expect(await chats()).toHaveLength(1);
+  });
+
+  it("doesn't let one PR that can't be read stop the others", async () => {
+    const { leo, platform, catchUp } = await setup();
+    platform.addPr(snapshotFromPull({ ...ref, number: 43 }, pull({ number: 43 })));
+    platform.openPrs.set(leo.id, [
+      { repoFullName: 'octo/sandbox', number: 42 },
+      { repoFullName: 'octo/sandbox', number: 43 },
+    ]);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const realGetPr = platform.getPr.bind(platform);
+    vi.spyOn(platform, 'getPr').mockImplementation((r) => (r.number === 42 ? Promise.reject(new Error('PR 42 was deleted')) : realGetPr(r)));
+    expect(await catchUp.forUser(leo)).toBe(1);
+    expect((await chats()).map((c) => c.number)).toEqual([43]);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('#42'), expect.any(Error));
+  });
+
   it('tries again on the next hello when the search failed', async () => {
     const { leo, platform, catchUp } = await setup();
     vi.spyOn(platform, 'findOpenPrsFor').mockRejectedValueOnce(new Error('GitHub is down'));
