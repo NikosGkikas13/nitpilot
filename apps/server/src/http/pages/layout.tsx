@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { BRAND } from '@nitpilot/protocol';
 import type { Context } from 'hono';
 import type { PropsWithChildren } from 'hono/jsx';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -18,25 +19,38 @@ h1 { font-size:24px; margin:0 0 8px; letter-spacing:-0.02em; }
 button, .button { flex:1; height:44px; border-radius:12px; border:1px solid var(--b1); background:var(--surface); color:var(--fg1); font:inherit; cursor:pointer; text-decoration:none; display:inline-grid; place-items:center; }
 .primary { background:var(--acc); border-color:var(--acc); color:var(--on-acc); }
 code { font-family:ui-monospace, monospace; background:var(--code); border-radius:6px; padding:1px 6px; }
+.wide { max-width:760px; }
+.warn { color:var(--red); }
+.activity { font-weight:600; }
+.timeline, .thread { list-style:none; padding:0; display:grid; gap:12px; }
+.point { border:1px solid var(--b1); border-radius:16px; padding:16px; }
+.point h2 { font-size:18px; margin:4px 0; }
+.status { font-weight:600; margin:4px 0; }
+.text { white-space:pre-wrap; }
+pre { font-family:ui-monospace, monospace; font-size:13px; background:var(--code); border-radius:12px; padding:12px; overflow-x:auto; }
 `;
 
-export function Layout(props: PropsWithChildren<{ title: string }>) {
+export function Layout(props: PropsWithChildren<{ title: string; wide?: boolean }>) {
   return (
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{`${props.title} · Nitpilot`}</title>
+        <title>{`${props.title} · ${BRAND.name}`}</title>
         <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
       <body>
-        <main class="card">{props.children}</main>
+        <main class={props.wide ? 'card wide' : 'card'}>{props.children}</main>
       </body>
     </html>
   );
 }
 
-/** Send a server-rendered page with a doctype. */
+/**
+ * Send a server-rendered page with a doctype. No other site may show it in a frame, where a page could
+ * trick someone into clicking Approve (clickjacking).
+ */
 export function renderPage(c: Context, page: { toString(): string }, status: ContentfulStatusCode = 200): Response {
+  c.header('Content-Security-Policy', "frame-ancestors 'none'");
   return c.html(`<!doctype html>${page.toString()}`, status);
 }

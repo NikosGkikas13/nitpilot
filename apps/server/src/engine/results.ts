@@ -123,19 +123,19 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const name = p ? `${p.login}'s agent` : 'An agent';
 
   if (RUN_AGAIN_NOW.includes(e.reason)) {
-    requeue(ctx, job, ctx.now, true);
+    requeue(ctx, job, ctx.now, true, e.reason);
     return;
   }
   const wait = WAIT_MS[e.reason];
   if (wait !== undefined) {
-    requeue(ctx, job, addMs(ctx.now, wait), true);
+    requeue(ctx, job, addMs(ctx.now, wait), true, e.reason);
     system(ctx, `${name} is waiting (${e.reason.replaceAll('_', ' ')}) and will try again later`, { reason: e.reason });
     return;
   }
   // Only the attempts that were the agent's problem count toward the limit and the backoff.
   const counted = job.attempt - job.refundedAttempts;
   if (e.retryable && counted < MAX_ATTEMPTS) {
-    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (counted - 1)), false);
+    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (counted - 1)), false, e.reason);
     return;
   }
 
@@ -168,7 +168,7 @@ export function onRetryRequested(ctx: Ctx, e: Ev<'retry_requested'>): void {
   advance(ctx);
 }
 
-function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean): void {
+function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean, reason: FailureReason): void {
   job.status = 'queued';
-  emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt });
+  emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt, reason });
 }

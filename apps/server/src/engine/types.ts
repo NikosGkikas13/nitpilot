@@ -140,7 +140,8 @@ export type Command =
   | { type: 'enqueue_job'; participant: ParticipantKey; jobType: JobType; round: number; sinceSha: string | null; applyState: 'pending' | 'draft' }
   | { type: 'cancel_jobs'; jobIds: string[]; reason: string }
   | { type: 'complete_job'; jobId: string; applyState: 'applied' | 'draft'; result: JobResult }
-  | { type: 'retry_job'; jobId: string; runAfter: Date; refundAttempt: boolean }
+  /** `reason` is why its last run ended; the "waiting" status shows it (chats/activity.ts). */
+  | { type: 'retry_job'; jobId: string; runAfter: Date; refundAttempt: boolean; reason: FailureReason }
   | { type: 'fail_job'; jobId: string; reason: FailureReason }
   | { type: 'schedule'; key: string; at: Date }
   | { type: 'unschedule'; key: string }

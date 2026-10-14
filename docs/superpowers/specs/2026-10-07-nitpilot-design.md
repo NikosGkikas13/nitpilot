@@ -205,7 +205,7 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 | `escalated` | Escalated points remain and no automated work is left | Same as `ready` |
 | `closed` | PR closed or merged; all jobs are cancelled | `idle` on reopen |
 
-**Activity** is derived from jobs and never stored: `agent_working{who}` · `agent_waiting{who, offlineSince \| repo_not_linked \| cap_reached}` · `human_turn{who}` · `none`.
+**Activity** is derived from jobs and never stored: `agent_working{who}` · `agent_waiting{who, offlineSince \| repo_not_linked \| cap_reached}` · `human_turn{who}` · `none`. It is worked out each time it's shown, from the chat's queued and running jobs and the CLIs connected right then. A queued job waits when none of its person's CLIs is connected (`offlineSince`: when one was last seen), when none that is connected has the repo linked, or when a CLI turned it down at its daily cap or the agent's quota and it waits to run again (`cap_reached`; a requeued job keeps why its last run ended). A waiting agent is shown before a working one. With no agent at work, it's the author's turn while addressing, and a human reviewer's while their answered GitHub point waits for them.
 
 **Attention** is stored per participant, because "needs you" is personal: `decision` (escalation), `manual_review`, `failed`, `drafts` (Plan 2).
 
@@ -292,7 +292,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - Status: `GET /api/me`, `GET /api/me/chats` (behind `nitpilot status`)
 - Retry a failed job: `POST /api/chats/:id/retry` (behind `nitpilot retry`)
 - Revoke a CLI: `DELETE /api/cli/token`
-- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub, and the web app replaces it in Plan 2.
+- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes), and the web app replaces it in Plan 2. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'`.
 - Health check: `GET /healthz`
 - Stretch goals: `POST /api/chats/:id/review` (manual review of an untrusted PR) and `POST /api/chats/:id/messages` (a human note)
 
@@ -622,7 +622,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   4. `nitpilot repos add`.
   5. `nitpilot start`.
 - **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA.
-- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached briefly.
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes.
 
 **Design decisions** (from the Claude Design handoff, 2026-10-07; full spec in `docs/design/handoff/design_handoff_nitpilot_web/README.md`):
 - **Visual system: "Soft signal".** Sage neutrals, one deep-teal accent, Bricolage Grotesque + Fragment Mono, generous rounding.

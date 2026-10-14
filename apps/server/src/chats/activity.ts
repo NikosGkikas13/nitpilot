@@ -1,0 +1,89 @@
+import type { Phase } from '@nitpilot/protocol';
+import { prisma } from '../lib/prisma';
+
+/**
+ * What a chat is waiting on right now (spec §9.1 "Activity"). Worked out from its jobs and the CLIs
+ * that are connected, each time it's shown, and never stored: it changes when a laptop goes to sleep,
+ * which no event tells us.
+ */
+export type Activity =
+  | { kind: 'agent_working'; who: string }
+  | { kind: 'agent_waiting'; who: string; why: 'offline'; offlineSince: Date | null }
+  | { kind: 'agent_waiting'; who: string; why: 'repo_not_linked' | 'cap_reached' }
+  | { kind: 'human_turn'; who: string }
+  | { kind: 'none' };
+
+/** A queued or running job, and whose agent it's for. */
+export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: string | null };
+
+/** A person's CLIs: the repos each connected one has linked, and when any of them was last seen. */
+export type Presence = { connected: ReadonlySet<string>[]; lastSeenAt: Date | null };
+
+/** The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. */
+export type LiveClis = { connectionsFor(userId: string): readonly { repos: ReadonlySet<string> }[] };
+
+export type ActivityFacts = {
+  phase: Phase;
+  repoFullName: string;
+  /** The PR author's login. */
+  author: string | null;
+  /** A human reviewer whose answered GitHub point waits for them, if one does. */
+  reviewerToAnswer: string | null;
+  /** Queued and running jobs, oldest first. */
+  jobs: ActiveJob[];
+  presence: (userId: string) => Presence;
+  now: Date;
+};
+
+/** Jobs a CLI turned down because its owner's limits were reached: they wait (spec §9.4). */
+const LIMITS = new Set(['daily_cap', 'quota']);
+
+export function deriveActivity(f: ActivityFacts): Activity {
+  // An agent that can't start is what a person needs to hear about, so it comes first.
+  for (const job of f.jobs) {
+    const waiting = waitingFor(job, f);
+    if (waiting) return waiting;
+  }
+  const job = f.jobs.find((j) => j.status === 'running') ?? f.jobs[0];
+  if (job) return { kind: 'agent_working', who: job.login };
+  if (f.phase === 'addressing' && f.author) return { kind: 'human_turn', who: f.author };
+  if (f.phase === 'reviewing' && f.reviewerToAnswer) return { kind: 'human_turn', who: f.reviewerToAnswer };
+  return { kind: 'none' };
+}
+
+/** Why a queued job can't go to a CLI now, or null when one can take it. */
+function waitingFor(job: ActiveJob, f: ActivityFacts): Activity | null {
+  if (job.status !== 'queued') return null;
+  const presence = f.presence(job.userId);
+  if (presence.connected.length === 0) return { kind: 'agent_waiting', who: job.login, why: 'offline', offlineSince: presence.lastSeenAt };
+  if (!presence.connected.some((repos) => repos.has(f.repoFullName))) return { kind: 'agent_waiting', who: job.login, why: 'repo_not_linked' };
+  if (job.failure !== null && LIMITS.has(job.failure) && job.runAfter > f.now) return { kind: 'agent_waiting', who: job.login, why: 'cap_reached' };
+  return null;
+}
+
+/** The activity of one chat, read from the database and the connected CLIs. */
+export async function loadActivity(chatId: string, clis: LiveClis, now = new Date()): Promise<Activity> {
+  const chat = await prisma.prChat.findUniqueOrThrow({
+    where: { id: chatId },
+    include: {
+      repo: true,
+      participants: true,
+      points: { where: { status: 'addressed' }, orderBy: { number: 'asc' } },
+      jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true }, orderBy: { createdAt: 'asc' } },
+    },
+  });
+  const userIds = [...new Set(chat.jobs.map((j) => j.userId))];
+  // When each of them was last seen: the newest lastSeenAt of their CLI tokens (spec §8).
+  const seen = await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } });
+  const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
+  const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? null;
+  return deriveActivity({
+    phase: chat.phase as Phase,
+    repoFullName: chat.repo.fullName,
+    author: loginOf(chat.authorGithubId),
+    reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
+    jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: j.failure })),
+    presence: (userId) => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) }),
+    now,
+  });
+}

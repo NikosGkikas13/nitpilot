@@ -59,7 +59,7 @@ export async function startE2e() {
   hub.onMessage(async (conn, msg) => intercept?.(conn, msg));
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */

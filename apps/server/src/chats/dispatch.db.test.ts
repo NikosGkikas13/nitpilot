@@ -59,6 +59,14 @@ describe('Dispatcher', () => {
     expect(await prisma.task.findUnique({ where: { dedupeKey: `summary:${chat.id}` } })).toMatchObject({ kind: 'summary', status: 'pending' });
   });
 
+  it('keeps why a job waits to run again, for the "waiting" status (a CLI at its daily cap, say)', async () => {
+    const { chat, dispatcher } = await scene();
+    const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });
+    await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: job.id, attempt: 1, reason: 'daily_cap', retryable: true });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: 'queued', failure: 'daily_cap', refundedAttempts: 1 });
+  });
+
   it('reports cancelled running jobs to listeners, for the CLI hub', async () => {
     const { chat, dispatcher, effects } = await scene();
     const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });

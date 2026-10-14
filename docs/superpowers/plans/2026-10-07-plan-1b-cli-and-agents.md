@@ -13611,7 +13611,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 4. The page: the title, `<repo>#<n>` (a link to the PR) · the phase in words (`Waiting to start`, `Reviewing`, `Fixing`, `Ready for approval`, `Needs a human`, `Merged` or `Closed`) · `round x of <max_rounds>`; the `.nitpilot.yml` problem when `Repo.rulesError` is set; the activity line; then the timeline in `seq` order. A raised point is a card (P-number, severity, category, `file:line`, title, status in words: `Open`, `Addressed: fixed|answered|declined`, `Resolved`, `Escalated: <reason>`, the body, the snippet with line numbers, and its thread: replies, decisions, and human replies in its GitHub thread). Everything is text, escaped by JSX.
 5. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'` (carry-forward M10), and `home.tsx` and `layout.tsx` take their names from `BRAND` (carry-forward M7).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `apps/server/src/chats/activity.test.ts`:
 ```ts
@@ -13942,7 +13942,7 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/server -- src/chats/activity src/engine/failures src/chats/dispatch src/auth/repo-access src/http/routes/transcript`
 Expected: FAIL: 16 tests in 3 files, and `src/chats/activity.test.ts` and `src/auth/repo-access.db.test.ts` don't load (`Cannot find module './activity'`, `'./repo-access'`):
@@ -13950,7 +13950,7 @@ Expected: FAIL: 16 tests in 3 files, and `src/chats/activity.test.ts` and `src/a
 - dispatch (1): the requeued job's `failure` is still `null`;
 - transcript (7 of 8): there's no route yet. Its 404 test already passes, for the wrong reason, until the route exists.
 
-- [ ] **Step 3: Write the code**
+- [x] **Step 3: Write the code**
 
 In `apps/server/src/engine/types.ts`:
 Replace:
@@ -14507,12 +14507,12 @@ with:
   const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub });
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: the command from Step 2.
 Expected: PASS (5 files, 51 tests).
 
-- [ ] **Step 5: Explain the page, and bring the spec in line**
+- [x] **Step 5: Explain the page, and bring the spec in line**
 
 `docs/why/transcript-page.md`:
 ```markdown
@@ -14570,12 +14570,12 @@ with:
 - **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes.
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
 Expected: all green: protocol 41, CLI 274 passed and 14 skipped, server 436; end to end 5 passed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/server/src/chats/activity.ts apps/server/src/chats/activity.test.ts apps/server/src/auth/repo-access.ts apps/server/src/auth/repo-access.db.test.ts apps/server/src/http apps/server/src/engine/types.ts apps/server/src/engine/results.ts apps/server/src/engine/failures.test.ts apps/server/src/chats/apply-commands.ts apps/server/src/chats/dispatch.db.test.ts apps/server/src/main.ts apps/server/test/app.ts apps/server/test/e2e/harness.ts docs/why/transcript-page.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md

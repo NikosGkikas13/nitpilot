@@ -16,7 +16,7 @@ describe('job_failed', () => {
     [2, 60_000],
   ])('retries a retryable failure on attempt %i after %i ms', (attempt, delay) => {
     const out = failing(attempt, 'crash', true);
-    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(delay), refundAttempt: false }]);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(delay), refundAttempt: false, reason: 'crash' }]);
     expect(out.chat.jobs[0]!.status).toBe('queued');
     expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
   });
@@ -33,7 +33,7 @@ describe('job_failed', () => {
     const chat = agentToAgent({ phase: 'reviewing', jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { attempt: 3, refundedAttempts: 1 })] });
     const out = run(chat, { type: 'job_failed', jobId: 'job-r1', attempt: 3, reason: 'crash', retryable: true });
     // Two attempts counted: retried (not failed), and it waits as after the second one (60 s).
-    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(60_000), refundAttempt: false }]);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(60_000), refundAttempt: false, reason: 'crash' }]);
     expect(commandsOf(out, 'fail_job')).toEqual([]);
   });
 
@@ -48,12 +48,12 @@ describe('job_failed', () => {
     ['repo_not_linked', 10 * 60_000],
   ] as const)('waits after %s without counting an attempt', (reason, delay) => {
     const out = failing(3, reason, true);
-    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(delay), refundAttempt: true }]);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(delay), refundAttempt: true, reason }]);
   });
 
   it.each(['stale_head', 'branch_moved'] as const)('runs again right away after %s', (reason) => {
     const out = failing(2, reason, false);
-    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: T0, refundAttempt: true }]);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: T0, refundAttempt: true, reason }]);
   });
 
   it('ignores a failure from a job that is no longer running', () => {

@@ -13,6 +13,8 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     appAuth: new AppAuth(github, '12345', 'tests-that-need-a-key-pass-their-own'),
     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
     dispatch: new Dispatcher().dispatch,
+    // No CLI is connected.
+    clis: { connectionsFor: () => [] },
     ...over,
   };
 }
