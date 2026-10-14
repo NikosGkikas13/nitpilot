@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: M6–M12 at step level (Task 20 on hold); M13 at task level.** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). M7 (Tasks 5–8) was written the same way on 2026-10-10, against the branch after M6 (`f2dc50f`), M8 (Tasks 9–11) the same day, against the branch after M7 (`d2fcb5d`), M9 (Tasks 12–15) on 2026-10-12, against the branch after M8 (`e594e44`), M10 (Tasks 16–18) on 2026-10-13, against the branch after M9 (`0056c1a`), M11 (Tasks 19 and 21) on 2026-10-14, against the branch after M10 (`f3e292e`), and M12 (Tasks 22–23) on 2026-10-15, against the branch after Task 21 (`b52fe14`); Task 20 (Gemini CLI) is on hold. "Checked against Plan 1a's code (M6)" and "Checked against the code" (M7, M8, M9, M10, M11, M12) below list where each differs from the earlier task-level text. M13 still fixes only the tasks, files, interfaces and tests; its step-level code is written against the code that exists by then. Nobody executes a task that is still at task level.
+> **Status: M6–M13 at step level (Task 20 on hold).** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). M7 (Tasks 5–8) was written the same way on 2026-10-10, against the branch after M6 (`f2dc50f`), M8 (Tasks 9–11) the same day, against the branch after M7 (`d2fcb5d`), M9 (Tasks 12–15) on 2026-10-12, against the branch after M8 (`e594e44`), M10 (Tasks 16–18) on 2026-10-13, against the branch after M9 (`0056c1a`), M11 (Tasks 19 and 21) on 2026-10-14, against the branch after M10 (`f3e292e`), M12 (Tasks 22–23) on 2026-10-15, against the branch after Task 21 (`b52fe14`), and M13 (Task 24) on 2026-10-14, against the branch after Task 23's fix rounds (`004aef7`); Task 20 (Gemini CLI) is on hold. "Checked against Plan 1a's code (M6)" and "Checked against the code" (M7, M8, M9, M10, M11, M12, M13) below list where each differs from the earlier task-level text. Task 24 is half offline (Steps 1–13, Docker only) and half live (Steps 14–24, with a person at the keyboard and Claude Code as the author's agent): its live steps follow `docs/acceptance/plan-1.md`, which Step 11 creates.
 
 **Goal:** Connect each developer's own agent to the Plan 1a server: a CLI daemon that receives jobs over a WebSocket, runs Claude Code or Gemini CLI safely in an isolated git worktree with a local MCP server, pushes fixes, and reports results. Then prove it end to end and with the live acceptance test from spec §20.
 
@@ -196,6 +196,26 @@ M12 was written at step level on 2026-10-15, against branch `plan-1b-cli-and-age
 - **The activity has a `why`:** `agent_waiting { who, why: 'offline', offlineSince } | { who, why: 'repo_not_linked' | 'cap_reached' }`, one activity per chat as in spec §9.1. When one agent works and another waits, the waiting one is shown. "Offline since" is the newest `lastSeenAt` of any of that person's CLI tokens.
 - **Access checks live in `auth/repo-access.ts`**, with their own tests (the 5-minute memory, 404/403, 401 meaning "sign in again"). "No such chat" and "can't see it" answer the same 404, and the chat is looked up before GitHub is asked, so a random URL costs no GitHub call.
 - **`frame-ancestors` is sent by `renderPage`**, so every server page has it (`/cli/approve`, the transcript, the home page), not only the two the carry-forward named. `AppDeps` gains `clis` (the hub in `main.ts`; tests and the end-to-end harness pass theirs).
+
+## Checked against the code (M13)
+
+M13 was written at step level on 2026-10-14, against branch `plan-1b-cli-and-agents` at `004aef7`. Its code was run in a scratch copy first (CLI 274 → 283 passed plus 14 skipped, server 456 → 517, protocol 41 and end to end 5 unchanged, tsc and eslint clean). Then Steps 1 to 12 were replayed from the code blocks below into a clean copy, which a script generated from the tested files and checked: the RED and GREEN below matched, and the final tree was identical to the prototype's, byte for byte. Steps 17 and 22 were replayed against stand-in fixtures (real ones made to look like the live deliveries) to check their expectation rows: the test file came out identical to the prototype's and passed. Each guard was also checked by breaking it (the scrubber's seven noise rules and its input handling, each of the seven secret shapes, the exact-secret check, the file-name check, every normalizer the recorded rows depend on, the fetched review comments, the scenario variable, the empty variable, the missing-file check in `detect()`, each scenario line, and each planted bug): each break fails a test. **Nothing was done on GitHub and no agent was run while writing it.** The only things read were the dev database (counts, event types and the 15 stored deliveries, through the new recorder's `list`), the local SSH and git setup (names only), and `gh auth status`. Where it differs from the task-level text, and why:
+
+- **Task 24 is two halves.** Steps 1 to 13 need only Docker and are committed on their own (tooling, tests and docs); Steps 14 to 24 are the live run, which needs a person for the clicks and the sign-ins, writes to the sandbox repo, and starts Claude Code. The plan's own table says which steps do what. The final whole-branch review should treat the first commit as code and the second as results.
+- **CLI B is the fake agent, not Gemini CLI** (the user's decision, 2026-10-14). Gemini is blocked by Google's refusal of personal sign-ins (§22, M11), and a second Claude Code on the same login would have used the Pro plan twice for the same evidence. What it costs: the run proves B's plumbing (a review request becomes a job within seconds; the CLI fetches the PR, its tools work, its points reach the chat and GitHub), not a reviewer's judgment, and the Claude path is exercised only for the author's editor mode. Spec §17, §20 and §22 now say so (Step 12).
+- **`NITPILOT_FAKE_SCENARIO`** (`agents/registry.ts`, `fake/adapter.ts`) is new: `getAdapter('fake')` always followed `happy.json`, whose paths belong to a different PR. A missing scenario file is reported by `detect()`, so `nitpilot start` stops with a message. The sandbox's scenarios live in `docs/acceptance/scenarios/` with the seed they describe, and `fake/acceptance.test.ts` keeps their line numbers honest.
+- **A runs the built bundle** (`apps/cli/dist/index.js`) and **B runs from source** (the fake agent only exists in a source checkout). It is the first time the bundle meets a real agent (the e2e test and the live conformance suite run the source).
+- **Files differ from the task-level list.** `recorded.test.ts` is `test/fixtures/recorded/recorded.test.ts` beside `scrub.ts`, and the unit project of `vitest.config.ts` now includes `test/fixtures/**/*.test.ts` (it only looked in `src/`). Also new: `scripts/record-fixtures.ts` (`npm run record:fixtures`), the seed, the scenarios, four helper files and two `docs/why` explainers.
+- **The dev database already holds real deliveries**, so the first 11 fixtures need no GitHub click: 15 were stored on 2026-10-09 and 2026-10-10 by the earlier sandbox work (PR 1's reviews and replies, PR 2's life, the app's installation). **They are purged after 14 days, so Step 7 must run before 2026-10-23.** `installation.created` is not recorded: it names every repository on the account, private ones included. A test lets only the sandbox and this project's own repository appear in a fixture.
+- **The real payloads showed a few things the hand-made ones don't:** for a new PR with a reviewer, `review_requested` arrives *before* `opened` (06:20:58.1 and .7); the app's own summary comment arrives as `issue_comment.created` with association `NONE`, so the normalizer says `trusted: false` and only the router's marker check drops it; installation payloads leave out `default_branch` (the normalizer already allowed for it); a PR object in a review event has no `merged`. All normalize correctly; the rows record them.
+- **Two of the three sandbox questions already have a hint** in the stored deliveries (not proof, so they are still probed live): a reply made on GitHub's page arrived next to a `pull_request_review.submitted`, and a review by the requested reviewer brought no `review_request_removed`. Question 2 is a **stop condition**: if a removal does follow a submitted review, `onReviewRequestRemoved` would withdraw the agent's points right after it posts them. Question 4 (does a base retarget arrive as `edited` with `changes.base`) is added: Task 22 built `pr_retargeted` on a payload shape it never saw live.
+- **A fresh database, `nitpilot_acceptance`**, not the dev one. The dev database has a queued address job for PR 1 that the first CLI A to connect would hand to Claude Code, and the single-player runs need an account that has never joined Nitpilot. It borrows the dev database's `Installation` and `Repo` rows (GitHub only sends those once). Between the two single-player runs, A is removed with `delete from "User"`, which is what a person who never joined looks like to the engine (`onNitpilot` is `userId !== null`).
+- **Single-player runs are one per side.** The spec has one phrase; the author's side needs B off Nitpilot and the reviewer's side needs A off it, so they cannot both happen with both accounts joined. §20 now says "one per side".
+- **The 5-second criterion is measured from outside.** A job's start is stored nowhere, so each CLI's output is stamped by `stamp.pl` and compared with the arrival time `check.sql` prints for the webhook (UTC, to the millisecond). It is measured from the webhook's arrival, not from GitHub's click, which only GitHub knows.
+- **"Only B is notified" is read from the CLI terminals.** The server only logs a `[notify]` line for someone with no CLI online, so with both online the proof is one `🔔` line in B's terminal and none in A's.
+- **The machine has no `~/.ssh/config` and one key.** Section 1 of the runbook adds `github-a` (a new key for A) and `github-b` (the existing key); `parseGithubRemote` already accepts those host aliases (M8).
+- **Gaps left, on purpose.** There is no acceptance-check script: the criteria are `check.sql` plus six one-line `gh api … | jq` commands in the runbook, which cannot be verified without reading GitHub and are checked live in Step 20 (a wrong filter there is a runbook fix, not a code change). The final fixture set is 35 files if every optional delivery arrives (`recorded.test.ts` lists what each file must turn into); the live half adds 3 server tests per fixture.
+- **Task 20 and the stale blocks.** Task 20 is untouched. Tasks 22 and 23's plan blocks stay as written (stale against their fix rounds, per the ledger).
 
 ## How to work in this repo
 
@@ -14588,19 +14608,2101 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Milestone M13: Acceptance and docs
 
+M13 shows that Plan 1 works for real, and leaves behind the docs a reader needs. Task 24 does it in two halves. The first (Steps 1 to 13) needs Docker and nothing else: tooling that turns real webhooks into test fixtures, a switch that lets account B's fake agent follow the sandbox's own script, the seed PR with its three planted problems, the acceptance runbook and its helper files, and the architecture and adapter docs. It is committed on its own. The second (Steps 14 to 24) is the live run: a person follows the runbook against real GitHub, with Claude Code as the author's agent, the deliveries it produces are recorded as fixtures, and the spec's open questions get their answers.
+
+**Files at the end of M13:**
+```
+apps/server/
+  scripts/record-fixtures.ts                      list stored deliveries, write one as a fixture
+  test/fixtures/recorded/
+    scrub.ts, scrub.test.ts                       noise removal, secret check, file naming
+    recorded.test.ts                              replays every fixture, checks the events it gives
+    <event>.<action>[.<variant>].json             real deliveries, scrubbed
+apps/cli/src/agents/
+  registry.ts, fake/adapter.ts                    NITPILOT_FAKE_SCENARIO
+  fake/acceptance.test.ts                         the scenarios and the seed stay in step
+docs/
+  acceptance/plan-1.md                            the runbook (spec §20 as a checklist)
+  acceptance/{env.sh,new-branch.sh,stamp.pl,check.sql}
+  acceptance/seed/orders-demo/                    the PR's code, with three planted bugs and one SQL injection
+  acceptance/scenarios/sandbox-{happy,security}.json   what B's fake agent says
+  architecture.md, adapters.md
+  why/recorded-fixtures.md, why/live-acceptance.md
+```
+
 ### Task 24: Live acceptance runbook, recorded fixtures and docs
 
 **Files:**
-- Create:
-  - `docs/acceptance/plan-1.md`: the spec §20 setup, pass criteria and every variant as a checklist, including the single-player runs;
-  - `apps/server/test/fixtures/recorded/*.json` (real deliveries from the sandbox, with secrets removed) and `apps/server/test/fixtures/recorded.test.ts`, which normalizes each one;
-  - `docs/architecture.md` (Odyhook's Chosen / Alternatives / Why style);
-  - `docs/adapters.md` (how to write an agent or platform adapter, and how to run the conformance suite).
-- Modify: `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §22 with what the sandbox showed.
+- Create, tooling and tests (Steps 1 to 9): `apps/server/test/fixtures/recorded/scrub.ts` and `scrub.test.ts`, `apps/server/scripts/record-fixtures.ts`, `apps/server/test/fixtures/recorded/recorded.test.ts` with 11 recorded `*.json` fixtures, `apps/cli/src/agents/fake/acceptance.test.ts`, `docs/acceptance/seed/orders-demo/**` (5 files), `docs/acceptance/scenarios/sandbox-happy.json` and `sandbox-security.json`.
+- Create, helpers and docs (Steps 10 and 11): `docs/acceptance/{env.sh,new-branch.sh,stamp.pl,check.sql,plan-1.md}`, `docs/architecture.md`, `docs/adapters.md`, `docs/why/recorded-fixtures.md`, `docs/why/live-acceptance.md`.
+- Modify: `apps/server/vitest.config.ts` and `package.json`; `apps/cli/src/agents/registry.ts`, `fake/adapter.ts` and `fake/adapter.test.ts`; the spec (§17, §20, §21, §22 in Step 12; §15 and §22 again in Step 23); `recorded.test.ts` and the new fixtures again in Steps 17 and 22; the runbook's results (Step 23).
+- Not touched: Task 20 (Gemini CLI, on hold), Tasks 22 and 23's code.
 
-**Verify in the sandbox and record the answers:**
-- Does re-requesting a review fire `review_requested` again?
-- Does a reviewer submitting a review fire `review_request_removed`? This matters for Plan 1a's `requested` flag.
-- Do replies created in the GitHub UI also arrive as `pull_request_review.submitted`?
+**Interfaces:**
+- Consumes: `parseGithubWebhook(event, raw, fetchReviewComments)` and `FetchReviewComments` (`platform/github/normalize`); the `RawEvent` table through `prisma` (`lib/prisma`); `BRAND` (`@nitpilot/protocol`); `getAdapter`, `adapterFor`, `fakeAdapter({ scenario })`, `FAKE_SCENARIOS` (`apps/cli/src/agents`); the CLI commands `login`, `repos add`, `start`, `doctor`.
+- Produces:
+  - `scrubPayload(value) → unknown`, `findSecrets(text, exact?) → string[]`, `buildFixture(row, note, exact?) → RecordedFixture`, `fixtureFileName(name) → string`, `deliveryFacts(payload) → { pr, sender, detail }` (`test/fixtures/recorded/scrub.ts`);
+  - `npm run record:fixtures -w apps/server -- list [--since <time>] [--event <name>]` and `-- write <deliveryId> <name> [--note <text>] [--force]`;
+  - `FAKE_SCENARIO_ENV` (`NITPILOT_FAKE_SCENARIO`) and `getAdapter(id, { scenario })` (`agents/registry.ts`);
+  - shell helpers `nit-a`, `nit-b`, `nit-edit`, `dbq` (`docs/acceptance/env.sh`).
 
-**Done when:** the runbook passes end to end with CLI A on Claude Code and CLI B on Gemini CLI, and every variant is ticked.
+**Which steps are live.**
+
+| Steps | What | Needs | Writes to GitHub | Uses Claude |
+|---|---|---|---|---|
+| 1 to 13 | tooling, tests, docs, commit | Docker | no | no |
+| 14, 15 | readiness; SSH aliases, clones, database, tunnel, server | the person at the keyboard; their browser for A's SSH key | an SSH key is added to account A | no |
+| 16 | the probe PR: three questions, every kind of delivery | the person clicking in two browser windows | yes: one PR, comments, reviews | no |
+| 17 | record the probe's deliveries | Docker | no | no |
+| 18 | single-player author | the person; B reviews in the browser | yes: a PR, a review; A's agent pushes and replies | **yes (1 run)** |
+| 19 | single-player reviewer | the person | yes: a PR; B's agent posts a review | no |
+| 20 | agent to agent, the pass criteria | the person | yes: a PR, a summary comment, a push | **yes (1 run)** |
+| 21 | four variants | the person | yes: four PRs | **yes (about 4 runs)** |
+| 22 | record Nitpilot's own deliveries | Docker | no | no |
+| 23, 24 | results, spec answers, full suite, commit | Docker | no | no |
+
+Say what is about to be written to GitHub before each live step, and ask before every Claude run (it uses a little of the Pro plan). The controller starts the tunnel, the server and both CLIs in Terminal-panel tabs and stops them afterwards; the person does the clicking and the browser sign-ins.
+
+**What a recorded fixture is.** GitHub sends a webhook for everything that happens on a PR, and the server stores each one (`RawEvent`) for 14 days. `record-fixtures` turns a stored delivery into a file (`apps/server/test/fixtures/recorded/<name>.json`), after removing GitHub's link and id noise and refusing anything that looks like a secret. `recorded.test.ts` then replays each file through `parseGithubWebhook` and compares what comes out with expectations written by hand. The difference from the other tests: their payloads are our idea of what GitHub sends; these are what it did send. See `docs/why/recorded-fixtures.md` (Step 11).
+
+**What the acceptance runbook is.** A checklist for a person to follow, with the exact commands and clicks, what to expect after each, and boxes to tick: the manual twin of the end-to-end test, run against real GitHub, real accounts and a real agent. See `docs/why/live-acceptance.md` (Step 11) and `docs/acceptance/plan-1.md`, which Step 11 creates and Steps 14 to 23 follow.
+
+- [ ] **Step 1: Write the failing tests for the scrubber**
+
+The unit project only looks in `src/`. Let it find the new test too:
+
+In `apps/server/vitest.config.ts`, replace:
+```ts
+include: ['src/**/*.test.{ts,tsx}'], exclude
+```
+with:
+```ts
+include: ['src/**/*.test.{ts,tsx}', 'test/fixtures/**/*.test.ts'], exclude
+```
+
+Create `apps/server/test/fixtures/recorded/scrub.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { buildFixture, deliveryFacts, findSecrets, fixtureFileName, scrubPayload } from './scrub';
+
+describe('scrubPayload', () => {
+  // A fresh object each time, so a scrub that changed its input can't hide behind an earlier test.
+  const makePayload = () => ({
+    action: 'opened',
+    number: 2,
+    pull_request: {
+      id: 99,
+      node_id: 'PR_kwDOabc',
+      url: 'https://api.github.com/repos/o/r/pulls/2',
+      html_url: 'https://github.com/o/r/pull/2',
+      diff_url: 'https://github.com/o/r/pull/2.diff',
+      title: 'Cursor pagination',
+      user: { login: 'maya', id: 1001, type: 'User', node_id: 'U_1', gravatar_id: '', avatar_url: 'https://avatars.githubusercontent.com/u/1001?v=4' },
+      requested_reviewers: [{ login: 'leo', id: 1002, repos_url: 'https://api.github.com/users/leo/repos' }],
+      _links: { self: { href: 'https://api.github.com/repos/o/r/pulls/2' } },
+    },
+  });
+
+  it('drops node ids, gravatar ids, _links and every link except html_url, at any depth', () => {
+    expect(scrubPayload(makePayload())).toEqual({
+      action: 'opened',
+      number: 2,
+      pull_request: {
+        id: 99,
+        html_url: 'https://github.com/o/r/pull/2',
+        title: 'Cursor pagination',
+        user: { login: 'maya', id: 1001, type: 'User' },
+        requested_reviewers: [{ login: 'leo', id: 1002 }],
+      },
+    });
+  });
+
+  it('keeps what Nitpilot reads: ids, logins, shas, branch names and text', () => {
+    const kept = { head: { sha: 'a'.repeat(40), ref: 'acc/happy' }, body: 'Replaces offset pagination. See https://example.com/doc', merged: false, line: null };
+    expect(scrubPayload(kept)).toEqual(kept);
+  });
+
+  it('does not change what it was given', () => {
+    const payload = makePayload();
+    scrubPayload(payload);
+    expect(payload).toEqual(makePayload());
+  });
+
+  it('is idempotent: scrubbing a scrubbed payload changes nothing', () => {
+    const once = scrubPayload(makePayload());
+    expect(scrubPayload(once)).toEqual(once);
+  });
+});
+
+describe('findSecrets', () => {
+  const samples: [string, string][] = [
+    ['a GitHub token', `token ghs_${'a1B2'.repeat(9)}`],
+    ['a fine-grained GitHub token', `github_pat_${'A1b2C3d4E5'.repeat(4)}`],
+    ['a Nitpilot token', `nit_${'x9Y8z7'.repeat(5)}`],
+    ['a private key', '-----BEGIN RSA PRIVATE KEY-----\nMIIE'],
+    ['a signed JWT', `eyJ${'a'.repeat(20)}.${'b'.repeat(20)}.${'c'.repeat(20)}`],
+    ['a bearer token', `Authorization: Bearer ${'k3y'.repeat(8)}`],
+    ['a webhook signature', `sha256=${'0f'.repeat(32)}`],
+  ];
+
+  it.each(samples)('finds %s', (name, text) => {
+    expect(findSecrets(text)).toContain(name);
+  });
+
+  it('finds an exact secret you hand it, such as the webhook secret', () => {
+    expect(findSecrets('the secret is hunter2-hunter2', ['hunter2-hunter2'])).toEqual(['a secret you asked about']);
+  });
+
+  it('ignores an empty extra secret, which would match everything', () => {
+    expect(findSecrets('ordinary text', [''])).toEqual([]);
+  });
+
+  it('finds nothing in an ordinary payload', () => {
+    expect(findSecrets(JSON.stringify({ title: 'Add nit_pick helper', sha: 'a'.repeat(40), body: 'bearer of bad news' }))).toEqual([]);
+  });
+});
+
+describe('buildFixture', () => {
+  const row = { event: 'pull_request', action: 'opened', createdAt: new Date('2026-10-10T06:20:58.000Z'), body: JSON.stringify({ action: 'opened', pull_request: { node_id: 'x', title: 't' } }) };
+
+  it('keeps the event, the action and the note, and scrubs the payload', () => {
+    expect(buildFixture(row, 'PR opened with a reviewer')).toEqual({
+      event: 'pull_request',
+      action: 'opened',
+      note: 'PR opened with a reviewer',
+      recordedAt: '2026-10-10',
+      payload: { action: 'opened', pull_request: { title: 't' } },
+    });
+  });
+
+  it('refuses a payload that holds a secret, and does not repeat the secret in the error', () => {
+    const leaky = { ...row, body: JSON.stringify({ body: `my token is ghs_${'a1B2'.repeat(9)}` }) };
+    expect(() => buildFixture(leaky, '')).toThrow(/a GitHub token/);
+    expect(() => buildFixture(leaky, '')).not.toThrow(/a1B2a1B2/);
+  });
+});
+
+describe('fixtureFileName', () => {
+  it('accepts dotted lowercase names', () => {
+    expect(fixtureFileName('pull_request.review_requested.again')).toBe('pull_request.review_requested.again.json');
+  });
+
+  it.each(['../escape', 'a/b', 'Upper', '', '.hidden', 'x y'])('rejects %j', (name) => {
+    expect(() => fixtureFileName(name)).toThrow(/name/);
+  });
+});
+
+describe('deliveryFacts', () => {
+  it('reads the PR number and the sender for the listing', () => {
+    expect(deliveryFacts({ pull_request: { number: 2 }, sender: { login: 'maya' } })).toMatchObject({ pr: 2, sender: 'maya' });
+    expect(deliveryFacts({ issue: { number: 7 }, sender: { login: 'leo' } })).toMatchObject({ pr: 7, sender: 'leo' });
+    expect(deliveryFacts({ installation: { id: 1 } })).toEqual({ pr: null, sender: null, detail: '' });
+  });
+
+  it('adds a few words that tell two deliveries of the same kind apart', () => {
+    const detail = (payload: object) => deliveryFacts(payload).detail;
+    expect(detail({ requested_reviewer: { login: 'leo' } })).toBe('reviewer leo');
+    expect(detail({ changes: { base: { ref: { from: 'main' } } } })).toBe('changed: base');
+    expect(detail({ changes: { title: { from: 'old' }, body: { from: 'x' } } })).toBe('changed: title, body');
+    expect(detail({ comment: { body: 'probe: first comment' } })).toBe('comment "probe: first comment"');
+    expect(detail({ comment: { body: 'probe: a reply', in_reply_to_id: 5 } })).toBe('reply "probe: a reply"');
+    expect(detail({ comment: { body: 'x'.repeat(60) } })).toBe(`comment "${'x'.repeat(30)}…"`);
+    expect(detail({ review: { state: 'commented' } })).toBe('review commented');
+    expect(detail({ action: 'synchronize', after: 'abcdef1234567890' })).toBe('head abcdef1');
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/server -- test/fixtures`
+Expected: FAIL: ``test/fixtures/recorded/scrub.test.ts` doesn't load (`Cannot find module './scrub'`)`
+
+- [ ] **Step 3: Write the scrubber**
+
+Create `apps/server/test/fixtures/recorded/scrub.ts`:
+```ts
+import { BRAND } from '@nitpilot/protocol';
+
+// Turning a real GitHub delivery (a RawEvent row) into a fixture file that is safe to commit.
+// Used by scripts/record-fixtures.ts and checked again by recorded.test.ts.
+
+/** What a recorded file holds. `payload` is the delivery's body as GitHub sent it, minus the noise `scrubPayload` removes. */
+export type RecordedFixture = { event: string; action: string | null; note: string; recordedAt: string; payload: unknown };
+
+/** The parts of a stored delivery that a fixture needs. */
+export type DeliveryRow = { event: string; action: string | null; body: string; createdAt: Date };
+
+// GitHub fills its payloads with links and ids that Nitpilot never reads. Dropping them keeps each file a few
+// kilobytes instead of tens, and keeps the diff readable. `html_url` stays: the PR's own address is read.
+const DROP_KEYS = new Set(['node_id', 'gravatar_id', '_links', 'url']);
+const KEEP_LINKS = new Set(['html_url']);
+
+function isNoise(key: string): boolean {
+  return DROP_KEYS.has(key) || (key.endsWith('_url') && !KEEP_LINKS.has(key));
+}
+
+/** A copy of a payload without links and node ids, at any depth. Everything else is kept exactly as GitHub sent it. */
+export function scrubPayload(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(scrubPayload);
+  if (value === null || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value)) {
+    if (!isNoise(key)) out[key] = scrubPayload(inner);
+  }
+  return out;
+}
+
+// Webhook bodies don't carry credentials (the signature is a header, which RawEvent doesn't store), but a PR
+// description or comment is whatever a person typed. This is the last check before a file is written or committed.
+const SECRET_SHAPES: [string, RegExp][] = [
+  ['a GitHub token', /\bgh[pousr]_[A-Za-z0-9]{20,}/],
+  ['a fine-grained GitHub token', /\bgithub_pat_[A-Za-z0-9_]{20,}/],
+  ['a Nitpilot token', new RegExp(`\\b${BRAND.tokenPrefix}[A-Za-z0-9_-]{16,}`)],
+  ['a private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+  ['a signed JWT', /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+  ['a bearer token', /\bBearer\s+[A-Za-z0-9._-]{20,}/],
+  ['a webhook signature', /\bsha256=[0-9a-f]{64}/],
+];
+
+/**
+ * Which kinds of secret `text` seems to hold, by name (never the secret itself). `exact` adds strings that
+ * must not appear at all, such as this server's own webhook secret.
+ */
+export function findSecrets(text: string, exact: string[] = []): string[] {
+  const found = SECRET_SHAPES.filter(([, shape]) => shape.test(text)).map(([name]) => name);
+  if (exact.some((secret) => secret !== '' && text.includes(secret))) found.push('a secret you asked about');
+  return found;
+}
+
+/** One stored delivery as a fixture. Throws, naming the kind of secret, if the payload seems to hold one. */
+export function buildFixture(row: DeliveryRow, note: string, exact: string[] = []): RecordedFixture {
+  const payload = scrubPayload(JSON.parse(row.body));
+  const secrets = findSecrets(JSON.stringify(payload), exact);
+  if (secrets.length > 0) throw new Error(`This delivery seems to contain ${secrets.join(' and ')}. Nothing was written.`);
+  return { event: row.event, action: row.action, note, recordedAt: row.createdAt.toISOString().slice(0, 10), payload };
+}
+
+/** `<name>.json`, for a name like `pull_request.review_requested`. Only lowercase letters, digits, dots, dashes and underscores. */
+export function fixtureFileName(name: string): string {
+  if (!/^[a-z0-9_][a-z0-9_.-]*$/.test(name)) throw new Error(`Fixture name ${JSON.stringify(name)} must be lowercase letters, digits, dots, dashes or underscores, like pull_request.opened.`);
+  return `${name}.json`;
+}
+
+/** What `record-fixtures list` shows next to each delivery: which PR it was about, who caused it, and a few words that tell it from its twins. */
+export function deliveryFacts(payload: unknown): { pr: number | null; sender: string | null; detail: string } {
+  const p = payload as {
+    pull_request?: { number?: number };
+    issue?: { number?: number };
+    sender?: { login?: string };
+    requested_reviewer?: { login?: string };
+    changes?: Record<string, unknown>;
+    comment?: { body?: string; in_reply_to_id?: number };
+    review?: { state?: string };
+    after?: string;
+  };
+  return { pr: p.pull_request?.number ?? p.issue?.number ?? null, sender: p.sender?.login ?? null, detail: detailOf(p) };
+}
+
+function detailOf(p: { requested_reviewer?: { login?: string }; changes?: Record<string, unknown>; comment?: { body?: string; in_reply_to_id?: number }; review?: { state?: string }; after?: string }): string {
+  if (p.requested_reviewer?.login) return `reviewer ${p.requested_reviewer.login}`;
+  if (p.changes) return `changed: ${Object.keys(p.changes).join(', ')}`;
+  if (p.comment?.body !== undefined) {
+    const text = p.comment.body.length > 30 ? `${p.comment.body.slice(0, 30)}…` : p.comment.body;
+    return `${p.comment.in_reply_to_id ? 'reply' : 'comment'} "${text}"`;
+  }
+  if (p.review?.state) return `review ${p.review.state}`;
+  if (p.after) return `head ${p.after.slice(0, 7)}`;
+  return '';
+}
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm test -w apps/server -- test/fixtures`
+Expected: PASS (1 file, 25 tests).
+
+- [ ] **Step 5: Write the recorder, and look at what the database holds**
+
+Create `apps/server/scripts/record-fixtures.ts`:
+```ts
+import 'dotenv/config';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { prisma } from '../src/lib/prisma';
+import { buildFixture, deliveryFacts, fixtureFileName } from '../test/fixtures/recorded/scrub';
+
+// Turn real webhook deliveries from the database into fixture files (spec §19, docs/why/recorded-fixtures.md).
+// Every delivery GitHub sends is stored as a RawEvent for 14 days, so a live run records itself: look at what
+// arrived, then keep the ones worth replaying in tests.
+//   npm run record:fixtures -w apps/server -- list [--since 2026-10-10T06:00:00Z] [--event pull_request]
+//   npm run record:fixtures -w apps/server -- write <deliveryId> <name> [--note "what you did"] [--force]
+// It reads the database named by DATABASE_URL (apps/server/.env, or the environment, which wins).
+
+const DIR = fileURLToPath(new URL('../test/fixtures/recorded/', import.meta.url));
+const USAGE = 'Usage: record-fixtures list [--since <ISO time>] [--event <name>]\n       record-fixtures write <deliveryId> <name> [--note <text>] [--force]';
+
+async function list(opts: { since?: string; event?: string }): Promise<void> {
+  const since = opts.since ? new Date(opts.since) : undefined;
+  if (since && Number.isNaN(since.getTime())) throw new Error(`--since ${opts.since} is not a time. Try 2026-10-10T06:00:00Z.`);
+  const rows = await prisma.rawEvent.findMany({
+    where: { ...(since ? { createdAt: { gte: since } } : {}), ...(opts.event ? { event: opts.event } : {}) },
+    orderBy: { createdAt: 'asc' },
+  });
+  for (const row of rows) {
+    const { pr, sender, detail } = deliveryFacts(JSON.parse(row.body));
+    const when = row.createdAt.toISOString().replace('T', ' ').slice(0, 19);
+    const what = `${row.event}${row.action ? `.${row.action}` : ''}`;
+    console.log([row.deliveryId, `${when}Z`, what.padEnd(38), (pr === null ? '-' : `#${pr}`).padEnd(4), (sender ?? '-').padEnd(18), row.status.padEnd(9), detail].join('  ').trimEnd());
+  }
+  console.log(`${rows.length} deliveries (times are UTC).`);
+}
+
+async function write(deliveryId: string, name: string, opts: { note?: string; force?: boolean }): Promise<void> {
+  const file = `${DIR}${fixtureFileName(name)}`;
+  if (existsSync(file) && !opts.force) throw new Error(`${name} already exists. Pick another name, or pass --force to replace it.`);
+  const row = await prisma.rawEvent.findUnique({ where: { deliveryId } });
+  if (!row) throw new Error(`No delivery ${deliveryId}. Run "list" to see what is stored (deliveries are kept 14 days).`);
+  const fixture = buildFixture(row, opts.note ?? '', [process.env.GITHUB_WEBHOOK_SECRET ?? '']);
+  mkdirSync(DIR, { recursive: true });
+  writeFileSync(file, `${JSON.stringify(fixture, null, 2)}\n`);
+  console.log(`Wrote ${file} (${row.event}.${row.action ?? '-'}, ${(JSON.stringify(fixture).length / 1024).toFixed(1)} KB)`);
+}
+
+async function main(): Promise<void> {
+  const { positionals, values } = parseArgs({
+    allowPositionals: true,
+    options: { since: { type: 'string' }, event: { type: 'string' }, note: { type: 'string' }, force: { type: 'boolean' } },
+  });
+  const [command, deliveryId, name] = positionals;
+  if (command === 'list') await list(values);
+  else if (command === 'write' && deliveryId && name) await write(deliveryId, name, values);
+  else throw new Error(USAGE);
+}
+
+main()
+  .catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exitCode = 1;
+  })
+  .finally(() => void prisma.$disconnect());
+```
+
+In `apps/server/package.json`, replace:
+```json
+    "dev:fake-cli": "tsx scripts/fake-cli.ts"
+```
+with:
+```json
+    "dev:fake-cli": "tsx scripts/fake-cli.ts",
+    "record:fixtures": "tsx scripts/record-fixtures.ts"
+```
+
+Docker must be running. This reads your dev database (`apps/server/.env`) and changes nothing:
+
+Run: `npm run record:fixtures -w apps/server -- list`
+Expected: one line per stored delivery (id, time in UTC, `event.action`, PR number, who caused it, status, a few words), ending `N deliveries (times are UTC).` The ones from 2026-10-09 and 2026-10-10 are the 15 that Step 7 picks from; for example `pull_request.review_requested  #2  ngkdev93-jpg  processed  reviewer NikosGkikas13`.
+
+Run: `npm run record:fixtures -w apps/server -- list --since nope`
+Expected: `--since nope is not a time. Try 2026-10-10T06:00:00Z.` and a non-zero exit code.
+
+**Deliveries are kept 14 days**, so the ones from 2026-10-09 and 2026-10-10 are gone after 2026-10-23. If the dates above are no longer listed, see the note in Step 7.
+
+- [ ] **Step 6: Write the test that replays the fixtures (before there are any)**
+
+Its expectations are written by hand, for the fixtures Step 7 records; the point of the test is that a recording is only the input.
+
+Create `apps/server/test/fixtures/recorded/recorded.test.ts`:
+```ts
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { parseGithubWebhook } from '../../../src/platform/github/normalize';
+import type { FetchReviewComments } from '../../../src/platform/github/normalize';
+import type { GhReviewComment } from '../../../src/platform/github/payloads';
+import { findSecrets, scrubPayload, type RecordedFixture } from './scrub';
+
+// Real deliveries from the dev GitHub App and the sandbox repo (docs/why/recorded-fixtures.md). Each file is
+// replayed through the same code a live webhook goes through, and what comes out is checked here, by hand-written
+// expectations: a recording is only the input. Add a fixture with `npm run record:fixtures -w apps/server`.
+
+const DIR = fileURLToPath(new URL('./', import.meta.url));
+const names = readdirSync(DIR)
+  .filter((file) => file.endsWith('.json'))
+  .map((file) => file.slice(0, -'.json'.length))
+  .sort();
+
+const load = (name: string): RecordedFixture => JSON.parse(readFileSync(`${DIR}${name}.json`, 'utf8')) as RecordedFixture;
+
+/** The sandbox repo and the two accounts that took part, as the normalizer sees them. */
+const SANDBOX = { installationId: '169557306', repoId: '1411793061', repoFullName: 'NikosGkikas13/nitpilot-sandbox' };
+const A = { githubId: '340081894', login: 'ngkdev93-jpg', isBot: false }; // the author
+const B = { githubId: '69345580', login: 'NikosGkikas13', isBot: false }; // the reviewer, who owns the repo
+const pr = (number: number) => ({ ...SANDBOX, number });
+
+/** What each fixture must turn into. `[]` means Nitpilot ignores it. A fixture without a row here fails the test below. */
+const EXPECTED: Record<string, unknown[]> = {
+  'installation_repositories.added': [
+    { scope: 'installation_repos', installationId: '169557306', accountLogin: 'NikosGkikas13', added: [{ id: '1412072001', fullName: 'NikosGkikas13/nitpilot', private: true, defaultBranch: 'main' }], removed: [] },
+  ],
+  'repository.created': [],
+  'pull_request.opened': [
+    {
+      scope: 'pr',
+      pr: pr(2),
+      snapshot: { title: 'Update README.md', state: 'open', isDraft: false, authorAssociation: 'COLLABORATOR', headRef: 'ngkdev93-jpg-patch-2', baseRef: 'main', headSha: '92747e094611ec1c912663d06888c1f4e8c80815', requestedReviewers: [B] },
+      event: { type: 'pr_opened', author: A, reviewers: [B] },
+    },
+  ],
+  'pull_request.review_requested': [{ scope: 'pr', pr: pr(2), event: { type: 'review_requested', reviewer: B } }],
+  'pull_request.closed': [{ scope: 'pr', pr: pr(2), snapshot: { state: 'closed', merged: false }, event: { type: 'pr_closed', merged: false } }],
+  'pull_request_review.submitted': [
+    {
+      scope: 'pr',
+      pr: pr(1),
+      event: {
+        type: 'external_review_submitted',
+        review: { id: '5470301182', author: A, trusted: true, state: 'commented', body: '', comments: [{ id: '4230317325', threadRootId: null, body: 'what is this?', path: 'README.md', line: 2, side: 'RIGHT' }] },
+      },
+    },
+  ],
+  'pull_request_review.submitted.reply': [
+    {
+      scope: 'pr',
+      pr: pr(1),
+      event: {
+        type: 'external_review_submitted',
+        review: { id: '5470415815', author: B, trusted: true, state: 'commented', comments: [{ id: '4230409588', threadRootId: '4230317325', body: 'dont worry abou tit' }] },
+      },
+    },
+  ],
+  'pull_request_review_comment.created': [
+    {
+      scope: 'pr',
+      pr: pr(1),
+      event: { type: 'external_comment', comment: { id: '4230317325', threadRootId: null, author: A, trusted: true, body: 'what is this?', path: 'README.md', line: 2, side: 'RIGHT', commitSha: 'e539491a85b101c5b27e31fb88e2cb1436519929' } },
+    },
+  ],
+  'pull_request_review_comment.created.reply': [
+    { scope: 'pr', pr: pr(1), event: { type: 'external_comment', comment: { id: '4230409588', threadRootId: '4230317325', author: B, trusted: true } } },
+  ],
+  // The app's own summary comment is a comment like any other to the normalizer; the router drops it by its marker.
+  'issue_comment.created': [
+    { scope: 'pr', pr: pr(2), event: { type: 'external_comment', comment: { id: 'issue:6094600445', author: { login: 'nitpilot-dev[bot]', isBot: true }, trusted: false, path: null } } },
+  ],
+  'issue_comment.edited': [],
+};
+
+/** The `pull_request` actions the normalizer maps. Each has a fixture, or says here why it doesn't yet. */
+const PULL_REQUEST_ACTIONS = ['opened', 'reopened', 'ready_for_review', 'converted_to_draft', 'closed', 'review_requested', 'review_request_removed', 'synchronize', 'edited'];
+const NOT_RECORDED: Record<string, string> = {
+  reopened: 'to record in the live run',
+  ready_for_review: 'to record in the live run',
+  converted_to_draft: 'to record in the live run',
+  review_request_removed: 'to record in the live run',
+  synchronize: 'to record in the live run',
+  edited: 'to record in the live run',
+};
+
+/** Only these repositories may appear in a committed fixture: the public sandbox and this project. */
+const PUBLISHABLE_REPOS = ['NikosGkikas13/nitpilot-sandbox', 'NikosGkikas13/nitpilot'];
+
+/** `GET /pulls/:n/reviews/:id/comments` answered from the recorded review comments, oldest first, as GitHub would. */
+const fetchReviewComments: FetchReviewComments = async (_pr, reviewId) =>
+  names
+    .filter((name) => name.startsWith('pull_request_review_comment.'))
+    .map((name) => (load(name).payload as { comment: GhReviewComment & { pull_request_review_id?: number } }).comment)
+    .filter((comment) => String(comment.pull_request_review_id) === reviewId)
+    .sort((a, b) => a.id - b.id);
+
+describe('the recorded set', () => {
+  it('has an expectation for every fixture, and a fixture for every expectation', () => {
+    expect(names).toEqual(Object.keys(EXPECTED).sort());
+  });
+
+  it('covers every pull_request action the normalizer maps, or says why one is missing', () => {
+    for (const action of PULL_REQUEST_ACTIONS) {
+      const recorded = names.some((name) => name === `pull_request.${action}` || name.startsWith(`pull_request.${action}.`));
+      expect(recorded || action in NOT_RECORDED, `pull_request.${action} has neither a fixture nor a reason`).toBe(true);
+      expect(!(recorded && action in NOT_RECORDED), `pull_request.${action} is recorded: remove it from NOT_RECORDED`).toBe(true);
+    }
+  });
+
+  it('mentions only repositories that may be published', () => {
+    for (const name of names) {
+      const repos = [...readFileSync(`${DIR}${name}.json`, 'utf8').matchAll(/"full_name": "([^"]+)"/g)].map((m) => m[1]);
+      for (const repo of repos) expect(PUBLISHABLE_REPOS, `${name} mentions ${repo}`).toContain(repo);
+    }
+  });
+});
+
+describe.each(names)('recorded %s', (name) => {
+  const fixture = load(name);
+
+  it('is named for the event and action it holds', () => {
+    const base = `${fixture.event}.${fixture.action}`;
+    expect(name === base || name.startsWith(`${base}.`)).toBe(true);
+  });
+
+  it('holds no secret and is already scrubbed', () => {
+    expect(findSecrets(readFileSync(`${DIR}${name}.json`, 'utf8'))).toEqual([]);
+    expect(scrubPayload(fixture.payload)).toEqual(fixture.payload);
+  });
+
+  it('turns into the expected events', async () => {
+    const events = await parseGithubWebhook(fixture.event, JSON.stringify(fixture.payload), fetchReviewComments);
+    expect(events).toMatchObject(EXPECTED[name] ?? []);
+  });
+});
+```
+
+Run: `npm test -w apps/server -- test/fixtures/recorded/recorded`
+Expected: FAIL: 2 tests in `recorded.test.ts`: "has an expectation for every fixture, and a fixture for every expectation" (`expected [] to deeply equal [ …(11) ]`) and "covers every pull_request action the normalizer maps" (`pull_request.opened has neither a fixture nor a reason`). The test about publishable repositories passes, because there is nothing to check yet.
+
+- [ ] **Step 7: Record what the dev database already holds**
+
+Eleven of the deliveries from the earlier sandbox work make good fixtures: a PR opened, a review requested, a PR closed, a review with an inline comment and a reply, the app's own summary comment and its edit, and the installation events. (`installation.created` is left out on purpose: it names every repository on the account, private ones included. The test only lets `NikosGkikas13/nitpilot-sandbox` and `NikosGkikas13/nitpilot` appear.)
+
+Docker must be running. The ids are the deliveries' own, from the `list` in Step 5:
+
+```bash
+rec() { npm run -s record:fixtures -w apps/server -- write "$@"; }
+rec c37ff4b0-c3f6-11f1-835e-cda8d1950626 installation_repositories.added --note "A repository was added to the installation"
+rec c23d1470-c3f6-11f1-854d-3cdcde0b453e repository.created --note "A new repository was created on the account"
+rec c17bfc00-c472-11f1-9a23-d24417359ade pull_request.opened --note "ngkdev93-jpg opened PR 2 and asked NikosGkikas13 to review"
+rec c0f60320-c472-11f1-9d31-ffce1800e529 pull_request.review_requested --note "The review request that came with the new PR (it arrives before opened)"
+rec 05b46e70-c473-11f1-866f-1896a3623d5c pull_request.closed --note "NikosGkikas13 closed PR 2 without merging"
+rec d7bee3b6-c3e0-11f1-8750-755ba4ed3293 pull_request_review.submitted --note "A review with one inline comment, submitted on the GitHub page"
+rec 5e1d14e0-c3e2-11f1-811e-5d8651841853 pull_request_review.submitted.reply --note "A reply in that comment thread, sent from the GitHub page, arrives as a review too"
+rec d7f9f7d0-c3e0-11f1-8583-fca6613a3c60 pull_request_review_comment.created --note "The inline comment of that review, delivered on its own as well"
+rec 5e3b3600-c3e2-11f1-9fe3-a8773a3daaf7 pull_request_review_comment.created.reply --note "The reply: in_reply_to_id names the first comment of the thread"
+rec c7ea1a40-c472-11f1-83be-ed8f0bf67528 issue_comment.created --note "The summary comment Nitpilot wrote on PR 2 (the app's own write)"
+rec 0a31e040-c473-11f1-91ea-351c509ccd79 issue_comment.edited --note "Nitpilot editing its summary comment"
+```
+
+Each prints `Wrote …/<name>.json (<event>.<action>, N KB)`; the files are 1 to 9 KB.
+
+Open one to see what a fixture is: `head -40 apps/server/test/fixtures/recorded/pull_request.opened.json`. It has the event, action, a note, the recording date and the payload; links and node ids are gone, everything else is what GitHub sent.
+
+Run: `npm test -w apps/server -- test/fixtures`
+Expected: PASS (2 files, 61 tests: 25 in `scrub.test.ts`, 3 + 3 for each of the 11 fixtures in `recorded.test.ts`).
+
+**If a delivery is gone** (older than 14 days), `write` says `No delivery …`. Delete that name's row from `EXPECTED` in `recorded.test.ts` and go on; Step 17 records the same kind of delivery from the probe PR, and you then write its row from what the new delivery holds (the PR number, ids and shas will be different).
+
+- [ ] **Step 8: Let the fake agent follow a scenario of the run's choosing**
+
+`getAdapter('fake')` always follows `happy.json`, which mentions `src/orders.ts`. The sandbox PR has its own files, so account B's fake agent needs its own script. A variable names it; a missing file is reported by `detect()`, so `nitpilot start` stops with a message instead of failing every job.
+
+In `apps/cli/src/agents/fake/adapter.test.ts`, replace:
+```ts
+import { getAdapter } from '../registry';
+```
+with:
+```ts
+import { adapterFor, getAdapter } from '../registry';
+```
+
+Append to `apps/cli/src/agents/fake/adapter.test.ts`:
+```ts
+
+describe('adapterFor, with the fake agent', () => {
+  const input = { mode: 'reviewer', cwd: '/work', prompt: 'Review this PR.', mcp: { url: 'http://127.0.0.1:1/mcp', token: 'job-token' }, tmpDir: '/tmp/run', baseEnv: {}, maxTurns: 5 } as const;
+  const config = { agent: 'fake', apiBilling: false } as const;
+  const scenarioOf = (args: string[]) => args[args.indexOf('--scenario') + 1];
+
+  it('follows NITPILOT_FAKE_SCENARIO, so a live run can use its own script', () => {
+    const adapter = adapterFor(config, { NITPILOT_FAKE_SCENARIO: '/scripts/sandbox-seed.json' })!;
+    expect(scenarioOf(adapter.buildInvocation(input).args)).toBe('/scripts/sandbox-seed.json');
+  });
+
+  it('uses happy.json when the variable is unset or empty', () => {
+    for (const env of [{}, { NITPILOT_FAKE_SCENARIO: '' }]) {
+      expect(scenarioOf(adapterFor(config, env)!.buildInvocation(input).args)).toBe(join(FAKE_SCENARIOS, 'happy.json'));
+    }
+  });
+
+  it('says so when the scenario file is missing, so `nitpilot start` stops instead of failing every job', async () => {
+    const adapter = adapterFor(config, { NITPILOT_FAKE_SCENARIO: '/scripts/nope.json' })!;
+    expect(await adapter.detect()).toEqual({ ok: false, problem: "The fake agent's scenario file /scripts/nope.json doesn't exist." });
+  });
+
+  it('is not read for Claude Code', () => {
+    const adapter = adapterFor({ agent: 'claude-code', apiBilling: false }, { NITPILOT_FAKE_SCENARIO: '/scripts/x.json' })!;
+    expect(adapter.buildInvocation(input).args).not.toContain('/scripts/x.json');
+  });
+});
+```
+
+Run: `npm test -w apps/cli -- src/agents/fake/adapter.test.ts`
+Expected: FAIL: 2 of the 8 tests in `adapter.test.ts`: the scenario is still `happy.json` (`expected '/…/happy.json' to be '/scripts/sandbox-seed.json'`), and `detect()` answers `{ ok: true }` for a scenario file that doesn't exist. The other two new tests pass already.
+
+In `apps/cli/src/agents/registry.ts`, replace:
+```ts
+import type { AgentId } from '@nitpilot/protocol';
+```
+with:
+```ts
+import { BRAND, type AgentId } from '@nitpilot/protocol';
+```
+
+In `apps/cli/src/agents/registry.ts`, replace:
+```ts
+/**
+ * The adapter for an agent. `run` is for tests (a pretend program). Gemini CLI's (Task 20) waits on Google's sign-in (spec §22); until then it's
+ * null, and `nitpilot start` takes no jobs with it.
+ */
+export function getAdapter(id: AgentId, opts: { apiKey?: string; apiBilling?: boolean; run?: RunProgram } = {}): AgentAdapter | null {
+  switch (id) {
+    case 'fake':
+      return fakeAdapter();
+```
+with:
+```ts
+/** Names the scenario file the fake agent follows, instead of its built-in happy.json (live runs and tests only). */
+export const FAKE_SCENARIO_ENV = `${BRAND.envPrefix}FAKE_SCENARIO`;
+
+/**
+ * The adapter for an agent. `run` is for tests (a pretend program); `scenario` is the fake agent's script. Gemini CLI's (Task 20) waits on
+ * Google's sign-in (spec §22); until then it's null, and `nitpilot start` takes no jobs with it.
+ */
+export function getAdapter(id: AgentId, opts: { apiKey?: string; apiBilling?: boolean; run?: RunProgram; scenario?: string } = {}): AgentAdapter | null {
+  switch (id) {
+    case 'fake':
+      return fakeAdapter({ scenario: opts.scenario });
+```
+
+In `apps/cli/src/agents/registry.ts`, replace:
+```ts
+ * billing (spec §12.2). `run` is for tests (a pretend program).
+```
+with:
+```ts
+ * billing (spec §12.2). The fake agent follows the scenario file named by NITPILOT_FAKE_SCENARIO. `run` is for tests (a pretend program).
+```
+
+In `apps/cli/src/agents/registry.ts`, replace:
+```ts
+run: opts.run });
+```
+with:
+```ts
+run: opts.run, scenario: env[FAKE_SCENARIO_ENV] || undefined });
+```
+
+In `apps/cli/src/agents/fake/adapter.ts`, replace:
+```ts
+      if (existsSync(AGENT_SCRIPT)) return { ok: true, version: CLI_VERSION };
+      return { ok: false, problem: 'The fake agent only runs from a source checkout of Nitpilot: it is for tests.' };
+```
+with:
+```ts
+      if (!existsSync(AGENT_SCRIPT)) return { ok: false, problem: 'The fake agent only runs from a source checkout of Nitpilot: it is for tests.' };
+      if (!existsSync(scenario)) return { ok: false, problem: `The fake agent's scenario file ${scenario} doesn't exist.` };
+      return { ok: true, version: CLI_VERSION };
+```
+
+Run: `npm test -w apps/cli -- src/agents`
+Expected: PASS (4 files, 36 tests, with the 14 live tests skipped).
+
+- [ ] **Step 9: The seed PR, B's scripts, and a test that keeps them together**
+
+The acceptance PR adds a tiny `orders-demo` project with three planted bugs in `orders.js` (the first page is skipped, the empty average is `NaN`, an unknown id crashes) that its own tests don't catch, and a `search.js` that builds SQL by joining strings (for the security variant). Account B's fake agent says exactly where the bugs are, in two scenario files. If a line number in a scenario drifted, B would comment on the wrong line and nobody would know until the live run, so a test ties them together. (A scenario names no PR number or sha, so the same files serve every PR in the run.)
+
+Create `apps/cli/src/agents/fake/acceptance.test.ts`:
+```ts
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+// The live acceptance run (docs/acceptance/plan-1.md) points CLI B's fake agent at these scenario files and
+// opens a PR that adds this seed. If a line number drifts, B would comment on the wrong line and nobody would
+// notice until the live run. This keeps the two together.
+
+const ACCEPTANCE = fileURLToPath(new URL('../../../../../docs/acceptance/', import.meta.url));
+const SEED = `${ACCEPTANCE}seed/`;
+
+type AddPoint = { add_point: { path: string; line: number; severity: string; category: string; title: string } };
+type Scenario = { review: ({ finish: string } | AddPoint)[]; re_review: ({ finish: string } | { decide: { point: number; decision: string } })[] };
+
+const scenario = (name: string) => JSON.parse(readFileSync(`${ACCEPTANCE}scenarios/${name}.json`, 'utf8')) as Scenario;
+const pointsOf = (s: Scenario) => s.review.filter((step): step is AddPoint => 'add_point' in step).map((step) => step.add_point);
+const lineOf = (path: string, line: number) => readFileSync(`${SEED}${path}`, 'utf8').split('\n')[line - 1];
+const seedModule = (file: string) => import(pathToFileURL(`${SEED}orders-demo/src/${file}`).href);
+
+describe('the sandbox scenarios and the seed', () => {
+  it('B comments on the three planted lines of orders.js', () => {
+    const points = pointsOf(scenario('sandbox-happy'));
+    expect(points.map((p) => [p.path, lineOf(p.path, p.line)?.trim()])).toEqual([
+      ['orders-demo/src/orders.js', 'const start = page * size;'],
+      ['orders-demo/src/orders.js', 'return sum / totals.length;'],
+      ['orders-demo/src/orders.js', 'return `Order #${order.id} for ${order.customer}: ${order.total} cents`;'],
+    ]);
+    expect(points.every((p) => p.category !== 'security')).toBe(true);
+  });
+
+  it('settles every point it raised when it reviews again', () => {
+    const s = scenario('sandbox-happy');
+    const decided = s.re_review.filter((step) => 'decide' in step).map((step) => (step as { decide: { point: number } }).decide.point);
+    expect(decided).toEqual(pointsOf(s).map((_, i) => i + 1));
+  });
+
+  it('the security scenario raises one security point on the SQL line', () => {
+    const [point] = pointsOf(scenario('sandbox-security'));
+    expect(point).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
+    expect(lineOf(point!.path, point!.line)).toContain('SELECT * FROM orders WHERE customer =');
+  });
+
+  it('the planted bugs are real, and the seed passes its own tests anyway', async () => {
+    const { paginate, averageTotal, describeOrder } = await seedModule('orders.js');
+    expect(paginate(['a', 'b', 'c', 'd'], 1, 2)).toEqual(['c', 'd']); // page 1 should be ['a', 'b']
+    expect(averageTotal([])).toBeNaN();
+    expect(() => describeOrder([], 1)).toThrow(TypeError);
+    // `node --test` exits 0 only when every test passes.
+    expect(() => execFileSync(process.execPath, ['--test'], { cwd: `${SEED}orders-demo`, stdio: 'pipe' })).not.toThrow();
+  });
+
+  it('search.js builds its SQL by joining strings', async () => {
+    const { ordersOfCustomer } = await seedModule('search.js');
+    const queries: string[] = [];
+    ordersOfCustomer({ query: (sql: string) => queries.push(sql) }, "x' OR '1'='1");
+    expect(queries).toEqual(["SELECT * FROM orders WHERE customer = 'x' OR '1'='1'"]);
+  });
+});
+```
+
+Run: `npm test -w apps/cli -- src/agents/fake/acceptance`
+Expected: FAIL: 5 tests: `ENOENT: no such file or directory, open '…/docs/acceptance/scenarios/sandbox-happy.json'` (and the same for `sandbox-security.json`), and `Cannot find module '…/docs/acceptance/seed/orders-demo/src/orders.js'` (and `search.js`)
+
+The seed:
+
+Create `docs/acceptance/seed/orders-demo/package.json`:
+```json
+{
+  "name": "orders-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
+```
+
+Create `docs/acceptance/seed/orders-demo/README.md`:
+```markdown
+# orders-demo
+
+A few order helpers, used to try Nitpilot on a real pull request. Run the tests with `npm test`.
+```
+
+Create `docs/acceptance/seed/orders-demo/src/orders.js`:
+```js
+// Order helpers.
+
+/** One page of items. Pages start at 1, so page 1 is the first `size` items. */
+export function paginate(items, page, size) {
+  const start = page * size;
+  return items.slice(start, start + size);
+}
+
+/** The average of the order totals, in cents. */
+export function averageTotal(totals) {
+  const sum = totals.reduce((a, b) => a + b, 0);
+  return sum / totals.length;
+}
+
+/** A one-line description of the order with this id. */
+export function describeOrder(orders, id) {
+  const order = orders.find((o) => o.id === id);
+  return `Order #${order.id} for ${order.customer}: ${order.total} cents`;
+}
+```
+
+Create `docs/acceptance/seed/orders-demo/src/search.js`:
+```js
+// Looks orders up by customer name.
+
+/** Every order placed by this customer. `db.query` takes the SQL text to run. */
+export function ordersOfCustomer(db, customer) {
+  return db.query("SELECT * FROM orders WHERE customer = '" + customer + "'");
+}
+```
+
+Create `docs/acceptance/seed/orders-demo/test/orders.test.js`:
+```js
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { averageTotal, describeOrder, paginate } from '../src/orders.js';
+
+test('paginate returns a slice of the items', () => {
+  assert.deepEqual(paginate(['a', 'b', 'c', 'd', 'e'], 0, 2), ['a', 'b']);
+});
+
+test('averageTotal averages the totals', () => {
+  assert.equal(averageTotal([100, 300]), 200);
+});
+
+test('describeOrder describes an order', () => {
+  assert.equal(describeOrder([{ id: 7, customer: 'Maya', total: 1250 }], 7), 'Order #7 for Maya: 1250 cents');
+});
+```
+
+B's scenarios (account B's fake agent follows `sandbox-happy.json` unless told otherwise):
+
+Create `docs/acceptance/scenarios/sandbox-happy.json`:
+```json
+{
+  "review": [
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 5, "severity": "major", "category": "bug", "title": "Page 1 skips the first page", "body": "Pages start at 1 (see the comment above), but the start is page * size, so page 1 begins at item `size`. Use (page - 1) * size." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 12, "severity": "major", "category": "bug", "title": "averageTotal([]) is NaN", "body": "With no orders the sum is 0 and totals.length is 0, so this divides 0 by 0. Return 0 when there are no totals." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 18, "severity": "minor", "category": "bug", "title": "describeOrder throws for an id that does not exist", "body": "orders.find returns undefined for an unknown id, so order.id throws a TypeError. Say the order was not found instead." } },
+    { "finish": "Three bugs in orders.js: the page offset, the empty average and the missing order." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Page 1 now starts at the first item." } },
+    { "decide": { "point": 2, "decision": "resolve", "comment": "An empty list gives 0." } },
+    { "decide": { "point": 3, "decision": "resolve", "comment": "An unknown id is handled." } },
+    { "finish": "All three points settled." }
+  ]
+}
+```
+
+Create `docs/acceptance/scenarios/sandbox-security.json`:
+```json
+{
+  "review": [
+    { "add_point": { "path": "orders-demo/src/search.js", "line": 5, "severity": "blocker", "category": "security", "title": "The customer name goes straight into the SQL", "body": "A name like ' OR '1'='1 returns every order. Pass the name as a query parameter instead of joining strings." } },
+    { "finish": "One security point in search.js." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Parameterized now." } },
+    { "finish": "Settled." }
+  ]
+}
+```
+
+Run: `npm test -w apps/cli -- src/agents/fake/acceptance`
+Expected: PASS (1 file, 5 tests).
+
+- [ ] **Step 10: The runbook's helper files**
+
+Four small files the runbook uses. `env.sh` gives each terminal tab the commands `nit-a` (the built CLI as account A) and `nit-b` (the CLI from source as account B, because the fake agent only exists in a source checkout), `nit-edit` (change a CLI's config file with a `jq` filter and keep it readable by you only) and `dbq` (`psql` inside the Postgres container). `new-branch.sh` makes a PR branch holding the seed and pushes it as A. `stamp.pl` puts a UTC time, to the millisecond, in front of every line it reads: a job's start isn't recorded anywhere in the database, so the 5-second criterion is measured from the CLI's own output against the time `check.sql` shows each webhook arriving. `check.sql` prints what the database says about one PR.
+
+Create `docs/acceptance/env.sh`:
+```bash
+# Source this in every terminal tab of the acceptance run, from the Nitpilot checkout:
+#   cd /path/to/nitpilot && source docs/acceptance/env.sh
+# It defines nit-a and nit-b (the CLI as account A and as account B), nit-edit (change a CLI's config) and dbq (psql on the acceptance database).
+export REPO="$PWD"
+export SANDBOX=NikosGkikas13/nitpilot-sandbox
+export SERVER=http://localhost:8787
+export ACC_DB=nitpilot_acceptance
+export CLONE_A="$HOME/nitpilot-acceptance/a/nitpilot-sandbox"
+export CLONE_B="$HOME/nitpilot-acceptance/b/nitpilot-sandbox"
+
+# A runs the built CLI with Claude Code, like a user who installed it. Build it first: npm run build -w apps/cli
+nit-a() {
+  NITPILOT_CONFIG_DIR="$HOME/.nitpilot-a" NITPILOT_SERVER="$SERVER" node "$REPO/apps/cli/dist/index.js" "$@"
+}
+
+# B runs from source (the fake agent only exists in a source checkout) and follows $B_SCENARIO.
+nit-b() {
+  NITPILOT_CONFIG_DIR="$HOME/.nitpilot-b" NITPILOT_SERVER="$SERVER" \
+    NITPILOT_FAKE_SCENARIO="${B_SCENARIO:-$REPO/docs/acceptance/scenarios/sandbox-happy.json}" \
+    "$REPO/node_modules/.bin/tsx" "$REPO/apps/cli/src/index.ts" "$@"
+}
+
+# nit-edit a '.agent = "fake"'   changes ~/.nitpilot-a/config.json with a jq filter and keeps the file readable by you only.
+nit-edit() {
+  local dir="$HOME/.nitpilot-$1" file="$HOME/.nitpilot-$1/config.json"
+  jq "$2" "$file" > "$file.tmp" && chmod 600 "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+# dbq -c 'select 1'   or   dbq -v pr=5 -f - < docs/acceptance/check.sql   (runs psql inside the Postgres container)
+dbq() {
+  docker exec -i nitpilot-postgres-1 psql -U nitpilot -d "$ACC_DB" "$@"
+}
+```
+
+Create `docs/acceptance/new-branch.sh`:
+```bash
+#!/usr/bin/env bash
+# A new PR branch for the acceptance run: the seed (docs/acceptance/seed/orders-demo) on top of main, pushed as
+# account A. Run it inside clone A, with $REPO set (source docs/acceptance/env.sh first):
+#   bash "$REPO/docs/acceptance/new-branch.sh" happy
+set -euo pipefail
+
+name="${1:?Usage: new-branch.sh <name>   (the branch will be acc/<name>)}"
+: "${REPO:?Run: source docs/acceptance/env.sh from the Nitpilot checkout first}"
+branch="acc/$name"
+
+git fetch origin main
+git switch -c "$branch" origin/main
+cp -R "$REPO/docs/acceptance/seed/orders-demo" .
+git add orders-demo
+git commit -m "Add orders-demo ($name)"
+git push -u origin "$branch"
+
+slug="$(git remote get-url origin | sed -E 's#^.*[:/]([^/]+/[^/]+)$#\1#; s#\.git$##')"
+echo
+echo "Branch pushed. Open the pull request as account A:"
+echo "  https://github.com/$slug/compare/main...$branch?expand=1"
+```
+
+Create `docs/acceptance/stamp.pl`:
+```perl
+#!/usr/bin/perl
+# Puts the UTC time, to the millisecond, in front of every line it reads, the moment the line arrives:
+#   node ... start 2>&1 | perl docs/acceptance/stamp.pl
+# check.sql prints database times in UTC too, so the two can be compared.
+use strict;
+use warnings;
+use POSIX qw(strftime);
+use Time::HiRes qw(gettimeofday);
+
+$| = 1;
+while (my $line = <STDIN>) {
+    my ($seconds, $microseconds) = gettimeofday;
+    printf "%s.%03d %s", strftime('%H:%M:%S', gmtime $seconds), $microseconds / 1000, $line;
+}
+```
+
+Create `docs/acceptance/check.sql`:
+```sql
+-- What the database says about one sandbox PR, for the acceptance runbook (docs/acceptance/plan-1.md).
+--   docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot_acceptance -v pr=5 -f - < docs/acceptance/check.sql
+-- Times are UTC, like the ones the CLI prints in the runbook's timestamped terminals.
+\set repo '''NikosGkikas13/nitpilot-sandbox'''
+
+\echo
+\echo '== 1. The chat: READY (or Escalated) within max_rounds (3), and one summary comment'
+select c.number as pr, c.phase, c.round, c."addressPasses" as address_passes, c."pointCount" as points, c."summaryCommentId" is not null as has_summary
+from "PrChat" c join "Repo" r on r.id = c."repoId" where r."fullName" = :repo and c.number = :pr;
+
+\echo
+\echo '== 2. Jobs, oldest first (no job twice: every row is a different type/round/person)'
+select j.type, j.round, j.status, j.attempt, u.login as for_person, coalesce(j.failure, '') as failure, coalesce(j."cancelReason", '') as cancelled_because
+from "Job" j join "PrChat" c on c.id = j."chatId" join "Repo" r on r.id = c."repoId" join "User" u on u.id = j."userId"
+where r."fullName" = :repo and c.number = :pr order by j."createdAt";
+
+\echo
+\echo '== 3. Duplicate jobs (must print 0 rows)'
+select j."participantId", j.type, j.round, count(*) as rows
+from "Job" j join "PrChat" c on c.id = j."chatId" join "Repo" r on r.id = c."repoId"
+where r."fullName" = :repo and c.number = :pr group by 1, 2, 3 having count(*) > 1;
+
+\echo
+\echo '== 4. Webhooks about this PR, with the time each reached the server (compare with the CLI terminals)'
+select to_char("createdAt", 'HH24:MI:SS.MS') as arrived_utc, event || coalesce('.' || action, '') as delivery, body::jsonb -> 'sender' ->> 'login' as sender, status
+from "RawEvent" where coalesce(body::jsonb -> 'pull_request' ->> 'number', body::jsonb -> 'issue' ->> 'number') = :'pr' order by "createdAt";
+
+\echo
+\echo '== 5. Every webhook since this PR first appeared was processed or ignored on purpose (no received / retrying / failed)'
+select status, count(*) as deliveries from "RawEvent"
+where "createdAt" >= (select min("createdAt") from "RawEvent" where coalesce(body::jsonb -> 'pull_request' ->> 'number', body::jsonb -> 'issue' ->> 'number') = :'pr')
+group by status order by status;
+
+\echo
+\echo '== 6. Points'
+select p.number, p.status, p.severity, p.category, coalesce(p."escalationReason", '') as escalation, coalesce(p."authorResolution", '') as author_said, left(p.title, 50) as title
+from "Point" p join "PrChat" c on c.id = p."chatId" join "Repo" r on r.id = c."repoId" where r."fullName" = :repo and c.number = :pr order by p.number;
+
+\echo
+\echo '== 7. The chat timeline'
+select m.seq, m.kind, coalesce(m."authorLogin", '') as who, left(m.body, 80) as text
+from "Message" m join "PrChat" c on c.id = m."chatId" join "Repo" r on r.id = c."repoId" where r."fullName" = :repo and c.number = :pr order by m.seq;
+```
+
+Check them without GitHub (Docker must be running):
+```bash
+chmod +x docs/acceptance/new-branch.sh
+bash -n docs/acceptance/env.sh && bash -n docs/acceptance/new-branch.sh && perl -c docs/acceptance/stamp.pl
+printf 'one\ntwo\n' | perl docs/acceptance/stamp.pl
+docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot -v pr=1 -f - < docs/acceptance/check.sql
+```
+Expected: `stamp.pl syntax OK`; two lines like `12:18:37.039 one`; then seven headed sections. In your dev database PR 1 shows `addressing` and one `queued` address job in sections 1 and 2, and `(0 rows)` under section 3 (duplicate jobs).
+
+- [ ] **Step 11: The docs**
+
+Two explainers (CLAUDE.md asks for one whenever a backend idea first shows up), the architecture document in Odyhook's Chosen / Alternatives / Why style, the adapter guide, and the runbook itself. The runbook is the live part of this task: its numbered steps and tick boxes are what Steps 14 to 23 follow.
+
+Create `docs/why/recorded-fixtures.md`:
+```markdown
+# Recorded fixtures: tests that replay what GitHub really sent
+
+**In one sentence:** instead of inventing the JSON GitHub sends us, we save real deliveries from the sandbox repo (with the noise taken out) and replay them through the same code a live webhook goes through (spec §19).
+
+## Why not just write the JSON by hand?
+
+Our other tests build payloads by hand (`apps/server/test/fixtures/github.ts`). That is fast and exact, but it only proves the code understands *our idea* of GitHub's JSON. If GitHub names a field differently, or sends events in an order we didn't expect, the hand-made payloads never find out. A recorded fixture is a real payload: if our code can't read it, the code is wrong.
+
+It's the same difference as mocking an API response in a React test versus saving a real response from the network tab and replaying it. A hand-written mock is what you *hope* the API returns; the saved one is what it *did* return.
+
+## Where recordings come from
+
+Every webhook GitHub sends is stored as a `RawEvent` row for 14 days (that is what makes boot-time replay possible; see [webhooks.md](webhooks.md)). So a live run records itself, and nobody copies JSON out of GitHub's "Recent deliveries" page.
+
+`npm run record:fixtures -w apps/server` (`apps/server/scripts/record-fixtures.ts`) has two commands:
+
+- `list` shows what the database holds: delivery id, time, event, PR number, who caused it;
+- `write <deliveryId> <name>` turns one delivery into `apps/server/test/fixtures/recorded/<name>.json`.
+
+Names read `<event>.<action>` plus an optional dotted suffix for the variant: `pull_request.review_requested.again`.
+
+## What "secrets removed" means here
+
+A webhook body has no passwords: the signature is a header, and `RawEvent` doesn't store headers. Two kinds of thing still need care, and `test/fixtures/recorded/scrub.ts` handles both:
+
+- **Noise.** GitHub fills each payload with dozens of API links and node ids that Nitpilot never reads. The scrubber drops every `*_url` key except `html_url`, plus `url`, `node_id`, `gravatar_id` and `_links`. Files shrink from about 25 KB to 8 KB, and a diff shows only what matters. Everything else is kept exactly as GitHub sent it.
+- **Whatever a person typed.** A PR description or comment can hold anything, including a pasted token. The recorder refuses to write a file in which it finds a GitHub token, a Nitpilot token, a private key, a JWT, a bearer token, a webhook signature or our own webhook secret, and the test refuses to pass if a committed file has one.
+
+There is also a privacy rule: a delivery such as `installation.created` lists *every* repository the app can see, private ones by name. The test only lets the public sandbox and this project's own repository appear in a fixture, so a payload like that can't be committed by accident.
+
+## What the test checks (`recorded.test.ts`)
+
+For each file: it is named for the event it holds, it holds no secret and is already scrubbed, and replaying it through `parseGithubWebhook` (the code both `GithubPlatform` and `FakePlatform` use) gives exactly the events written next to it by hand. The recording is only the input; the expected output is written by a person, so a bug can't hide by being recorded.
+
+One more check keeps the set honest: every `pull_request` action the normalizer handles must have a fixture, or a written reason why not.
+
+## The React analogy
+
+A recorded fixture is a snapshot test whose snapshot you wrote yourself: the input comes from the real world, and the expected output is your own decision about what it should mean.
+```
+
+Create `docs/why/live-acceptance.md`:
+```markdown
+# The live acceptance run: the manual test that uses the real thing
+
+**In one sentence:** after every automated test passes, a person runs the whole product once against real GitHub and a real agent, following a checklist, and writes down what happened (spec §20, `docs/acceptance/plan-1.md`).
+
+## Why it can't be automated
+
+The end-to-end test ([end-to-end-test.md](end-to-end-test.md)) pretends to be GitHub. That makes it fast and repeatable, but it can only find mistakes we already imagined. Some things only exist for real:
+
+- GitHub decides which webhooks to send, and in what order. (We had no idea whether re-requesting a review fires `review_requested` again until we tried.)
+- GitHub's rendering of a comment, its permission rules, its rate limits.
+- A real agent's behavior: Claude Code reading real files and calling our tools.
+- Two real people's accounts, and a laptop's SSH setup.
+
+A **runbook** is a checklist for a person to follow, with the exact commands and clicks, what to expect after each, and boxes to tick. It's the manual twin of an automated test: same job (prove it works), but a human is the test runner. It is a document in the repo because the steps matter as much as the code: the next person to run it, or to make a demo video, follows the same page.
+
+## What's real and what's scripted
+
+- **Real:** GitHub (the sandbox repo `NikosGkikas13/nitpilot-sandbox`, two accounts), the dev GitHub App and its webhooks through a tunnel, the server, Postgres, both CLIs, git over SSH, and Claude Code as account A's agent.
+- **Scripted:** account B's reviewer is the fake agent, which follows a scenario file and always raises the same three planted problems. The spec asked for a second real agent (Gemini CLI) here; Google refuses personal sign-ins for it, so the fake stands in. What the run proves about B is the plumbing: a review request becomes a job within seconds, the CLI fetches the PR and its tools work, and its points reach the chat and GitHub. How good a reviewer's judgment is, it doesn't test.
+
+## Why a fresh database
+
+Two reasons. A leftover job from earlier experiments would be handed to your real agent the moment its CLI connects. And the "single-player" runs need an account that has *never* joined Nitpilot, so the run starts from an empty database and lets each account join when it's their turn.
+
+## Why timestamps, and where each comes from
+
+One pass criterion is "the review job starts within 5 seconds of the request". Nothing in the database records when a job started, so the runbook pipes each CLI's output through `docs/acceptance/stamp.pl`, which puts the time (UTC, to the millisecond) in front of each line as it arrives. `docs/acceptance/check.sql` prints the time each webhook reached the server in the same clock, so the two are compared by eye.
+
+## The React analogy
+
+It's the pre-release click-through before you ship a frontend: automated tests are green, and you still open the real app, in a real browser, signed in as real users, and go through the main journeys with a checklist. You do it once per release, and it's where you find the things nobody thought to test.
+```
+
+Create `docs/architecture.md`:
+````markdown
+# Nitpilot: Architecture and Technology Decisions
+
+This document follows one pull request through Nitpilot and explains every significant technology choice: what was chosen, what else was considered, and why the choice won. The design itself is in [the spec](superpowers/specs/2026-10-07-nitpilot-design.md); small explainers for each backend idea are in [why/](why/).
+
+---
+
+## 1. What Nitpilot does
+
+Developers' own AI agents (Claude Code today, Gemini CLI next) review each other's pull requests the moment they open. The author's agent fixes what the reviewer's agent raises, the reviewer's agent checks the fixes, and a human is pinged only when there is a decision to make: the PR is ready to approve, or the agents disagree, or something needs a person.
+
+The agents run on each developer's own machine, under their own login. Nitpilot is the coordinator: it hears about PRs from GitHub, decides whose turn it is, hands jobs to the right laptop, and writes the results back to the PR.
+
+---
+
+## 2. The big picture
+
+```
+            webhooks                                  writes (summary as bot; reviews and replies as the user)
+GitHub ──────────────────▶ ┌──────────── Nitpilot server (one Node process) ────────────┐ ──────▶ GitHub
+                           │ GitHub adapter → normalized events → engine (pure rules)  │
+                           │ Postgres: chats · points · messages · jobs · tasks · raw  │
+                           │ job assigner · task runner (outbox, timers) · WS hubs     │
+                           └──────────▲───────────────────────────────────▲────────────┘
+                                      │ WebSocket /ws/cli                 │ web app (Plan 2)
+                         ┌────────────┴────────────┐
+                         │ Nitpilot CLI (each dev) │
+                         │ safe git worktrees      │
+                         │ local MCP server        │
+                         │ agent adapters          │
+                         └────────────┬────────────┘
+                                      ▼
+                         claude / gemini (the user's own install)
+```
+
+Three programs, one shared package:
+
+1. **Server** (`apps/server`): one Node process (Hono) plus Postgres. It never runs code from a repository.
+2. **CLI** (`apps/cli`): runs on each developer's machine. It is the only component that touches code: it checks the PR out into an isolated folder, runs the developer's agent, and (for fixes) commits and pushes.
+3. **Web app** (`apps/web`): Plan 2. Plan 1 has three server-rendered pages: sign-in, CLI approval and a read-only chat transcript.
+4. **Protocol** (`packages/protocol`): zod schemas for every message, job and result, plus the `BRAND` constant. All three apps import it, and the CLI bundles it so `npx nitpilot` needs nothing else.
+
+---
+
+## 3. A PR's life, end to end
+
+1. **GitHub sends a webhook** (`POST /webhooks/github`). The server checks the HMAC signature on the raw bytes, stores the body as a `RawEvent` keyed by GitHub's delivery id (a repeat is dropped), and answers `202` at once. See [why/webhooks.md](why/webhooks.md).
+2. **Normalize.** `platform/github/normalize/` turns GitHub's JSON into the engine's vocabulary: `pr_opened`, `review_requested`, `head_updated`, `external_comment`, and so on. GitHub is the only thing in the server that knows GitHub's field names.
+3. **Route and dispatch.** The router finds or creates the PR's chat, and the dispatcher takes that chat's in-memory lock, loads its state and calls the engine.
+4. **The engine decides** (`engine/decide.ts`, a pure function): given the chat, the team's rules and one event, it returns the new chat state, new timeline items, and commands: queue a job, cancel jobs, post a review, notify someone.
+5. **One transaction** saves the state, the timeline, the jobs and the tasks together. GitHub is never called while the lock is held; a `Task` row (the outbox) says what to write later.
+6. **The assigner hands a job to a CLI.** One atomic compare-and-swap moves a `Job` from `queued` to `running` and binds it to a connected CLI that belongs to the right person, has the repo linked, has free capacity and runs an agent for the job's mode. The CLI receives the job over its WebSocket.
+7. **The CLI runs it.** It fetches the PR into a detached git worktree with hardened git settings, deletes the files that would steer the agent (`CLAUDE.md`, `.mcp.json`, `.claude/`, …), starts a local MCP server for this one job and launches the agent with only the tools the job's mode allows.
+8. **The agent works through Nitpilot's tools.** A reviewer calls `get_diff`, `add_point`, `finish`. An editor edits files, runs allowlisted checks (`run_check`) and answers each point (`reply_to_point`). Nothing reaches the server until the agent finishes: the results are buffered and sent once.
+9. **The result comes back** as `job.complete`. Fixes are committed and pushed by the CLI itself, after the server has acknowledged `job.pushing`. The engine turns the result into points, replies and the next step.
+10. **Tasks write to GitHub:** the summary comment as the app bot (edited in place, never duplicated), and, in single-player modes, a review or thread replies as the user.
+11. **The loop repeats** (review, address, re-review) until the chat is `ready`, or a point escalates, or the round limit is reached. Approving and merging always happen on GitHub, by a human.
+
+---
+
+## 4. Decisions
+
+### 4.1 One Node process and Postgres, no queue
+
+- **Chosen:** a single server process. Durable work is rows in Postgres (`Job`, `Task`); a 1-second in-process ticker runs timers and the outbox. At boot the server takes a Postgres advisory lock and refuses to start if another instance holds it.
+- **Alternatives:** Redis with BullMQ (what Odyhook uses), `pg-boss`, a managed workflow engine (Temporal), several services.
+- **Why:** the heavy work, running agents, happens on users' machines. The server only receives, decides, stores and forwards, so it is I/O-light and one process is plenty. Every extra moving part (Redis, workers) is something a self-hoster must run and a reader must understand. Postgres being the single source of truth also means a restart loses nothing: [why/one-process.md](why/one-process.md), [why/outbox-and-restarts.md](why/outbox-and-restarts.md).
+- **Cost:** no horizontal scaling. The per-chat locks and WebSocket hubs live in memory, so a second instance would break them (hence the advisory lock).
+
+### 4.2 Agents run on the developer's machine
+
+- **Chosen:** the CLI launches the developer's own `claude` (or `gemini`). Nitpilot never sees an Anthropic or Google credential.
+- **Alternatives:** run agents on the server in sandboxes; run them in GitHub Actions; ask users for API keys.
+- **Why:** server-side agents mean holding users' API keys and running untrusted repo code on our box, which is a security and cost problem and a different product. Local agents use the subscription the developer already pays for, can run the project's own checks with their real toolchain, and keep the code on the developer's disk.
+- **Cost:** a job needs the laptop to be on. The server tracks that honestly ("offline since 09:30" on the transcript page) instead of pretending.
+
+### 4.3 The workflow is one pure function
+
+- **Chosen:** `decide(chat, rules, event, now)` returns the new state and commands with no database, network or clock access. ESLint's `no-restricted-imports` enforces it for `engine/`.
+- **Alternatives:** workflow rules spread through route handlers; a state-machine library; an event-sourced design.
+- **Why:** the rules (rounds, escalation, who is notified, what a retry means) are the product, and they are the part most likely to be wrong. As a pure function they are tested with plain tables of input and expected output, hundreds of cases that run in milliseconds. See [why/pure-engine.md](why/pure-engine.md).
+
+### 4.4 Jobs: compare-and-swap, leases and fencing
+
+- **Chosen:** a job is assigned by an atomic `UPDATE … WHERE status = 'queued'`. A running job holds a 90-second lease that the CLI's 25-second ping extends. Every job message carries `(jobId, attempt)`, and a message with an old attempt is acknowledged as `stale` and ignored, both at the hub and again inside the chat's lock.
+- **Alternatives:** trust the connection (a dropped socket means a dead job); a visibility-timeout queue; distributed locks.
+- **Why:** laptops sleep, Wi-Fi drops, a CLI can come back after the server gave its job to another. Leases say "I'll assume you're gone if I don't hear from you"; fencing makes sure that if you were not gone after all, your late answer can't overwrite a newer one. A reconnecting CLI reports what it is running, and valid jobs are bound to it again, so a laptop that slept keeps its work. See [why/leases-and-fencing.md](why/leases-and-fencing.md).
+
+### 4.5 A WebSocket between server and CLI
+
+- **Chosen:** one WebSocket per CLI token (`/ws/cli`), authenticated with the CLI's token. The server pushes jobs, cancels and notifications; the CLI sends pings, progress and results.
+- **Alternatives:** the CLI polls an HTTP endpoint; server-sent events plus POSTs; long polling.
+- **Why:** jobs must start within seconds of a review request, and the server must be able to tell a CLI to stop mid-job. Polling that fast wastes requests, polling slowly delays the first review. The connection itself is the "is this laptop online?" signal. See [why/websockets.md](why/websockets.md).
+
+### 4.6 A GitHub App that writes as two identities
+
+- **Chosen:** the summary comment is written with the app's installation token (so it shows as `nitpilot[bot]`); reviews and thread replies are written with the person's own user-to-server token, so GitHub shows their avatar plus the app badge. If a person's token can't be refreshed, their writes stop and they are told; Nitpilot never quietly posts as the bot instead.
+- **Alternatives:** post everything as the bot; use personal access tokens; require every user to create their own app.
+- **Why:** a review "from the bot" is easy to ignore and breaks the rule that the developer's agent speaks for the developer. Personal access tokens are broader than needed. The App model gives per-repo installation, short-lived tokens and a clear audit trail. See [why/github-app.md](why/github-app.md), [why/oauth-pkce.md](why/oauth-pkce.md).
+
+### 4.7 Recognizing our own writes
+
+- **Chosen:** every body we write carries a hidden marker (`<!-- nitpilot:v1 chat=… -->`), and every id we create is stored in `GithubWrite`. A webhook for either is ignored. Our own pushes are announced with `job.pushing` before `git push` and matched by sha.
+- **Alternatives:** compare authors (impossible when we write as the user); wait and diff; ignore everything from our app.
+- **Why:** GitHub tells us about our own comments and pushes like anyone else's. Without the marker, an agent's reply would be read as a new human comment and start another round, forever.
+
+### 4.8 Safe git, worktrees and a scrub
+
+- **Chosen:** each job gets a detached worktree. Every git call goes through `safeGit()`, which sets `core.hooksPath` to an empty folder, `core.symlinks=false`, `core.fsmonitor=false`, `submodule.recurse=false`, an explicit `GIT_DIR` and `GIT_WORK_TREE`, and a minimal environment. Files that would configure the agent are marked `skip-worktree` and deleted before it starts.
+- **Alternatives:** a plain `git clone` per job; a container per job; trusting the repository.
+- **Why:** a pull request is untrusted input. A repository can ship git hooks, symlinks to `~/.ssh`, an `.mcp.json` that starts a program, a `CLAUDE.md` with instructions. Worktrees are cheap and leave the developer's own checkout alone; the hardened settings and the scrub close the doors an attacker would try. See [why/git-worktrees.md](why/git-worktrees.md), [why/safe-git.md](why/safe-git.md).
+
+### 4.9 Agents get tools, never a shell
+
+- **Chosen:** each job gets a local MCP server on `127.0.0.1` with a random port and a 32-byte bearer token, checked with `timingSafeEqual`, valid only for that job. A reviewer's tools are read-only; an editor's add edits and allowlisted checks, run without a shell in their own process group.
+- **Alternatives:** give the agent `bash` and `gh`; let it call the server directly.
+- **Why:** an agent with a shell and a GitHub token can be talked into anything by a PR description. With only Nitpilot's tools, the worst a hostile PR can do is raise a silly point. The server also never has to trust the agent: results are validated and applied by the engine. See [why/local-mcp-server.md](why/local-mcp-server.md).
+
+### 4.10 Untrusted text is marked as such
+
+- **Chosen:** the PR title, body and every comment are wrapped in `<untrusted source="…">` in tool results, and the agent's prompt says what that means. Automatic jobs only start from trusted authors (`OWNER`, `MEMBER`, `COLLABORATOR` or a bot on the team's list).
+- **Alternatives:** strip suspicious text; trust the model to resist.
+- **Why:** prompt injection can't be filtered out reliably. Marking text as data, limiting what the agent can do, and not auto-running on outside contributors' PRs layer up. See [why/prompt-injection.md](why/prompt-injection.md).
+
+### 4.11 Adapters, fakes and a conformance suite
+
+- **Chosen:** two interfaces. `PlatformAdapter` (GitHub today) and `AgentAdapter` (Claude Code, Gemini CLI, a scripted fake). Every adapter passes one shared conformance suite for the modes it declares: static checks in CI, live checks run by hand. [adapters.md](adapters.md) shows how to write one.
+- **Alternatives:** call GitHub and `claude` directly; mock them per test.
+- **Why:** agent CLIs change flags quickly. A suite that checks the *command we would run* (no shell tool for a reviewer, the token only in a 0600 file, the isolation flags present) catches drift in CI. A `FakePlatform` and a fake agent make the whole loop testable without a network or a subscription.
+
+### 4.12 Testing: five layers
+
+- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) one end-to-end test with real server, two real CLIs and the fake agent (`npm run test:e2e`); (5) a manual live acceptance run against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md)). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
+- **Alternatives:** mocks only; full browser-level tests.
+- **Why:** each layer catches what the one below can't. Mocks can't tell us what GitHub really sends, and the live run is the only place a real agent meets a real PR. The live run is manual because it needs two accounts and a subscription; it is written down so it can be repeated.
+
+### 4.13 A monorepo with a shared protocol package
+
+- **Chosen:** npm workspaces; `packages/protocol` holds the zod schemas, the enums and the `BRAND` constant.
+- **Alternatives:** separate repositories; OpenAPI-generated clients.
+- **Why:** the server and CLI must agree on every message exactly. One schema, imported by both, is the contract, and a protocol change fails to compile on both sides at once.
+
+---
+
+## 5. When things go wrong
+
+| What happens | What Nitpilot does |
+|---|---|
+| The server restarts | Stored deliveries not yet processed are replayed; due tasks run; running jobs get a fresh lease (the server was away, not the CLIs); GitHub is asked to resend recent failed deliveries |
+| A laptop sleeps mid-job | If it wakes before the lease ends, `hello` rebinds the job. Otherwise the job was requeued, the old CLI is told to stop, and its late answer is acknowledged `stale` |
+| A CLI is offline when a job is due | The job waits; the chat page says "offline since …"; it runs when a CLI with the repo linked connects |
+| A human pushes while the author's agent is fixing | The server cancels and requeues that job on the new head; a push that still loses the race is rejected by git as non-fast-forward and becomes `branch_moved`. Nothing is ever force-pushed |
+| A GitHub write fails for good | A `write_failed` event: a timeline message, a notification, the person's attention flag. Signing in again clears it |
+| The PR closes mid-job | Jobs are cancelled, the CLI stops the agent and removes the worktree |
+| The agent hits its quota or the daily cap | The job waits and runs again later; it isn't counted as a failed attempt |
+| A PR comes from an outside contributor | The chat waits for a person to start the review by hand |
+
+---
+
+## 6. Not built yet
+
+The web app (inbox, chats, Auto switches, Web Push, drafts) is Plan 2. The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
+````
+
+Create `docs/adapters.md`:
+````markdown
+# Writing an adapter
+
+Nitpilot talks to two kinds of outside thing through two small interfaces, so neither the engine nor the rest of the server knows which one it is using:
+
+- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, Gemini CLI, or the scripted fake agent;
+- a **platform adapter** (in the server) knows one code host: GitHub today. [Spec §12.1](superpowers/specs/2026-10-07-nitpilot-design.md) checks the interface against GitLab's concepts.
+
+Both are held to the same rule: **an adapter may only declare what it has proven.** An agent adapter lists only the modes that pass the conformance suite; a platform adapter's parsing is tested against recorded real payloads.
+
+---
+
+## An agent adapter
+
+Everything is in `apps/cli/src/agents/`. The interface is `AgentAdapter` in `types.ts`:
+
+| Member | What it does |
+|---|---|
+| `id` | One of the ids in `AgentId` (`packages/protocol/src/enums.ts`) |
+| `modes` | `'reviewer'` and/or `'editor'`. Only modes that pass the suite |
+| `scrubPaths` | Project files this agent loads by itself (`CLAUDE.md`, `.claude/`, …). They are deleted from the PR's checkout before it runs |
+| `detect()` | Is it installed and logged in? `nitpilot doctor` and `nitpilot start` use it |
+| `buildInvocation(input)` | The command, arguments, environment and files (the MCP config with the job's token) for one run. Throws for a mode it doesn't support |
+| `parseLine(line)` | One line of the agent's output → `{ type: 'progress' }`, `{ type: 'result' }`, or `null`. Never throws |
+| `outcome({ code, signal, last, stderrTail })` | How the run ended: ok, or a failure reason (`auth`, `quota`, `max_turns`, `crash`, `timeout`, `no_result`) and whether retrying can help |
+
+An adapter only *builds a command and reads output*. Spawning, timeouts and killing the whole process tree are done once, by `runAgent` (`runner.ts`), so an adapter can be tested without running anything.
+
+### Steps
+
+1. **Read the agent's own documentation and check its flags against the installed version.** Write the version in the adapter (`CLAUDE_CODE_CHECKED_VERSION`). Flags change fast; this is what the suite will catch later.
+2. **Pick the tools per mode.** A reviewer gets read tools only. An editor adds edit tools. No shell, no web, for either. Everything else the agent needs goes through Nitpilot's MCP tools.
+3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`).
+4. **Put the MCP token in a file, never on the command line.** Return it in `files`; `runAgent` writes it with mode 0600 inside the run's private folder and the executor deletes the folder afterwards.
+5. **Build the environment from `input.baseEnv`.** It is an allowlist. Add only what your agent needs. `ANTHROPIC_API_KEY` only when the user opted into API billing; `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `AWS_*` never.
+6. **Record real runs** of every way the agent can end (success, out of turns, logged out, rate limit, crash, killed by a signal) into `fixtures/*.jsonl`, with paths and ids replaced. Write what `outcome` must make of each. Read the agent's *error output*, never its own words: a model can say "I hit my limit" about anything.
+7. **Run the static suite** from a test file next to the adapter (`claude-code/conformance.test.ts` is the example):
+
+   ```ts
+   staticConformance({
+     adapter: myAdapter(),
+     toolsOf: (invocation) => /* the tools this invocation turns on, in the agent's own names */,
+     readTools: ['Read', 'Glob', 'Grep'],
+     editTools: ['Edit', 'Write'],
+     isolation: { reviewer: [/* argument sequences that must be present */], editor: [/* … */] },
+     fixtures: { dir: FIXTURES, cases: [/* { file, code, signal, stderr?, outcome } */] },
+   });
+   ```
+
+   It checks, without running the agent (S1 to S6): no shell, write or web tool in reviewer mode; the token only in a 0600 file; no secrets in the environment; the isolation flags are present; every recorded fixture gives the right outcome and junk lines never crash the parser; an unsupported mode throws. Each check was run against a deliberately broken adapter to be sure it can fail.
+8. **Register it** in `registry.ts` (`getAdapter`), and give `detect()` a real check so `nitpilot doctor` can say what is wrong.
+9. **Run the live suite** by hand: add the adapter to `ADAPTERS` in `conformance/live.test.ts`, make sure the agent is logged in, then `npm run test:live -w apps/cli`. It runs the real agent against booby-trapped checkouts (L1 to L6) and uses a little of the user's plan, about five minutes and 14 runs for Claude Code. [why/agent-conformance.md](why/agent-conformance.md) explains the canaries.
+10. **Declare only the modes that passed.** If the editor mode fails a live check, `modes` is `['reviewer']` until it is fixed.
+
+### The fake agent
+
+`agents/fake/` is the smallest adapter and the best template. It runs `agent.ts`, a script that follows a JSON scenario file over real MCP ("raise two points; fix one; resolve both"), so tests exercise the whole loop with no model. `NITPILOT_FAKE_SCENARIO=<file>` points it at another scenario; the live acceptance run uses that for account B ([acceptance/plan-1.md](acceptance/plan-1.md)). It only runs from a source checkout.
+
+---
+
+## A platform adapter
+
+Everything is in `apps/server/src/platform/`. `types.ts` defines `PlatformAdapter = PlatformReads & PlatformWrites`.
+
+**Reading**
+
+- `parseWebhook(headers, raw)` → `NormalizedEvent[]`. Turn the platform's payload into the engine's events (`pr_opened`, `review_requested`, `head_updated`, `external_comment`, …). `[]` means "nothing for us". It may call the platform's API, for example to fetch a submitted review's comments instead of trusting the order webhooks arrive in.
+- `getPr(pr)` → `PrSnapshot`, the PR as it is right now.
+- `readDefaultBranchFile(repo, path, etag?)`: the team's rules file, from the default branch only, so a PR can't change its own rules. Uses the ETag so an unchanged file costs nothing.
+- `gitSpec(pr)`: where the CLI fetches the code (`refs/pull/N/head` on GitHub) and where it may push (`null` for a PR from a deleted fork).
+- `findOpenPrsFor(user)`: the person's open PRs, found with their own token, for catching up.
+
+**Writing** (all three accept `{ reuseIfContains }`, so a retry after a timeout finds the earlier write instead of posting twice)
+
+- `upsertSummary`: the one summary comment, as the app bot, edited in place.
+- `postReview`: one review, as the person, with its inline comments.
+- `replyToThread`: a reply in a comment thread, as the person.
+
+Two conventions the adapter must keep: it never alters the body it is given (the hidden `<!-- nitpilot:v1 … -->` marker inside is how Nitpilot recognizes its own writes coming back as webhooks), and ids are strings.
+
+The webhook signature check is still GitHub-specific and lives in the HTTP route (`http/routes/webhooks.ts`, `lib/hmac.ts`). A second platform would move it behind the adapter; the spec's `verifyWebhook` is where it belongs.
+
+### How a platform adapter is tested
+
+1. **Normalizers, with hand-built payloads** (`platform/github/normalize/*.test.ts`) for every action and edge case: fast, and they pin down each rule.
+2. **Recorded fixtures** (`test/fixtures/recorded/`): real deliveries from a sandbox repo, replayed through `parseGithubWebhook`, with hand-written expected events. This is what proves the adapter reads what the platform really sends. Record with `npm run record:fixtures -w apps/server`; see [why/recorded-fixtures.md](why/recorded-fixtures.md).
+3. **`FakePlatform`** (`platform/fake/`): the whole interface in memory. It parses payloads with the same code and records every write, so the engine, dispatcher and end-to-end tests run without a network. A new platform's own fake is a copy of it with the new payloads.
+4. **The live acceptance run**, with the new platform's sandbox ([acceptance/plan-1.md](acceptance/plan-1.md) for GitHub).
+````
+
+Create `docs/acceptance/plan-1.md`:
+````markdown
+# Plan 1 acceptance run (live)
+
+The manual end-to-end test from [spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md): the real server, real GitHub, two real accounts, and a real agent. Follow it top to bottom and tick the boxes. [why/live-acceptance.md](../why/live-acceptance.md) explains why this is a document and not a test.
+
+**Time:** about 3 hours. **Cost:** account A's agent is Claude Code, so a full run uses about 6 agent runs of your Claude plan. Account B's reviewer is a scripted fake agent and costs nothing. If a run ends with a `quota` failure, wait for the plan's window to reset and carry on.
+
+## Who is who
+
+| | Account | Role | CLI | Agent | Config folder | Clone |
+|---|---|---|---|---|---|---|
+| **A** | `ngkdev93-jpg` | author | CLI A (the built bundle) | **Claude Code** | `~/.nitpilot-a` | `~/nitpilot-acceptance/a/nitpilot-sandbox` |
+| **B** | `NikosGkikas13` | reviewer, owns the repo | CLI B (from source) | **fake agent** (scenario files) | `~/.nitpilot-b` | `~/nitpilot-acceptance/b/nitpilot-sandbox` |
+
+The sandbox is `NikosGkikas13/nitpilot-sandbox`. The spec has account A owning it; here B does, and roles follow the accounts, not the ownership. The spec also has CLI B on Gemini CLI; Google refuses personal sign-ins for it ([spec §22](../superpowers/specs/2026-10-07-nitpilot-design.md)), so B's agent is the fake one. What the run proves about B is the plumbing, not a reviewer's judgment.
+
+**Windows you will use:**
+- **Window A:** a private browser window signed in to GitHub as `ngkdev93-jpg`.
+- **Window B:** a normal browser window signed in as `NikosGkikas13`.
+- **T1 tunnel, T2 server, T3 CLI A, T4 CLI B, T5 commands:** five terminal tabs. In each, first run `cd /path/to/nitpilot && source docs/acceptance/env.sh`.
+
+**If something goes wrong**, stop and keep the evidence: the T2, T3 and T4 output and the output of `check.sql`. A bug found here gets a failing test first and a fix after, like any other bug; don't patch it live and carry on.
+
+---
+
+## 0. Before you start
+
+- [ ] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
+- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [ ] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
+- [ ] The dev server isn't running (stop it with Ctrl-C if it is). Nothing else uses port 8787.
+- [ ] The CLI is built: `npm run build -w apps/cli`, then `node apps/cli/dist/index.js --version` prints a version.
+
+## 1. One-time setup: SSH aliases and clones (about 15 minutes)
+
+Two SSH aliases let one laptop push as two GitHub accounts: `github-a` uses a new key that belongs to A, `github-b` uses the key you already use (B's).
+
+1. **T5:** make a key for A (no passphrase; it only has access to a throwaway account) and copy its public half:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_nitpilot_a -N "" -C "ngkdev93-jpg nitpilot acceptance"
+   pbcopy < ~/.ssh/id_ed25519_nitpilot_a.pub
+   ```
+2. **Window A:** open `https://github.com/settings/ssh/new`. Title: `nitpilot acceptance (laptop)`. Key type: *Authentication Key*. Click in the *Key* box, paste with ⌘V, click **Add SSH key** (GitHub may ask for A's password).
+3. **T5:** add the two aliases (this creates `~/.ssh/config` if you have none; if you do, append only the two `Host` blocks):
+   ```bash
+   cat >> ~/.ssh/config <<'CONF'
+
+   Host github-a
+     HostName github.com
+     User git
+     IdentityFile ~/.ssh/id_ed25519_nitpilot_a
+     IdentitiesOnly yes
+
+   Host github-b
+     HostName github.com
+     User git
+     IdentityFile ~/.ssh/id_ed25519
+     IdentitiesOnly yes
+   CONF
+   chmod 600 ~/.ssh/config
+   ```
+4. **T5:** check both. Answer `yes` if SSH asks whether to trust the host. Exit code 1 is normal; the greeting matters:
+   ```bash
+   ssh -T git@github-a    # expect: Hi ngkdev93-jpg! You've successfully authenticated…
+   ssh -T git@github-b    # expect: Hi NikosGkikas13! You've successfully authenticated…
+   ```
+   If `github-b` greets someone else or says *Permission denied*, your usual key isn't B's. Repeat steps 1 and 2 for B (key `~/.ssh/id_ed25519_nitpilot_b`, in **Window B**, at the same URL) and change `github-b`'s `IdentityFile` to it.
+5. **T5:** clone the sandbox twice, once as each account:
+   ```bash
+   mkdir -p ~/nitpilot-acceptance/a ~/nitpilot-acceptance/b
+   git clone git@github-a:NikosGkikas13/nitpilot-sandbox.git "$CLONE_A"
+   git clone git@github-b:NikosGkikas13/nitpilot-sandbox.git "$CLONE_B"
+   ```
+6. **T5:** make A's commits A's. GitHub credits a commit to an account by the e-mail on it; the `…@users.noreply.github.com` address of account A does that without exposing a real one. Confirm A's id first (it should print `340081894`):
+   ```bash
+   gh api users/ngkdev93-jpg --jq .id
+   git -C "$CLONE_A" config user.name ngkdev93-jpg
+   git -C "$CLONE_A" config user.email 340081894+ngkdev93-jpg@users.noreply.github.com
+   git -C "$CLONE_B" config user.name NikosGkikas13
+   git -C "$CLONE_B" config user.email 69345580+NikosGkikas13@users.noreply.github.com
+   ```
+7. **T5:** push a second base branch, which section 3 retargets a PR to:
+   ```bash
+   git -C "$CLONE_A" push origin origin/main:refs/heads/acc/base2
+   ```
+
+- [ ] Both `ssh -T` greetings are right.
+- [ ] Both clones exist and have the right `user.email`.
+
+## 2. A clean database, the tunnel and the server (about 5 minutes)
+
+A fresh database `nitpilot_acceptance` keeps your dev data untouched, and means nobody has joined Nitpilot yet, which the single-player runs need. It borrows the dev database's installation and repository rows, because GitHub only sends those once.
+
+1. **T5:** create it, migrate it, copy the two tables:
+   ```bash
+   docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "create database $ACC_DB"
+   DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB npm run db:deploy -w apps/server
+   docker exec nitpilot-postgres-1 pg_dump -U nitpilot -d nitpilot --data-only --table='"Installation"' --table='"Repo"' \
+     | docker exec -i nitpilot-postgres-1 psql -U nitpilot -d $ACC_DB -q
+   docker exec nitpilot-postgres-1 psql -U nitpilot -d $ACC_DB -c 'select (select count(*) from "Installation") as installations, (select count(*) from "Repo") as repos, (select count(*) from "User") as users'
+   ```
+   Expect `All migrations have been successfully applied.` and then `1 | 19 | 0` (installations, repos, users; the repo count is however many the app sees).
+2. **T1:** start the tunnel first (webhooks reach your laptop only while it runs): `npm run dev:tunnel`. Expect `✓ nitpilot-dev now sends webhooks to https://….trycloudflare.com/webhooks/github`. Leave it running.
+3. **T2:** start the server on the new database. The environment variable wins over `apps/server/.env`:
+   ```bash
+   DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB npm run start -w apps/server
+   ```
+   Expect `Nitpilot server listening on http://localhost:8787` and a `[boot]` line. Leave it running.
+
+- [ ] Tunnel and server are up.
+
+`dbq` (from `env.sh`) runs `psql` inside the Postgres container against this database, so you don't need `psql` installed.
+
+## 3. The probe PR: three questions and a delivery of every kind (about 20 minutes)
+
+No CLI runs and nobody has joined Nitpilot, so nothing reacts: the server just stores every webhook GitHub sends. You click through a PR's whole life and then read what arrived. These are the answers the spec left open (§22), and the raw material for the recorded fixtures.
+
+1. **T5:** note the start time, then make the probe branch (it prints a link):
+   ```bash
+   date -u +%Y-%m-%dT%H:%M:%SZ        # write this down: PROBE_START
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" probe && cd "$REPO"
+   ```
+
+Now do these in order. After each, wait a couple of seconds so deliveries arrive in order.
+
+| # | Where | Do this | GitHub should send |
+|---|---|---|---|
+| P1 | Window A | Open the link `new-branch.sh` printed. Title: `Acceptance probe`. Right side, **Reviewers** gear → tick `NikosGkikas13`. Click **Create pull request**. | `pull_request.opened`, `pull_request.review_requested` |
+| P2 | Window B | Open the PR → **Files changed**. Hover line 5 of `orders-demo/src/orders.js`, click the blue **+**, type `probe: first comment`, click **Start a review**. Hover line 12, click **+**, type `probe: second comment`, click **Add review comment**. Click the green **Finish your review**, leave *Comment* selected, click **Submit review**. | two `pull_request_review_comment.created`, one `pull_request_review.submitted`. **Question 2:** does a `pull_request.review_request_removed` for B follow? |
+| P3 | Window A | **Conversation** tab. In B's first comment thread click **Reply…**, type `probe: reply from the Conversation tab`, click the green button (*Reply* or *Add single comment*). | a `pull_request_review_comment.created` with a reply. **Question 3:** does a `pull_request_review.submitted` come too? |
+| P4 | Window A | **Files changed** tab. In B's second thread click **Reply…**, type `probe: reply from Files changed`, click **Add single comment**. | the same, for this reply |
+| P5 | Window A | **Conversation** tab. Right side, **Reviewers**: click the circular arrows (*Re-request review*) beside `NikosGkikas13`. | **Question 1:** is there a second `pull_request.review_requested`? |
+| P6 | Window A | **Reviewers** gear → untick `NikosGkikas13`, click outside the list. Then gear → tick `NikosGkikas13` again. | `pull_request.review_request_removed`, then `review_requested` |
+| P7 | Window B | **Conversation** tab. On B's first thread click **Resolve conversation**, then **Unresolve conversation**. | `pull_request_review_thread.resolved`, then `.unresolved` |
+| P8 | Window B | In the box at the bottom type `probe: a plain comment`, click **Comment**. | `issue_comment.created` |
+| P9 | Window A | Right side, under *Reviewers*: **Convert to draft** → confirm **Convert to draft**. Then the green **Ready for review**. | `pull_request.converted_to_draft`, then `ready_for_review` |
+| P10 | T5 | Push a second commit: `cd "$CLONE_A" && git switch acc/probe && echo "probe change" >> orders-demo/README.md && git commit -am "probe: a second commit" && git push && cd "$REPO"` | `pull_request.synchronize` |
+| P11 | Window A | Next to the PR title click **Edit**, change the title to `Acceptance probe (renamed)`, **Save**. Click **Edit** again, change the base branch (`base: main ▾`) to `acc/base2`, confirm, **Save**. | `pull_request.edited` (title), then `pull_request.edited` with `changes.base` (**Question 4:** a base retarget has never been seen live) |
+| P12 | Window A | Scroll down, click **Close pull request**, then **Reopen pull request**, then **Close pull request** once more. | `closed`, `reopened`, `closed` |
+
+2. **T5:** list what arrived (use the `PROBE_START` you wrote down) and read it against the table:
+   ```bash
+   DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB npm run record:fixtures -w apps/server -- list --since <PROBE_START>
+   ```
+3. Write the answers in section 9 (Results). The questions, and how to read each from the list:
+
+   | | Question | How to read it |
+   |---|---|---|
+   | Q1 | Does re-requesting a review fire `review_requested` again? | a second `pull_request.review_requested` for `NikosGkikas13` right after P5 |
+   | Q2 | Does a reviewer submitting a review fire `review_request_removed`? | a `pull_request.review_request_removed` within a few seconds after P2's `pull_request_review.submitted`. **If one arrives, stop:** Nitpilot would treat it as "the reviewer left" and withdraw the agent's points right after it posts a review. That is a design change to bring to the person running this, not something to work around here |
+   | Q3 | Do replies made in the GitHub page also arrive as `pull_request_review.submitted`? | a `pull_request_review.submitted` next to the reply's `pull_request_review_comment.created`, for P3 and for P4 separately |
+   | Q4 | Does a base retarget arrive as `pull_request.edited` with `changes.base`? | the second `pull_request.edited` after P11 |
+
+   (Hints from earlier deliveries in the dev database, not proof: a UI reply did arrive with a `pull_request_review.submitted`, and a review by the requested reviewer did not bring a `review_request_removed`.)
+
+- [ ] P1 to P12 done, the list read, Q1 to Q4 answered in section 9.
+- [ ] The probe PR is closed.
+
+## 4. Single-player: the author (A only; B has never joined)
+
+A is on Nitpilot, B is a person with a GitHub account only. When B comments on A's PR on GitHub, A's agent fixes it and answers in B's threads. Nothing is written as a summary comment, because only one side is on Nitpilot.
+
+1. **T5:** A joins. Run `nit-a login`. A browser tab opens; if it opens in the wrong browser, copy the link it printed into **Window A**. Sign in with GitHub if asked, check the code matches the terminal, click **Approve**. Expect `Logged in as ngkdev93-jpg.`
+2. **T5:** link the clone and tell CLI A which check the agent may run:
+   ```bash
+   nit-a repos add "$CLONE_A"
+   nit-edit a '.repos[env.SANDBOX].checks = {test: ["npm", "test", "--prefix", "orders-demo"]}'
+   nit-a doctor
+   ```
+   Expect no `✗` lines; Claude Code shows as installed and logged in.
+3. **T3:** start CLI A with timestamps: `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as ngkdev93-jpg.`
+4. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" sp-author && cd "$REPO"`
+5. **Window A:** open the link, title `Single-player: author`, Reviewers → `NikosGkikas13`, **Create pull request**. Expect nothing to start (B isn't on Nitpilot): T3 stays quiet.
+6. **Window B:** open the PR → **Files changed**. Line 5 of `orders.js`: **+**, `Pages start at 1, but page 1 skips the first page. Please fix.`, **Start a review**. Line 18: **+**, `This throws for an id that does not exist. Please handle it.`, **Add review comment**. **Finish your review** → *Comment* → **Submit review**.
+7. **T3:** within about 5 seconds expect `→ address of …#<PR> (attempt 1)`. Claude works for one to four minutes. Then `✓ address of …: done`.
+8. **Window B**, on the PR: a new commit `Address review feedback (round 1)`; both threads have a reply from `ngkdev93-jpg` with the app badge; no Nitpilot summary comment.
+9. **T5:** `PR=<the PR number>` then `dbq -v pr=$PR -f - < docs/acceptance/check.sql`, and `gh api repos/$SANDBOX/pulls/$PR/commits | jq '[.[] | {sha: .sha[0:7], author: .author.login, trailer: (.commit.message | contains("Nitpilot-Job"))}]'`
+10. **Window A:** close the PR (**Close pull request**), so later sections' catch-up and chats don't touch it.
+
+- [ ] The address job started within about 5 seconds of B's review (T3 stamp against `check.sql` section 4).
+- [ ] The commit is authored by `ngkdev93-jpg` and its message has a `Nitpilot-Job` trailer.
+- [ ] Both of B's threads got a reply from A, as A.
+- [ ] No comment from `nitpilot-dev[bot]`.
+- [ ] `check.sql` shows no duplicate jobs, and no webhook left `received`, `retrying` or `failed`.
+
+## 5. Single-player: the reviewer (B only; A leaves)
+
+Now the other side. B is on Nitpilot, A is a plain GitHub user. When A asks B for a review, B's agent reviews and posts **one GitHub review** as B.
+
+1. **T3:** stop CLI A (Ctrl-C).
+2. **T5:** make A leave Nitpilot, as if they had never joined: `dbq -c "delete from \"User\" where login = 'ngkdev93-jpg'"`. Expect `DELETE 1`.
+3. **T5:** B joins: `nit-b login` (use **Window B** for the link), then:
+   ```bash
+   nit-b repos add "$CLONE_B"
+   nit-edit b '.agent = "fake"'
+   nit-b doctor
+   ```
+   Expect `Logged in as NikosGkikas13.` and no `✗` lines.
+4. **T4:** `nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as NikosGkikas13.`
+5. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" sp-reviewer && cd "$REPO"`
+6. **Window A:** open the link, title `Single-player: reviewer`, Reviewers → `NikosGkikas13`, **Create pull request**.
+7. **T4:** within about 5 seconds `→ review of …#<PR> (attempt 1)`, then `✓ review of …: done`.
+8. **Window B**, on the PR: one review by `NikosGkikas13` with three inline comments (lines 5, 12 and 18 of `orders.js`), showing the app badge; no summary comment.
+9. **T5:** `PR=<number>`, then `gh api repos/$SANDBOX/pulls/$PR/reviews --jq length` (expect `1`), `gh api repos/$SANDBOX/pulls/$PR/comments --jq '.[].user.login'` (expect three `NikosGkikas13`), and `check.sql`.
+10. **Window A:** close the PR.
+
+- [ ] The review job started within about 5 seconds of the request.
+- [ ] Exactly one review, with three inline comments, written as B.
+- [ ] No `nitpilot-dev[bot]` comment.
+
+## 6. Agent to agent: the pass criteria
+
+Both on Nitpilot. A's agent is Claude Code, B's is the scripted reviewer.
+
+1. **T5:** A rejoins: `nit-a login` (**Window A**). Expect `Logged in as ngkdev93-jpg.` (the clone and check stay configured). **T3:** `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. CLI B (T4) is still running.
+2. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" happy && cd "$REPO"`
+3. **Window A:** open the link, title `Agent to agent: happy path`, Reviewers → `NikosGkikas13`, **Create pull request**. Note the PR number: `PR=…`.
+4. Watch. Expected, in order:
+   - **T4:** `→ review of …#<PR> (attempt 1)` within 5 seconds, then `✓ review of …: done` (three points).
+   - **GitHub:** one comment from `nitpilot-dev[bot]` appears a few seconds later (the summary).
+   - **T3:** `→ address of …#<PR> (attempt 1)`; Claude edits `orders.js`, runs the test, replies to each point; then `✓ address of …: done` and a commit lands on the branch.
+   - **T4:** `→ re-review of …`, then `✓ re-review of …: done`.
+   - **T4 only:** a `🔔` line that the PR is ready. T3 prints none.
+5. **T5:** check everything:
+   ```bash
+   dbq -v pr=$PR -f - < docs/acceptance/check.sql
+   gh api repos/$SANDBOX/issues/$PR/comments | jq --arg link "/c/$SANDBOX/$PR" '[.[] | select(.user.login == "nitpilot-dev[bot]")] | {bot_comments: length, edited: (.[0].updated_at != .[0].created_at), has_log: (.[0].body | contains("<summary>Review log")), has_transcript_link: (.[0].body | contains($link))}'
+   gh api repos/$SANDBOX/pulls/$PR/comments --jq length
+   gh api repos/$SANDBOX/pulls/$PR/commits | jq '[.[] | select(.commit.message | contains("Nitpilot-Job")) | {sha: .sha[0:7], author: .author.login, email: .commit.author.email}]'
+   ```
+6. Open the transcript link from the summary comment (in **Window B**, sign in with GitHub if the page asks). It shows the whole conversation and the chat as ready.
+
+**Pass criteria** (spec §20):
+- [ ] B's review job starts within 5 seconds of the review request (T4's `→ review of …` stamp minus the first row of `check.sql` section 4).
+- [ ] The chat reaches `ready` within `max_rounds` (3): `check.sql` section 1 shows `ready` and a round of 3 or less.
+- [ ] Exactly one `nitpilot-dev[bot]` comment (`bot_comments: 1`), edited across rounds (`edited: true`), with the collapsed log and the transcript link (`has_log` and `has_transcript_link` true).
+- [ ] No agent comments in the PR's review threads (the `pulls/$PR/comments` count is `0`).
+- [ ] The fix commits are authored by A (`author: "ngkdev93-jpg"` on every commit with a trailer).
+- [ ] Only B is notified: T4 shows one `🔔` line saying the PR is ready, T3 shows none. (T2 shows no `[notify]` line either: the server only logs a notification for someone whose CLI is offline.)
+- [ ] No job is duplicated (`check.sql` section 3 prints no rows), and every `RawEvent` is processed (section 5 shows only `processed` and `ignored`).
+
+## 7. Variants
+
+Close each variant's PR when you're done with it, so it can't affect the next.
+
+### 7.1 A security point escalates
+
+1. **T4:** stop CLI B (Ctrl-C), then restart it on the security scenario:
+   ```bash
+   export B_SCENARIO="$REPO/docs/acceptance/scenarios/sandbox-security.json"
+   nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+2. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" security && cd "$REPO"`. **Window A:** open the link, title `Variant: security`, Reviewers → `NikosGkikas13`, **Create pull request**. `PR=…`
+3. Expect: **T4** `→ review of …`, `✓ review of …: done` (one point); a `🔔` line about an escalation in **both** T3 and T4 (each person is notified once); T3 never prints `→ address of …`.
+4. **T5:** `check.sql`.
+
+- [ ] Section 1 shows the chat as `escalated`; section 6 shows P1 as `escalated` with reason `category`.
+- [ ] Both people were notified (one `🔔` line each in T3 and T4), and no address job ran.
+
+Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, step 4.
+
+### 7.2 Stopping B's CLI shows "offline since…", and the job completes after a restart
+
+1. **T4:** stop CLI B (Ctrl-C). Wait a few seconds.
+2. **T5:** new branch `offline`; **Window A:** open the PR, title `Variant: offline`, Reviewers → `NikosGkikas13`. `PR=…`
+3. Nothing runs. Open `http://localhost:8787/c/NikosGkikas13/nitpilot-sandbox/$PR` in **Window B** (sign in with GitHub if asked). It says `NikosGkikas13's agent is waiting: offline since …` with about the time you stopped CLI B.
+4. Wait a full minute, then **T4:** `nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Within about 5 seconds `→ review of …#<PR> (attempt 1)`. The run carries on to ready, with A's agent fixing as in section 6.
+
+- [ ] The page showed "offline since …" while B was stopped.
+- [ ] The review ran once, after the restart (`check.sql` section 3 prints no rows), and the chat reached `ready`.
+
+### 7.3 A manual push during an address job triggers `branch_moved` and a new plan
+
+1. **T5:** new branch `push-mid`; **Window A:** open the PR, title `Variant: manual push`, Reviewers → `NikosGkikas13`. `PR=…`
+2. Watch **T3**. The moment it prints `→ address of …#<PR> (attempt 1)`, go to **T5** and push as a human, quickly:
+   ```bash
+   cd "$CLONE_A" && git switch acc/push-mid && echo "a human edit" >> orders-demo/README.md && git commit -am "human: tweak the README" && git push; cd "$REPO"
+   ```
+3. Expect: the chat timeline says `New commits pushed (…)`; **T3** prints `■ Stopped …: branch moved.` (or, if Claude pushed second and lost the race, git rejects its push and the job fails as `branch_moved`); then a new `→ address of …` on the new head; the PR reaches ready.
+4. If Claude had already pushed before you, your push was an ordinary one and nothing was cancelled. That isn't a failure of Nitpilot: repeat on a new PR and push faster.
+5. **T5:** `check.sql`.
+
+- [ ] An address job shows `cancelled` with `branch_moved` (section 2), followed by a later address job on the new head, and the timeline has the "New commits pushed" line.
+- [ ] Nothing was force-pushed: the branch's history on GitHub keeps your commit.
+
+### 7.4 Closing the PR mid-job cancels and cleans up
+
+1. **T5:** new branch `close-mid`; **Window A:** open the PR, title `Variant: close mid-job`, Reviewers → `NikosGkikas13`. `PR=…`
+2. When **T3** prints `→ address of …#<PR> (attempt 1)`, go to **Window A** and click **Close pull request**.
+3. Expect **T3** `■ Stopped …: pr closed.` within seconds, and no `✓`.
+4. **T5:** check nothing is left behind:
+   ```bash
+   ls ~/.nitpilot-a/worktrees/NikosGkikas13/nitpilot-sandbox/ 2>&1     # empty, or "No such file"
+   pgrep -fl 'claude -p' || echo "no claude running"
+   dbq -v pr=$PR -f - < docs/acceptance/check.sql
+   ```
+
+- [ ] The address job is `cancelled` with `pr_closed`, the chat is `closed`, the worktree folder is gone, and no agent process is left.
+
+## 8. Wrap up
+
+1. Record the deliveries this run produced as fixtures (Task 24, Step 22). Do it before the database goes away.
+2. Stop T1 to T4 (Ctrl-C).
+3. Fill in section 9. Keep this file as the record of the run.
+4. Optional: `docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "drop database $ACC_DB"` once the fixtures are saved. Your dev database was never touched.
+
+## 9. Results
+
+Run on: ____ with Nitpilot at commit ____.
+
+**Answers to the spec's open questions** (section 3):
+
+| | Answer |
+|---|---|
+| Q1: re-request fires `review_requested` again? | |
+| Q2: a submitted review fires `review_request_removed`? | |
+| Q3: UI replies also arrive as `pull_request_review.submitted`? | |
+| Q4: a base retarget arrives as `edited` with `changes.base`? | |
+
+**What was found and fixed during the run** (each with its commit):
+
+-
+
+**Ticks:** every box in sections 1 to 7 above is ticked, or has a note here saying why not:
+
+-
+````
+
+- [ ] **Step 12: Bring the spec in line**
+
+The spec has CLI B on Gemini CLI, which is on hold (§22), and one phrase for the single-player runs, which need one run per side. Four edits and a line in the docs list:
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+A runs Claude Code; B runs Gemini CLI.
+```
+with:
+```
+A runs Claude Code; B runs Gemini CLI, or the scripted fake agent while Gemini CLI is on hold (§22).
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+     - CLI A running Claude Code, CLI B running Gemini CLI.
+```
+with:
+```
+     - CLI A running Claude Code. CLI B running a second agent CLI: Gemini CLI once Task 20 lands, and until then the scripted fake agent (§12.2), so B's side proves the plumbing (a review request becomes a job within seconds, its tools work, its points reach the chat and GitHub) and not a reviewer's judgment.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+     - Single-player runs, done before B joins Nitpilot.
+```
+with:
+```
+     - Single-player runs, one per side: the author's side done before B joins Nitpilot, and the reviewer's side done with A not on Nitpilot.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+- `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
+```
+with:
+```
+- `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
+- `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+and the Plan 1 acceptance run can't put CLI B on Gemini CLI.
+```
+with:
+```
+and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
+```
+
+- [ ] **Step 13: Run the full suite, and commit the offline half**
+
+Docker must be running.
+
+Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
+Expected: all green: protocol 41, CLI 283 passed and 14 skipped, server 517; end to end 5 passed.
+
+```bash
+git add apps/server/vitest.config.ts apps/server/package.json apps/server/scripts/record-fixtures.ts apps/server/test/fixtures apps/cli/src/agents docs/acceptance docs/architecture.md docs/adapters.md docs/why/recorded-fixtures.md docs/why/live-acceptance.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(acceptance): recorded webhook fixtures, a fake-agent scenario switch, the live runbook and the architecture docs
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+From here the steps need a person. Everything in `docs/acceptance/plan-1.md` is checked off as it is done, and its section 9 (Results) is filled in.
+
+- [ ] **Step 14: Live: be ready (the person and the controller)**
+
+Everything from here writes to the sandbox repo on GitHub, and Steps 18, 20 and 21 start Claude Code. Tell the person what is coming (about 3 hours; about 6 Claude runs; every GitHub write goes to `NikosGkikas13/nitpilot-sandbox`) and get a clear yes before starting.
+
+The controller checks:
+```bash
+git status --short            # clean, on the plan-1b branch with Step 13's commit on top
+docker ps --format '{{.Names}}'
+claude auth status
+command -v jq perl cloudflared gh git node
+npm run build -w apps/cli && node apps/cli/dist/index.js --version
+```
+Expected: no changes; `nitpilot-postgres-1`; `"loggedIn": true`; six paths; a version number. If Claude Code isn't signed in, the person runs `claude auth login` themselves.
+
+The built CLI is what account A will run: this is the first time the bundle (not the source) meets a real agent.
+
+- [ ] **Step 15: Live: SSH aliases, clones, a clean database, the tunnel and the server**
+
+Follow `docs/acceptance/plan-1.md` sections **1 and 2**.
+
+- The person: adds the new SSH key to account A on GitHub (section 1, step 2; Window A is a private window signed in as `ngkdev93-jpg`).
+- The controller: runs the terminal commands in section 1, then creates the database (section 2, step 1) and starts the tunnel (**T1**) and the server (**T2**) in two Terminal-panel tabs. Leave both running until Step 21 is done. Note the tunnel's `*.trycloudflare.com` address changes every run; `npm run dev:tunnel` points the app at it itself.
+
+Expected: both `ssh -T` greetings name the right account; `1 | 19 | 0` (installations, repos, users: the repo count is whatever the app can see); T1 `✓ nitpilot-dev now sends webhooks to …`; T2 `Nitpilot server listening on http://localhost:8787`. Tick the boxes in sections 1 and 2.
+
+- [ ] **Step 16: Live: the probe PR, and the three questions**
+
+Follow section **3**. No CLI runs and nobody has joined Nitpilot, so nothing reacts: the server just stores every webhook. The person does the clicks P1 to P12 (two browser windows); after each group the controller runs the `list` command from section 3, step 2, to confirm the deliveries arrived and to read the answers:
+
+- **Q1** re-requesting a review: is there a second `pull_request.review_requested` after P5?
+- **Q2** a submitted review: does `pull_request.review_request_removed` follow P2's review? **If it does, stop here.** Nitpilot would take it for "the reviewer left" and withdraw the agent's points right after a review is posted (`onReviewRequestRemoved`, `engine/lifecycle.ts`). That is a design change for the person to decide, with a failing engine test first; don't carry on to Step 18 until it's settled.
+- **Q3** replies made on GitHub's pages: does a `pull_request_review.submitted` arrive with each reply, for the Conversation tab (P3) and for Files changed (P4) separately?
+- **Q4** a base retarget: does P11's second edit arrive as `pull_request.edited` with `changes.base`?
+
+Write the four answers in the table in section 9. Tick P1 to P12. The probe PR ends closed.
+
+- [ ] **Step 17: Record the probe's deliveries as fixtures**
+
+Docker must be running. Use the `list` output from Step 16 (the delivery ids are in its first column). Each of these is a delivery of a kind the unit tests only know from hand-made payloads:
+
+| Fixture name | Which delivery |
+|---|---|
+| `pull_request.review_requested.again` | the first `pull_request.review_requested` after P4's replies (P5). If there is none, that is Q1's answer: record nothing and delete this row |
+| `pull_request.review_request_removed` | the `pull_request.review_request_removed` of P6 |
+| `pull_request.converted_to_draft` | P9, `pull_request.converted_to_draft` |
+| `pull_request.ready_for_review` | P9, `pull_request.ready_for_review` |
+| `pull_request.synchronize` | P10, `pull_request.synchronize` (`head <sha>`) |
+| `pull_request.edited` | P11, the `pull_request.edited` that says `changed: title` |
+| `pull_request.edited.retarget` | P11, the `pull_request.edited` that says `changed: base` |
+| `pull_request.reopened` | P12, `pull_request.reopened` |
+| `pull_request_review_comment.created.probe-first` | P2, the `comment "probe: first comment"` line |
+| `pull_request_review_comment.created.probe-second` | P2, the `comment "probe: second comment"` line |
+| `pull_request_review.submitted.probe` | P2, the `pull_request_review.submitted` (`review commented`) that comes with those two comments |
+| `pull_request_review_comment.created.reply-conversation` | P3, the `reply "probe: reply from the Conversation tab"` line |
+| `pull_request_review.submitted.reply-conversation` | P3: a `pull_request_review.submitted` right next to that reply, if there is one (Q3). If there is none, record nothing and delete this row |
+| `pull_request_review_comment.created.reply-files` | P4, the `reply "probe: reply from Files changed"` line |
+| `pull_request_review.submitted.reply-files` | P4: a `pull_request_review.submitted` right next to that reply, if there is one (Q3). If there is none, record nothing and delete this row |
+| `pull_request_review_thread.resolved` | P7, `pull_request_review_thread.resolved` |
+| `pull_request_review_thread.unresolved` | P7, `pull_request_review_thread.unresolved` |
+| `issue_comment.created.human` | P8, the `issue_comment.created` whose sender is `NikosGkikas13` |
+
+Run, with the ids filled in (the recorder reads the acceptance database when `DATABASE_URL` points at it):
+```bash
+export DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/nitpilot_acceptance
+rec() { npm run -s record:fixtures -w apps/server -- write "$@"; }
+rec <delivery id> pull_request.review_requested.again --note "Re-requesting a review from a reviewer who had already reviewed"
+rec <delivery id> pull_request.review_request_removed --note "Unticking the reviewer in the Reviewers list"
+rec <delivery id> pull_request.converted_to_draft --note "The author converted the PR to a draft"
+rec <delivery id> pull_request.ready_for_review --note "The author marked the draft ready for review"
+rec <delivery id> pull_request.synchronize --note "A second commit was pushed to the PR branch"
+rec <delivery id> pull_request.edited --note "The PR title was edited"
+rec <delivery id> pull_request.edited.retarget --note "The PR base branch was changed to acc/base2"
+rec <delivery id> pull_request.reopened --note "The PR was reopened"
+rec <delivery id> pull_request_review_comment.created.probe-first --note "First inline comment of the reviewer"
+rec <delivery id> pull_request_review_comment.created.probe-second --note "Second inline comment of the reviewer"
+rec <delivery id> pull_request_review.submitted.probe --note "The reviewer submitted the two inline comments as one review"
+rec <delivery id> pull_request_review_comment.created.reply-conversation --note "A reply made on the Conversation tab"
+rec <delivery id> pull_request_review.submitted.reply-conversation --note "Does a reply on the Conversation tab also arrive as a review?"
+rec <delivery id> pull_request_review_comment.created.reply-files --note "A reply made with Add single comment on Files changed"
+rec <delivery id> pull_request_review.submitted.reply-files --note "Does a reply on Files changed also arrive as a review?"
+rec <delivery id> pull_request_review_thread.resolved --note "The reviewer resolved a conversation"
+rec <delivery id> pull_request_review_thread.unresolved --note "The reviewer reopened the conversation"
+rec <delivery id> issue_comment.created.human --note "A person commented on the PR conversation"
+```
+
+Read two or three of the new files (`git diff --stat` and `head -60`), and check the recorder refused nothing. Then add the expectations. They are written by hand, from what each event means, and pin only what is stable: types, logins, the branch `acc/base2`, the two comment bodies. They go into `apps/server/test/fixtures/recorded/recorded.test.ts`:
+
+In `apps/server/test/fixtures/recorded/recorded.test.ts`, replace:
+```ts
+const pr = (number: number) => ({ ...SANDBOX, number });
+```
+with:
+```ts
+const pr = (number: number) => ({ ...SANDBOX, number });
+/** For the fixtures recorded in the live run, where the PR number, comment ids and shas are the sandbox's own and not worth pinning. */
+const anyPr = { ...SANDBOX, number: expect.any(Number) };
+const anyId = expect.any(String);
+const aSha = expect.stringMatching(/^[0-9a-f]{40}$/);
+```
+
+In `apps/server/test/fixtures/recorded/recorded.test.ts`, replace:
+```ts
+  'issue_comment.edited': [],
+};
+```
+with:
+```ts
+  'issue_comment.edited': [],
+  // The probe PR (docs/acceptance/plan-1.md section 3): one delivery of every kind a PR's life sends.
+  'pull_request.review_requested.again': [{ scope: 'pr', pr: anyPr, event: { type: 'review_requested', reviewer: B } }],
+  'pull_request.review_request_removed': [{ scope: 'pr', pr: anyPr, event: { type: 'review_request_removed', reviewer: B } }],
+  'pull_request.converted_to_draft': [{ scope: 'pr', pr: anyPr, snapshot: { isDraft: true }, event: { type: 'pr_to_draft' } }],
+  'pull_request.ready_for_review': [{ scope: 'pr', pr: anyPr, snapshot: { isDraft: false }, event: { type: 'pr_ready' } }],
+  'pull_request.synchronize': [{ scope: 'pr', pr: anyPr, event: { type: 'head_updated', before: aSha, after: aSha, ours: false } }],
+  'pull_request.edited': [], // a new title is nothing to us
+  'pull_request.edited.retarget': [{ scope: 'pr', pr: anyPr, snapshot: { baseRef: 'acc/base2' }, event: { type: 'pr_retargeted', baseRef: 'acc/base2', trusted: true } }],
+  'pull_request.reopened': [{ scope: 'pr', pr: anyPr, snapshot: { state: 'open' }, event: { type: 'pr_reopened' } }],
+  'pull_request_review_comment.created.probe-first': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: null, author: B, trusted: true, body: 'probe: first comment', path: 'orders-demo/src/orders.js', line: 5, side: 'RIGHT' } } },
+  ],
+  'pull_request_review_comment.created.probe-second': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: null, author: B, trusted: true, body: 'probe: second comment', path: 'orders-demo/src/orders.js', line: 12, side: 'RIGHT' } } },
+  ],
+  'pull_request_review.submitted.probe': [
+    {
+      scope: 'pr',
+      pr: anyPr,
+      event: {
+        type: 'external_review_submitted',
+        review: { id: anyId, author: B, trusted: true, state: 'commented', comments: [{ body: 'probe: first comment', line: 5 }, { body: 'probe: second comment', line: 12 }] },
+      },
+    },
+  ],
+  'pull_request_review_comment.created.reply-conversation': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: 'probe: reply from the Conversation tab' } } },
+  ],
+  'pull_request_review_comment.created.reply-files': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: 'probe: reply from Files changed' } } },
+  ],
+  'pull_request_review.submitted.reply-conversation': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_review_submitted', review: { id: anyId, author: A, trusted: true, state: 'commented', comments: [{ threadRootId: anyId, body: 'probe: reply from the Conversation tab' }] } } },
+  ],
+  'pull_request_review.submitted.reply-files': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_review_submitted', review: { id: anyId, author: A, trusted: true, state: 'commented', comments: [{ threadRootId: anyId, body: 'probe: reply from Files changed' }] } } },
+  ],
+  'pull_request_review_thread.resolved': [{ scope: 'pr', pr: anyPr, event: { type: 'thread_resolved', threadRootId: anyId } }],
+  'pull_request_review_thread.unresolved': [{ scope: 'pr', pr: anyPr, event: { type: 'thread_unresolved', threadRootId: anyId } }],
+  'issue_comment.created.human': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: expect.stringMatching(/^issue:\d+$/), author: B, trusted: true, body: 'probe: a plain comment', path: null } } },
+  ],
+};
+```
+
+In `apps/server/test/fixtures/recorded/recorded.test.ts`, replace:
+```ts
+const NOT_RECORDED: Record<string, string> = {
+  reopened: 'to record in the live run',
+  ready_for_review: 'to record in the live run',
+  converted_to_draft: 'to record in the live run',
+  review_request_removed: 'to record in the live run',
+  synchronize: 'to record in the live run',
+  edited: 'to record in the live run',
+};
+```
+with:
+```ts
+const NOT_RECORDED: Record<string, string> = {};
+```
+
+Every `pull_request` action the normalizer maps now has a real delivery, so `NOT_RECORDED` is empty. If an action never arrived, put it back there with the reason (for example `review_request_removed: 'GitHub sent nothing when the reviewer was unticked'`): that is an answer worth writing down.
+
+Run: `npm test -w apps/server -- test/fixtures`
+Expected: PASS, with every fixture's three tests and the three set-level tests (25 in `scrub.test.ts`, then 3 + 3 per fixture in `recorded.test.ts`: with all 18 probe fixtures that is 115 tests in all).
+
+**If a row fails, that is a finding.** A real delivery that normalizes differently from what was written means either the row or the normalizer is wrong. Decide which from what GitHub actually sent; if it is the normalizer, write the failing test in its own test file first (a `normalize/*.test.ts` with the real payload's shape), then fix it, in its own commit, before going on.
+
+- [ ] **Step 18: Live: single-player, the author (Claude Code fixes B's comments)**
+
+Follow section **4**. Ask before starting CLI A: this is the first run of the real agent through the built bundle. The person signs A in (`nit-a login`), the controller starts CLI A in **T3** with timestamps; the person opens a PR as A and reviews it as B in the browser; Claude Code fixes and replies.
+
+Capture: the T3 output (with its timestamps) and `check.sql`'s output for the PR, and the `gh api …/commits` output from section 4, step 9. Tick the five boxes in section 4. The PR ends closed.
+
+If the address job fails (`auth`, `quota`, `max_turns`, `crash`), read T3 and what it says; a `quota` failure means wait for the plan's window and run the section again on a new PR. Anything else is a bug to write a test for.
+
+- [ ] **Step 19: Live: single-player, the reviewer (B's fake agent reviews A's PR)**
+
+Follow section **5**. No Claude run. The controller stops CLI A, removes A from the database (`delete from "User"`), the person signs B in (`nit-b login`), the controller starts CLI B in **T4**, and the person opens a PR as A, requesting B.
+
+Capture: T4's output, the three `gh api` outputs of section 5, step 9, and `check.sql`. Tick the three boxes in section 5. The PR ends closed.
+
+- [ ] **Step 20: Live: agent to agent, the pass criteria (spec §20)**
+
+Follow section **6**. Ask before the Claude run. A rejoins, the person opens the happy-path PR requesting B, and both CLIs work it to READY: B's fake agent raises the three planted problems, Claude Code fixes them, B's fake agent resolves them.
+
+Capture: T3 and T4 (timestamped), the output of every command in section 6, step 5, and the transcript page. Tick the seven pass criteria. This is the run Plan 1b exists for. If any criterion fails: stop, keep the evidence, and treat it as a bug: a failing test first, a fix in its own commit, then run section 6 again on a new PR.
+
+- [ ] **Step 21: Live: the variants**
+
+Follow section **7**, one variant at a time: a security point escalates (7.1), stopping B's CLI shows "offline since…" and the job completes after a restart (7.2), a manual push during an address job (7.3), closing the PR mid-job (7.4). 7.2, 7.3 and 7.4 each start Claude Code on the address job: ask before each. 7.3 and 7.4 need quick hands: the person acts the moment T3 prints `→ address of …`, so the controller should say "now" as soon as it shows up in T3 (`read_terminal`).
+
+Capture: for each, the T3 and T4 lines and `check.sql`. Tick the boxes in section 7. Each variant's PR ends closed.
+
+- [ ] **Step 22: Record the deliveries Nitpilot caused itself**
+
+These six are what Nitpilot wrote to GitHub in sections 4 and 5, coming back as webhooks. They show the hidden `<!-- nitpilot:v1 … -->` marker surviving the trip through GitHub, which is how the server recognizes (and ignores) its own writes. Use `list --since <time>` with the time you started section 4:
+
+| Fixture name | Which delivery |
+|---|---|
+| `pull_request.synchronize.by-agent` | section 4: the `pull_request.synchronize` right after A's commit "Address review feedback (round 1)" (sender `ngkdev93-jpg`) |
+| `pull_request_review_comment.created.reply-by-agent` | section 4: one of the two replies `ngkdev93-jpg` posted in B's threads after the fix (its text starts with what the agent wrote) |
+| `pull_request_review_comment.created.by-agent-line5` | section 5: the inline comment on line 5 (`comment "**P1 · major · bug:** Page 1 skips the first page…"`) |
+| `pull_request_review_comment.created.by-agent-line12` | section 5: the inline comment on line 12 |
+| `pull_request_review_comment.created.by-agent-line18` | section 5: the inline comment on line 18 |
+| `pull_request_review.submitted.by-agent` | section 5: the `pull_request_review.submitted` that came with those three comments (`review commented`) |
+
+```bash
+export DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/nitpilot_acceptance
+rec() { npm run -s record:fixtures -w apps/server -- write "$@"; }
+rec <delivery id> pull_request.synchronize.by-agent --note "Claude Code's fix, pushed by the CLI"
+rec <delivery id> pull_request_review_comment.created.reply-by-agent --note "A's agent answering a review comment, in the thread, as A"
+rec <delivery id> pull_request_review_comment.created.by-agent-line5 --note "B's agent, inline comment on orders.js line 5"
+rec <delivery id> pull_request_review_comment.created.by-agent-line12 --note "B's agent, inline comment on orders.js line 12"
+rec <delivery id> pull_request_review_comment.created.by-agent-line18 --note "B's agent, inline comment on orders.js line 18"
+rec <delivery id> pull_request_review.submitted.by-agent --note "B's agent posted one review for all three points"
+```
+
+Then the expectations: the marker is in the bodies, the authors are the people the writes were made as, and the review has its three comments in line order.
+
+In `apps/server/test/fixtures/recorded/recorded.test.ts`, replace:
+```ts
+  ],
+};
+
+/** The `pull_request` actions the normalizer maps.
+```
+with:
+```ts
+  ],
+  // Written by Nitpilot itself in the live run (single-player author and reviewer): the hidden marker must survive the trip through GitHub, because it is how our own writes are recognized.
+  'pull_request.synchronize.by-agent': [{ scope: 'pr', pr: anyPr, event: { type: 'head_updated', before: aSha, after: aSha, ours: false } }],
+  'pull_request_review_comment.created.reply-by-agent': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line5': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 5, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line12': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 12, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line18': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 18, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review.submitted.by-agent': [
+    {
+      scope: 'pr',
+      pr: anyPr,
+      event: { type: 'external_review_submitted', review: { id: anyId, author: B, state: 'commented', body: expect.stringContaining('nitpilot:v1'), comments: [{ line: 5 }, { line: 12 }, { line: 18 }] } },
+    },
+  ],
+};
+
+/** The `pull_request` actions the normalizer maps.
+```
+
+Run: `npm test -w apps/server -- test/fixtures`
+Expected: PASS (25 in `scrub.test.ts`, 3 + 3 per fixture in `recorded.test.ts`: with all 6 of these and all 18 of Step 17 that is 133 tests in all). Do this before the acceptance database is dropped.
+
+- [ ] **Step 23: Write down what the run showed**
+
+1. **The runbook.** Fill in section 9: the date, the commit, the answers to Q1 to Q4, anything that was found and fixed (each with its commit), and a note for every box that isn't ticked. Tick the boxes in sections 0 to 7 that Steps 15 to 21 did.
+2. **The spec's open question** (§22) gets its answer. In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace the bullet and keep the sentence that matches Q1's answer:
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+- **Re-requested reviews.** Whether `review_requested` fires again is undocumented. Verify it in the sandbox repo; the design doesn't depend on it.
+```
+with:
+```
+- **Re-requested reviews (checked in the sandbox, 2026-10).** Re-requesting a review from someone who had already reviewed fires `pull_request.review_requested` again, with that reviewer in `requested_reviewer`. So it starts a new review as a first request does. The `synchronize` and thread-reply triggers for single-player reviewers (§15) stay, for the reviewers who never get re-requested.
+```
+
+or, if no second `review_requested` arrived:
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+- **Re-requested reviews.** Whether `review_requested` fires again is undocumented. Verify it in the sandbox repo; the design doesn't depend on it.
+```
+with:
+```
+- **Re-requested reviews (checked in the sandbox, 2026-10).** Re-requesting a review from someone who had already reviewed sends no webhook at all, so Nitpilot can't see it. A re-review only starts from the other triggers in §15 (`synchronize`, the author's reply in a thread) or by hand.
+```
+
+3. **§15 says the same thing** where it says "GitHub doesn't document…". In the same file, replace the first sentence of the bullet under "Re-requested reviews:" with the fact (use the one that matches Q1):
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+  - GitHub doesn't document whether re-requesting a review fires `review_requested` again. So in single-player reviewer mode,
+```
+with:
+```
+  - Re-requesting a review fires `review_requested` again (checked in the sandbox). Even so, in single-player reviewer mode,
+```
+
+or
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace:
+```
+  - GitHub doesn't document whether re-requesting a review fires `review_requested` again. So in single-player reviewer mode,
+```
+with:
+```
+  - Re-requesting a review sends no webhook (checked in the sandbox). So in single-player reviewer mode,
+```
+
+4. **Q2, Q3 and Q4** go into §22 as one new bullet each, right after the "Re-requested reviews" bullet, so the next reader doesn't have to run the probe again. Use the one that matches what you saw. Q2, when no removal followed the review (if one did, you stopped at Step 16):
+```markdown
+- **A submitted review doesn't remove the request.** Submitting a review, even as a requested reviewer, sends no `review_request_removed`, so `requested` stays true after a review and the re-review rules (§9.3) keep working.
+```
+Q3, when both tabs sent a review:
+```markdown
+- **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created` and also as a `pull_request_review.submitted` carrying the same comment, whether sent from the Conversation tab or from Files changed. `SeenComment` makes the comment count once (§8).
+```
+Q3, when only *Add single comment* on Files changed sent a review:
+```markdown
+- **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created`. One sent with *Add single comment* on Files changed also arrives as a `pull_request_review.submitted` carrying the same comment; one sent from the Conversation tab does not. `SeenComment` makes the comment count once (§8).
+```
+Q3, when neither tab sent a review:
+```markdown
+- **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created` only, with `in_reply_to_id` naming the first comment of the thread.
+```
+Q4, when the shape matched (if it differed, you fixed the normalizer in Step 17: write what the payload really looks like):
+```markdown
+- **A base retarget** arrives as `pull_request.edited` with `changes.base.ref.from` and `changes.base.sha.from`, which is what `pr_retargeted` (§9) reads.
+```
+
+- [ ] **Step 24: Run the full suite, stop everything, and commit the results**
+
+Stop T1 to T4 (Ctrl-C). Drop the acceptance database only now, after the fixtures are saved: `docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "drop database nitpilot_acceptance"`. Your dev database was never touched.
+
+Docker must be running.
+
+Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
+Expected: all green: protocol 41, CLI 283 passed and 14 skipped (unchanged since Step 13), server 484 + 3 for each recorded fixture (589 with all 35), end to end 5 passed.
+
+```bash
+git add apps/server/test/fixtures docs/acceptance docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "test(acceptance): the live run passed, with its deliveries recorded as fixtures and the spec's open questions answered
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Fixes made during the live run were committed on their own, each with its failing test, before this commit.
+
+**Done when:** `docs/acceptance/plan-1.md` has every box ticked (or a note saying why not), the spec's §22 has the answers, and the recorded fixtures pass. Plan 1b is then complete except Task 20 (Gemini CLI, on hold); the final whole-branch review comes next.
