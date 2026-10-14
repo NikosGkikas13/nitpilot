@@ -146,6 +146,36 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
     expect(await textOf(await unlinked.view(unlinked.maya.id))).toContain(`leo's agent is waiting: ${unlinked.repo.fullName} isn't linked on leo's connected CLI`);
   });
 
+  it("shows a human's reply in a point's GitHub thread inside that point's card", async () => {
+    const { maya, chat, view } = await scene();
+    await githubAuthFor(maya.id);
+    await prisma.point.update({ where: { chatId_number: { chatId: chat.id, number: 1 } }, data: { githubCommentId: 'gh-comment-1' } });
+    const last = await prisma.message.findFirstOrThrow({ where: { chatId: chat.id }, orderBy: { seq: 'desc' } });
+    await prisma.message.create({ data: { chatId: chat.id, seq: last.seq + 1, kind: 'human', authorGithubId: maya.githubId, authorLogin: 'maya', body: 'Thanks, will do.', data: { threadRootId: 'gh-comment-1' } } });
+    const text = await textOf(await view(maya.id));
+    const at = ['Page size 50 is too big', 'maya: Thanks, will do.', 'Rename <script>'].map((s) => text.indexOf(s));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("shows when the repo's .nitpilot.yml has a problem", async () => {
+    const { maya, repo, view } = await scene();
+    await githubAuthFor(maya.id);
+    await prisma.repo.update({ where: { id: repo.id }, data: { rulesError: 'max_rounds must be a number' } });
+    expect(await textOf(await view(maya.id))).toContain('.nitpilot.yml has a problem, so the defaults apply: max_rounds must be a number');
+  });
+
+  it('says in words whether a finished chat was merged or closed, and why a point escalated', async () => {
+    const { maya, chat, view } = await scene();
+    await githubAuthFor(maya.id);
+    await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'closed', merged: true } });
+    expect(await textOf(await view(maya.id))).toContain(`#${chat.number} · Merged ·`);
+    await prisma.prChat.update({ where: { id: chat.id }, data: { merged: false } });
+    expect(await textOf(await view(maya.id))).toContain(`#${chat.number} · Closed ·`);
+    await prisma.point.update({ where: { chatId_number: { chatId: chat.id, number: 2 } }, data: { status: 'escalated', escalationReason: 'round_limit' } });
+    expect(await textOf(await view(maya.id))).toContain('Escalated: round limit');
+  });
+
   it('escapes what agents and people wrote', async () => {
     const { maya, view } = await scene();
     await githubAuthFor(maya.id);
