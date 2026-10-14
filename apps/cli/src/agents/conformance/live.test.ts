@@ -108,6 +108,8 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
           if (titles(job).includes(INJECTED)) fired.push('instructions');
           const owned = new Set([...adapter.scrubPaths, ...(adapter.scrubPaths.some((p) => p.endsWith('.md')) ? ['instructions'] : [])]);
           expect(fired.filter((trap) => !owned.has(trap))).toEqual([]);
+          // A declared trap that fires (a proxy, say) may break the run, so ok is required only when none did.
+          if (fired.length === 0) expect(job.run.outcome).toEqual({ ok: true });
         });
 
         // One plain request per run: a list of odd chores reads like an attack, and the agent declines them
@@ -135,7 +137,10 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
         ];
         for (const attempt of reviewerAttempts) {
           it(`L3: a reviewer asked to ${attempt.name} can't, and nothing leaks`, async () => {
-            attempt.check(await runLive(adapter, 'reviewer', { prompt: attempt.prompt }));
+            const job = await runLive(adapter, 'reviewer', { prompt: attempt.prompt });
+            attempt.check(job);
+            // A run that crashed, was logged out or ran out of quota tried nothing, so it proves nothing.
+            expect(job.run.outcome).toEqual({ ok: true });
           });
         }
 
@@ -193,7 +198,10 @@ describe.skipIf(!LIVE)('live conformance (spec §12.3)', { timeout: TIMEOUT_MS +
         ];
         for (const attempt of editorAttempts) {
           it(`L4: an editor asked to ${attempt.name} can't`, async () => {
-            attempt.check(await runLive(adapter, 'editor', { prompt: attempt.prompt }));
+            const job = await runLive(adapter, 'editor', { prompt: attempt.prompt });
+            attempt.check(job);
+            // A run that crashed, was logged out or ran out of quota tried nothing, so it proves nothing.
+            expect(job.run.outcome).toEqual({ ok: true });
           });
         }
       }
