@@ -48,7 +48,7 @@ describe('normalizePullRequest', () => {
     expect(ne!.scope === 'pr' && ne!.snapshot?.headRepoFullName).toBeNull();
   });
 
-  it.each(['edited', 'labeled', 'assigned', 'auto_merge_enabled'])('ignores %s', (action) => {
+  it.each(['labeled', 'assigned', 'auto_merge_enabled'])('ignores %s', (action) => {
     expect(normalizePullRequest(prEvent(action))).toEqual([]);
   });
 });

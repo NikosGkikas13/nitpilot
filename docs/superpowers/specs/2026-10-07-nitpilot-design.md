@@ -561,7 +561,7 @@ max_points_per_review: 20
   - GitHub doesn't document whether re-requesting a review fires `review_requested` again. So in single-player reviewer mode, a re-review also starts on `synchronize` (debounced) while that reviewer has open points, and when the author replies in one of their threads.
   - Team review requests are ignored in v1.
 - **Catching up when a CLI connects** (once per person per server start, not polling): three searches with the person's own token, `is:pr is:open author:<login>`, `is:pr is:open review-requested:<login>` and `is:pr is:open reviewed-by:<login>`, one page of 100 each. Search allows 30 requests per minute per person. Each open PR in a repo the app is on and without a chat starts as if it had just been opened. A failed search is tried again at that person's next connect.
-- **A retargeted PR** (`pull_request.edited` with a new base): the chat's `baseRef` and `baseSha` are refreshed and the author's trust is checked again (`pr_retargeted`). Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
+- **A retargeted PR** (`pull_request.edited` with a new base): the author's trust is checked again (`pr_retargeted`). The chat's `baseRef` and `baseSha` are refreshed from every `pull_request` event, so a missed retarget is fixed by the next one. Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
 - **Recovering after a restart:**
   - Replay `RawEvent` rows still marked `received`. Rows marked `retrying` run again once their `retryAt` passes (a 30-second sweep).
   - Redeliver GitHub deliveries that failed in the last 3 days (`GET /app/hook/deliveries`, `POST …/attempts`).
