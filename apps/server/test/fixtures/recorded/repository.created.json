@@ -1,0 +1,67 @@
+{
+  "event": "repository",
+  "action": "created",
+  "note": "A new repository was created on the account",
+  "recordedAt": "2026-10-10",
+  "payload": {
+    "action": "created",
+    "repository": {
+      "id": 1412072001,
+      "name": "nitpilot",
+      "full_name": "NikosGkikas13/nitpilot",
+      "private": true,
+      "owner": {
+        "login": "NikosGkikas13",
+        "id": 69345580,
+        "html_url": "https://github.com/NikosGkikas13",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/NikosGkikas13/nitpilot",
+      "description": "Developers' own AI agents review each other's PRs; humans are pinged only for decisions.",
+      "fork": false,
+      "created_at": "2026-10-09T15:33:18Z",
+      "updated_at": "2026-10-09T15:33:20Z",
+      "pushed_at": "2026-10-09T15:33:20Z",
+      "homepage": null,
+      "size": 0,
+      "stargazers_count": 0,
+      "watchers_count": 0,
+      "language": null,
+      "has_issues": true,
+      "has_projects": true,
+      "has_downloads": false,
+      "has_wiki": false,
+      "has_pages": false,
+      "has_discussions": false,
+      "forks_count": 0,
+      "archived": false,
+      "disabled": false,
+      "open_issues_count": 0,
+      "license": null,
+      "allow_forking": true,
+      "is_template": false,
+      "web_commit_signoff_required": false,
+      "has_pull_requests": true,
+      "pull_request_creation_policy": "all",
+      "topics": [],
+      "visibility": "private",
+      "forks": 0,
+      "open_issues": 0,
+      "watchers": 0,
+      "default_branch": "main"
+    },
+    "sender": {
+      "login": "NikosGkikas13",
+      "id": 69345580,
+      "html_url": "https://github.com/NikosGkikas13",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "installation": {
+      "id": 169557306
+    }
+  }
+}

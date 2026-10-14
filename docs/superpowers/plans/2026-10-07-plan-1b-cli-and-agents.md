@@ -14667,7 +14667,7 @@ Say what is about to be written to GitHub before each live step, and ask before 
 
 **What the acceptance runbook is.** A checklist for a person to follow, with the exact commands and clicks, what to expect after each, and boxes to tick: the manual twin of the end-to-end test, run against real GitHub, real accounts and a real agent. See `docs/why/live-acceptance.md` (Step 11) and `docs/acceptance/plan-1.md`, which Step 11 creates and Steps 14 to 23 follow.
 
-- [ ] **Step 1: Write the failing tests for the scrubber**
+- [x] **Step 1: Write the failing tests for the scrubber**
 
 The unit project only looks in `src/`. Let it find the new test too:
 
@@ -14813,12 +14813,12 @@ describe('deliveryFacts', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/server -- test/fixtures`
 Expected: FAIL: ``test/fixtures/recorded/scrub.test.ts` doesn't load (`Cannot find module './scrub'`)`
 
-- [ ] **Step 3: Write the scrubber**
+- [x] **Step 3: Write the scrubber**
 
 Create `apps/server/test/fixtures/recorded/scrub.ts`:
 ```ts
@@ -14917,12 +14917,12 @@ function detailOf(p: { requested_reviewer?: { login?: string }; changes?: Record
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/server -- test/fixtures`
 Expected: PASS (1 file, 25 tests).
 
-- [ ] **Step 5: Write the recorder, and look at what the database holds**
+- [x] **Step 5: Write the recorder, and look at what the database holds**
 
 Create `apps/server/scripts/record-fixtures.ts`:
 ```ts
@@ -15009,7 +15009,7 @@ Expected: `--since nope is not a time. Try 2026-10-10T06:00:00Z.` and a non-zero
 
 **Deliveries are kept 14 days**, so the ones from 2026-10-09 and 2026-10-10 are gone after 2026-10-23. If the dates above are no longer listed, see the note in Step 7.
 
-- [ ] **Step 6: Write the test that replays the fixtures (before there are any)**
+- [x] **Step 6: Write the test that replays the fixtures (before there are any)**
 
 Its expectations are written by hand, for the fixtures Step 7 records; the point of the test is that a recording is only the input.
 
@@ -15160,7 +15160,7 @@ describe.each(names)('recorded %s', (name) => {
 Run: `npm test -w apps/server -- test/fixtures/recorded/recorded`
 Expected: FAIL: 2 tests in `recorded.test.ts`: "has an expectation for every fixture, and a fixture for every expectation" (`expected [] to deeply equal [ …(11) ]`) and "covers every pull_request action the normalizer maps" (`pull_request.opened has neither a fixture nor a reason`). The test about publishable repositories passes, because there is nothing to check yet.
 
-- [ ] **Step 7: Record what the dev database already holds**
+- [x] **Step 7: Record what the dev database already holds**
 
 Eleven of the deliveries from the earlier sandbox work make good fixtures: a PR opened, a review requested, a PR closed, a review with an inline comment and a reply, the app's own summary comment and its edit, and the installation events. (`installation.created` is left out on purpose: it names every repository on the account, private ones included. The test only lets `NikosGkikas13/nitpilot-sandbox` and `NikosGkikas13/nitpilot` appear.)
 
@@ -15190,7 +15190,7 @@ Expected: PASS (2 files, 61 tests: 25 in `scrub.test.ts`, 3 + 3 for each of the 
 
 **If a delivery is gone** (older than 14 days), `write` says `No delivery …`. Delete that name's row from `EXPECTED` in `recorded.test.ts` and go on; Step 17 records the same kind of delivery from the probe PR, and you then write its row from what the new delivery holds (the PR number, ids and shas will be different).
 
-- [ ] **Step 8: Let the fake agent follow a scenario of the run's choosing**
+- [x] **Step 8: Let the fake agent follow a scenario of the run's choosing**
 
 `getAdapter('fake')` always follows `happy.json`, which mentions `src/orders.ts`. The sandbox PR has its own files, so account B's fake agent needs its own script. A variable names it; a missing file is reported by `detect()`, so `nitpilot start` stops with a message instead of failing every job.
 
@@ -15305,7 +15305,7 @@ with:
 Run: `npm test -w apps/cli -- src/agents`
 Expected: PASS (4 files, 36 tests, with the 14 live tests skipped).
 
-- [ ] **Step 9: The seed PR, B's scripts, and a test that keeps them together**
+- [x] **Step 9: The seed PR, B's scripts, and a test that keeps them together**
 
 The acceptance PR adds a tiny `orders-demo` project with three planted bugs in `orders.js` (the first page is skipped, the empty average is `NaN`, an unknown id crashes) that its own tests don't catch, and a `search.js` that builds SQL by joining strings (for the security variant). Account B's fake agent says exactly where the bugs are, in two scenario files. If a line number in a scenario drifted, B would comment on the wrong line and nobody would know until the live run, so a test ties them together. (A scenario names no PR number or sha, so the same files serve every PR in the run.)
 
@@ -15485,7 +15485,7 @@ Create `docs/acceptance/scenarios/sandbox-security.json`:
 Run: `npm test -w apps/cli -- src/agents/fake/acceptance`
 Expected: PASS (1 file, 5 tests).
 
-- [ ] **Step 10: The runbook's helper files**
+- [x] **Step 10: The runbook's helper files**
 
 Four small files the runbook uses. `env.sh` gives each terminal tab the commands `nit-a` (the built CLI as account A) and `nit-b` (the CLI from source as account B, because the fake agent only exists in a source checkout), `nit-edit` (change a CLI's config file with a `jq` filter and keep it readable by you only) and `dbq` (`psql` inside the Postgres container). `new-branch.sh` makes a PR branch holding the seed and pushes it as A. `stamp.pl` puts a UTC time, to the millisecond, in front of every line it reads: a job's start isn't recorded anywhere in the database, so the 5-second criterion is measured from the CLI's own output against the time `check.sql` shows each webhook arriving. `check.sql` prints what the database says about one PR.
 
@@ -15623,7 +15623,7 @@ docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot -v pr=1 -f - < d
 ```
 Expected: `stamp.pl syntax OK`; two lines like `12:18:37.039 one`; then seven headed sections. In your dev database PR 1 shows `addressing` and one `queued` address job in sections 1 and 2, and `(0 rows)` under section 3 (duplicate jobs).
 
-- [ ] **Step 11: The docs**
+- [x] **Step 11: The docs**
 
 Two explainers (CLAUDE.md asks for one whenever a backend idea first shows up), the architecture document in Odyhook's Chosen / Alternatives / Why style, the adapter guide, and the runbook itself. The runbook is the live part of this task: its numbered steps and tick boxes are what Steps 14 to 23 follow.
 
@@ -16290,7 +16290,7 @@ Run on: ____ with Nitpilot at commit ____.
 -
 ````
 
-- [ ] **Step 12: Bring the spec in line**
+- [x] **Step 12: Bring the spec in line**
 
 The spec has CLI B on Gemini CLI, which is on hold (§22), and one phrase for the single-player runs, which need one run per side. Four edits and a line in the docs list:
 
@@ -16340,7 +16340,7 @@ with:
 and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
 ```
 
-- [ ] **Step 13: Run the full suite, and commit the offline half**
+- [x] **Step 13: Run the full suite, and commit the offline half**
 
 Docker must be running.
 

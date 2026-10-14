@@ -640,7 +640,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   - **Webhooks:** a **cloudflared quick tunnel** (`cloudflared tunnel --url http://localhost:8787`, no account needed), wrapped in `npm run dev:tunnel`. The script reads the generated URL and updates the app's webhook URL (`PATCH /app/hook/config`). Requests arrive byte-for-byte, so the production signature check runs in development too. Odyhook's `ody listen` can't be used here because Odyhook redacts the signature and delivery-id headers.
 - **Testing with two accounts:**
   - Two clones using SSH host aliases (`github-a`, `github-b`).
-  - Two CLIs with `NITPILOT_CONFIG_DIR=~/.nitpilot-a` and `~/.nitpilot-b`. A runs Claude Code; B runs Gemini CLI.
+  - Two CLIs with `NITPILOT_CONFIG_DIR=~/.nitpilot-a` and `~/.nitpilot-b`. A runs Claude Code; B runs Gemini CLI, or the scripted fake agent while Gemini CLI is on hold (§22).
 - **Hosted instance (Plan 3),** on the Hetzner CX23 next to Odyhook:
   - **First, check memory.** Run `docker stats` to see real usage; Odyhook's memory limits already add up to about 4.2 GB on a 4 GB box.
   - **One new container,** `nitpilot-server`. It must never be called `web`, `postgres` or `redis`, because those names collide on the shared Docker network. It joins Odyhook's `hooksmith_default` network as an external network.
@@ -709,7 +709,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
      - The `nitpilot-dev` app.
      - A public sandbox repo owned by account A, with B as a collaborator.
      - Two clones using SSH host aliases.
-     - CLI A running Claude Code, CLI B running Gemini CLI.
+     - CLI A running Claude Code. CLI B running a second agent CLI: Gemini CLI once Task 20 lands, and until then the scripted fake agent (§12.2), so B's side proves the plumbing (a review request becomes a job within seconds, its tools work, its points reach the chat and GitHub) and not a reviewer's judgment.
      - A seeded PR with three planted issues.
    - **It passes when:**
      - B's review job starts within 5 seconds of the review request.
@@ -724,7 +724,7 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
      - Stopping B's CLI shows "offline since…", and the job completes after a restart.
      - A manual push during an address job triggers `branch_moved` and a new plan.
      - Closing the PR mid-job cancels and cleans up.
-     - Single-player runs, done before B joins Nitpilot.
+     - Single-player runs, one per side: the author's side done before B joins Nitpilot, and the reviewer's side done with A not on Nitpilot.
 3. **Plan 2: the web app**, from the Claude Design output:
    - inbox, chat and the Auto switches;
    - drafts (`publish_draft`; the author's draft commits stay on the laptop at `refs/nitpilot/drafts/<job>`);
@@ -741,13 +741,14 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 - `docs/architecture.md`, in Odyhook's style: Chosen / Alternatives / Why.
 - `docs/why/`: short, plain-language explainers for a frontend developer. Topics: webhooks, WebSockets, why one process, how jobs survive restarts, leases and fencing, git worktrees, prompt injection.
 - `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
+- `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it.
 - `docs/self-hosting.md` (Plan 3).
 
 ## 22. Risks and open questions
 
 - **Name squatting.** `nitpilot` was free on npm and nitpilot.dev looked unregistered on 2026-10-07. Claim both early.
 - **Agent CLI flags change quickly.** The conformance suite and the version checks in `nitpilot doctor` catch drift. If an adapter can't pass the suite for a mode, it doesn't declare that mode.
-- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run can't put CLI B on Gemini CLI.
+- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
 - **Re-requested reviews.** Whether `review_requested` fires again is undocumented. Verify it in the sandbox repo; the design doesn't depend on it.
 - **Rate limits.** GitHub's secondary limit is about 80 content-creating requests per minute, which could matter on busy PRs.
 - **Claude subscription policy** could change.

@@ -22,8 +22,9 @@ export function fakeAdapter(opts: { scenario?: string } = {}): AgentAdapter {
     // It loads nothing by itself, but it scrubs what every agent would, so tests see what real jobs see.
     scrubPaths: SCRUB_PATHS,
     async detect() {
-      if (existsSync(AGENT_SCRIPT)) return { ok: true, version: CLI_VERSION };
-      return { ok: false, problem: 'The fake agent only runs from a source checkout of Nitpilot: it is for tests.' };
+      if (!existsSync(AGENT_SCRIPT)) return { ok: false, problem: 'The fake agent only runs from a source checkout of Nitpilot: it is for tests.' };
+      if (!existsSync(scenario)) return { ok: false, problem: `The fake agent's scenario file ${scenario} doesn't exist.` };
+      return { ok: true, version: CLI_VERSION };
     },
     buildInvocation(i) {
       const mcpConfig = join(i.tmpDir, 'mcp.json');

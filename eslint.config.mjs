@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // docs/ holds reference material (the design handoff prototypes), not our code.
-  { ignores: ['**/node_modules/**', '**/dist/**', 'apps/server/src/generated/**', 'docs/**'] },
+  { ignores: ['**/node_modules/**', '**/dist/**', 'apps/server/src/generated/**', 'docs/**', '.superpowers/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

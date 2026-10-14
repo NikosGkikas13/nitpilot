@@ -1,0 +1,10 @@
+{
+  "review": [
+    { "add_point": { "path": "orders-demo/src/search.js", "line": 5, "severity": "blocker", "category": "security", "title": "The customer name goes straight into the SQL", "body": "A name like ' OR '1'='1 returns every order. Pass the name as a query parameter instead of joining strings." } },
+    { "finish": "One security point in search.js." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Parameterized now." } },
+    { "finish": "Settled." }
+  ]
+}

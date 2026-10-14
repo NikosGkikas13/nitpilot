@@ -5,7 +5,7 @@ import { mcpJob } from '../../../test/mcp-job';
 import { tempDir } from '../../../test/temp';
 import { jobTools } from '../../mcp/job-tools';
 import { startMcpServer } from '../../mcp/server';
-import { getAdapter } from '../registry';
+import { adapterFor, getAdapter } from '../registry';
 import { agentBaseEnv, runAgent } from '../runner';
 import { FAKE_SCENARIOS, fakeAdapter } from './adapter';
 
@@ -50,5 +50,32 @@ describe('getAdapter', () => {
     expect(await getAdapter('fake')!.detect()).toMatchObject({ ok: true });
     expect(getAdapter('claude-code')?.id).toBe('claude-code');
     expect(getAdapter('gemini-cli')).toBeNull();
+  });
+});
+
+describe('adapterFor, with the fake agent', () => {
+  const input = { mode: 'reviewer', cwd: '/work', prompt: 'Review this PR.', mcp: { url: 'http://127.0.0.1:1/mcp', token: 'job-token' }, tmpDir: '/tmp/run', baseEnv: {}, maxTurns: 5 } as const;
+  const config = { agent: 'fake', apiBilling: false } as const;
+  const scenarioOf = (args: string[]) => args[args.indexOf('--scenario') + 1];
+
+  it('follows NITPILOT_FAKE_SCENARIO, so a live run can use its own script', () => {
+    const adapter = adapterFor(config, { NITPILOT_FAKE_SCENARIO: '/scripts/sandbox-seed.json' })!;
+    expect(scenarioOf(adapter.buildInvocation(input).args)).toBe('/scripts/sandbox-seed.json');
+  });
+
+  it('uses happy.json when the variable is unset or empty', () => {
+    for (const env of [{}, { NITPILOT_FAKE_SCENARIO: '' }]) {
+      expect(scenarioOf(adapterFor(config, env)!.buildInvocation(input).args)).toBe(join(FAKE_SCENARIOS, 'happy.json'));
+    }
+  });
+
+  it('says so when the scenario file is missing, so `nitpilot start` stops instead of failing every job', async () => {
+    const adapter = adapterFor(config, { NITPILOT_FAKE_SCENARIO: '/scripts/nope.json' })!;
+    expect(await adapter.detect()).toEqual({ ok: false, problem: "The fake agent's scenario file /scripts/nope.json doesn't exist." });
+  });
+
+  it('is not read for Claude Code', () => {
+    const adapter = adapterFor({ agent: 'claude-code', apiBilling: false }, { NITPILOT_FAKE_SCENARIO: '/scripts/x.json' })!;
+    expect(adapter.buildInvocation(input).args).not.toContain('/scripts/x.json');
   });
 });

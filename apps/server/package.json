@@ -16,7 +16,8 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "dev:tunnel": "tsx scripts/dev-tunnel.ts",
-    "dev:fake-cli": "tsx scripts/fake-cli.ts"
+    "dev:fake-cli": "tsx scripts/fake-cli.ts",
+    "record:fixtures": "tsx scripts/record-fixtures.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",

@@ -1,0 +1,177 @@
+{
+  "event": "issue_comment",
+  "action": "edited",
+  "note": "Nitpilot editing its summary comment",
+  "recordedAt": "2026-10-10",
+  "payload": {
+    "action": "edited",
+    "changes": {
+      "body": {
+        "from": "<!-- nitpilot:v1 chat=cmv209y4i0002y1v8orce34ww -->\n🤖 **Nitpilot** · agents fixing · 1 round\nNeeds a human: none\n<details><summary>Review log (1 point)</summary>\n\n| # | Point | Outcome |\n|---|---|---|\n| P1 | Mention check: `@​nitpilot-mention-check` must show as code, not as a mention | open |\n</details>\n\n[Open the conversation →](http://localhost:8787/c/NikosGkikas13/nitpilot-sandbox/2)"
+      }
+    },
+    "issue": {
+      "html_url": "https://github.com/NikosGkikas13/nitpilot-sandbox/pull/2",
+      "id": 5788746304,
+      "number": 2,
+      "title": "Update README.md",
+      "user": {
+        "login": "ngkdev93-jpg",
+        "id": 340081894,
+        "html_url": "https://github.com/ngkdev93-jpg",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "labels": [],
+      "state": "closed",
+      "locked": false,
+      "assignees": [],
+      "milestone": null,
+      "comments": 1,
+      "created_at": "2026-10-10T06:20:56Z",
+      "updated_at": "2026-10-10T06:22:51Z",
+      "closed_at": "2026-10-10T06:22:51Z",
+      "assignee": null,
+      "author_association": "COLLABORATOR",
+      "active_lock_reason": null,
+      "draft": false,
+      "pull_request": {
+        "html_url": "https://github.com/NikosGkikas13/nitpilot-sandbox/pull/2",
+        "merged_at": null
+      },
+      "body": null,
+      "reactions": {
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "performed_via_github_app": null,
+      "state_reason": null
+    },
+    "comment": {
+      "html_url": "https://github.com/NikosGkikas13/nitpilot-sandbox/pull/2#issuecomment-6094600445",
+      "id": 6094600445,
+      "user": {
+        "login": "nitpilot-dev[bot]",
+        "id": 339313481,
+        "html_url": "https://github.com/apps/nitpilot-dev",
+        "type": "Bot",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "created_at": "2026-10-10T06:21:07Z",
+      "updated_at": "2026-10-10T06:22:59Z",
+      "body": "<!-- nitpilot:v1 chat=cmv209y4i0002y1v8orce34ww -->\n🤖 **Nitpilot** · closed · 1 round\nNeeds a human: none\n<details><summary>Review log (1 point)</summary>\n\n| # | Point | Outcome |\n|---|---|---|\n| P1 | Mention check: `@​nitpilot-mention-check` must show as code, not as a mention | open |\n</details>\n\n[Open the conversation →](http://localhost:8787/c/NikosGkikas13/nitpilot-sandbox/2)",
+      "author_association": "NONE",
+      "reactions": {
+        "total_count": 0,
+        "+1": 0,
+        "-1": 0,
+        "laugh": 0,
+        "hooray": 0,
+        "confused": 0,
+        "heart": 0,
+        "rocket": 0,
+        "eyes": 0
+      },
+      "performed_via_github_app": {
+        "id": 5228436,
+        "client_id": "Iv23li3LelpJmOdYgQNl",
+        "slug": "nitpilot-dev",
+        "owner": {
+          "login": "NikosGkikas13",
+          "id": 69345580,
+          "html_url": "https://github.com/NikosGkikas13",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "name": "nitpilot-dev",
+        "description": "",
+        "html_url": "https://github.com/apps/nitpilot-dev",
+        "created_at": "2026-10-07T19:55:57Z",
+        "updated_at": "2026-10-09T10:19:58Z",
+        "permissions": {
+          "contents": "read",
+          "issues": "read",
+          "metadata": "read",
+          "pull_requests": "write"
+        },
+        "events": [
+          "issue_comment",
+          "pull_request",
+          "pull_request_review",
+          "pull_request_review_comment",
+          "pull_request_review_thread",
+          "repository"
+        ]
+      },
+      "minimized": null
+    },
+    "repository": {
+      "id": 1411793061,
+      "name": "nitpilot-sandbox",
+      "full_name": "NikosGkikas13/nitpilot-sandbox",
+      "private": false,
+      "owner": {
+        "login": "NikosGkikas13",
+        "id": 69345580,
+        "html_url": "https://github.com/NikosGkikas13",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/NikosGkikas13/nitpilot-sandbox",
+      "description": null,
+      "fork": false,
+      "created_at": "2026-10-09T12:12:25Z",
+      "updated_at": "2026-10-09T12:12:31Z",
+      "pushed_at": "2026-10-10T06:20:43Z",
+      "homepage": null,
+      "size": 1,
+      "stargazers_count": 0,
+      "watchers_count": 0,
+      "language": null,
+      "has_issues": true,
+      "has_projects": true,
+      "has_downloads": false,
+      "has_wiki": true,
+      "has_pages": false,
+      "has_discussions": false,
+      "forks_count": 0,
+      "archived": false,
+      "disabled": false,
+      "open_issues_count": 1,
+      "license": null,
+      "allow_forking": true,
+      "is_template": false,
+      "web_commit_signoff_required": false,
+      "has_pull_requests": true,
+      "pull_request_creation_policy": "all",
+      "topics": [],
+      "visibility": "public",
+      "forks": 0,
+      "open_issues": 1,
+      "watchers": 0,
+      "default_branch": "main"
+    },
+    "sender": {
+      "login": "nitpilot-dev[bot]",
+      "id": 339313481,
+      "html_url": "https://github.com/apps/nitpilot-dev",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "installation": {
+      "id": 169557306
+    }
+  }
+}

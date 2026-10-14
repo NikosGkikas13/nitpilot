@@ -26,7 +26,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        test: { name: 'unit', include: ['src/**/*.test.{ts,tsx}'], exclude: ['**/*.db.test.{ts,tsx}'] },
+        test: { name: 'unit', include: ['src/**/*.test.{ts,tsx}', 'test/fixtures/**/*.test.ts'], exclude: ['**/*.db.test.{ts,tsx}'] },
       },
       {
         // Real Postgres. Files run one at a time; tests use unique data (see test/db.ts).
