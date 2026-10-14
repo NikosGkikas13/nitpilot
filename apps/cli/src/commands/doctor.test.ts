@@ -5,7 +5,7 @@ import { PersonalConfigSchema } from '../config/config';
 import { CliError } from '../errors';
 import { ServerError } from '../http';
 import type { RunResult } from '../run-program';
-import { printChecks, probeAgent, runDoctor, type Check, type DoctorDeps } from './doctor';
+import { detectAgentFor, printChecks, probeAgent, runDoctor, type Check, type DoctorDeps } from './doctor';
 
 const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' });
 const missing: RunResult = { code: null, stdout: '', stderr: 'spawn ENOENT' };
@@ -170,6 +170,36 @@ describe('probeAgent', () => {
     expect(await probeAgent('claude-code', fakeRun({ 'claude --version': ok('2.1.29 (Claude Code)\n') }))).toEqual({ ok: true, version: '2.1.29 (Claude Code)' });
     expect(await probeAgent('gemini-cli', fakeRun({ 'gemini --version': missing }))).toEqual({ ok: false, problem: '`gemini` is not installed (or not on your PATH)' });
     expect(await probeAgent('fake', fakeRun({}))).toEqual({ ok: true, version: '(built in)' });
+  });
+});
+
+describe('detectAgentFor', () => {
+  const claudeVersion = ok('2.1.277 (Claude Code)\n');
+  const config = (over: { agent?: 'claude-code' | 'gemini-cli'; apiBilling?: boolean } = {}) => PersonalConfigSchema.parse({ agent: 'claude-code', ...over });
+
+  it("asks Claude Code's adapter, so a logged-in claude is ready", async () => {
+    const run = fakeRun({ 'claude --version': claudeVersion, 'claude auth status': ok('{"loggedIn":true}') });
+    expect(await detectAgentFor(config(), {}, run)).toEqual({ ok: true, version: '2.1.277 (Claude Code)' });
+  });
+
+  it("asks Claude Code's adapter, so a logged-out claude says to log in (not just a version)", async () => {
+    const run = fakeRun({ 'claude --version': claudeVersion, 'claude auth status': ok('{"loggedIn":false}') });
+    expect(await detectAgentFor(config(), {}, run)).toMatchObject({ ok: false, problem: expect.stringContaining('claude auth login') });
+  });
+
+  it("doesn't ask for a login when API billing has a key", async () => {
+    const run = fakeRun({ 'claude --version': claudeVersion });
+    expect(await detectAgentFor(config({ apiBilling: true }), { ANTHROPIC_API_KEY: 'sk-ant-x' }, run)).toEqual({ ok: true, version: '2.1.277 (Claude Code)' });
+  });
+
+  it('points at the missing key when API billing is on without one', async () => {
+    const run = fakeRun({ 'claude --version': claudeVersion });
+    expect(await detectAgentFor(config({ apiBilling: true }), {}, run)).toMatchObject({ ok: false, problem: expect.stringContaining('ANTHROPIC_API_KEY') });
+  });
+
+  it('checks only the version of Gemini CLI, which has no adapter yet', async () => {
+    const run = fakeRun({ 'gemini --version': ok('0.63.0\n') });
+    expect(await detectAgentFor(config({ agent: 'gemini-cli' }), {}, run)).toEqual({ ok: true, version: '0.63.0' });
   });
 });
 

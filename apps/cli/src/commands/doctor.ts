@@ -5,7 +5,7 @@ import { loadConfig, type PersonalConfig } from '../config/config';
 import { githubReposInRemoteList } from '../git/remotes';
 import { ServerClient } from '../http';
 import { terminal, type Out } from '../out';
-import { runProgram, type RunResult } from '../run-program';
+import { runProgram, type RunProgram, type RunResult } from '../run-program';
 
 export type Check = { name: string; status: 'ok' | 'warn' | 'fail'; detail: string };
 export type AgentCheck = { ok: boolean; version?: string; problem?: string };
@@ -145,6 +145,11 @@ export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<A
   return { ok: false, problem: `\`${binary}\` is not installed (or not on your PATH)` };
 }
 
+/** The agent check for your config: its adapter's detect() (installed and logged in), or for an agent without an adapter yet (Gemini CLI) only its version. */
+export function detectAgentFor(config: PersonalConfig, env: Record<string, string | undefined>, run: RunProgram = runProgram): Promise<AgentCheck> {
+  return adapterFor(config, env, { run })?.detect() ?? probeAgent(config.agent, run);
+}
+
 /** `nitpilot doctor`, on this machine. */
 export async function doctor(deps: { env?: Record<string, string | undefined>; out?: Out } = {}): Promise<number> {
   const out = deps.out ?? terminal;
@@ -155,7 +160,7 @@ export async function doctor(deps: { env?: Record<string, string | undefined>; o
     run: runProgram,
     loadConfig: () => loadConfig({ env }),
     client: (config) => new ServerClient(config.server, config.token),
-    detectAgent: (config) => adapterFor(config, env)?.detect() ?? probeAgent(config.agent, runProgram),
+    detectAgent: (config) => detectAgentFor(config, env),
     isFolder: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
   });
   return printChecks(checks, out);
