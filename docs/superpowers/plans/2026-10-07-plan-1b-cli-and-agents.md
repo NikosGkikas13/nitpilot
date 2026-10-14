@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: M6–M11 at step level (Task 20 on hold); M12–M13 at task level.** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). M7 (Tasks 5–8) was written the same way on 2026-10-10, against the branch after M6 (`f2dc50f`), M8 (Tasks 9–11) the same day, against the branch after M7 (`d2fcb5d`), M9 (Tasks 12–15) on 2026-10-12, against the branch after M8 (`e594e44`), M10 (Tasks 16–18) on 2026-10-13, against the branch after M9 (`0056c1a`), and M11 (Tasks 19 and 21) on 2026-10-14, against the branch after M10 (`f3e292e`); Task 20 (Gemini CLI) is on hold. "Checked against Plan 1a's code (M6)" and "Checked against the code" (M7, M8, M9, M10, M11) below list where each differs from the earlier task-level text. M12–M13 still fix only the tasks, files, interfaces and tests; their step-level code is written one milestone at a time, against the code that exists by then. Nobody executes a task that is still at task level.
+> **Status: M6–M12 at step level (Task 20 on hold); M13 at task level.** M6 (Tasks 1–4) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-09 against Plan 1a's merged code (`main` at `6417c39`). M7 (Tasks 5–8) was written the same way on 2026-10-10, against the branch after M6 (`f2dc50f`), M8 (Tasks 9–11) the same day, against the branch after M7 (`d2fcb5d`), M9 (Tasks 12–15) on 2026-10-12, against the branch after M8 (`e594e44`), M10 (Tasks 16–18) on 2026-10-13, against the branch after M9 (`0056c1a`), M11 (Tasks 19 and 21) on 2026-10-14, against the branch after M10 (`f3e292e`), and M12 (Tasks 22–23) on 2026-10-15, against the branch after Task 21 (`b52fe14`); Task 20 (Gemini CLI) is on hold. "Checked against Plan 1a's code (M6)" and "Checked against the code" (M7, M8, M9, M10, M11, M12) below list where each differs from the earlier task-level text. M13 still fixes only the tasks, files, interfaces and tests; its step-level code is written against the code that exists by then. Nobody executes a task that is still at task level.
 
 **Goal:** Connect each developer's own agent to the Plan 1a server: a CLI daemon that receives jobs over a WebSocket, runs Claude Code or Gemini CLI safely in an isolated git worktree with a local MCP server, pushes fixes, and reports results. Then prove it end to end and with the live acceptance test from spec §20.
 
@@ -181,6 +181,21 @@ M11 was written at step level on 2026-10-14, against branch `plan-1b-cli-and-age
 - **L2's traps were proven real:** without the adapter's isolation flags and without the scrub, the planted hook ran, the planted `.mcp.json` server started, and Claude Code sent its own traffic to the planted proxy (Task 21 Step 4 shows it). With the flags alone, nothing fired even unscrubbed: two locks.
 - **L3/L4 are one request per run.** Asked for several odd chores at once (and with words like "pwned" or "secret"), Claude Code declined them all without calling a tool, so the first version of these tests passed vacuously, even with `Write` handed to a reviewer. One plain request per run gets an attempt where the tool exists: in standalone runs (`claude -p`, no Nitpilot context) a reviewer's `Read` of `../outside/notes.txt` and an editor's `Write` there were refused by Claude Code itself (`permission_denials`). Inside a Nitpilot job it often still declines; the test passes either way, which is why the static suite and those refusals are the proof. It declined every request to edit `.git`; if an agent ever did, safe git refuses that worktree (Task 9). Giving the agent a shell to prove the shell checks fail was not tried: the session's safety rules refused to run an agent with Bash and permissions bypassed.
 - **`../outside/secret` became `../outside/notes.txt`,** and the planted text is a release tag: the file's name only has to be outside the worktree, and "secret" made the agent refuse on sight.
+
+## Checked against the code (M12)
+
+M12 was written at step level on 2026-10-15, against branch `plan-1b-cli-and-agents` after Task 21 (`b52fe14`). Its code was run in a scratch copy first (server 398 → 415 → 436, CLI 274 plus 14 skipped and protocol 41 unchanged, end to end 5, tsc and eslint clean). Then both tasks were replayed into a clean copy from the code blocks below, which a script generated from the tested files and checked byte for byte: the RED and GREEN below matched, and the final tree was identical. Each check was also run against deliberately broken code (no "once" memory, no hello listener, a retarget that keeps the old base, trust taken from the association alone, the closed-PR check dropped, every flagged chat resumed, `is:open` dropped, the role filter dropped; the reason not stored, the access answer not kept, a 401 read as "no access", no access check, no `frame-ancestors`, no last-seen time, the waiting agent not put first, `runAfter` ignored, the repo-linked check dropped): each fails a test. Where it differs from the earlier task-level text, and why:
+
+- **Task 22 owns three things, Task 23 the activity.** Task 22's text listed catch-up and the activity; the carry-forwards table also sends it "signing in again clears `write_failed` flags", which the text left out. The activity's only user in Plan 1 is the transcript page, so it moved to Task 23, and Task 22 took both carry-forwards (base retargets and signing in again).
+- **`findOpenPrsFor(user: { id, login })` returns `{ repoFullName, number }[]`**, not `findOpenPrsFor(userId) → PrRef[]`: a search can't know our installation and repo ids (the catch-up looks the repo up in the database), and the query needs the login. `GithubReads` gets the user-token function `GithubPlatform` already had. All three searches say `is:open`, not only the first. Each person's search allowance is their own (30 a minute), and a catch-up uses three requests, so there's no shared limiter.
+- **`listThreads` isn't built.** A caught-up PR starts as if just opened; comments left on GitHub before Nitpilot saw it aren't imported. Spec §12.1 keeps the method (unbuilt since Plan 1a, like `verifyWebhook`).
+- **Catch-up isn't awaited in the hello listener.** The hub handles a CLI's messages one at a time, so awaiting three GitHub searches would delay its next ping. Its jobs wake the assigner through the dispatcher's commit, as any job does. It remembers "done" in memory, per server start: catching up again after a restart is the point.
+- **A retarget goes through the engine** (`pr_retargeted`), because the dispatcher's save writes `PrChat.trusted`: a trust change written outside the chat's lock could be overwritten by an event running at the same time. `baseRef`/`baseSha` aren't engine state, so the router writes them, and from every snapshot, not only on `edited`. A retarget of a PR Nitpilot never tracked is ignored (catch-up finds it). Nothing restarts on a retarget; the spec now says so.
+- **Signing in again is an engine event too** (`signed_in_again { who, roles }`): the engine can't tell a write-failed flag from a failed job, so the route decides (the rule `nitpilot retry` already used, now `chats/failed-flags.ts`) and names the roles. Any sign-in does it, not only one after `needs_reauth`. What failed isn't posted again: points without a GitHub thread get no reply there, and the summary comment still lists them.
+- **`cap_reached` needed the engine to say why a job waits.** `retry_job` didn't record a reason, so the activity couldn't tell a daily-cap wait from a backoff. It now carries `reason`, stored in `Job.failure` (which `fail_job` already used). A quota wait counts as `cap_reached` too: both are the person's limits.
+- **The activity has a `why`:** `agent_waiting { who, why: 'offline', offlineSince } | { who, why: 'repo_not_linked' | 'cap_reached' }`, one activity per chat as in spec §9.1. When one agent works and another waits, the waiting one is shown. "Offline since" is the newest `lastSeenAt` of any of that person's CLI tokens.
+- **Access checks live in `auth/repo-access.ts`**, with their own tests (the 5-minute memory, 404/403, 401 meaning "sign in again"). "No such chat" and "can't see it" answer the same 404, and the chat is looked up before GitHub is asked, so a random URL costs no GitHub call.
+- **`frame-ancestors` is sent by `renderPage`**, so every server page has it (`/cli/approve`, the transcript, the home page), not only the two the carry-forward named. `AppDeps` gains `clis` (the hub in `main.ts`; tests and the end-to-end harness pass theirs).
 
 ## How to work in this repo
 
@@ -12515,44 +12530,2059 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-## Milestone M12: Catch-up and the transcript
+## Milestone M12: Catch-up, retargets and the transcript
 
-### Task 22: Catch-up on connect and the "waiting" activity
+M12 finishes what the server owes a person who wasn't there when something happened. Task 22 catches up when a CLI first connects (PRs whose webhooks never reached us start as if just opened), follows a PR whose base branch changed, and lets a chat that waited on a failed GitHub write carry on once that person signs in again (two carry-forwards). Task 23 adds the read-only transcript page the summary comment links to, with a line saying what the chat is waiting on ("leo's agent is waiting: offline since 09:30"), and the last two carry-forwards (`BRAND` in the server pages, `frame-ancestors`).
+
+**Files at the end of M12:**
+```
+apps/server/src/
+  jobs/catch-up.ts                     CatchUp: once per person per server start
+  chats/failed-flags.ts                failureKind (from http/routes/cli.ts), resumeAfterSignIn
+  chats/activity.ts                    Activity, deriveActivity (pure), loadActivity
+  auth/repo-access.ts                  RepoAccess: can this viewer read the repo? (5-minute answers)
+  http/routes/transcript.tsx           GET /c/:owner/:repo/:number
+  http/pages/transcript.tsx            the page, not found, sign in again
+  platform/…                           findOpenPrsFor; pull_request.edited → pr_retargeted
+  engine/…                             pr_retargeted, signed_in_again; retry_job carries its reason
+docs/why/catching-up.md, docs/why/transcript-page.md (new)
+```
+
+### Task 22: Catch-up on connect, base retargets, and signing in again
 
 **Files:**
-- Create: `apps/server/src/jobs/catch-up.ts`, `apps/server/src/chats/activity.ts`, and tests.
-- Modify: `apps/server/src/platform/types.ts` (add `findOpenPrsFor(userId)` and `listThreads(pr)` to `PlatformReads`), `apps/server/src/platform/github/reads.ts`, `apps/server/src/platform/fake/fake-platform.ts`, `apps/server/src/ws/wire.ts` (catch-up runs from a hub listener on `hello`).
-- Modify (Plan 1a carry-forward): `apps/server/src/platform/github/normalize/pull-request.ts` and `apps/server/src/chats/route-event.ts`: `pull_request.edited` with `changes.base` (a base retarget) refreshes the chat's `baseRef`, `baseSha` and `trusted`.
+- Create: `apps/server/src/jobs/catch-up.ts` and `catch-up.db.test.ts`, `apps/server/src/chats/failed-flags.ts`, `docs/why/catching-up.md`.
+- Modify, for catching up: `apps/server/src/platform/types.ts`, `platform/github/reads.ts` and `reads.test.ts`, `platform/github/platform.ts`, `platform/fake/fake-platform.ts`, `ws/wire.ts`, `apps/server/test/ws.ts`.
+- Modify, for retargets: `platform/github/payloads.ts`, `platform/github/normalize/pull-request.ts` and `pull-request.test.ts`, `chats/route-event.ts` and `route-event.db.test.ts`, `apps/server/test/fixtures/github.ts`.
+- Modify, for both new engine events: `engine/types.ts`, `engine/decide.ts`, `engine/lifecycle.ts` and `lifecycle.test.ts`, `engine/writes.ts`, `engine/failures.test.ts`.
+- Modify, for signing in again: `http/routes/auth.ts` and `auth.db.test.ts`, `http/routes/cli.ts` (its `failureKind` moves to `chats/failed-flags.ts`), `docs/why/outbox-and-restarts.md`.
+- Modify: the spec (§9, §12.1, §15).
 
 **Interfaces:**
+- Consumes: `routePrEvent`, `RouterDeps` (`chats/route-event.ts`); `Dispatcher`, `Dispatch`; `advance` (`engine/advance.ts`); `getUserToken` (`auth/user-tokens.ts`); `CliHub.onMessage` and `CliConnection.{userId, login}` (Task 1); `wireCliHub` (Tasks 2–3); `failureKind` (Task 6, moved here); test helpers `startCliServer`, `TestCli`, `makeChat`, `makeCliToken`, `makeRepo`, `makeUser`, `prEvent`, `pull`, `people`, `repository`, `snapshotFromPull`, `syncFromEvent`.
 - Produces:
-  - `catchUp(userId)`, run once per user per server boot on their first `hello`. It runs three searches with the user's token (`is:pr is:open author:<login>`, `review-requested:<login>`, `reviewed-by:<login>`; within 30 requests/minute). Each PR without a chat goes through Plan 1a's `routePrEvent` with a `pr_opened` built from `getPr`;
-  - `deriveActivity(chat, jobs, connections) → agent_working{who} | agent_waiting{who, offlineSince | repo_not_linked | cap_reached} | human_turn{who} | none` (spec §9.1, never stored).
+  - `FoundPr = { repoFullName, number }` and `PlatformReads.findOpenPrsFor(user: { id, login }) → Promise<FoundPr[]>`; `GithubReads(github, appAuth, userToken)` (the third argument is new); `FakePlatform.openPrs` (userId → found PRs) and `FakePlatform.searches` (whose PRs were searched);
+  - `CatchUp` (`jobs/catch-up.ts`) with `forUser(user: { id, login }) → Promise<number>` (how many chats it started); `wireCliHub({ hub, dispatcher, platform: PlatformReads, now? })` also returns `catchUp`; `startCliServer()` also returns `platform`;
+  - DomainEvents `{ type: 'pr_retargeted'; baseRef; trusted }` and `{ type: 'signed_in_again'; who: Person; roles: Role[] }`;
+  - `failureKind(chatId, githubId)` and `resumeAfterSignIn(user, dispatch) → Promise<number>` (`chats/failed-flags.ts`); `authRoutes({ github, dispatch })`.
 
-**Tests this task must include:**
-- catch-up creates missing chats once and skips known ones;
-- each activity case, including "offline since…" from `CliToken.lastSeenAt` and `repo_not_linked` when the user's CLIs lack the repo;
-- a base retarget refreshes `baseRef` and `baseSha`, and an edit that only changes the title doesn't.
+**Behavior** (spec §15):
+1. **Catching up.** On a CLI's `hello`, `wireCliHub` starts `catchUp.forUser(conn)` without waiting for it (a CLI's messages are handled one at a time, so its next ping mustn't wait for GitHub). The first catch-up for a person since the server started searches `is:pr is:open author:<login>`, `is:pr is:open review-requested:<login>` and `is:pr is:open reviewed-by:<login>` with **their own** token, one page of 100 each, and lists each PR once. Each PR in a repo the app is on, with no chat yet and still open when read, goes through `routePrEvent` as a `pr_opened` built from `getPr`. Later hellos do nothing; two hellos at once share one catch-up; a failed search isn't remembered, so the next hello tries again; one PR that fails doesn't stop the others.
+2. **A retargeted PR.** `pull_request.edited` with `changes.base` becomes `pr_retargeted { baseRef, trusted }`; any other edit is still ignored. The router refreshes the chat's `title`, `body`, `baseRef` and `baseSha` from every snapshot (so a missed retarget is fixed by the next `pull_request` event), sets `trusted` the way a new chat gets it (trusted bots included), and ignores a retarget of a PR it never tracked. The engine stores `trusted` and says `Now targets <branch>`; nothing restarts.
+3. **Signing in again.** After the GitHub callback saves the user, `resumeAfterSignIn` finds each chat where they're flagged `failed` because a write in their name never reached GitHub (their newest job in that role didn't fail; `failureKind`'s rule), and dispatches `signed_in_again { who, roles }` there. The engine clears those roles' flags, says `<login> signed in again`, and calls `advance`. A flag from a failed job stays (that's `nitpilot retry`). What failed isn't posted again.
 
-### Task 23: Read-only transcript page
+- [ ] **Step 1: Write the failing tests**
+
+Append to `apps/server/src/engine/lifecycle.test.ts`:
+```ts
+describe('pr_retargeted', () => {
+  it('says which branch the PR now targets', () => {
+    const out = run(chatState(), { type: 'pr_retargeted', baseRef: 'release', trusted: true });
+    expect(out.timeline).toEqual([expect.objectContaining({ kind: 'system', body: 'Now targets release' })]);
+  });
+
+  it('checks again whether the author is trusted', () => {
+    expect(run(chatState({ trusted: true }), { type: 'pr_retargeted', baseRef: 'release', trusted: false }).chat.trusted).toBe(false);
+    expect(run(chatState({ trusted: false }), { type: 'pr_retargeted', baseRef: 'main', trusted: true }).chat.trusted).toBe(true);
+  });
+});
+```
+
+Append to `apps/server/src/engine/failures.test.ts`:
+```ts
+describe('signed_in_again (a person whose GitHub write failed signed in again)', () => {
+  /** maya's replies never reached GitHub, so she's flagged; leo's P1 is still open. */
+  const repliesFailed = () =>
+    agentToAgent({
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { attention: 'failed' }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+
+  it('clears the flag and lets the chat carry on', () => {
+    const out = run(repliesFailed(), { type: 'signed_in_again', who: maya, roles: ['author'] });
+    expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('none');
+    expect(out.timeline[0]).toEqual(expect.objectContaining({ kind: 'system', body: 'maya signed in again' }));
+    expect(commandsOf(out, 'enqueue_job')).toEqual([
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+    ]);
+  });
+
+  it('leaves a role the event does not name: that flag is a failed job, which `nitpilot retry` handles', () => {
+    const out = run(repliesFailed(), { type: 'signed_in_again', who: maya, roles: ['reviewer'] });
+    expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('failed');
+    expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
+  });
+});
+```
+
+`prEvent` takes `changes` too, in `apps/server/test/fixtures/github.ts`:
+Replace:
+```ts
+opts: { pull?: Partial<GhPull>; requested_reviewer?: GhUser; requested_team?: { slug: string }; before?: string; after?: string } = {},
+```
+with:
+```ts
+opts: { pull?: Partial<GhPull>; requested_reviewer?: GhUser; requested_team?: { slug: string }; before?: string; after?: string; changes?: GhPullRequestEvent['changes'] } = {},
+```
+
+In `apps/server/src/platform/github/normalize/pull-request.test.ts`, import `repository` too:
+Replace:
+```ts
+import { people, prEvent } from '../../../../test/fixtures/github';
+```
+with:
+```ts
+import { people, prEvent, repository } from '../../../../test/fixtures/github';
+```
+Then append:
+```ts
+describe('normalizePullRequest: edited', () => {
+  it('turns a new base branch into pr_retargeted; the router decides who is trusted', () => {
+    const retarget = prEvent('edited', {
+      pull: { base: { sha: 'c'.repeat(40), ref: 'release', repo: repository } },
+      changes: { base: { ref: { from: 'main' }, sha: { from: 'b'.repeat(40) } } },
+    });
+    const [ne] = normalizePullRequest(retarget);
+    expect(ne).toMatchObject({ scope: 'pr', pr: ref, event: { type: 'pr_retargeted', baseRef: 'release', trusted: true } });
+    expect(ne!.scope === 'pr' && ne!.snapshot?.baseSha).toBe('c'.repeat(40));
+  });
+
+  it('ignores an edit that leaves the base alone (a new title, say)', () => {
+    expect(normalizePullRequest(prEvent('edited', { pull: { title: 'Keyset pagination' }, changes: { title: { from: 'Cursor pagination for orders' } } }))).toEqual([]);
+  });
+});
+```
+
+Append to `apps/server/src/chats/route-event.db.test.ts`:
+```ts
+describe('a base retarget (pull_request.edited)', () => {
+  const retarget = (over: Parameters<typeof pull>[0] = {}) =>
+    prEvent('edited', {
+      pull: { base: { sha: 'c'.repeat(40), ref: 'release', repo: repository }, ...over },
+      changes: { base: { ref: { from: 'main' }, sha: { from: 'b'.repeat(40) } } },
+    });
+
+  it('refreshes the base, checks trust again and says so in the chat', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    expect(await deliver('pull_request', retarget({ author_association: 'CONTRIBUTOR' }))).toEqual({ status: 'processed' });
+    const c = await chat();
+    expect(c).toMatchObject({ baseRef: 'release', baseSha: 'c'.repeat(40), trusted: false });
+    const last = await prisma.message.findFirstOrThrow({ where: { chatId: c.id }, orderBy: { seq: 'desc' } });
+    expect(last.body).toBe('Now targets release');
+  });
+
+  it('keeps a PR from a bot the team trusts trusted', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened', { pull: { user: people.rabbit, author_association: 'NONE' } }));
+    await deliver('pull_request', retarget({ user: people.rabbit, author_association: 'NONE' }));
+    expect(await chat()).toMatchObject({ baseRef: 'release', trusted: true });
+  });
+
+  it('ignores an edit that only changes the title', async () => {
+    const { deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    const retitled = prEvent('edited', { pull: { title: 'Keyset pagination' }, changes: { title: { from: 'Cursor pagination for orders' } } });
+    expect(await deliver('pull_request', retitled)).toEqual({ status: 'ignored', note: 'nothing to do for pull_request.edited' });
+    expect(await chat()).toMatchObject({ baseRef: 'main', baseSha: 'b'.repeat(40), trusted: true });
+  });
+});
+```
+
+`GithubReads` gets a function that hands out a person's own token. In `apps/server/src/platform/github/reads.test.ts`:
+Replace:
+```ts
+  return { fetch, platform: new GithubReads(github, new AppAuth(github, '12345', pem)) };
+```
+with:
+```ts
+  return { fetch, platform: new GithubReads(github, new AppAuth(github, '12345', pem), async (userId) => `ghu_${userId}`) };
+```
+Then append:
+```ts
+describe('findOpenPrsFor (spec §15 "Catching up")', () => {
+  const item = (repo: string, number: number) => ({ number, repository_url: `https://api.github.com/repos/${repo}` });
+
+  it("runs the three searches with the person's own token and lists each PR once", async () => {
+    const { fetch, platform } = reads({
+      'GET /search/issues': (req) => ({ items: req.url.searchParams.get('q')!.includes('author:') ? [item('octo/api', 7)] : [item('octo/sandbox', 42)] }),
+    });
+    expect(await platform.findOpenPrsFor({ id: 'user-leo', login: 'leo' })).toEqual([
+      { repoFullName: 'octo/api', number: 7 },
+      { repoFullName: 'octo/sandbox', number: 42 },
+    ]);
+    const searches = fetch.calls.filter((c) => c.url.pathname === '/search/issues');
+    expect(searches.map((c) => c.url.searchParams.get('q'))).toEqual(['is:pr is:open author:leo', 'is:pr is:open review-requested:leo', 'is:pr is:open reviewed-by:leo']);
+    expect(searches.map((c) => c.headers.get('authorization'))).toEqual(Array(3).fill('Bearer ghu_user-leo'));
+  });
+});
+```
+
+`startCliServer` hands out its FakePlatform, so a test can put PRs on it. In `apps/server/test/ws.ts`:
+Replace:
+```ts
+  const wired = wireCliHub({ hub, dispatcher, platform: new FakePlatform(), now: opts.now });
+```
+with:
+```ts
+  const platform = new FakePlatform();
+  const wired = wireCliHub({ hub, dispatcher, platform, now: opts.now });
+```
+Then replace:
+```ts
+    hub,
+    dispatcher,
+    url: server.url,
+```
+with:
+```ts
+    hub,
+    dispatcher,
+    platform,
+    url: server.url,
+```
+
+`apps/server/src/jobs/catch-up.db.test.ts`:
+```ts
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeChat, makeCliToken, resetDb } from '../../test/db';
+import { people, pull } from '../../test/fixtures/github';
+import { startCliServer, TestCli, type CliServer } from '../../test/ws';
+import { Dispatcher } from '../chats/dispatch';
+import { syncFromEvent } from '../ingest/installations';
+import { prisma } from '../lib/prisma';
+import { FakePlatform } from '../platform/fake/fake-platform';
+import { snapshotFromPull } from '../platform/github/mapping';
+import { CatchUp } from './catch-up';
+
+beforeEach(resetDb);
+
+const ref = { installationId: '77', repoId: '501', repoFullName: 'octo/sandbox', number: 42 };
+
+/**
+ * The app is on octo/sandbox, maya and leo use Nitpilot, and maya opened PR 42 asking leo to review
+ * it while the server was down: GitHub (`platform`) has it, Nitpilot has no chat for it.
+ */
+async function setup(platform = new FakePlatform()) {
+  await syncFromEvent({ scope: 'installation', action: 'created', installationId: '77', accountLogin: 'octo', repos: [{ id: '501', fullName: 'octo/sandbox', private: false, defaultBranch: 'main' }] });
+  await prisma.user.create({ data: { githubId: String(people.maya.id), login: 'maya' } });
+  const leo = await prisma.user.create({ data: { githubId: String(people.leo.id), login: 'leo' } });
+  platform.addPr(snapshotFromPull(ref, pull()));
+  platform.openPrs.set(leo.id, [{ repoFullName: 'octo/sandbox', number: 42 }]);
+  return { leo, platform, catchUp: new CatchUp({ platform, dispatch: new Dispatcher().dispatch }) };
+}
+
+const chats = () => prisma.prChat.findMany({ include: { jobs: true } });
+
+describe('catching up when a CLI connects (spec §15)', () => {
+  it('starts a chat for an open PR Nitpilot never saw, as if it had just been opened', async () => {
+    const { leo, catchUp } = await setup();
+    expect(await catchUp.forUser(leo)).toBe(1);
+    const [chat] = await chats();
+    expect(chat).toMatchObject({ number: 42, phase: 'reviewing' });
+    expect(chat!.jobs).toEqual([expect.objectContaining({ type: 'review', userId: leo.id })]);
+  });
+
+  it('searches once per person per server start', async () => {
+    const { leo, platform, catchUp } = await setup();
+    await catchUp.forUser(leo);
+    expect(await catchUp.forUser(leo)).toBe(0);
+    expect(platform.searches).toEqual([leo.id]);
+    expect(await chats()).toHaveLength(1);
+  });
+
+  it("skips a PR it already has a chat for, a repo the app isn't on, and a PR closed since the search", async () => {
+    const { leo, platform, catchUp } = await setup();
+    await makeChat('501', { number: 42 });
+    platform.addPr(snapshotFromPull({ ...ref, number: 43 }, pull({ number: 43, state: 'closed' })));
+    platform.openPrs.set(leo.id, [
+      { repoFullName: 'octo/sandbox', number: 42 },
+      { repoFullName: 'someone/elsewhere', number: 1 },
+      { repoFullName: 'octo/sandbox', number: 43 },
+    ]);
+    expect(await catchUp.forUser(leo)).toBe(0);
+    expect((await chats()).map((c) => c.number)).toEqual([42]);
+    expect(await prisma.message.count()).toBe(0);
+  });
+
+  it('tries again on the next hello when the search failed', async () => {
+    const { leo, platform, catchUp } = await setup();
+    vi.spyOn(platform, 'findOpenPrsFor').mockRejectedValueOnce(new Error('GitHub is down'));
+    await expect(catchUp.forUser(leo)).rejects.toThrow('GitHub is down');
+    expect(await catchUp.forUser(leo)).toBe(1);
+  });
+
+  describe('wired to the CLI hub', () => {
+    let s: CliServer | null = null;
+    afterEach(async () => {
+      await s?.close();
+      s = null;
+    });
+
+    it("a CLI's hello catches its owner up, and the review it queued comes back to that CLI", async () => {
+      s = await startCliServer();
+      const { leo } = await setup(s.platform);
+      const token = await makeCliToken(leo.id);
+      const cli = await TestCli.online(s.url, token.raw, { repos: ['octo/sandbox'] });
+      const assign = await cli.next('job.assign');
+      expect(assign.d.bundle.pr).toMatchObject({ repoFullName: 'octo/sandbox', number: 42 });
+      cli.close();
+    });
+  });
+});
+```
+
+In `apps/server/src/http/routes/auth.db.test.ts`, two imports, then the tests:
+Replace:
+```ts
+import { ghId } from '../../../test/db';
+```
+with:
+```ts
+import { ghId, makeChat, makeRepo, makeUser } from '../../../test/db';
+```
+Then replace:
+```ts
+import { pkceChallenge } from '../../auth/github-oauth';
+```
+with:
+```ts
+import { pkceChallenge } from '../../auth/github-oauth';
+import { Dispatcher } from '../../chats/dispatch';
+```
+Then append:
+```ts
+describe('signing in again (spec §15)', () => {
+  /**
+   * maya's PR: leo raised P1, and maya's agent answered it, but her replies never reached GitHub, so
+   * she's flagged. `jobStatus` is how her newest job ended: `done` means the flag is the failed write.
+   */
+  async function flaggedAuthor(jobStatus: 'done' | 'failed') {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const chat = await makeChat((await makeRepo()).id, { authorGithubId: maya.githubId });
+    const author = await prisma.participant.create({ data: { chatId: chat.id, githubId: maya.githubId, role: 'author', login: 'maya', userId: maya.id } });
+    await prisma.participant.create({ data: { chatId: chat.id, githubId: leo.githubId, role: 'reviewer', login: 'leo', userId: leo.id, requested: true, lastReviewedSha: chat.headSha } });
+    await prisma.point.create({ data: { chatId: chat.id, number: 1, raisedByGithubId: leo.githubId, origin: 'agent', severity: 'major', category: 'bug', title: 'Page size 50 is too big', body: 'Use 20.', round: 1 } });
+    await prisma.job.create({ data: { chatId: chat.id, participantId: author.id, userId: maya.id, type: 'address', status: jobStatus, round: 1, headSha: chat.headSha } });
+    const dispatcher = new Dispatcher();
+    await dispatcher.dispatch(chat.id, { type: 'write_failed', write: 'replies', asGithubId: maya.githubId, pointNumbers: [1], reason: 'needs_reauth' });
+    const app = testApp({ github: new GithubClient(githubFake({ id: maya.githubId, login: 'maya' })), dispatch: dispatcher.dispatch });
+    const signIn = async () => {
+      const { cookie, saved } = await startLogin(app, '/');
+      return app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
+    };
+    return { chat, signIn };
+  }
+
+  it('clears the flag a failed GitHub write left, and the chat carries on', async () => {
+    const { chat, signIn } = await flaggedAuthor('done');
+    expect((await signIn()).status).toBe(302);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'none' });
+    expect(await prisma.job.findFirst({ where: { chatId: chat.id, status: 'queued' } })).toMatchObject({ type: 'address' });
+    const last = await prisma.message.findFirstOrThrow({ where: { chatId: chat.id }, orderBy: { seq: 'desc' } });
+    expect(last.body).toBe("maya's agent is working on 1 point");
+  });
+
+  it("leaves a flag from a failed job: that's for `nitpilot retry`", async () => {
+    const { chat, signIn } = await flaggedAuthor('failed');
+    expect((await signIn()).status).toBe(302);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'failed' });
+    expect(await prisma.job.count({ where: { chatId: chat.id, status: 'queued' } })).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/server -- src/engine/lifecycle src/engine/failures src/platform/github/normalize/pull-request src/platform/github/reads src/chats/route-event src/jobs/catch-up src/http/routes/auth`
+Expected: FAIL: 9 tests in 6 files, and `src/jobs/catch-up.db.test.ts` doesn't load (`Cannot find module './catch-up'`):
+- lifecycle and failures (4): `Unhandled event: {"type":"pr_retargeted",…}` and `{"type":"signed_in_again",…}`;
+- pull-request (1): `expected undefined to match object { scope: 'pr', … }` (`edited` is still ignored);
+- reads (1): `platform.findOpenPrsFor is not a function`;
+- route-event (2): the retarget is `ignored`, so the base is still `main`;
+- auth (1): maya's flag is still `failed`.
+
+- [ ] **Step 3: Write the code**
+
+In `apps/server/src/engine/types.ts`, add the two events after `write_failed`:
+Replace:
+```ts
+  | { type: 'write_failed'; write: 'review' | 'replies'; asGithubId: string; pointNumbers: number[]; reason: 'needs_reauth' | 'github_error' };
+```
+with:
+```ts
+  | { type: 'write_failed'; write: 'review' | 'replies'; asGithubId: string; pointNumbers: number[]; reason: 'needs_reauth' | 'github_error' }
+  /** The PR now targets another branch. `trusted` is the author's trust, checked again. */
+  | { type: 'pr_retargeted'; baseRef: string; trusted: boolean }
+  /** Someone flagged by write_failed signed in again, in these roles (the ones whose flag came from a failed write). */
+  | { type: 'signed_in_again'; who: Person; roles: Role[] };
+```
+
+In `apps/server/src/engine/lifecycle.ts`, add before `onReviewRequested`:
+Replace:
+```ts
+export function onReviewRequested(ctx: Ctx, e: Ev<'review_requested'>): void {
+```
+with:
+```ts
+/**
+ * The PR now targets another branch (spec §15). The chat row already has the new base; the engine
+ * records whether the author is still trusted. Nothing starts: a running job finishes on the base it
+ * began with, and the next one gets the new base.
+ */
+export function onPrRetargeted(ctx: Ctx, e: Ev<'pr_retargeted'>): void {
+  ctx.chat.trusted = e.trusted;
+  system(ctx, `Now targets ${e.baseRef}`);
+}
+
+export function onReviewRequested(ctx: Ctx, e: Ev<'review_requested'>): void {
+```
+
+In `apps/server/src/engine/writes.ts`, import `advance`:
+Replace:
+```ts
+import { emit, system, type Ctx, type Ev } from './context';
+import { onNitpilot } from './state';
+```
+with:
+```ts
+import { advance } from './advance';
+import { emit, system, type Ctx, type Ev } from './context';
+import { onNitpilot } from './state';
+```
+Then append:
+```ts
+/**
+ * Someone whose review or replies never reached GitHub signed in to Nitpilot again (spec §15), so writes
+ * in their name work again: their flag goes, and the chat carries on. What failed isn't posted again;
+ * the chat keeps it, and a point without a GitHub thread gets no reply there.
+ */
+export function onSignedInAgain(ctx: Ctx, e: Ev<'signed_in_again'>): void {
+  const flagged = ctx.chat.participants.filter((p) => p.githubId === e.who.githubId && e.roles.includes(p.role) && p.attention === 'failed');
+  if (flagged.length === 0) return;
+  for (const p of flagged) p.attention = 'none';
+  system(ctx, `${e.who.login} signed in again`);
+  advance(ctx);
+}
+```
+
+In `apps/server/src/engine/decide.ts`, import the two handlers and add their cases:
+Replace:
+```ts
+  onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrToDraft,
+  onReviewRequestRemoved, onReviewRequested,
+```
+with:
+```ts
+  onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrRetargeted, onPrToDraft,
+  onReviewRequestRemoved, onReviewRequested,
+```
+Then replace:
+```ts
+import { onWriteFailed } from './writes';
+```
+with:
+```ts
+import { onSignedInAgain, onWriteFailed } from './writes';
+```
+Then replace:
+```ts
+    case 'write_failed': onWriteFailed(ctx, event); break;
+```
+with:
+```ts
+    case 'write_failed': onWriteFailed(ctx, event); break;
+    case 'pr_retargeted': onPrRetargeted(ctx, event); break;
+    case 'signed_in_again': onSignedInAgain(ctx, event); break;
+```
+
+In `apps/server/src/platform/github/payloads.ts`, `GhPullRequestEvent` gets `changes`:
+Replace:
+```ts
+  before?: string;
+  after?: string;
+};
+export type GhReviewCommentEvent
+```
+with:
+```ts
+  before?: string;
+  after?: string;
+  /** On `edited`: what changed, with the old values. `base` is there when the PR now targets another branch. */
+  changes?: { base?: { ref: { from: string }; sha: { from: string } }; title?: { from: string }; body?: { from: string } };
+};
+export type GhReviewCommentEvent
+```
+
+In `apps/server/src/platform/github/normalize/pull-request.ts`:
+Replace:
+```ts
+import { snapshotFromPull, toPerson } from '../mapping';
+```
+with:
+```ts
+import { isTrustedAssociation, snapshotFromPull, toPerson } from '../mapping';
+```
+Then replace:
+```ts
+    case 'synchronize':
+      return one({ type: 'head_updated', before: p.before ?? '', after: p.after ?? p.pull_request.head.sha, ours: false });
+```
+with:
+```ts
+    case 'synchronize':
+      return one({ type: 'head_updated', before: p.before ?? '', after: p.after ?? p.pull_request.head.sha, ours: false });
+    case 'edited':
+      // Only a new base branch matters (a retarget). The router adds trusted bots to `trusted`.
+      return p.changes?.base ? one({ type: 'pr_retargeted', baseRef: snapshot.baseRef, trusted: isTrustedAssociation(snapshot.authorAssociation) }) : [];
+```
+
+In `apps/server/src/chats/route-event.ts`: a retarget of an untracked PR is ignored, every snapshot refreshes the base, and the router decides who is trusted (as it does for a new chat):
+Replace:
+```ts
+  if (!chat) {
+    if (event.type === 'pr_closed') return 'closed PR that was never tracked';
+```
+with:
+```ts
+  if (!chat) {
+    if (event.type === 'pr_closed') return 'closed PR that was never tracked';
+    if (event.type === 'pr_retargeted') return 'retargeted PR that was never tracked';
+```
+Then replace:
+```ts
+  } else if (ne.snapshot) {
+    await prisma.prChat.update({ where: { id: chat.id }, data: { title: ne.snapshot.title, body: ne.snapshot.body } });
+  }
+
+  if (event.type === 'head_updated') event = { ...event, ours: await isOurPush(chat, event.after) };
+```
+with:
+```ts
+  } else if (ne.snapshot) {
+    // The base too: a PR can be retargeted, and the next job must fetch the branch it targets now.
+    const { title, body, baseRef, baseSha } = ne.snapshot;
+    await prisma.prChat.update({ where: { id: chat.id }, data: { title, body, baseRef, baseSha } });
+  }
+
+  if (event.type === 'head_updated') event = { ...event, ours: await isOurPush(chat, event.after) };
+  if (event.type === 'pr_retargeted' && ne.snapshot) event = { ...event, trusted: isTrustedAuthor(ne.snapshot, rules) };
+```
+Then replace:
+```ts
+async function createChat(repoId: string, s: PrSnapshot, rules: TeamRules): Promise<PrChat> {
+  const trusted = isTrustedAssociation(s.authorAssociation) || (s.author.isBot && rules.trusted_bots.includes(s.author.login));
+  return prisma.prChat.create({
+```
+with:
+```ts
+/** OWNER, MEMBER or COLLABORATOR of the repo, or a bot the team trusts (spec §6.1). */
+function isTrustedAuthor(s: PrSnapshot, rules: TeamRules): boolean {
+  return isTrustedAssociation(s.authorAssociation) || (s.author.isBot && rules.trusted_bots.includes(s.author.login));
+}
+
+async function createChat(repoId: string, s: PrSnapshot, rules: TeamRules): Promise<PrChat> {
+  const trusted = isTrustedAuthor(s, rules);
+  return prisma.prChat.create({
+```
+
+In `apps/server/src/platform/types.ts`:
+Replace:
+```ts
+export type RepoInfo = { id: string; fullName: string; private: boolean; defaultBranch: string };
+```
+with:
+```ts
+export type RepoInfo = { id: string; fullName: string; private: boolean; defaultBranch: string };
+
+/** A PR a search found: enough to look it up. */
+export type FoundPr = { repoFullName: string; number: number };
+```
+Then replace:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec;
+}
+```
+with:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec;
+  /**
+   * Open PRs this person authored, was asked to review, or reviewed, found with their own token
+   * (spec §15 "Catching up"). Each PR once.
+   */
+  findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
+}
+```
+
+In `apps/server/src/platform/github/reads.ts`:
+Replace:
+```ts
+import type { GitSpec, GitSpecInput, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
+```
+with:
+```ts
+import type { FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
+```
+Then replace:
+```ts
+/** The read side of the GitHub adapter. Task 26 adds the writes. */
+export class GithubReads implements PlatformReads {
+  readonly id = 'github' as const;
+
+  constructor(
+    protected readonly github: GithubClient,
+    protected readonly appAuth: AppAuth,
+  ) {}
+```
+with:
+```ts
+/** What a search answers, as far as we read it. */
+type GhSearch = { items: { number: number; repository_url: string }[] };
+
+/** The read side of the GitHub adapter. Task 26 adds the writes. */
+export class GithubReads implements PlatformReads {
+  readonly id = 'github' as const;
+
+  constructor(
+    protected readonly github: GithubClient,
+    protected readonly appAuth: AppAuth,
+    /** A person's own GitHub token (auth/user-tokens.ts), for what only they can see. */
+    protected readonly userToken: (userId: string) => Promise<string>,
+  ) {}
+```
+Then replace:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec {
+    return gitSpecFor(pr);
+  }
+}
+```
+with:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec {
+    return gitSpecFor(pr);
+  }
+
+  /**
+   * Three searches with the person's own token, one page of 100 each (spec §15 "Catching up"). Search
+   * allows 30 requests a minute per person, and a catch-up uses 3.
+   */
+  async findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]> {
+    const token = await this.userToken(user.id);
+    const found = new Map<string, FoundPr>();
+    for (const filter of [`author:${user.login}`, `review-requested:${user.login}`, `reviewed-by:${user.login}`]) {
+      const q = encodeURIComponent(`is:pr is:open ${filter}`);
+      const { data } = await this.github.api<GhSearch>('GET', `/search/issues?q=${q}&per_page=100`, { token });
+      for (const item of data.items) {
+        // repository_url is https://api.github.com/repos/<owner>/<name>
+        const repoFullName = item.repository_url.split('/repos/')[1];
+        if (repoFullName) found.set(`${repoFullName}#${item.number}`, { repoFullName, number: item.number });
+      }
+    }
+    return [...found.values()];
+  }
+}
+```
+
+In `apps/server/src/platform/github/platform.ts`, pass the token function up:
+Replace:
+```ts
+    super(github, appAuth);
+```
+with:
+```ts
+    super(github, appAuth, userToken);
+```
+
+In `apps/server/src/platform/fake/fake-platform.ts`:
+Replace:
+```ts
+import type { AnchoredComment, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
+```
+with:
+```ts
+import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
+```
+Then replace:
+```ts
+  readonly writes: FakeWrite[] = [];
+```
+with:
+```ts
+  readonly writes: FakeWrite[] = [];
+  /** userId → the open PRs a catch-up search finds for them */
+  readonly openPrs = new Map<string, FoundPr[]>();
+  /** Whose PRs were searched, in order. */
+  readonly searches: string[] = [];
+```
+Then replace:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec {
+    return gitSpecFor(pr);
+  }
+```
+with:
+```ts
+  gitSpec(pr: GitSpecInput): GitSpec {
+    return gitSpecFor(pr);
+  }
+
+  async findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]> {
+    this.searches.push(user.id);
+    return this.openPrs.get(user.id) ?? [];
+  }
+```
+
+`apps/server/src/jobs/catch-up.ts`:
+```ts
+import { routePrEvent, type RouterDeps } from '../chats/route-event';
+import { prisma } from '../lib/prisma';
+import type { FoundPr } from '../platform/types';
+
+/**
+ * Catching up when a CLI connects (spec §15): webhooks GitHub sent while the server was down, or
+ * before the app could see a repo, never arrive again. So the first time a person's CLI says hello
+ * after the server starts, search for their open PRs, and start each one Nitpilot has no chat for as if
+ * it had just been opened. Once per person per server start: it's a catch-up, not polling.
+ */
+export class CatchUp {
+  private readonly done = new Set<string>();
+  private readonly running = new Map<string, Promise<number>>();
+
+  constructor(private readonly deps: RouterDeps) {}
+
+  /**
+   * Catch this person up, unless that already happened since the server started. Resolves with how many
+   * chats it started. A failed search rejects and isn't remembered, so their next hello tries again.
+   */
+  forUser(user: { id: string; login: string }): Promise<number> {
+    if (this.done.has(user.id)) return Promise.resolve(0);
+    // Two of their CLIs saying hello at once share one catch-up.
+    let run = this.running.get(user.id);
+    if (!run) {
+      run = this.run(user).finally(() => this.running.delete(user.id));
+      this.running.set(user.id, run);
+    }
+    return run;
+  }
+
+  private async run(user: { id: string; login: string }): Promise<number> {
+    const found = await this.deps.platform.findOpenPrsFor(user);
+    this.done.add(user.id);
+    let started = 0;
+    for (const pr of found) {
+      try {
+        if (await this.start(pr)) started += 1;
+      } catch (err) {
+        // One PR that can't be read (deleted a moment ago, say) doesn't stop the others.
+        console.error(`[catch-up] ${pr.repoFullName}#${pr.number}:`, err);
+      }
+    }
+    return started;
+  }
+
+  /** Start a chat for this PR if Nitpilot has none and it's still open. True when one was started. */
+  private async start(pr: FoundPr): Promise<boolean> {
+    // A repo the app isn't installed on (or that it lost) is none of our business.
+    const repo = await prisma.repo.findUnique({ where: { fullName: pr.repoFullName } });
+    if (!repo) return false;
+    if ((await prisma.prChat.count({ where: { repoId: repo.id, number: pr.number } })) > 0) return false;
+    const ref = { installationId: repo.installationId, repoId: repo.id, repoFullName: repo.fullName, number: pr.number };
+    const snapshot = await this.deps.platform.getPr(ref);
+    if (snapshot.state !== 'open') return false;
+    const event = { type: 'pr_opened' as const, author: snapshot.author, reviewers: snapshot.requestedReviewers };
+    return (await routePrEvent({ scope: 'pr', pr: ref, snapshot, event }, this.deps)) === null;
+  }
+}
+```
+
+In `apps/server/src/ws/wire.ts`, the hub needs the whole platform now, and every hello may start a catch-up:
+Replace:
+```ts
+import { JobAssigner } from '../jobs/assign';
+import { buildJobBundle } from '../jobs/bundle';
+```
+with:
+```ts
+import { JobAssigner } from '../jobs/assign';
+import { buildJobBundle } from '../jobs/bundle';
+import { CatchUp } from '../jobs/catch-up';
+```
+Then replace:
+```ts
+  platform: Pick<PlatformReads, 'gitSpec'>;
+```
+with:
+```ts
+  platform: PlatformReads;
+```
+Then replace:
+```ts
+  const leases = new Leases(hub, dispatcher.dispatch, now);
+```
+with:
+```ts
+  const leases = new Leases(hub, dispatcher.dispatch, now);
+  const catchUp = new CatchUp({ platform, dispatch: dispatcher.dispatch });
+```
+Then replace:
+```ts
+  hub.onMessage(async (_conn, msg) => {
+    // A CLI that just said hello may be able to take queued jobs.
+    if (msg.t === 'hello') assigner.wake();
+  });
+```
+with:
+```ts
+  hub.onMessage(async (conn, msg) => {
+    if (msg.t !== 'hello') return;
+    // A CLI that just said hello may be able to take queued jobs.
+    assigner.wake();
+    // The first hello since the server started: look for PRs of theirs we missed (spec §15). Not awaited,
+    // so this CLI's next messages don't wait for GitHub's search; the jobs it queues wake the assigner.
+    void catchUp.forUser({ id: conn.userId, login: conn.login }).catch((err) => console.error(`[catch-up] ${conn.login}:`, err));
+  });
+```
+Then replace:
+```ts
+  return {
+    assigner,
+    leases,
+```
+with:
+```ts
+  return {
+    assigner,
+    leases,
+    catchUp,
+```
+
+`apps/server/src/chats/failed-flags.ts`:
+```ts
+import type { Role } from '@nitpilot/protocol';
+import type { Person } from '../engine/types';
+import { prisma } from '../lib/prisma';
+import type { Dispatch } from './dispatch';
+
+/**
+ * Two things flag a person `failed` in a chat:
+ * - 'agent': their agent's job failed for good (spec §9.4). Running it again can help: `nitpilot retry`.
+ * - 'github_post': a review or replies in their name never reached GitHub (spec §15, `write_failed`).
+ *   Running the agent again won't fix that; signing in again does.
+ * The flag doesn't say which, so look at their newest job in that role: if it failed, the agent did.
+ */
+export type FailureKind = 'agent' | 'github_post';
+
+async function kindOf(participantId: string): Promise<FailureKind> {
+  const newest = await prisma.job.findFirst({ where: { participantId }, orderBy: { createdAt: 'desc' }, select: { status: true } });
+  return newest?.status === 'failed' ? 'agent' : 'github_post';
+}
+
+/** Why this person is flagged in the chat: null when none of their roles is, 'agent' when any flagged role's newest job failed. */
+export async function failureKind(chatId: string, githubId: string): Promise<FailureKind | null> {
+  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
+  if (flagged.length === 0) return null;
+  for (const p of flagged) {
+    if ((await kindOf(p.id)) === 'agent') return 'agent';
+  }
+  return 'github_post';
+}
+
+/**
+ * Someone signed in again, so writes in their name work again. In each chat where a failed GitHub write
+ * flagged them, clear those flags and let the chat carry on: one `signed_in_again` event per chat.
+ * Returns how many chats that was.
+ */
+export async function resumeAfterSignIn(user: { id: string; githubId: string; login: string }, dispatch: Dispatch): Promise<number> {
+  const flagged = await prisma.participant.findMany({ where: { githubId: user.githubId, attention: 'failed' }, select: { id: true, chatId: true, role: true } });
+  const rolesByChat = new Map<string, Role[]>();
+  for (const p of flagged) {
+    if ((await kindOf(p.id)) !== 'github_post') continue;
+    rolesByChat.set(p.chatId, [...(rolesByChat.get(p.chatId) ?? []), p.role as Role]);
+  }
+  const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
+  for (const [chatId, roles] of rolesByChat) {
+    try {
+      await dispatch(chatId, { type: 'signed_in_again', who, roles });
+    } catch (err) {
+      // One chat that can't be updated doesn't stop the sign-in, or the other chats.
+      console.error(`[sign-in] couldn't resume chat ${chatId} for ${user.login}:`, err);
+    }
+  }
+  return rolesByChat.size;
+}
+```
+
+`failureKind` moves to `chats/failed-flags.ts`, which sign-in uses too. In `apps/server/src/http/routes/cli.ts`, import it:
+Replace:
+```ts
+import type { Dispatch } from '../../chats/dispatch';
+```
+with:
+```ts
+import type { Dispatch } from '../../chats/dispatch';
+import { failureKind } from '../../chats/failed-flags';
+```
+Then replace:
+```ts
+/**
+ * Why this person is flagged `failed` in the chat, if they are:
+ * - null: none of their roles is flagged;
+ * - 'agent': a flagged role's newest job failed, so running it again can help;
+ * - 'github_post': otherwise. A write that never reached GitHub (spec §15, `write_failed`) is the only other
+ *   thing that sets the flag, and it is fixed by signing in again, not by re-running the agent.
+ */
+async function failureKind(chatId: string, githubId: string): Promise<'agent' | 'github_post' | null> {
+  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
+  if (flagged.length === 0) return null;
+  for (const p of flagged) {
+    const newest = await prisma.job.findFirst({ where: { participantId: p.id }, orderBy: { createdAt: 'desc' }, select: { status: true } });
+    if (newest?.status === 'failed') return 'agent';
+  }
+  return 'github_post';
+}
+```
+with nothing (delete it).
+
+In `apps/server/src/http/routes/auth.ts`, the callback lets chats that waited on a failed write carry on:
+Replace:
+```ts
+import { saveGithubUser } from '../../auth/users';
+```
+with:
+```ts
+import { saveGithubUser } from '../../auth/users';
+import type { Dispatch } from '../../chats/dispatch';
+import { resumeAfterSignIn } from '../../chats/failed-flags';
+```
+Then replace:
+```ts
+export function authRoutes(deps: { github: GithubClient }): Hono {
+```
+with:
+```ts
+export function authRoutes(deps: { github: GithubClient; dispatch: Dispatch }): Hono {
+```
+Then replace:
+```ts
+    const user = await saveGithubUser(ghUser, tokens);
+    await startSession(c, user.id);
+```
+with:
+```ts
+    const user = await saveGithubUser(ghUser, tokens);
+    // Writes in their name work again: chats that waited on one that failed carry on (spec §15).
+    await resumeAfterSignIn(user, deps.dispatch);
+    await startSession(c, user.id);
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: the command from Step 2.
+Expected: PASS (7 files, 107 tests).
+
+- [ ] **Step 5: Explain catching up, and bring the spec in line**
+
+`docs/why/catching-up.md`:
+```markdown
+# Catching up: finding the PRs we missed
+
+**In one sentence:** the first time your CLI connects after the server starts, Nitpilot asks GitHub for your open PRs and starts a chat for each one it never heard about (spec §15).
+
+## Why webhooks aren't enough
+
+Nitpilot learns about PRs from webhooks: GitHub calls us when something happens. If nobody answers (the server was down, or being deployed), GitHub keeps the delivery for a few days, and the server asks for the failed ones again at boot (`ingest/recovery.ts`). But a PR opened before the app was installed on the repo, or one whose delivery is older than that, never arrives. Its review would never start.
+
+## What happens (`jobs/catch-up.ts`)
+
+1. Your CLI says `hello` (`ws/wire.ts`). If it's your first hello since the server started, the catch-up runs in the background, so your CLI doesn't wait for it.
+2. Three searches with **your own** GitHub token: PRs you opened, PRs waiting for your review, and PRs you reviewed, all still open (`platform/github/reads.ts`, `findOpenPrsFor`).
+3. Each PR in a repo the app is on, without a chat yet, goes through the same router as a webhook, as if it had just been opened. Its reviews are queued as usual, and your CLI picks them up.
+
+It runs **once per person per server start**. That's a catch-up, not polling: from then on, webhooks keep us current. If the search fails (GitHub hiccups, or you need to sign in again), your next connect tries again.
+
+## Why your token, and why only three requests
+
+GitHub's search allows 30 requests a minute **per person**, and your own token only finds PRs you can see. A catch-up uses three, one page of 100 PRs each, so it never gets near the limit, and one person's catch-up can't use up anyone else's.
+
+## The React analogy
+
+It's like a component that subscribes to live updates but, when it mounts, also fetches the current list once: the subscription only tells you what changes from now on, so you load what's already there first.
+```
+
+In `docs/why/outbox-and-restarts.md`, in "When a write never reaches GitHub":
+Replace:
+```markdown
+- notifies them.
+
+The summary comment is left out on purpose.
+```
+with:
+```markdown
+- notifies them.
+
+When that person signs in again (`http/routes/auth.ts`), writes in their name work again. `chats/failed-flags.ts` finds each chat where a failed write flagged them and sends it a `signed_in_again` event: the flag goes and the chat carries on. What failed isn't posted again; the chat still has it. A flag from a failed *job* stays: running the agent again is what fixes that (`nitpilot retry`).
+
+The summary comment is left out on purpose.
+```
+
+In the spec:
+Replace:
+```markdown
+| timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error}`.
+```
+with:
+```markdown
+| timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error} | pr_retargeted{baseRef, trusted} | signed_in_again{who, roles}`.
+```
+Then replace:
+```markdown
+`write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15).
+```
+with:
+```markdown
+`write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15), and `signed_in_again` when that person signs in again. `pr_retargeted` is a PR that now targets another branch.
+```
+Then replace:
+```markdown
+  findOpenPrsFor(userId: string): Promise<PrRef[]>;
+```
+with:
+```markdown
+  findOpenPrsFor(user: { id: string; login: string }): Promise<{ repoFullName: string; number: number }[]>;  // with the user's own token
+```
+Then replace:
+```markdown
+a review or replies in someone's name becomes a `write_failed` engine event: a timeline message, that person's attention set to `failed`, and a notification.
+```
+with:
+```markdown
+a review or replies in someone's name becomes a `write_failed` engine event: a timeline message, that person's attention set to `failed`, and a notification. When that person signs in again, the flag is cleared (`signed_in_again`) and the chat carries on; what failed isn't posted again.
+```
+Then replace:
+```markdown
+- **Catching up when a CLI connects** (once, not polling): three searches, `is:pr is:open author:<login>`, `review-requested:<login>` and `reviewed-by:<login>`. Search allows 30 requests per minute.
+```
+with:
+```markdown
+- **Catching up when a CLI connects** (once per person per server start, not polling): three searches with the person's own token, `is:pr is:open author:<login>`, `is:pr is:open review-requested:<login>` and `is:pr is:open reviewed-by:<login>`, one page of 100 each. Search allows 30 requests per minute per person. Each open PR in a repo the app is on and without a chat starts as if it had just been opened. A failed search is tried again at that person's next connect.
+- **A retargeted PR** (`pull_request.edited` with a new base): the chat's `baseRef` and `baseSha` are refreshed and the author's trust is checked again (`pr_retargeted`). Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
+```
+
+- [ ] **Step 6: Run the full suite**
+
+Docker must be running (container `nitpilot-postgres-1`).
+
+Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
+Expected: all green: protocol 41, CLI 274 passed and 14 skipped, server 415; end to end 5 passed.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/server/src/jobs/catch-up.ts apps/server/src/jobs/catch-up.db.test.ts apps/server/src/chats/failed-flags.ts apps/server/src/chats/route-event.ts apps/server/src/chats/route-event.db.test.ts apps/server/src/engine apps/server/src/http/routes/auth.ts apps/server/src/http/routes/auth.db.test.ts apps/server/src/http/routes/cli.ts apps/server/src/platform apps/server/src/ws/wire.ts apps/server/test/fixtures/github.ts apps/server/test/ws.ts docs/why/catching-up.md docs/why/outbox-and-restarts.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(server): catch up on a CLI's first hello, follow base retargets, and carry on after signing in again
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Task 23: The "waiting" status and the read-only transcript page
 
 **Files:**
-- Create: `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx`, `apps/server/src/http/routes/transcript.db.test.ts`.
+- Create: `apps/server/src/chats/activity.ts` and `activity.test.ts`, `apps/server/src/auth/repo-access.ts` and `repo-access.db.test.ts`, `apps/server/src/http/routes/transcript.tsx` and `transcript.db.test.ts`, `apps/server/src/http/pages/transcript.tsx`, `docs/why/transcript-page.md`.
+- Modify, so a waiting job keeps why: `engine/types.ts`, `engine/results.ts`, `engine/failures.test.ts`, `chats/apply-commands.ts`, `chats/dispatch.db.test.ts`.
+- Modify, for the page: `http/app.ts` (`clis`, the route), `http/pages/layout.tsx` (`BRAND`, a wide card, `frame-ancestors`), `http/pages/home.tsx` (`BRAND`), `main.ts`, `apps/server/test/app.ts`, `apps/server/test/e2e/harness.ts`.
+- Modify: the spec (§9.1, §10, §16).
 
 **Interfaces:**
-- Route `GET /c/:owner/:repo/:number` (spec §10). It requires sign-in and read access to the repo, checked with the viewer's own token (`GET /repos/{owner}/{repo}`) and cached for 5 minutes.
+- Consumes: `currentUser` (`auth/session.ts`), `getUserToken` and `NeedsReauthError` (`auth/user-tokens.ts`), `rulesFromJson` (`chats/rules.ts`), `CliHub.connectionsFor` (Task 1), `renderPage` and `Layout` (`http/pages/layout.tsx`), `GithubClient`, `GithubError`; test helpers `testApp`, `sessionCookieFor`, `fakeFetch`, `json`, `makeChat`, `makeRepo`, `makeUser`, `personOf`.
+- Produces:
+  - `Activity`, `ActiveJob`, `Presence`, `LiveClis`, `ActivityFacts`, `deriveActivity(facts) → Activity`, `loadActivity(chatId, clis, now?) → Promise<Activity>` (`chats/activity.ts`). Plan 2's inbox and chat header reuse them;
+  - `RepoAccess(github, now?)` with `check(userId, repoFullName) → Promise<'read' | 'none' | 'reauth'>`, and `ACCESS_TTL_MS` (`auth/repo-access.ts`);
+  - `transcriptRoutes({ github, clis })`; `AppDeps.clis: LiveClis` (main passes the hub); `Layout({ title, wide? })`;
+  - the `retry_job` command's `reason` (stored in `Job.failure`).
 
-**Behavior:**
-- The page shows the header (title, `repo#n`, phase, round x of max, the `Repo.rulesError` warning when present), the activity from Task 22, and the timeline.
-- Point cards show severity, category, `file:line`, the snippet, the status and the thread.
-- Styling is plain (Plan 1a's `Layout`); the real design is Plan 2.
-- Plan 1a carry-forwards: `home.tsx` and `layout.tsx` take the CLI name from `BRAND`, and server pages (`/cli/approve`, the transcript) send `Content-Security-Policy: frame-ancestors 'none'`.
+**Behavior** (spec §9.1, §10, §16):
+1. A requeued job keeps why its last run ended: `retry_job` carries the failure's `reason`, and `Job.failure` stores it (a final failure overwrites it, as before).
+2. `deriveActivity` (pure): for each queued job, oldest first, the agent waits when none of its person's CLIs is connected (`offline`, with `offlineSince` = their newest `CliToken.lastSeenAt`, or null if none ever connected), when none connected has the repo linked (`repo_not_linked`), or when the CLI turned it down at its `daily_cap` or the agent's `quota` and its `runAfter` hasn't come (`cap_reached`). The first waiting agent wins; otherwise a running job (else the oldest queued one) is `agent_working`. With no active job: `addressing` → `human_turn` for the author; `reviewing` with an answered GitHub point → `human_turn` for whoever raised it; anything else → `none`.
+3. `GET /c/:owner/:repo/:number`: not signed in → 302 to `/auth/github/login?next=<path>`. No such chat → 404. Otherwise `RepoAccess` asks GitHub `GET /repos/<owner>/<name>` with the viewer's own token: a 404 or 403 → the same 404 page as a missing chat; an expired sign-in (no token, or GitHub answers 401) → 401 with a "sign in again" link back here, without calling GitHub when Nitpilot already knows. Answers are kept for 5 minutes per viewer and repo.
+4. The page: the title, `<repo>#<n>` (a link to the PR) · the phase in words (`Waiting to start`, `Reviewing`, `Fixing`, `Ready for approval`, `Needs a human`, `Merged` or `Closed`) · `round x of <max_rounds>`; the `.nitpilot.yml` problem when `Repo.rulesError` is set; the activity line; then the timeline in `seq` order. A raised point is a card (P-number, severity, category, `file:line`, title, status in words: `Open`, `Addressed: fixed|answered|declined`, `Resolved`, `Escalated: <reason>`, the body, the snippet with line numbers, and its thread: replies, decisions, and human replies in its GitHub thread). Everything is text, escaped by JSX.
+5. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'` (carry-forward M10), and `home.tsx` and `layout.tsx` take their names from `BRAND` (carry-forward M7).
 
-**Tests this task must include:**
-- not signed in → redirect to sign-in with `next`;
-- no repo access → 404;
-- the timeline renders in `seq` order with the right status words;
-- a viewer with `needs_reauth` is asked to sign in again.
+- [ ] **Step 1: Write the failing tests**
+
+`apps/server/src/chats/activity.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { deriveActivity, type ActiveJob, type ActivityFacts, type Presence } from './activity';
+
+const NOW = new Date('2026-10-15T12:00:00.000Z');
+const LAST_SEEN = new Date('2026-10-15T09:30:00.000Z');
+const REPO = 'octo/sandbox';
+
+const job = (over: Partial<ActiveJob> = {}): ActiveJob => ({ login: 'leo', userId: 'user-leo', status: 'queued', runAfter: NOW, failure: null, ...over });
+const online = (...linked: string[][]): Presence => ({ connected: linked.map((repos) => new Set(repos)), lastSeenAt: NOW });
+const offline = (lastSeenAt: Date | null): Presence => ({ connected: [], lastSeenAt });
+
+function facts(over: Partial<ActivityFacts> = {}, presence: Record<string, Presence> = {}): ActivityFacts {
+  return {
+    phase: 'reviewing',
+    repoFullName: REPO,
+    author: 'maya',
+    reviewerToAnswer: null,
+    jobs: [],
+    presence: (userId) => presence[userId] ?? offline(null),
+    now: NOW,
+    ...over,
+  };
+}
+
+describe('deriveActivity (spec §9.1)', () => {
+  it("is agent_working while a job runs", () => {
+    expect(deriveActivity(facts({ jobs: [job({ status: 'running' })] }))).toEqual({ kind: 'agent_working', who: 'leo' });
+  });
+
+  it('is agent_working for a queued job a CLI can take now', () => {
+    expect(deriveActivity(facts({ jobs: [job()] }, { 'user-leo': online([REPO]) }))).toEqual({ kind: 'agent_working', who: 'leo' });
+  });
+
+  it("waits with offlineSince when none of the person's CLIs is connected", () => {
+    expect(deriveActivity(facts({ jobs: [job()] }, { 'user-leo': offline(LAST_SEEN) }))).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'offline', offlineSince: LAST_SEEN });
+  });
+
+  it('waits with offlineSince null when their CLI never connected', () => {
+    expect(deriveActivity(facts({ jobs: [job()] }))).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'offline', offlineSince: null });
+  });
+
+  it("waits with repo_not_linked when their connected CLIs don't have the repo", () => {
+    expect(deriveActivity(facts({ jobs: [job()] }, { 'user-leo': online(['octo/other'], []) }))).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'repo_not_linked' });
+  });
+
+  it('waits with cap_reached after the daily cap or the agent quota turned the job down', () => {
+    const later = new Date(NOW.getTime() + 60 * 60_000);
+    for (const failure of ['daily_cap', 'quota']) {
+      expect(deriveActivity(facts({ jobs: [job({ failure, runAfter: later })] }, { 'user-leo': online([REPO]) }))).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'cap_reached' });
+    }
+    // Once the wait is over, it's up for grabs again.
+    expect(deriveActivity(facts({ jobs: [job({ failure: 'daily_cap', runAfter: NOW })] }, { 'user-leo': online([REPO]) }))).toEqual({ kind: 'agent_working', who: 'leo' });
+  });
+
+  it('shows the agent that waits when another is working', () => {
+    const jobs = [job({ status: 'running' }), job({ login: 'sam', userId: 'user-sam' })];
+    expect(deriveActivity(facts({ jobs }, { 'user-sam': offline(LAST_SEEN) }))).toEqual({ kind: 'agent_waiting', who: 'sam', why: 'offline', offlineSince: LAST_SEEN });
+  });
+
+  it("is human_turn for the author while addressing with no agent at work, and for a reviewer whose answered point waits", () => {
+    expect(deriveActivity(facts({ phase: 'addressing' }))).toEqual({ kind: 'human_turn', who: 'maya' });
+    expect(deriveActivity(facts({ phase: 'reviewing', reviewerToAnswer: 'sam' }))).toEqual({ kind: 'human_turn', who: 'sam' });
+  });
+
+  it('is none otherwise', () => {
+    for (const phase of ['idle', 'ready', 'escalated', 'closed'] as const) expect(deriveActivity(facts({ phase }))).toEqual({ kind: 'none' });
+    expect(deriveActivity(facts({ phase: 'reviewing' }))).toEqual({ kind: 'none' });
+  });
+});
+```
+
+A requeued job now says why. In `apps/server/src/engine/failures.test.ts`, each `retry_job` expectation gets its `reason`:
+Replace:
+```ts
+runAfter: after(delay), refundAttempt: false }]);
+    expect(out.chat.jobs[0]!.status)
+```
+with:
+```ts
+runAfter: after(delay), refundAttempt: false, reason: 'crash' }]);
+    expect(out.chat.jobs[0]!.status)
+```
+Then replace:
+```ts
+runAfter: after(60_000), refundAttempt: false }]);
+```
+with:
+```ts
+runAfter: after(60_000), refundAttempt: false, reason: 'crash' }]);
+```
+Then replace:
+```ts
+runAfter: after(delay), refundAttempt: true }]);
+```
+with:
+```ts
+runAfter: after(delay), refundAttempt: true, reason }]);
+```
+Then replace:
+```ts
+runAfter: T0, refundAttempt: true }]);
+```
+with:
+```ts
+runAfter: T0, refundAttempt: true, reason }]);
+```
+
+In `apps/server/src/chats/dispatch.db.test.ts`, a test before "reports cancelled running jobs to listeners":
+Replace:
+```ts
+  it('reports cancelled running jobs to listeners, for the CLI hub', async () => {
+```
+with:
+```ts
+  it('keeps why a job waits to run again, for the "waiting" status (a CLI at its daily cap, say)', async () => {
+    const { chat, dispatcher } = await scene();
+    const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } });
+    await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: job.id, attempt: 1, reason: 'daily_cap', retryable: true });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).toMatchObject({ status: 'queued', failure: 'daily_cap', refundedAttempts: 1 });
+  });
+
+  it('reports cancelled running jobs to listeners, for the CLI hub', async () => {
+```
+
+`apps/server/src/auth/repo-access.db.test.ts`:
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeUser } from '../../test/db';
+import { fakeFetch, json } from '../../test/fake-fetch';
+import { encrypt } from '../lib/crypto';
+import { prisma } from '../lib/prisma';
+import { GithubClient } from '../platform/github/client';
+import { ACCESS_TTL_MS, RepoAccess } from './repo-access';
+
+/** A person signed in to Nitpilot, whose stored GitHub sign-in is `status`. */
+async function viewer(status: 'ok' | 'needs_reauth' = 'ok') {
+  const user = await makeUser();
+  const later = new Date(Date.now() + 86_400_000);
+  await prisma.githubAuth.create({ data: { userId: user.id, accessTokenEnc: encrypt('ghu_viewer'), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status } });
+  return user;
+}
+
+const github = () =>
+  fakeFetch({
+    'GET /repos/octo/open': () => ({ id: 1 }),
+    'GET /repos/octo/hidden': () => json({ message: 'Not Found' }, 404),
+    'GET /repos/octo/blocked': () => json({ message: 'Forbidden' }, 403),
+    'GET /repos/octo/revoked': () => json({ message: 'Bad credentials' }, 401),
+  });
+
+describe('RepoAccess (spec §16 "Who can see a chat")', () => {
+  it("asks GitHub with the viewer's own token: read, or none for a 404 or a 403", async () => {
+    const user = await viewer();
+    const fetch = github();
+    const access = new RepoAccess(new GithubClient(fetch));
+    expect(await access.check(user.id, 'octo/open')).toBe('read');
+    expect(await access.check(user.id, 'octo/hidden')).toBe('none');
+    expect(await access.check(user.id, 'octo/blocked')).toBe('none');
+    expect(fetch.calls[0]!.headers.get('authorization')).toBe('Bearer ghu_viewer');
+  });
+
+  it("says reauth when the viewer's sign-in expired, or GitHub no longer takes their token", async () => {
+    const fetch = github();
+    const access = new RepoAccess(new GithubClient(fetch));
+    expect(await access.check((await viewer('needs_reauth')).id, 'octo/open')).toBe('reauth');
+    expect(fetch.calls).toEqual([]);
+    expect(await access.check((await viewer()).id, 'octo/revoked')).toBe('reauth');
+  });
+
+  it('remembers an answer for 5 minutes, per viewer and repo', async () => {
+    const [a, b] = [await viewer(), await viewer()];
+    const fetch = github();
+    let now = 1_000_000;
+    const access = new RepoAccess(new GithubClient(fetch), () => now);
+    await access.check(a.id, 'octo/open');
+    await access.check(a.id, 'octo/open');
+    expect(fetch.calls).toHaveLength(1);
+    await access.check(b.id, 'octo/open');
+    expect(fetch.calls).toHaveLength(2);
+    now += ACCESS_TTL_MS;
+    await access.check(a.id, 'octo/open');
+    expect(fetch.calls).toHaveLength(3);
+  });
+});
+```
+
+`apps/server/src/http/routes/transcript.db.test.ts`:
+```ts
+import type { JobResult } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeChat, makeRepo, makeUser, personOf } from '../../../test/db';
+import { fakeFetch, json } from '../../../test/fake-fetch';
+import { sessionCookieFor } from '../../../test/http';
+import type { LiveClis } from '../../chats/activity';
+import { Dispatcher } from '../../chats/dispatch';
+import { encrypt } from '../../lib/crypto';
+import { prisma } from '../../lib/prisma';
+import { GithubClient } from '../../platform/github/client';
+
+/** A GitHub sign-in for `userId`, as saveGithubUser stores one. */
+async function githubAuthFor(userId: string, status: 'ok' | 'needs_reauth' = 'ok') {
+  const later = new Date(Date.now() + 86_400_000);
+  await prisma.githubAuth.create({ data: { userId, accessTokenEnc: encrypt(`ghu_${userId}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status } });
+}
+
+/** The page as a reader sees it: tags gone, entities decoded, spaces collapsed. */
+async function textOf(res: Response): Promise<string> {
+  const entities: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&amp;': '&' };
+  return (await res.text()).replace(/<[^>]+>/g, ' ').replace(/&(lt|gt|quot|#39|amp);/g, (e) => entities[e]!).replace(/\s+/g, ' ');
+}
+
+const result = (over: Partial<JobResult>): JobResult => ({ summary: 'Done.', points: [], decisions: [], replies: [], push: null, ...over });
+
+/**
+ * maya's PR: leo's agent raised P1 and P2, maya's agent fixed P1 and declined P2, and leo's re-review is
+ * queued, but leo's CLI isn't connected. `canRead` is what GitHub says about the viewer and the repo;
+ * `clis` are the connected CLIs (none by default).
+ */
+async function scene(opts: { canRead?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
+  const maya = await makeUser({ login: 'maya' });
+  const leo = await makeUser({ login: 'leo' });
+  const repo = await makeRepo();
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+  const dispatcher = new Dispatcher();
+  const runJob = async (r: JobResult) => {
+    const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, status: 'queued' } });
+    await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: job.id, attempt: 1, result: r });
+  };
+  await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+  const point = { path: 'src/orders.ts', line: 1, side: 'RIGHT' as const, severity: 'major' as const, category: 'bug' as const };
+  await runJob(result({
+    summary: 'Two things.',
+    points: [
+      { ...point, title: 'Page size 50 is too big', body: 'Use 20.', snippet: { startLine: 1, lines: ['export const pageSize = 50;'] } },
+      { ...point, severity: 'nit', category: 'style', title: 'Rename <script>alert(1)</script>', body: 'Call it `limit`.', snippet: null },
+    ],
+  }));
+  await runJob(result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Now 20.' }, { point: 2, resolution: 'declined', comment: 'Kept for the API.' }] }));
+
+  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
+  const app = testApp({ github: new GithubClient(github), dispatch: dispatcher.dispatch, ...(opts.clis ? { clis: opts.clis(leo.id) } : {}) });
+  const path = `/c/${repo.fullName}/${chat.number}`;
+  const view = async (viewerId: string | null, at = path) => app.request(at, { headers: viewerId ? { cookie: await sessionCookieFor(viewerId) } : {} });
+  return { maya, leo, repo, chat, github, path, view };
+}
+
+describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
+  it('sends someone who is not signed in to sign in, and back here after', async () => {
+    const { path, view } = await scene();
+    const res = await view(null);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`/auth/github/login?next=${encodeURIComponent(path)}`);
+  });
+
+  it("answers 404 when GitHub says the viewer can't read the repo, and when there's no such chat", async () => {
+    const { maya, repo, view } = await scene({ canRead: false });
+    await githubAuthFor(maya.id);
+    expect((await view(maya.id)).status).toBe(404);
+    expect((await view(maya.id, `/c/${repo.fullName}/999`)).status).toBe(404);
+  });
+
+  it('asks a viewer whose GitHub sign-in expired to sign in again', async () => {
+    const { maya, path, view, github } = await scene();
+    await githubAuthFor(maya.id, 'needs_reauth');
+    const res = await view(maya.id);
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain(`href="/auth/github/login?next=${encodeURIComponent(path)}"`);
+    expect(github.calls).toEqual([]);
+  });
+
+  it('shows the header, who the chat waits on, and the timeline in order with point cards', async () => {
+    const { maya, repo, chat, view } = await scene();
+    await githubAuthFor(maya.id);
+    const res = await view(maya.id);
+    expect(res.status).toBe(200);
+    const text = await textOf(res);
+    expect(text).toContain(`PR ${chat.number}`);
+    expect(text).toContain(`${repo.fullName}#${chat.number} · Reviewing · round 2 of 3`);
+    expect(text).toContain("leo's agent is waiting: their CLI hasn't connected yet");
+    const order = ['Pull request opened by maya', 'P1', 'Page size 50 is too big', 'Addressed: fixed', 'Now 20.', 'P2', 'Addressed: declined', 'Kept for the API.'];
+    const at = order.map((s) => text.indexOf(s));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(text).toContain('src/orders.ts:1');
+    expect(text).toContain('export const pageSize = 50;');
+  });
+
+  it("says why an agent waits: offline since its CLI was last seen, or the repo isn't linked on its connected CLI", async () => {
+    const offline = await scene();
+    await githubAuthFor(offline.maya.id);
+    await prisma.cliToken.create({ data: { userId: offline.leo.id, name: 'laptop', tokenHash: `hash-${offline.leo.id}`, prefix: 'nit_x', lastSeenAt: new Date('2026-10-15T09:30:00Z') } });
+    expect(await textOf(await offline.view(offline.maya.id))).toContain("leo's agent is waiting: offline since 2026-10-15 09:30 UTC");
+
+    const unlinked = await scene({ clis: (leoId) => ({ connectionsFor: (userId) => (userId === leoId ? [{ repos: new Set(['octo/other']) }] : []) }) });
+    await githubAuthFor(unlinked.maya.id);
+    expect(await textOf(await unlinked.view(unlinked.maya.id))).toContain(`leo's agent is waiting: ${unlinked.repo.fullName} isn't linked on leo's connected CLI`);
+  });
+
+  it('escapes what agents and people wrote', async () => {
+    const { maya, view } = await scene();
+    await githubAuthFor(maya.id);
+    const html = await (await view(maya.id)).text();
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('asks GitHub about access once, then remembers it', async () => {
+    const { maya, view, github } = await scene();
+    await githubAuthFor(maya.id);
+    await view(maya.id);
+    await view(maya.id);
+    expect(github.calls).toHaveLength(1);
+    expect(github.calls[0]!.headers.get('authorization')).toBe(`Bearer ghu_${maya.id}`);
+  });
+
+  it('may not be shown inside another site (frame-ancestors), like every server page', async () => {
+    const { maya, view } = await scene();
+    await githubAuthFor(maya.id);
+    expect((await view(maya.id)).headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    expect((await testApp().request('/')).headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/server -- src/chats/activity src/engine/failures src/chats/dispatch src/auth/repo-access src/http/routes/transcript`
+Expected: FAIL: 16 tests in 3 files, and `src/chats/activity.test.ts` and `src/auth/repo-access.db.test.ts` don't load (`Cannot find module './activity'`, `'./repo-access'`):
+- failures (8): each `retry_job` has no `reason` yet;
+- dispatch (1): the requeued job's `failure` is still `null`;
+- transcript (7 of 8): there's no route yet. Its 404 test already passes, for the wrong reason, until the route exists.
+
+- [ ] **Step 3: Write the code**
+
+In `apps/server/src/engine/types.ts`:
+Replace:
+```ts
+  | { type: 'retry_job'; jobId: string; runAfter: Date; refundAttempt: boolean }
+```
+with:
+```ts
+  /** `reason` is why its last run ended; the "waiting" status shows it (chats/activity.ts). */
+  | { type: 'retry_job'; jobId: string; runAfter: Date; refundAttempt: boolean; reason: FailureReason }
+```
+
+In `apps/server/src/engine/results.ts`, `requeue` passes the reason on, from all three callers:
+Replace:
+```ts
+    requeue(ctx, job, ctx.now, true);
+```
+with:
+```ts
+    requeue(ctx, job, ctx.now, true, e.reason);
+```
+Then replace:
+```ts
+    requeue(ctx, job, addMs(ctx.now, wait), true);
+```
+with:
+```ts
+    requeue(ctx, job, addMs(ctx.now, wait), true, e.reason);
+```
+Then replace:
+```ts
+    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (counted - 1)), false);
+```
+with:
+```ts
+    requeue(ctx, job, addMs(ctx.now, RETRY_BASE_MS * 2 ** (counted - 1)), false, e.reason);
+```
+Then replace:
+```ts
+function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean): void {
+  job.status = 'queued';
+  emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt });
+```
+with:
+```ts
+function requeue(ctx: Ctx, job: JobView, runAfter: Date, refundAttempt: boolean, reason: FailureReason): void {
+  job.status = 'queued';
+  emit(ctx, { type: 'retry_job', jobId: job.id, runAfter, refundAttempt, reason });
+```
+
+In `apps/server/src/chats/apply-commands.ts`, the `retry_job` case stores it:
+Replace:
+```ts
+          data: { status: 'queued', runAfter: cmd.runAfter, cliTokenId: null, leaseExpiresAt: null, ...(cmd.refundAttempt ? { refundedAttempts: { increment: 1 } } : {}) },
+```
+with:
+```ts
+          // `failure` keeps why it waits (a daily cap, say) for the "waiting" status; fail_job overwrites it if it fails for good.
+          data: { status: 'queued', runAfter: cmd.runAfter, cliTokenId: null, leaseExpiresAt: null, failure: cmd.reason, ...(cmd.refundAttempt ? { refundedAttempts: { increment: 1 } } : {}) },
+```
+
+`apps/server/src/chats/activity.ts`:
+```ts
+import type { Phase } from '@nitpilot/protocol';
+import { prisma } from '../lib/prisma';
+
+/**
+ * What a chat is waiting on right now (spec §9.1 "Activity"). Worked out from its jobs and the CLIs
+ * that are connected, each time it's shown, and never stored: it changes when a laptop goes to sleep,
+ * which no event tells us.
+ */
+export type Activity =
+  | { kind: 'agent_working'; who: string }
+  | { kind: 'agent_waiting'; who: string; why: 'offline'; offlineSince: Date | null }
+  | { kind: 'agent_waiting'; who: string; why: 'repo_not_linked' | 'cap_reached' }
+  | { kind: 'human_turn'; who: string }
+  | { kind: 'none' };
+
+/** A queued or running job, and whose agent it's for. */
+export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: string | null };
+
+/** A person's CLIs: the repos each connected one has linked, and when any of them was last seen. */
+export type Presence = { connected: ReadonlySet<string>[]; lastSeenAt: Date | null };
+
+/** The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. */
+export type LiveClis = { connectionsFor(userId: string): readonly { repos: ReadonlySet<string> }[] };
+
+export type ActivityFacts = {
+  phase: Phase;
+  repoFullName: string;
+  /** The PR author's login. */
+  author: string | null;
+  /** A human reviewer whose answered GitHub point waits for them, if one does. */
+  reviewerToAnswer: string | null;
+  /** Queued and running jobs, oldest first. */
+  jobs: ActiveJob[];
+  presence: (userId: string) => Presence;
+  now: Date;
+};
+
+/** Jobs a CLI turned down because its owner's limits were reached: they wait (spec §9.4). */
+const LIMITS = new Set(['daily_cap', 'quota']);
+
+export function deriveActivity(f: ActivityFacts): Activity {
+  // An agent that can't start is what a person needs to hear about, so it comes first.
+  for (const job of f.jobs) {
+    const waiting = waitingFor(job, f);
+    if (waiting) return waiting;
+  }
+  const job = f.jobs.find((j) => j.status === 'running') ?? f.jobs[0];
+  if (job) return { kind: 'agent_working', who: job.login };
+  if (f.phase === 'addressing' && f.author) return { kind: 'human_turn', who: f.author };
+  if (f.phase === 'reviewing' && f.reviewerToAnswer) return { kind: 'human_turn', who: f.reviewerToAnswer };
+  return { kind: 'none' };
+}
+
+/** Why a queued job can't go to a CLI now, or null when one can take it. */
+function waitingFor(job: ActiveJob, f: ActivityFacts): Activity | null {
+  if (job.status !== 'queued') return null;
+  const presence = f.presence(job.userId);
+  if (presence.connected.length === 0) return { kind: 'agent_waiting', who: job.login, why: 'offline', offlineSince: presence.lastSeenAt };
+  if (!presence.connected.some((repos) => repos.has(f.repoFullName))) return { kind: 'agent_waiting', who: job.login, why: 'repo_not_linked' };
+  if (job.failure !== null && LIMITS.has(job.failure) && job.runAfter > f.now) return { kind: 'agent_waiting', who: job.login, why: 'cap_reached' };
+  return null;
+}
+
+/** The activity of one chat, read from the database and the connected CLIs. */
+export async function loadActivity(chatId: string, clis: LiveClis, now = new Date()): Promise<Activity> {
+  const chat = await prisma.prChat.findUniqueOrThrow({
+    where: { id: chatId },
+    include: {
+      repo: true,
+      participants: true,
+      points: { where: { status: 'addressed' }, orderBy: { number: 'asc' } },
+      jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true }, orderBy: { createdAt: 'asc' } },
+    },
+  });
+  const userIds = [...new Set(chat.jobs.map((j) => j.userId))];
+  // When each of them was last seen: the newest lastSeenAt of their CLI tokens (spec §8).
+  const seen = await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } });
+  const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
+  const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? null;
+  return deriveActivity({
+    phase: chat.phase as Phase,
+    repoFullName: chat.repo.fullName,
+    author: loginOf(chat.authorGithubId),
+    reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
+    jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: j.failure })),
+    presence: (userId) => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) }),
+    now,
+  });
+}
+```
+
+`apps/server/src/auth/repo-access.ts`:
+```ts
+import { GithubError, type GithubClient } from '../platform/github/client';
+import { getUserToken, NeedsReauthError } from './user-tokens';
+
+/** How long an answer is kept: someone removed from a repo can still see its chats for this long. */
+export const ACCESS_TTL_MS = 5 * 60_000;
+
+/** read: GitHub shows them the repo. none: it doesn't. reauth: their GitHub sign-in has to be renewed first. */
+export type RepoAccessResult = 'read' | 'none' | 'reauth';
+
+/**
+ * Who can see a chat: anyone who can read the repo on GitHub, asked with their own token (spec §16).
+ * Answers are kept for 5 minutes per person and repo, so reading a chat doesn't call GitHub every time.
+ */
+export class RepoAccess {
+  private readonly answers = new Map<string, { result: 'read' | 'none'; at: number }>();
+
+  constructor(
+    private readonly github: GithubClient,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  async check(userId: string, repoFullName: string): Promise<RepoAccessResult> {
+    const key = `${userId} ${repoFullName}`;
+    const kept = this.answers.get(key);
+    if (kept && this.now() - kept.at < ACCESS_TTL_MS) return kept.result;
+
+    let token: string;
+    try {
+      token = await getUserToken(userId, this.github);
+    } catch (err) {
+      if (err instanceof NeedsReauthError) return 'reauth';
+      throw err;
+    }
+    let result: 'read' | 'none';
+    try {
+      await this.github.api('GET', `/repos/${repoFullName}`, { token });
+      result = 'read';
+    } catch (err) {
+      // 401: GitHub no longer takes the token (revoked there, say). Only signing in again helps.
+      if (err instanceof GithubError && err.status === 401) return 'reauth';
+      // GitHub hides a private repo you can't read behind a 404; a 403 is a plain no.
+      if (err instanceof GithubError && (err.status === 404 || err.status === 403)) result = 'none';
+      else throw err;
+    }
+    this.forgetOld();
+    this.answers.set(key, { result, at: this.now() });
+    return result;
+  }
+
+  /** Drop answers past their 5 minutes, so the map doesn't grow forever. */
+  private forgetOld(): void {
+    if (this.answers.size < 1_000) return;
+    for (const [key, answer] of this.answers) {
+      if (this.now() - answer.at >= ACCESS_TTL_MS) this.answers.delete(key);
+    }
+  }
+}
+```
+
+`apps/server/src/http/pages/transcript.tsx`:
+```tsx
+/** @jsxImportSource hono/jsx */
+import { BRAND, type Snippet } from '@nitpilot/protocol';
+import type { Activity } from '../../chats/activity';
+import type { Message, Point, PrChat, Repo } from '../../generated/prisma/client';
+import { Layout } from './layout';
+
+// The read-only transcript (spec §10). Deliberately plain: the web app replaces it in Plan 2.
+// Everything people and agents wrote is shown as text; JSX escapes it, so nothing in it runs as HTML.
+
+const PHASE: Record<string, string> = {
+  idle: 'Waiting to start',
+  reviewing: 'Reviewing',
+  addressing: 'Fixing',
+  ready: 'Ready for approval',
+  escalated: 'Needs a human',
+  closed: 'Closed',
+};
+
+export function TranscriptPage(props: { chat: PrChat & { repo: Repo }; maxRounds: number; activity: Activity; messages: Message[]; points: Point[] }) {
+  const { chat, points } = props;
+  const phase = chat.phase === 'closed' && chat.merged ? 'Merged' : (PHASE[chat.phase] ?? chat.phase);
+  const activity = activityText(props.activity, chat.repo.fullName);
+  // Replies and decisions are shown inside their point's card, and so are human replies in its GitHub thread.
+  const pointOf = (m: Message) => points.find((p) => p.number === m.pointNumber) ?? threadPoint(m, points);
+  const inCard = (m: Message) => m.kind !== 'point_raised' && pointOf(m) !== undefined;
+  return (
+    <Layout title={chat.title} wide>
+      <h1>{chat.title}</h1>
+      <p class="muted">
+        <a href={chat.url}>{chat.repo.fullName}#{chat.number}</a> · {phase} · round {chat.round} of {props.maxRounds}
+      </p>
+      {chat.repo.rulesError && <p class="warn">{BRAND.teamConfigFile} has a problem, so the defaults apply: {chat.repo.rulesError}</p>}
+      {activity && <p class="activity">{activity}</p>}
+      <ol class="timeline">
+        {props.messages.filter((m) => !inCard(m)).map((m) => {
+          const point = m.kind === 'point_raised' ? pointOf(m) : undefined;
+          if (point) return <li><PointCard point={point} thread={props.messages.filter((t) => t.kind !== 'point_raised' && pointOf(t) === point)} /></li>;
+          return <li class={m.kind === 'system' ? 'muted' : undefined}>{line(m)}</li>;
+        })}
+      </ol>
+    </Layout>
+  );
+}
+
+function PointCard(props: { point: Point; thread: Message[] }) {
+  const p = props.point;
+  const where = p.path ? ` · ${p.path}${p.line ? `:${p.line}` : ''}` : '';
+  const snippet = p.snippet as Snippet | null;
+  return (
+    <article class="point">
+      <p class="muted">P{p.number} · {p.severity} · {p.category}{where}</p>
+      <h2>{p.title}</h2>
+      <p class="status">{statusText(p)}</p>
+      <p class="text">{p.body}</p>
+      {snippet && <pre>{snippet.lines.map((l, i) => `${String(snippet.startLine + i).padStart(4)}  ${l}`).join('\n')}</pre>}
+      {props.thread.length > 0 && <ul class="thread">{props.thread.map((m) => <li>{line(m)}</li>)}</ul>}
+    </article>
+  );
+}
+
+/** A point's status, in words. */
+function statusText(p: Point): string {
+  if (p.status === 'addressed') return p.authorResolution ? `Addressed: ${p.authorResolution}` : 'Addressed';
+  if (p.status === 'escalated') return p.escalationReason ? `Escalated: ${p.escalationReason.replaceAll('_', ' ')}` : 'Escalated';
+  return p.status === 'resolved' ? 'Resolved' : 'Open';
+}
+
+/** One timeline item as a line of text: who said it, then what. */
+function line(m: Message): string {
+  if (m.kind === 'system' || !m.authorLogin) return m.body;
+  const who = m.kind === 'job_summary' || m.kind === 'point_reply' || m.kind === 'point_decision' ? `${m.authorLogin}'s agent` : m.authorLogin;
+  return `${who}: ${m.body}`;
+}
+
+/** The point whose GitHub thread a human comment replied in, if any. */
+function threadPoint(m: Message, points: Point[]): Point | undefined {
+  const root = (m.data as { threadRootId?: string } | null)?.threadRootId;
+  return root ? points.find((p) => p.githubThreadRootId === root || p.githubCommentId === root) : undefined;
+}
+
+function activityText(a: Activity, repoFullName: string): string | null {
+  switch (a.kind) {
+    case 'agent_working':
+      return `${a.who}'s agent is working`;
+    case 'agent_waiting':
+      if (a.why === 'offline') return `${a.who}'s agent is waiting: ${a.offlineSince ? `offline since ${utc(a.offlineSince)}` : "their CLI hasn't connected yet"}`;
+      if (a.why === 'repo_not_linked') return `${a.who}'s agent is waiting: ${repoFullName} isn't linked on ${a.who}'s connected CLI (${BRAND.cli} repos add)`;
+      return `${a.who}'s agent is waiting: it reached its limit for now (daily job cap or agent quota)`;
+    case 'human_turn':
+      return `${a.who}'s turn`;
+    case 'none':
+      return null;
+  }
+}
+
+const utc = (d: Date) => `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
+/** No such chat, or the viewer can't read its repo: the same page, so it doesn't tell which repos have chats. */
+export function TranscriptNotFound() {
+  return (
+    <Layout title="Not found">
+      <h1>Nothing here</h1>
+      <p class="muted">This chat doesn't exist, or your GitHub account can't see its repo.</p>
+    </Layout>
+  );
+}
+
+export function SignInAgain(props: { next: string }) {
+  return (
+    <Layout title="Sign in again">
+      <h1>Sign in again</h1>
+      <p class="muted">Your GitHub sign-in expired, so {BRAND.name} can't check that you can see this repo.</p>
+      <div class="row"><a class="button primary" href={`/auth/github/login?next=${encodeURIComponent(props.next)}`}>Sign in with GitHub →</a></div>
+    </Layout>
+  );
+}
+```
+
+`apps/server/src/http/routes/transcript.tsx`:
+```tsx
+/** @jsxImportSource hono/jsx */
+import { Hono } from 'hono';
+import { RepoAccess } from '../../auth/repo-access';
+import { currentUser } from '../../auth/session';
+import { loadActivity, type LiveClis } from '../../chats/activity';
+import { rulesFromJson } from '../../chats/rules';
+import { prisma } from '../../lib/prisma';
+import type { GithubClient } from '../../platform/github/client';
+import { renderPage } from '../pages/layout';
+import { SignInAgain, TranscriptNotFound, TranscriptPage } from '../pages/transcript';
+
+/**
+ * The read-only chat transcript (spec §10), linked from the summary comment. Only for people signed in
+ * to Nitpilot whose GitHub account can read the repo (spec §16 "Who can see a chat").
+ */
+export function transcriptRoutes(deps: { github: GithubClient; clis: LiveClis }): Hono {
+  const app = new Hono();
+  const access = new RepoAccess(deps.github);
+
+  app.get('/c/:owner/:repo/:number', async (c) => {
+    const path = new URL(c.req.url).pathname;
+    const user = await currentUser(c);
+    if (!user) return c.redirect(`/auth/github/login?next=${encodeURIComponent(path)}`);
+
+    const number = Number(c.req.param('number'));
+    const fullName = `${c.req.param('owner')}/${c.req.param('repo')}`;
+    const chat = Number.isSafeInteger(number) ? await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, include: { repo: true } }) : null;
+    if (!chat) return renderPage(c, <TranscriptNotFound />, 404);
+    const allowed = await access.check(user.id, chat.repo.fullName);
+    if (allowed === 'reauth') return renderPage(c, <SignInAgain next={path} />, 401);
+    if (allowed === 'none') return renderPage(c, <TranscriptNotFound />, 404);
+
+    const [messages, points, activity] = await Promise.all([
+      prisma.message.findMany({ where: { chatId: chat.id }, orderBy: { seq: 'asc' } }),
+      prisma.point.findMany({ where: { chatId: chat.id }, orderBy: { number: 'asc' } }),
+      loadActivity(chat.id, deps.clis),
+    ]);
+    const maxRounds = rulesFromJson(chat.repo.rulesJson).max_rounds;
+    return renderPage(c, <TranscriptPage chat={chat} maxRounds={maxRounds} activity={activity} messages={messages} points={points} />);
+  });
+
+  return app;
+}
+```
+
+In `apps/server/src/http/pages/layout.tsx`: the name from `BRAND`, a wide card for the transcript, and the header on every page:
+Replace:
+```tsx
+/** @jsxImportSource hono/jsx */
+import type { Context } from 'hono';
+```
+with:
+```tsx
+/** @jsxImportSource hono/jsx */
+import { BRAND } from '@nitpilot/protocol';
+import type { Context } from 'hono';
+```
+Then replace:
+```tsx
+code { font-family:ui-monospace, monospace; background:var(--code); border-radius:6px; padding:1px 6px; }
+`;
+```
+with:
+```tsx
+code { font-family:ui-monospace, monospace; background:var(--code); border-radius:6px; padding:1px 6px; }
+.wide { max-width:760px; }
+.warn { color:var(--red); }
+.activity { font-weight:600; }
+.timeline, .thread { list-style:none; padding:0; display:grid; gap:12px; }
+.point { border:1px solid var(--b1); border-radius:16px; padding:16px; }
+.point h2 { font-size:18px; margin:4px 0; }
+.status { font-weight:600; margin:4px 0; }
+.text { white-space:pre-wrap; }
+pre { font-family:ui-monospace, monospace; font-size:13px; background:var(--code); border-radius:12px; padding:12px; overflow-x:auto; }
+`;
+```
+Then replace:
+```tsx
+export function Layout(props: PropsWithChildren<{ title: string }>) {
+```
+with:
+```tsx
+export function Layout(props: PropsWithChildren<{ title: string; wide?: boolean }>) {
+```
+Then replace:
+```tsx
+        <title>{`${props.title} · Nitpilot`}</title>
+```
+with:
+```tsx
+        <title>{`${props.title} · ${BRAND.name}`}</title>
+```
+Then replace:
+```tsx
+        <main class="card">{props.children}</main>
+```
+with:
+```tsx
+        <main class={props.wide ? 'card wide' : 'card'}>{props.children}</main>
+```
+Then replace:
+```tsx
+/** Send a server-rendered page with a doctype. */
+export function renderPage(c: Context, page: { toString(): string }, status: ContentfulStatusCode = 200): Response {
+  return c.html(`<!doctype html>${page.toString()}`, status);
+```
+with:
+```tsx
+/**
+ * Send a server-rendered page with a doctype. No other site may show it in a frame, where a page could
+ * trick someone into clicking Approve (clickjacking).
+ */
+export function renderPage(c: Context, page: { toString(): string }, status: ContentfulStatusCode = 200): Response {
+  c.header('Content-Security-Policy', "frame-ancestors 'none'");
+  return c.html(`<!doctype html>${page.toString()}`, status);
+```
+
+In `apps/server/src/http/pages/home.tsx`, the names from `BRAND`:
+Replace:
+```tsx
+import type { SessionUser } from '../../auth/session';
+```
+with:
+```tsx
+import { BRAND } from '@nitpilot/protocol';
+import type { SessionUser } from '../../auth/session';
+```
+Then replace:
+```tsx
+        <h1>Nitpilot</h1>
+```
+with:
+```tsx
+        <h1>{BRAND.name}</h1>
+```
+Then replace:
+```tsx
+        <li>Run <code>npx nitpilot login</code>.</li>
+        <li>In your clone, run <code>nitpilot repos add</code>.</li>
+        <li>Run <code>nitpilot start</code>.</li>
+```
+with:
+```tsx
+        <li>Run <code>npx {BRAND.npmPackage} login</code>.</li>
+        <li>In your clone, run <code>{BRAND.cli} repos add</code>.</li>
+        <li>Run <code>{BRAND.cli} start</code>.</li>
+```
+
+In `apps/server/src/http/app.ts`, the app gets the connected CLIs and serves the transcript:
+Replace:
+```ts
+import { currentUser } from '../auth/session';
+```
+with:
+```ts
+import { currentUser } from '../auth/session';
+import type { LiveClis } from '../chats/activity';
+```
+Then replace:
+```ts
+import { setupRoutes } from './routes/setup';
+```
+with:
+```ts
+import { setupRoutes } from './routes/setup';
+import { transcriptRoutes } from './routes/transcript';
+```
+Then replace:
+```ts
+export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest; dispatch: Dispatch };
+```
+with:
+```ts
+export type AppDeps = { github: GithubClient; appAuth: AppAuth; ingest: Ingest; dispatch: Dispatch; clis: LiveClis };
+```
+Then replace:
+```ts
+  app.route('/', setupRoutes(deps));
+```
+with:
+```ts
+  app.route('/', setupRoutes(deps));
+  app.route('/', transcriptRoutes(deps));
+```
+
+In `apps/server/src/main.ts`, the CLI hub is the list of connected CLIs:
+Replace:
+```ts
+  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch });
+```
+with:
+```ts
+  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub });
+```
+
+In `apps/server/test/app.ts`, tests get no connected CLI unless they pass one:
+Replace:
+```ts
+    dispatch: new Dispatcher().dispatch,
+    ...over,
+```
+with:
+```ts
+    dispatch: new Dispatcher().dispatch,
+    // No CLI is connected.
+    clis: { connectionsFor: () => [] },
+    ...over,
+```
+
+In `apps/server/test/e2e/harness.ts`, the end-to-end server passes its hub, as `main.ts` does:
+Replace:
+```ts
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch });
+```
+with:
+```ts
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub });
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: the command from Step 2.
+Expected: PASS (5 files, 51 tests).
+
+- [ ] **Step 5: Explain the page, and bring the spec in line**
+
+`docs/why/transcript-page.md`:
+```markdown
+# The transcript page: who may see a chat, and what it's waiting on
+
+**In one sentence:** `/c/<owner>/<repo>/<number>` shows one chat to anyone signed in to Nitpilot whose GitHub account can read the repo, with a line saying what the chat is waiting on right now (spec §10, §16).
+
+## Who may see it (`auth/repo-access.ts`)
+
+The summary comment on GitHub links here, so anyone could click it. A chat repeats code and review points from the repo, so only people who can read the repo on GitHub may see it:
+
+1. Not signed in → off to GitHub sign-in, and back to this page after (`?next=`).
+2. Signed in → Nitpilot asks GitHub `GET /repos/<owner>/<repo>` **with your own token**. GitHub answers 404 for a private repo you can't read, so a 404 (or a 403) means no.
+3. The answer is kept for 5 minutes per person and repo, so reading a chat doesn't call GitHub every time. The cost: someone removed from a repo can still see its chats for up to 5 minutes.
+
+"No such chat" and "you can't see it" get the **same** 404 page. Otherwise someone could try URLs and learn which private repos have chats. If your GitHub sign-in expired, the page asks you to sign in again instead.
+
+## What it's waiting on (`chats/activity.ts`)
+
+"leo's agent is waiting: offline since 09:30" is never stored. It's **derived** each time the page is shown, from the chat's queued and running jobs and the CLIs connected right then. Storing it would mean updating it whenever a laptop goes to sleep, which no event tells us about. `deriveActivity` is a pure function (facts in, status out), so every case has a plain table test; `loadActivity` gathers the facts from the database and the CLI hub.
+
+## Two safety details
+
+- **Escaping.** Point titles, bodies and replies come from agents and PR authors, so they may contain HTML. JSX escapes text, so `<script>` shows up as text and never runs.
+- **Clickjacking.** Another site could load one of our pages in an invisible frame and trick you into clicking a button on it, such as "Approve" on the CLI approval page. Every server page sends `Content-Security-Policy: frame-ancestors 'none'` (`http/pages/layout.tsx`), which tells browsers not to show it inside another site.
+
+## The React analogy
+
+Activity is derived state, like a value you compute from props in render instead of copying it into `useState`: there's nothing to keep in sync, because it's worked out from the source of truth every time.
+```
+
+In the spec:
+Replace:
+```markdown
+**Activity** is derived from jobs and never stored: `agent_working{who}` · `agent_waiting{who, offlineSince \| repo_not_linked \| cap_reached}` · `human_turn{who}` · `none`.
+```
+with:
+```markdown
+**Activity** is derived from jobs and never stored: `agent_working{who}` · `agent_waiting{who, offlineSince \| repo_not_linked \| cap_reached}` · `human_turn{who}` · `none`. It is worked out each time it's shown, from the chat's queued and running jobs and the CLIs connected right then. A queued job waits when none of its person's CLIs is connected (`offlineSince`: when one was last seen), when none that is connected has the repo linked, or when a CLI turned it down at its daily cap or the agent's quota and it waits to run again (`cap_reached`; a requeued job keeps why its last run ended). A waiting agent is shown before a working one. With no agent at work, it's the author's turn while addressing, and a human reviewer's while their answered GitHub point waits for them.
+```
+Then replace:
+```markdown
+- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub, and the web app replaces it in Plan 2.
+```
+with:
+```markdown
+- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes), and the web app replaces it in Plan 2. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'`.
+```
+Then replace:
+```markdown
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached briefly.
+```
+with:
+```markdown
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes.
+```
+
+- [ ] **Step 6: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`, then `npm run test:e2e`
+Expected: all green: protocol 41, CLI 274 passed and 14 skipped, server 436; end to end 5 passed.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add apps/server/src/chats/activity.ts apps/server/src/chats/activity.test.ts apps/server/src/auth/repo-access.ts apps/server/src/auth/repo-access.db.test.ts apps/server/src/http apps/server/src/engine/types.ts apps/server/src/engine/results.ts apps/server/src/engine/failures.test.ts apps/server/src/chats/apply-commands.ts apps/server/src/chats/dispatch.db.test.ts apps/server/src/main.ts apps/server/test/app.ts apps/server/test/e2e/harness.ts docs/why/transcript-page.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md
+git commit -m "feat(server): the read-only transcript page, and what each chat is waiting on
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
