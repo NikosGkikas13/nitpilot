@@ -22,6 +22,7 @@ const github = () =>
     'GET /repos/octo/a': () => ({ id: 2 }),
     'GET /repos/octo/b': () => ({ id: 3 }),
     'GET /repos/octo/c': () => ({ id: 4 }),
+    'GET /repos/octo/limited': () => json({ message: 'rate limit exceeded' }, 403, { 'retry-after': '60' }),
     'GET /repos/octo/revoked': () => json({ message: 'Bad credentials' }, 401),
   });
 
@@ -70,5 +71,14 @@ describe('RepoAccess (spec §16 "Who can see a chat")', () => {
     expect(fetch.calls).toHaveLength(3);
     await access.check(user.id, 'octo/a');
     expect(fetch.calls).toHaveLength(4);
+  });
+
+  it("doesn't take a rate-limited 403 for 'no access', and doesn't remember it", async () => {
+    const user = await viewer();
+    const fetch = github();
+    const access = new RepoAccess(new GithubClient(fetch));
+    await expect(access.check(user.id, 'octo/limited')).rejects.toMatchObject({ status: 403 });
+    await expect(access.check(user.id, 'octo/limited')).rejects.toMatchObject({ status: 403 });
+    expect(fetch.calls).toHaveLength(2);
   });
 });

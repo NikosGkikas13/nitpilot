@@ -105,6 +105,16 @@ export function TranscriptNotFound() {
   );
 }
 
+/** GitHub didn't answer when we asked whether the viewer can see the repo. */
+export function GithubUnavailable() {
+  return (
+    <Layout title="GitHub didn't answer">
+      <h1>GitHub didn't answer</h1>
+      <p class="muted">{BRAND.name} couldn't check with GitHub that you can see this repo. Try again in a minute.</p>
+    </Layout>
+  );
+}
+
 export function SignInAgain(props: { next: string }) {
   return (
     <Layout title="Sign in again">

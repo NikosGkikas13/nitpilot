@@ -1,5 +1,5 @@
 import type { JobResult } from '@nitpilot/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeChat, makeRepo, makeUser, personOf } from '../../../test/db';
 import { fakeFetch, json } from '../../../test/fake-fetch';
@@ -27,9 +27,9 @@ const result = (over: Partial<JobResult>): JobResult => ({ summary: 'Done.', poi
 /**
  * maya's PR: leo's agent raised P1 and P2, maya's agent fixed P1 and declined P2, and leo's re-review is
  * queued, but leo's CLI isn't connected. `canRead` is what GitHub says about the viewer and the repo
- * (`revoked`: GitHub no longer takes the viewer's token); `clis` are the connected CLIs (none by default).
+ * (`revoked`: GitHub no longer takes the viewer's token; `githubDown`: it answers 500); `clis` are the connected CLIs (none by default).
  */
-async function scene(opts: { canRead?: boolean; revoked?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
+async function scene(opts: { canRead?: boolean; revoked?: boolean; githubDown?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
   const maya = await makeUser({ login: 'maya' });
   const leo = await makeUser({ login: 'leo' });
   const repo = await makeRepo();
@@ -51,7 +51,7 @@ async function scene(opts: { canRead?: boolean; revoked?: boolean; clis?: (leoId
   }));
   await runJob(result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Now 20.' }, { point: 2, resolution: 'declined', comment: 'Kept for the API.' }] }));
 
-  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
+  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.githubDown ? json({ message: 'Server Error' }, 500) : opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
   const app = testApp({ github: new GithubClient(github), dispatch: dispatcher.dispatch, ...(opts.clis ? { clis: opts.clis(leo.id) } : {}) });
   const path = `/c/${repo.fullName}/${chat.number}`;
   const view = async (viewerId: string | null, at = path) => app.request(at, { headers: viewerId ? { cookie: await sessionCookieFor(viewerId) } : {} });
@@ -95,6 +95,18 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
     expect((await view(maya.id, '/c/oc%20to/repo/1')).status).toBe(404);
     expect((await view(maya.id, '/c/octo/..%2Fx/1')).status).toBe(404);
     expect(github.calls).toEqual([]);
+  });
+
+  it("shows a page, not a crash, when GitHub doesn't answer the access check", async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { maya, view } = await scene({ githubDown: true });
+    await githubAuthFor(maya.id);
+    const res = await view(maya.id);
+    expect(res.status).toBe(502);
+    expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    expect(await textOf(res)).toContain("GitHub didn't answer");
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it('asks a viewer whose GitHub sign-in expired to sign in again', async () => {

@@ -7,7 +7,7 @@ import { rulesFromJson } from '../../chats/rules';
 import { prisma } from '../../lib/prisma';
 import type { GithubClient } from '../../platform/github/client';
 import { renderPage } from '../pages/layout';
-import { SignInAgain, TranscriptNotFound, TranscriptPage } from '../pages/transcript';
+import { GithubUnavailable, SignInAgain, TranscriptNotFound, TranscriptPage } from '../pages/transcript';
 
 /** GitHub owner and repo names: letters, digits, `-`, `_` and `.`. They go into a GitHub API path, so nothing else is let through. */
 const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !== '.' && s !== '..';
@@ -31,7 +31,14 @@ export function transcriptRoutes(deps: { github: GithubClient; clis: LiveClis })
     const repo = c.req.param('repo');
     if (!isGithubName(owner) || !isGithubName(repo)) return renderPage(c, <TranscriptNotFound />, 404);
     const fullName = `${owner}/${repo}`;
-    const allowed = await access.check(user.id, fullName);
+    let allowed: Awaited<ReturnType<RepoAccess['check']>>;
+    try {
+      allowed = await access.check(user.id, fullName);
+    } catch (err) {
+      // GitHub is down, or rate limiting us: say so, rather than a bare 500.
+      console.error('[transcript] could not check repo access:', err);
+      return renderPage(c, <GithubUnavailable />, 502);
+    }
     if (allowed === 'reauth') return renderPage(c, <SignInAgain next={path} />, 401);
     if (allowed === 'none') return renderPage(c, <TranscriptNotFound />, 404);
 

@@ -42,7 +42,9 @@ export class RepoAccess {
     } catch (err) {
       // 401: GitHub no longer takes the token (revoked there, say). Only signing in again helps.
       if (err instanceof GithubError && err.status === 401) return 'reauth';
-      // GitHub hides a private repo you can't read behind a 404; a 403 is a plain no.
+      // A 403 that says when to retry is GitHub's rate limit, not a no: pass it on, and don't remember it.
+      if (err instanceof GithubError && err.status === 403 && err.retryAfterMs !== undefined) throw err;
+      // GitHub hides a private repo you can't read behind a 404; a plain 403 is a no too.
       if (err instanceof GithubError && (err.status === 404 || err.status === 403)) result = 'none';
       else throw err;
     }
