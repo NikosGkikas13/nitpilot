@@ -4,7 +4,7 @@ import { fakeFetch, json } from '../../test/fake-fetch';
 import { encrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { GithubClient } from '../platform/github/client';
-import { ACCESS_TTL_MS, RepoAccess } from './repo-access';
+import { ACCESS_TTL_MS, MAX_ANSWERS, RepoAccess } from './repo-access';
 
 /** A person signed in to Nitpilot, whose stored GitHub sign-in is `status`. */
 async function viewer(status: 'ok' | 'needs_reauth' = 'ok') {
@@ -19,6 +19,9 @@ const github = () =>
     'GET /repos/octo/open': () => ({ id: 1 }),
     'GET /repos/octo/hidden': () => json({ message: 'Not Found' }, 404),
     'GET /repos/octo/blocked': () => json({ message: 'Forbidden' }, 403),
+    'GET /repos/octo/a': () => ({ id: 2 }),
+    'GET /repos/octo/b': () => ({ id: 3 }),
+    'GET /repos/octo/c': () => ({ id: 4 }),
     'GET /repos/octo/revoked': () => json({ message: 'Bad credentials' }, 401),
   });
 
@@ -54,5 +57,18 @@ describe('RepoAccess (spec §16 "Who can see a chat")', () => {
     now += ACCESS_TTL_MS;
     await access.check(a.id, 'octo/open');
     expect(fetch.calls).toHaveLength(3);
+  });
+
+  it('keeps at most MAX_ANSWERS answers, dropping the oldest first', async () => {
+    expect(MAX_ANSWERS).toBe(1_000);
+    const user = await viewer();
+    const fetch = github();
+    const access = new RepoAccess(new GithubClient(fetch), () => 1_000_000, 2);
+    for (const repo of ['octo/a', 'octo/b', 'octo/c']) await access.check(user.id, repo);
+    expect(fetch.calls).toHaveLength(3);
+    await access.check(user.id, 'octo/c');
+    expect(fetch.calls).toHaveLength(3);
+    await access.check(user.id, 'octo/a');
+    expect(fetch.calls).toHaveLength(4);
   });
 });

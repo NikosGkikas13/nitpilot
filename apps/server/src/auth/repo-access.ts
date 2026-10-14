@@ -4,6 +4,9 @@ import { getUserToken, NeedsReauthError } from './user-tokens';
 /** How long an answer is kept: someone removed from a repo can still see its chats for this long. */
 export const ACCESS_TTL_MS = 5 * 60_000;
 
+/** The most answers kept at once. The repo name comes from the URL, so a viewer could otherwise fill the map with made-up names. */
+export const MAX_ANSWERS = 1_000;
+
 /** read: GitHub shows them the repo. none: it doesn't. reauth: their GitHub sign-in has to be renewed first. */
 export type RepoAccessResult = 'read' | 'none' | 'reauth';
 
@@ -17,6 +20,7 @@ export class RepoAccess {
   constructor(
     private readonly github: GithubClient,
     private readonly now: () => number = () => Date.now(),
+    private readonly maxAnswers: number = MAX_ANSWERS,
   ) {}
 
   async check(userId: string, repoFullName: string): Promise<RepoAccessResult> {
@@ -42,16 +46,17 @@ export class RepoAccess {
       if (err instanceof GithubError && (err.status === 404 || err.status === 403)) result = 'none';
       else throw err;
     }
-    this.forgetOld();
-    this.answers.set(key, { result, at: this.now() });
+    this.remember(key, result);
     return result;
   }
 
-  /** Drop answers past their 5 minutes, so the map doesn't grow forever. */
-  private forgetOld(): void {
-    if (this.answers.size < 1_000) return;
-    for (const [key, answer] of this.answers) {
-      if (this.now() - answer.at >= ACCESS_TTL_MS) this.answers.delete(key);
-    }
+  /**
+   * Keep an answer, and never more than `maxAnswers`. A Map remembers the order keys were added in, so
+   * deleting the key first moves a repeated one to the end, and the first key is always the oldest.
+   */
+  private remember(key: string, result: 'read' | 'none'): void {
+    this.answers.delete(key);
+    if (this.answers.size >= this.maxAnswers) this.answers.delete(this.answers.keys().next().value!);
+    this.answers.set(key, { result, at: this.now() });
   }
 }
