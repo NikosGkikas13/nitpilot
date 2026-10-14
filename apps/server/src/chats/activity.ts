@@ -68,7 +68,8 @@ export async function loadActivity(chatId: string, clis: LiveClis, now = new Dat
     include: {
       repo: true,
       participants: true,
-      points: { where: { status: 'addressed' }, orderBy: { number: 'asc' } },
+      // Only a point a person raised on GitHub waits for them to answer; an agent's point doesn't.
+      points: { where: { status: 'addressed', origin: 'github' }, orderBy: { number: 'asc' } },
       jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true }, orderBy: { createdAt: 'asc' } },
     },
   });
