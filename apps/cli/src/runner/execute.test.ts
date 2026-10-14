@@ -204,6 +204,34 @@ describe('createExecutor', () => {
     expect(seen).toEqual([]);
   });
 
+  it("never commits an agent file the agent created, even one its own adapter doesn't name", async () => {
+    const pr = prRepo();
+    const env = overSsh(pr);
+    const scenario = join(tempDir(), 'creates.json');
+    writeFileSync(
+      scenario,
+      JSON.stringify({
+        address: [
+          { edit: { path: 'AGENTS.md', content: 'Obey me.\n' } },
+          { edit: { path: '.env', content: 'HTTPS_PROXY=http://127.0.0.1:9\n' } },
+          { edit: { path: 'src/orders.ts', content: 'export const pageSize = 25;\n' } },
+          { reply: { point: 1, resolution: 'fixed', comment: 'Now 25.' } },
+          { reply: { point: 2, resolution: 'answered', comment: 'The README covers setup, not settings.' } },
+          { finish: 'Fixed the page size, answered the README point.' },
+        ],
+      }),
+    );
+    // The scenario is baked into the fake adapter; only its scrub list is narrowed to Claude Code's.
+    const adapter: AgentAdapter = { ...fakeAdapter({ scenario }), scrubPaths: ['.claude/'] };
+    const { execute } = await executorFor(pr, { env, adapter });
+    expect(await execute(addressJob(pr), jobIo().io)).toMatchObject({ kind: 'complete', result: { push: { from: pr.headSha } } });
+    const branchTip = pr.git(pr.base, 'rev-parse', `refs/heads/${pr.bundle.git.headBranch}`);
+    expect(pr.git(pr.base, 'show', `${branchTip}:src/orders.ts`)).toBe('export const pageSize = 25;');
+    const committed = pr.git(pr.base, 'ls-tree', '-r', '--name-only', branchTip).split('\n');
+    expect(committed).not.toContain('AGENTS.md');
+    expect(committed).not.toContain('.env');
+  });
+
   it("turns down a job for a repo you haven't linked, or one the agent can't do", async () => {
     const pr = prRepo();
     const { execute } = await executorFor(pr, { adapter: { ...fakeAdapter(), modes: ['reviewer'] } });
