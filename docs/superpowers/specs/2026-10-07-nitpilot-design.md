@@ -297,14 +297,14 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - Stretch goals: `POST /api/chats/:id/review` (manual review of an untrusted PR) and `POST /api/chats/:id/messages` (a human note)
 
 **CLI login (`nitpilot login`):**
-1. The CLI asks the server for a code and opens the browser, printing something like "enter WDJB-MJHT at https://…/cli/approve".
+1. The CLI asks the server for a code and opens the browser, printing something like "enter WDJB-MJHT at https://…/cli/approve". With `--no-open` it only prints the link, for a laptop whose browsers are signed in to more than one GitHub account.
 2. The user signs in with GitHub and approves.
 3. The CLI's next poll returns its token, which is stored in the config file (0600).
 
 ## 11. CLI: running a job
 
 **Commands**
-- `nitpilot login`
+- `nitpilot login [--no-open]`
 - `nitpilot start` (runs the daemon in the foreground)
 - `nitpilot status`
 - `nitpilot doctor`: checks git, whether the agent is installed and logged in, the config, and linked repos

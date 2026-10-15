@@ -159,7 +159,7 @@ Now do these in order. After each, wait a couple of seconds so deliveries arrive
 
 A is on Nitpilot, B is a person with a GitHub account only. When B comments on A's PR on GitHub, A's agent fixes it and answers in B's threads. Nothing is written as a summary comment, because only one side is on Nitpilot.
 
-1. **T5:** A joins. Run `nit-a login`. A browser tab opens; if it opens in the wrong browser, copy the link it printed into **Window A**. Sign in with GitHub if asked, check the code matches the terminal, click **Approve**. Expect `Logged in as ngkdev93-jpg.`
+1. **T5:** A joins. Run `nit-a login --no-open` and copy the link it prints into **Window A** (without `--no-open` it opens your default browser, which is B's, and approving there connects the wrong account; codes last 10 minutes). Sign in with GitHub if asked, check the code matches the terminal, click **Approve**. Expect `Logged in as ngkdev93-jpg.`
 2. **T5:** link the clone and tell CLI A which check the agent may run:
    ```bash
    nit-a repos add "$CLONE_A"
@@ -211,7 +211,7 @@ Now the other side. B is on Nitpilot, A is a plain GitHub user. When A asks B fo
 
 Both on Nitpilot. A's agent is Claude Code, B's is the scripted reviewer.
 
-1. **T5:** A rejoins: `nit-a login` (**Window A**). Expect `Logged in as ngkdev93-jpg.` (the clone and check stay configured). **T3:** `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. CLI B (T4) is still running.
+1. **T5:** A rejoins: `nit-a login --no-open`, link into **Window A**. Expect `Logged in as ngkdev93-jpg.` (the clone and check stay configured). **T3:** `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. CLI B (T4) is still running.
 2. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" happy && cd "$REPO"`
 3. **Window A:** open the link, title `Agent to agent: happy path`, Reviewers → `NikosGkikas13`, **Create pull request**. Note the PR number: `PR=…`.
 4. Watch. Expected, in order:
@@ -326,7 +326,7 @@ Run on: 2026-10-14 (sections 0 to 3) and 2026-10-15 (sections 4 to 7), with Nitp
 
 - All 32 boxes are ticked.
 - Differences from the clicks written above: after the probe's P10, the remaining GitHub actions were done with `gh` instead of the browser. PRs were opened, closed and asked for review as `ngkdev93-jpg` with a second `gh` account (`gh auth login`, then `GH_TOKEN=$(gh auth token --user ngkdev93-jpg)`); P11 and P12 (title edit, base retarget, close and reopen) were done as the repo owner `NikosGkikas13`; B's review in section 4 was posted with `gh api …/pulls/<n>/reviews` (event `COMMENT`, two inline comments, no body); the pushes in 7.3 and the close in 7.4 were scripted to fire the moment the address job showed `running` in the database. The person approved each `nitpilot login` in the browser.
-- `nit-a login` opens your default browser; when that is B's, the approve page there approves the wrong account. Paste the link into A's window, or block the automatic open (we put a no-op `open` first on `PATH`).
+- `nit-a login` opens your default browser; when that is B's, the approve page there approves the wrong account. Paste the link into A's window, or block the automatic open (we put a no-op `open` first on `PATH`). `nitpilot login --no-open` was added after the run for this; sections 4 and 6 now use it.
 - In 7.1 GitHub failed the reviewer request that `gh pr create` makes after creating the PR (a GraphQL error on GitHub's side); the review was requested again through the REST API and the run went on.
 - In 7.2 B's re-review needed a second attempt: it was handed out the moment A's push was announced, before GitHub had moved the PR's ref, so B's CLI fetched the old head and answered `stale_head`; the engine re-ran it at once without counting the attempt, and it passed 2.5 s later.
 - Timings: B's review job started 0.35 to 0.7 s after the review request (sections 5 and 6); Claude Code's address passes took 41 to 64 s.

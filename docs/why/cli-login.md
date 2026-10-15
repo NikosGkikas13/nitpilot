@@ -9,7 +9,7 @@ This is the same "device flow" you've seen on a TV app that says "go to example.
 1. **The CLI asks to log in.** `POST /api/cli/login` with the device name. The server makes two codes (`auth/cli-login.ts`):
    - a long secret **device code**, which only the CLI knows. We store only its hash;
    - a short **user code** like `WDJB-MJHT`, which you read and compare.
-2. **You approve in the browser.** The CLI opens `/cli/approve?code=WDJB-MJHT`. If you're not signed in, you go through GitHub sign-in first and come back (`docs/why/oauth-pkce.md`). You check that the code matches your terminal and press Approve. That POST is accepted only from our own pages (`lib/csrf.ts`).
+2. **You approve in the browser.** The CLI opens `/cli/approve?code=WDJB-MJHT` (with `nitpilot login --no-open` it only prints it, so you can paste it into the browser signed in as the right account). If you're not signed in, you go through GitHub sign-in first and come back (`docs/why/oauth-pkce.md`). You check that the code matches your terminal and press Approve. That POST is accepted only from our own pages (`lib/csrf.ts`).
 3. **The CLI polls.** Every 2 seconds it sends its device code to `POST /api/cli/login/poll` and gets `pending`, `denied`, `expired`, or `approved` plus a `nit_…` token. Codes expire after 10 minutes.
 4. **From then on** the CLI sends `Authorization: Bearer nit_…` on every request. `requireCliToken` (`auth/cli-token.ts`) hashes it, looks it up, and rejects revoked tokens. `DELETE /api/cli/token` revokes the token that sent it.
 

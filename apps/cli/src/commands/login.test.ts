@@ -4,7 +4,7 @@ import { recordOut } from '../../test/out';
 import { inTurn, startStubServer, type StubReply } from '../../test/stub-server';
 import { tempDir } from '../../test/temp';
 import { configPath, loadConfigFile, saveConfig } from '../config/config';
-import { login } from './login';
+import { login, loginOptions } from './login';
 
 const START = { deviceCode: 'device-secret', userCode: 'WDJB-MJHT', verifyUrl: 'http://nitpilot.test/cli/approve?code=WDJB-MJHT', interval: 2, expiresIn: 600 };
 const pending: StubReply = { body: { status: 'pending' } };
@@ -57,5 +57,28 @@ describe('nitpilot login', () => {
   it('says to start over when the code expired', async () => {
     const { env } = await setup({ body: { status: 'expired' } });
     await expect(login({ env, out: recordOut(), open: noBrowser, sleep: noWait })).rejects.toThrow('The code expired. Run `nitpilot login` again.');
+  });
+
+  // Seen live (acceptance run): with two GitHub accounts on one laptop, the page opened in the default browser,
+  // which was the other account's, and was approved there.
+  it('with --no-open, only prints the link, to paste into the browser signed in as the right account', async () => {
+    const { env } = await setup(approved);
+    const out = recordOut();
+    const opened: string[] = [];
+    await login({ env, out, open: async (url) => void opened.push(url), sleep: noWait, noOpen: true });
+    expect(opened).toEqual([]);
+    expect(out.lines[0]).toBe('To connect this device, enter WDJB-MJHT at http://nitpilot.test/cli/approve?code=WDJB-MJHT');
+    expect(out.lines[1]).toBe('Open that link in the browser signed in as the account you want to connect.');
+  });
+});
+
+describe('nitpilot login arguments', () => {
+  it('reads --no-open', () => {
+    expect(loginOptions([])).toEqual({ noOpen: false });
+    expect(loginOptions(['--no-open'])).toEqual({ noOpen: true });
+  });
+
+  it('refuses anything else, with the usage', () => {
+    expect(() => loginOptions(['--nope'])).toThrow('Usage: nitpilot login [--no-open]');
   });
 });

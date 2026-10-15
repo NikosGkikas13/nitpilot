@@ -13,7 +13,15 @@ export type LoginDeps = {
   open?: (url: string) => Promise<void>;
   sleep?: (ms: number) => Promise<void>;
   fetch?: typeof fetch;
+  /** `--no-open`: only print the link, for a laptop with more than one GitHub account in its browsers. */
+  noOpen?: boolean;
 };
+
+/** `nitpilot login [--no-open]`. */
+export function loginOptions(args: string[]): { noOpen: boolean } {
+  if (args.some((a) => a !== '--no-open')) throw new CliError(`Usage: ${BRAND.cli} login [--no-open]`);
+  return { noOpen: args.includes('--no-open') };
+}
 
 /**
  * `nitpilot login` (spec §10 "CLI login"): get a code, let the person approve it in the browser, keep
@@ -29,7 +37,8 @@ export async function login(deps: LoginDeps = {}): Promise<void> {
 
   const start = await client.loginStart(deviceName());
   out.log(`To connect this device, enter ${start.userCode} at ${start.verifyUrl}`);
-  await (deps.open ?? openInBrowser)(start.verifyUrl);
+  if (deps.noOpen) out.log('Open that link in the browser signed in as the account you want to connect.');
+  else await (deps.open ?? openInBrowser)(start.verifyUrl);
   out.log('Waiting for you to approve it in the browser… (Ctrl-C cancels)');
 
   for (;;) {
