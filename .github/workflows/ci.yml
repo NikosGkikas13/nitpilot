@@ -36,6 +36,8 @@ jobs:
       # The script only exists once the server has a Prisma schema (Task 12).
       - run: npm run db:deploy --if-present -w apps/server
       - run: npm run typecheck
+      # The web app's files, which the server serves (spec §7).
+      - run: npm run build
       - run: npm run lint
       # Runs every workspace's tests: protocol, server and CLI.
       - run: npm test

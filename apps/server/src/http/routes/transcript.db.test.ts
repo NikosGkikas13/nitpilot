@@ -197,6 +197,7 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
     const { maya, view } = await scene();
     await githubAuthFor(maya.id);
     expect((await view(maya.id)).headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
-    expect((await testApp().request('/')).headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+    // The web app's pages say the same (http/spa.ts).
+    expect((await testApp().request('/')).headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
   });
 });

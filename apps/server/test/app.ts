@@ -15,6 +15,8 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     dispatch: new Dispatcher().dispatch,
     // No CLI is connected.
     clis: { connectionsFor: () => [] },
+    // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
+    webDistDir: '/nonexistent/nitpilot-web-dist',
     ...over,
   };
 }

@@ -82,13 +82,6 @@ describe('GitHub sign-in', () => {
     expect(res.status).toBe(302);
     expect(await prisma.webSession.count({ where: { userId: user.id } })).toBe(0);
   });
-
-  it('shows who is signed in on the home page', async () => {
-    const user = await prisma.user.create({ data: { githubId: ghId(), login: 'maya-home' } });
-    const app = testApp({ github: new GithubClient(fakeFetch({})) });
-    const res = await app.request('/', { headers: { cookie: await sessionCookieFor(user.id) } });
-    expect(await res.text()).toContain('@maya-home');
-  });
 });
 
 describe('safeNext', () => {

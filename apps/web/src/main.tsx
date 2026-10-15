@@ -1,3 +1,5 @@
+// First: before any zod schema is created (see the file).
+import './zod-setup';
 import '@fontsource-variable/bricolage-grotesque/opsz.css';
 import '@fontsource/fragment-mono/400.css';
 import './styles/global.css';

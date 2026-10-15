@@ -15,6 +15,8 @@ const EnvSchema = z.object({
   GITHUB_CLIENT_ID: z.string().min(1),
   GITHUB_CLIENT_SECRET: z.string().min(1),
   GITHUB_WEBHOOK_SECRET: z.string().min(1),
+  /** Where the built web app is (apps/web/dist by default; see http/spa.ts). */
+  WEB_DIST_DIR: z.string().min(1).optional(),
   /** Hosted instance: ignore private repos (spec §14.9). */
   PUBLIC_REPOS_ONLY: z.stringbool().default(false),
   /** Optional beta gate: comma-separated GitHub logins allowed to sign in. Empty = everyone. */

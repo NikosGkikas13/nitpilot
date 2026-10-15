@@ -890,7 +890,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `errorBody` (`http/errors.ts`), `getEnv`.
 - Produces: `spaRoutes(opts: { distDir: string; publicUrl: string }): Hono`, `contentSecurityPolicy(publicUrl): string`, `DEFAULT_WEB_DIST`, `BUILD_HINT` (`http/spa.ts`); `AppDeps.webDistDir?: string`; `Env.WEB_DIST_DIR?: string`. Every unmatched route answers `404 { error: { code: 'not_found', message: 'no such route' } }`.
 
-- [ ] **Step 1: Tests never serve a real build**
+- [x] **Step 1: Tests never serve a real build**
 
 In `apps/server/test/app.ts`, add to the object `testDeps` returns, after the `clis` line:
 
@@ -899,7 +899,7 @@ In `apps/server/test/app.ts`, add to the object `testDeps` returns, after the `c
     webDistDir: '/nonexistent/nitpilot-web-dist',
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `apps/server/src/http/spa.test.ts`:
 
@@ -988,12 +988,12 @@ describe('serving the web app', () => {
 });
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
 Expected: FAIL, `Error: Cannot find module './spa'`.
 
-- [ ] **Step 4: Serve the app**
+- [x] **Step 4: Serve the app**
 
 Create `apps/server/src/http/spa.ts`:
 
@@ -1161,17 +1161,17 @@ export function createApp(deps: AppDeps): Hono {
 
 Delete the old home page: `git rm apps/server/src/http/pages/home.tsx`.
 
-- [ ] **Step 5: Run the test to see it pass**
+- [x] **Step 5: Run the test to see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
 Expected: `Tests  8 passed (8)`.
 
-- [ ] **Step 6: Prove the path check matters**
+- [x] **Step 6: Prove the path check matters**
 
 In `spa.ts`, delete the line `  if (!full.startsWith(root + path.sep)) return null;` and run the test again.
 Expected: 1 failed, `× never serves a file outside dist, however the path is spelled`. Put the line back (`git diff apps/server/src/http/spa.ts` shows nothing beyond Step 4's file) and run it again: 8 passed.
 
-- [ ] **Step 7: The home page's two checks**
+- [x] **Step 7: The home page's two checks**
 
 Run: `npm test -w apps/server`
 Expected: 2 failed: `auth.db.test.ts > GitHub sign-in > shows who is signed in on the home page` (the page is gone) and `transcript.db.test.ts > … frame-ancestors …` (`/` now carries the web app's whole policy).
@@ -1186,7 +1186,7 @@ In `apps/server/src/http/routes/auth.db.test.ts`, delete the test `it('shows who
 Run: `npm test -w apps/server`
 Expected: `Tests  606 passed (606)`.
 
-- [ ] **Step 8: The explainer, the example environment and CI**
+- [x] **Step 8: The explainer, the example environment and CI**
 
 Create `docs/why/serving-a-spa.md`:
 
@@ -1253,11 +1253,11 @@ In `.github/workflows/ci.yml`, add after `- run: npm run typecheck`:
       - run: npm run build
 ```
 
-- [ ] **Step 9: Look at it through the server**
+- [x] **Step 9: Look at it through the server**
 
 Run `npm run build`, then `npm run dev -w apps/server` (it serves `apps/web/dist`), and open `http://localhost:8787/` and `http://localhost:8787/c/x/y/1`: the first shows Task 1's placeholder; the second is still the server's transcript route (signed out, it sends you to GitHub sign-in), because server routes come first. `curl -s -o /dev/null -w '%{http_code}\n' localhost:8787/api/nope` prints `404`. Stop the server.
 
-- [ ] **Step 10: The whole suite, then commit**
+- [x] **Step 10: The whole suite, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: protocol 41, CLI 293 passed + 14 skipped, server 606, web 10; typecheck and lint clean.
