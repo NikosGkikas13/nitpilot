@@ -8,9 +8,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app';
 import { applyTheme, readTheme } from './theme';
 
-// Before React renders, so the first render already has the saved theme. A cold load can still show light
-// briefly before this runs (the script loads after the page's CSS); whether a small inline script in
-// index.html should close that gap is up to the server's Content-Security-Policy (Task 2).
+// Before React renders, so the first render already has the saved theme. The Content-Security-Policy allows no
+// inline scripts (docs/why/content-security-policy.md), so a dark choice on a light system can flash light
+// briefly on a cold load. Accepted.
 applyTheme(readTheme());
 
 createRoot(document.getElementById('root')!).render(

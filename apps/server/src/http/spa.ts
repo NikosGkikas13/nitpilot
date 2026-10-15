@@ -24,11 +24,14 @@ const TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/web`, then restart the server.";
+export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/web`, then reload this page.";
 
 /**
  * What the browser may load, for every page and file the web app is served with. `frame-ancestors 'none'`
- * keeps other sites from framing it (spec §10). Styles allow inline `style` attributes, which React uses.
+ * keeps other sites from framing it (spec §10). `'unsafe-inline'` in style-src allows `style="…"` attributes
+ * written in HTML or set as an attribute, and <style> elements. React's `style={{…}}` goes through the DOM's
+ * style object, which the policy doesn't restrict; it's kept so a library that writes style attributes or
+ * <style> tags still works. Scripts stay strict: a script can do far more harm than a style.
  * See docs/why/content-security-policy.md.
  */
 export function contentSecurityPolicy(publicUrl: string): string {

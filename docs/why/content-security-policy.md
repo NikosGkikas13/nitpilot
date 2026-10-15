@@ -14,8 +14,8 @@ Nitpilot shows text written by AI agents and by other people: point titles, repl
 | --- | --- | --- |
 | `default-src 'self'` | Anything not listed below comes only from our own origin. Because `script-src` isn't listed, **scripts** fall under this: only our own files, no inline `<script>`, no `eval`. | The safe default, so a forgotten case is blocked rather than open. |
 | `connect-src 'self' ws(s)://<host of PUBLIC_URL>` | `fetch('/api/…')` to our origin, and the WebSocket to the same host. | The app talks to nothing else. `wss` when `PUBLIC_URL` is https, `ws` when it's http (development). |
-| `img-src 'self' data: https://avatars.githubusercontent.com` | Our own images, small `data:` images, and GitHub profile pictures. | Avatars come from GitHub. |
-| `style-src 'self' 'unsafe-inline'` | Our own CSS files, and inline `style="…"` attributes. | React's `style={{ … }}` writes inline styles. |
+| `img-src 'self' data: https://avatars.githubusercontent.com` | Our own images, `data:` images, and GitHub profile pictures. | Avatars come from GitHub. |
+| `style-src 'self' 'unsafe-inline'` | Our own CSS files, plus `style="…"` attributes written in HTML or set as an attribute, and `<style>` elements. | Kept so a library that writes style attributes or `<style>` tags still works. React's own `style={{ … }}` goes through the DOM's style object, which the policy doesn't restrict. |
 | `font-src 'self'` | Fonts from our own files only. | No `data:` fonts (see the Vite example below). |
 | `base-uri 'self'` | A page can't change what relative URLs resolve against with a `<base>` tag. | Closes a trick for redirecting our own relative links. |
 | `form-action 'self'` | Forms post only to us. | A form injected into the page can't send data elsewhere. |
@@ -23,7 +23,7 @@ Nitpilot shows text written by AI agents and by other people: point titles, repl
 
 ## Why styles may be inline but scripts may not
 
-A malicious script can steal a session or call the API as you. A malicious style can mostly only change how things look. Since React writes inline `style` attributes all the time, allowing them (`'unsafe-inline'` for styles) costs little. Allowing inline **scripts** would remove most of what the CSP protects against, so they stay blocked.
+A malicious script can steal a session or call the API as you. A malicious style can mostly only change how things look. So `'unsafe-inline'` for styles costs little, and it keeps working any library that writes `style` attributes or `<style>` tags. Allowing inline **scripts** would remove most of what the CSP protects against, so they stay blocked.
 
 The accepted trade-off: because there is no inline `<script>`, the page can't apply the saved theme before the CSS paints. The app's own script applies it (`apps/web/src/theme.ts`), so someone who chose dark on a light-theme system can see a brief light flash on a cold load.
 
