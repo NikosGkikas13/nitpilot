@@ -59,7 +59,10 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
       const ctx: McpJobContext = { bundle, worktree, buffer: new ResultBuffer(), checks: repo.checks ?? {} };
       const failure = await runAgentFor(ctx, mode, io, deps, env);
       if (failure) return failure;
-      if (ctx.buffer.isEmpty()) return { kind: 'fail', reason: 'no_result', retryable: true, detail: 'The agent finished without using any Nitpilot tool.' };
+      if (ctx.buffer.isEmpty() && !isCleanReview(ctx)) {
+        const detail = ctx.buffer.usedAnyTool ? 'The agent read the job but answered nothing.' : 'The agent finished without using any Nitpilot tool.';
+        return { kind: 'fail', reason: 'no_result', retryable: true, detail };
+      }
 
       let push = null;
       if (bundle.type === 'address') {
@@ -77,6 +80,14 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
       await worktree?.cleanup();
     }
   };
+}
+
+/**
+ * A first review that read the PR and found nothing worth raising is finished, with or without `finish`
+ * (spec §11 step 5). A re-review or an address job exists to answer points, so writing nothing is `no_result`.
+ */
+function isCleanReview(ctx: McpJobContext): boolean {
+  return ctx.bundle.type === 'review' && ctx.buffer.usedAnyTool;
 }
 
 /** The repo's `setup` command (spec §11 step 4): the CLI runs it, not the agent, with the same short environment as a check. */

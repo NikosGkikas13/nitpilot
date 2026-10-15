@@ -139,10 +139,25 @@ describe('createExecutor', () => {
     expect(leftovers()).toEqual([]);
   });
 
-  it('answers no_result when the agent used no Nitpilot tool (spec §12.3 L6)', async () => {
+  it('completes a review that read the PR and raised nothing as a clean review, finish or not', async () => {
     const pr = prRepo();
-    const { execute } = await executorFor(pr, { scenario: 'silent.json' });
+    const { execute } = await executorFor(pr, { scenario: 'silent.json' }); // calls get_job, then stops
+    expect(await execute(pr.bundle, jobIo().io)).toMatchObject({ kind: 'complete', result: { summary: 'No findings.', points: [], decisions: [], replies: [] } });
+  });
+
+  it('answers no_result when the agent used no Nitpilot tool, even for a review (spec §12.3 L6)', async () => {
+    const pr = prRepo();
+    const fake = fakeAdapter();
+    const said = JSON.stringify({ type: 'result', ok: true, text: 'Looks fine.' });
+    const adapter: AgentAdapter = { ...fake, buildInvocation: (i) => ({ command: process.execPath, args: ['-e', `console.log(${JSON.stringify(said)})`], env: i.baseEnv, files: [] }) };
+    const { execute } = await executorFor(pr, { adapter });
     expect(await execute(pr.bundle, jobIo().io)).toMatchObject({ kind: 'fail', reason: 'no_result', retryable: true });
+  });
+
+  it('answers no_result when an address job answered nothing: it exists to answer the points', async () => {
+    const pr = prRepo();
+    const { execute } = await executorFor(pr, { scenario: 'silent.json', env: overSsh(pr) });
+    expect(await execute(addressJob(pr), jobIo().io)).toMatchObject({ kind: 'fail', reason: 'no_result', retryable: true });
   });
 
   it('removes the worktree even when the agent crashes', async () => {

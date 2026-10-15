@@ -9,7 +9,7 @@
 3. **Address jobs only:** find where to push (a deleted fork fails here, before any work), then run the repo's `setup` command, e.g. `npm ci`.
 4. **Give the job its tools:** register it on the local MCP server, which hands back the URL and the job's own token (docs/why/local-mcp-server.md). The token goes into a config file in a private temp folder, never onto the command line.
 5. **Run the agent** with a short prompt that points it at `get_job`. Its progress lines go to the server as `job.progress`.
-6. **Take the tools away:** the token stops working the moment the agent is done. An agent that used no Nitpilot tool at all fails the job with `no_result`.
+6. **Take the tools away:** the token stops working the moment the agent is done. An agent that used no Nitpilot tool at all fails the job with `no_result`, and so does a re-review or address job that answered nothing. A first review that read the PR and found nothing is a clean review, even if the agent forgot `finish`: "nothing to say" is a real answer for a review, but not for a job whose whole point is to answer.
 7. **Address jobs only:** commit and push the agent's changes (docs/why/safe-git.md).
 8. **Attach snippets,** the lines of code around each point, and send the result.
 9. **Clean up,** whatever happened: the worktree, its folder and the job's refs go, in a `finally`.

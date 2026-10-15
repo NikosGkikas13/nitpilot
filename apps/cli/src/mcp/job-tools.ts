@@ -74,10 +74,21 @@ export function jobTools(ctx: McpJobContext): McpTool[] {
     }),
     finish: defineTool({
       name: 'finish',
-      description: 'Optional, last: a short summary of what you did.',
+      description: 'Last: a short summary of what you did, even when you found nothing to raise.',
       input: z.object({ summary: z.string().min(1).max(4000) }),
       run: async (args) => finish(ctx, args),
     }),
   };
-  return toolsFor(ctx.bundle.type).map((name) => tools[name]);
+  return toolsFor(ctx.bundle.type).map((name) => noted(ctx, tools[name]));
+}
+
+/** The same tool, but the buffer remembers that the agent used one (a review that only read is still a review). */
+function noted(ctx: McpJobContext, tool: McpTool): McpTool {
+  return {
+    ...tool,
+    run: (args) => {
+      ctx.buffer.noteToolCall();
+      return tool.run(args);
+    },
+  };
 }

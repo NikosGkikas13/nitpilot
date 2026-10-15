@@ -10,6 +10,7 @@ export class ResultBuffer {
   private readonly decisions = new Map<number, PointDecision>();
   private readonly replies = new Map<number, PointReply>();
   private summary: string | null = null;
+  private calledTools = false;
 
   /** Keep a new point. Returns how many points there are now. */
   addPoint(point: NewPoint): number {
@@ -31,6 +32,15 @@ export class ResultBuffer {
 
   finish(summary: string): void {
     this.summary = summary;
+  }
+
+  /** The agent called one of Nitpilot's tools (any of them, reading included). */
+  noteToolCall(): void {
+    this.calledTools = true;
+  }
+
+  get usedAnyTool(): boolean {
+    return this.calledTools;
   }
 
   /** True when the agent wrote nothing at all (the runner reports that as `no_result`). */
