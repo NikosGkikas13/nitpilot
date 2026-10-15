@@ -63,6 +63,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 | Claude usage | The CLI launches the user's own installed `claude`. Nitpilot never touches Claude credentials |
 | Agent powers | Agents never get a shell. They read files (and edit them, in fix jobs). Everything else goes through Nitpilot's tools |
 | UI design | Done in Claude Design, from a design brief based on this spec. Chosen direction and Plan 2 fixes in §16 |
+| Web app (Plan 2) | Served by the Nitpilot server from the same origin as its API (one process, the session cookie just works). React Router, TanStack Query, CSS Modules with the handoff's tokens as CSS variables. Built in vertical slices: each milestone ships a server piece and the screen that uses it (§20) |
 
 ## 6. How it works
 
@@ -76,7 +77,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 
 **A point is answered where it was raised.** Points raised in the Nitpilot chat are answered in the chat. Points raised as GitHub comments are answered in their GitHub thread. This is what makes mixed PRs work: one reviewer on Nitpilot and another off it is fine.
 
-**The Auto switch** is set per person per chat. On the reviewer's side it means auto-review; on the author's side it means auto-address. New chats take their defaults from personal config, and a team can forbid auto modes in `.nitpilot.yml`. In Plan 1 Auto is always on, since there's no UI yet; drafts come with the web app in Plan 2.
+**The Auto switch** is set per person per chat. On the reviewer's side it means auto-review; on the author's side it means auto-address. New chats take their defaults from the person's settings (Auto-review, Auto-fix), which live on the server and are edited on the web app's Settings page, and a team can forbid auto modes in `.nitpilot.yml`. **With Auto off, the agent still runs when its job is due, and the result waits as a draft** for the person to Send or Discard (§9 "Drafts"); the daily job cap bounds what that spends. In Plan 1 Auto was always on, since there was no UI yet.
 
 **Trusted** means the PR or comment author is an `OWNER`, `MEMBER` or `COLLABORATOR` of the repo, or a bot listed in `trusted_bots`. Automatic jobs only start from trusted content. Anything else shows up in the inbox and waits for a manual "Review".
 
@@ -122,10 +123,10 @@ GitHub ──────────────────▶ ┌────
   - checks incoming webhooks and runs the rules engine;
   - stores everything in Postgres and hands jobs to connected CLIs;
   - writes to GitHub: the summary comment as the app bot, reviews and replies as the user;
-  - serves the web app's API and WebSockets (Plan 2);
-  - in Plan 1, serves a few pages rendered on the server: sign-in, CLI approval, and a read-only chat transcript.
+  - serves the web app's API and WebSockets, and the built web app itself, from the same origin (Plan 2): any GET that isn't an API route gets the app's `index.html`;
+  - in Plan 1, served a few pages rendered on the server: sign-in, CLI approval, and a read-only chat transcript. Plan 2's web app takes over all three, at the same URLs.
 - **CLI** (`apps/cli`, run with `npx`): the only component that touches code. It logs in and keeps one WebSocket open. For each job it creates an isolated git worktree, starts a local MCP server, runs the user's agent CLI and sends the results back. For address jobs it also commits and pushes.
-- **Web app** (`apps/web`, Plan 2): a React + Vite PWA built from the Claude Design output.
+- **Web app** (`apps/web`, Plan 2): a React + Vite PWA built from the Claude Design output. In development Vite runs on port 5173 and proxies `/api`, `/auth`, `/github` and `/ws` to the server, so the browser sees one origin there too.
 - **Protocol** (`packages/protocol`): zod schemas and TypeScript types for every message, job bundle and result, plus the `BRAND` constant. All three apps use it.
 
 **Why one process and no Redis.** The heavy work (running agents) happens on users' machines; the server only receives, stores and forwards.
@@ -139,7 +140,7 @@ packages/protocol   zod schemas, enums, BRAND
 apps/server         http/ ws/ engine/ (pure) chats/ jobs/ tasks/ platform/{github,fake}/ lib/ + prisma/
 apps/cli            commands/ config/ connection/ git/ runner/{safe-git,scrub,worktree,push,…}.ts mcp/
                     agents/{claude-code,gemini-cli,fake,conformance}/
-apps/web            (Plan 2)
+apps/web            src/{api,live,routes,components,styles}/ public/{sw.js,manifest.webmanifest,icons} (Plan 2)
 docs/               architecture.md · why/*.md · adapters.md · self-hosting.md (Plan 3)
 ```
 When the CLI is published, it bundles `protocol` in (tsup `noExternal`), so `npx` needs nothing else.
@@ -150,27 +151,28 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
 
 | Model | What it's for | Key fields | Notes |
 |---|---|---|---|
-| `User` | A person signed in with GitHub | githubId, login, avatarUrl | `githubId` is unique (logins can change) |
+| `User` | A person signed in with GitHub | githubId, login, avatarUrl, autoReview, autoAddress, dailyJobCap | `githubId` is unique (logins can change). The three settings (Plan 2) are edited on the Settings page and sent to the person's CLIs (§10); they default to on, on and 40 |
 | `GithubAuth` | The user's GitHub user token | accessTokenEnc, accessExpiresAt, refreshTokenEnc, refreshExpiresAt, version, status `ok\|needs_reauth` | Encrypted with AES-256-GCM. Refreshes run one at a time, because refresh tokens are single-use |
 | `WebSession` | A browser sign-in | tokenHash, expiresAt | |
 | `CliToken` | One per CLI device | name, tokenHash, prefix, lastSeenAt, revokedAt | `nit_` prefix; only the hash is stored. `lastSeenAt` drives "offline since…" |
 | `CliLoginRequest` | The `nitpilot login` handshake | deviceCodeHash, userCode, deviceName, status `pending\|approved\|consumed\|denied\|expired`, expiresAt (10 min) | The token is created on the first poll after approval and never stored in plain form |
 | `Installation` | A GitHub App installation | id, accountLogin, suspendedAt | |
 | `Repo` | A repo the app can see | id, installationId, fullName, private, defaultBranch, rulesJson, rulesEtag, rulesError | Public-only mode ignores private repos |
-| `PrChat` | One chat per PR | repoId + number (unique), title, authorGithubId, phase, round, addressPasses, headSha, baseSha, baseRef, headRef, headRepoFullName, isDraft, trusted, lastSeq, pointCount, summaryCommentId, summaryHash, merged, closedAt | |
+| `PrChat` | One chat per PR | repoId + number (unique), title, authorGithubId, phase, round, addressPasses, extraRounds, headSha, baseSha, baseRef, headRef, headRepoFullName, isDraft, trusted, lastSeq, pointCount, summaryCommentId, summaryHash, merged, closedAt | `extraRounds` (Plan 2): address passes a person granted beyond `max_rounds` by pressing Continue at the limit (§9.2) |
 | `Participant` | A person in a chat | chatId + githubId + role (unique), userId (null = not on Nitpilot), login, isBot, role `author\|reviewer`, auto, requested, lastReviewedSha, attention `none\|decision\|manual_review\|failed\|drafts` | The "To review" and "Mine" inbox tabs come from `role` |
 | `Point` | One review point | chatId + number (unique, shown as P1, P2…), raisedByGithubId, origin `agent\|github`, jobId, githubCommentId (unique per chat), githubThreadRootId, path, line, side, commitSha, severity, category, title, body, snippet, status, authorResolution, escalationReason, trusted, round | |
 | `Message` | One item in the chat timeline | chatId + seq (unique; this is the chat's resume cursor), kind `point_raised\|point_reply\|point_decision\|job_summary\|human\|system`, authorGithubId, authorLogin, pointNumber, jobId, body, data | People and points are referenced by natural keys (GitHub id, point number), so the pure engine never has to generate ids |
-| `Job` | Work for one person's agent | chatId, participantId, userId, type `review\|re_review\|address`, status, round, headSha, sinceSha, attempt, refundedAttempts, runAfter, cliTokenId, leaseExpiresAt, expectedPushSha, result, applyState `pending\|applied\|draft\|discarded`, failure, cancelReason | At most one active job per participant, enforced by `activeFor` (the participant id while queued or running, null after) being unique. A plain unique column, so Prisma migrations never try to drop it |
+| `Job` | Work for one person's agent | chatId, participantId, userId, type `review\|re_review\|address\|publish`, status, round, headSha, sinceSha, attempt, refundedAttempts, runAfter, cliTokenId, leaseExpiresAt, expectedPushSha, result, applyState `pending\|applied\|draft\|discarded`, draftOfId, failure, cancelReason | At most one active job per participant, enforced by `activeFor` (the participant id while queued or running, null after) being unique. A plain unique column, so Prisma migrations never try to drop it. A `publish` job (Plan 2) pushes an author's draft commit; `draftOfId` names the draft job, and only the CLI device that made that draft can take it |
 | `Task` | Server-side outbox and timers | kind, chatId, payload, runAt, status, attempts, lastError, dedupeKey | A debounce is an upsert on `dedupeKey`. A failing task is retried with a growing delay for about an hour (13 attempts), never sooner than a GitHub rate limit asks |
 | `RawEvent` | Every webhook received | deliveryId (PK = `X-GitHub-Delivery`), event, action, repoId, body (≤1 MB), status `received\|processed\|ignored\|retrying\|failed`, note, attempts, retryAt | Prevents double processing. Rows still `received` are replayed on boot. A delivery whose processing throws is `retrying`: tried again after 1, 2, 4, 8, 16 and 32 minutes, then `failed` after 7 attempts. Purged after 14 days |
 | `SeenComment` | GitHub comment ids already handled | commentId (PK) | A comment can arrive on its own and again inside its submitted review; this makes sure it is handled once. Written in the dispatcher's transaction, with the event that carried the comment, so a failed delivery leaves it unseen for the retry. Purged after 14 days, like `RawEvent` |
 | `GithubWrite` | Everything Nitpilot wrote to GitHub | chatId, kind `summary\|review\|review_comment\|reply`, githubId (unique per kind) | Used to edit those writes and to ignore our own events |
-| `PushSubscription` (Plan 2) | A Web Push endpoint | userId, endpoint (unique), p256dh, auth, failCount | |
+| `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other failures add to `failCount` |
+| `ChatRead` (Plan 2) | How far a person has read a chat | userId + chatId (unique), lastReadSeq | The inbox's unread count is the number of timeline items after `lastReadSeq` that someone else wrote |
 
 - **Severity:** `blocker | major | minor | nit`.
 - **Category:** `security | bug | performance | design | tests | style | docs | other`.
-- **Drafts:** a draft is a `Job` with `applyState = draft` (Plan 2).
+- **Drafts:** a draft is a finished `Job` with `applyState = draft` (Plan 2). Its `result` holds what the agent produced; for an author's address job it also names the draft commit, which stays on that laptop at `refs/nitpilot/drafts/<job>` (§11).
 
 ## 9. The engine
 
@@ -182,9 +184,12 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 ```
 
 - **Purity rule.** `apps/server/src/engine/**` must not import database, platform or WebSocket code. ESLint `no-restricted-imports` enforces this.
-- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, attempt, result} | job_failed{jobId, attempt, reason, retryable} | retry_requested{who} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error} | pr_retargeted{baseRef, trusted} | signed_in_again{who, roles}`. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15), and `signed_in_again` when that person signs in again. `pr_retargeted` is a PR that now targets another branch. `retry_requested` is a person asking to run their failed job again (`nitpilot retry`; the web app's Retry button in Plan 2). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested. Job events carry the attempt they report on, and the engine ignores one whose attempt is no longer the job's current one (fencing, §9.4).
-- **`Command`**: `enqueue_job | cancel_jobs | complete_job | retry_job | fail_job | schedule{key, at} | unschedule | upsert_summary | post_review{reviewerGithubId, pointNumbers} | post_thread_replies | notify{userIds, kind, pointNumbers}`. Every job change is a command, so it shows up in table tests. The engine refers to people by `githubId + role` and to points by their chat-local number, so `decide` never has to generate ids.
-- **Drafts.** Whether a result is applied or becomes a draft is decided here: if Auto is off or forbidden, the job result gets `applyState = draft`.
+- **`DomainEvent`** (the same for every platform): `pr_opened | pr_reopened | pr_ready | pr_to_draft | pr_closed{merged} | review_requested{reviewer} | review_request_removed | head_updated{before, after, ours} | external_comment{…, trusted} | external_comment_deleted{commentId} | external_review_submitted{state, comments[]} | thread_resolved | thread_unresolved | job_completed{jobId, attempt, result} | job_failed{jobId, attempt, reason, retryable} | retry_requested{who} | human_note | manual_review | timer{key} | write_failed{write: review/replies, asGithubId, pointNumbers, reason: needs_reauth/github_error} | pr_retargeted{baseRef, trusted} | signed_in_again{who, roles} | auto_changed{who, role, on} | draft_send{who, jobId} | draft_discard{who, jobId} | point_resolve{who, point} | point_continue{who, point}`. The last five come from the web app (Plan 2): a person's Auto switch, Send / Discard on a draft, and Resolve / Continue on an escalated point. `write_failed` comes from the task runner when a review or replies in someone's name never reached GitHub (§15), and `signed_in_again` when that person signs in again. `pr_retargeted` is a PR that now targets another branch. `retry_requested` is a person asking to run their failed job again (`nitpilot retry`; the web app's Retry button in Plan 2). The engine, not the CLI, decides whether a failure is final (3 attempts; quota, daily cap and branch moves don't count), so that rule is table-tested. Job events carry the attempt they report on, and the engine ignores one whose attempt is no longer the job's current one (fencing, §9.4).
+- **`Command`**: `enqueue_job | cancel_jobs | complete_job | retry_job | fail_job | set_apply_state{jobId, applyState} | schedule{key, at} | unschedule | upsert_summary | post_review{reviewerGithubId, pointNumbers} | post_thread_replies | notify{userIds, kind, pointNumbers}`. Every job change is a command, so it shows up in table tests. The engine refers to people by `githubId + role` and to points by their chat-local number, so `decide` never has to generate ids.
+- **Auto.** `auto_changed` sets the person's switch in that chat. A job of theirs that is still queued follows the new setting (`set_apply_state`); a running job keeps the mode it started with, and drafts already waiting stay drafts. A new participant who is on Nitpilot starts with their own defaults (`User.autoReview` / `autoAddress`, carried into the engine on `Person`). A team rule that forbids an auto mode wins over the switch.
+- **Drafts.** Whether a result is applied or becomes a draft is decided here: if Auto is off or forbidden, the job result gets `applyState = draft`, the person's attention becomes `drafts`, and they are notified. While a person has a draft waiting, the engine starts no other job of theirs in that chat (the author waits like a reviewer does). The chat state the engine sees includes the waiting drafts with their stored results.
+  - **Send (`draft_send`).** A reviewer's draft is applied exactly as a finished auto job would have been: its points enter the chat, or go to GitHub as one review in single-player mode. An author's draft can't be applied by the server alone, because its commit is on the laptop: Send queues a `publish` job (`draftOfId` = the draft) that only the device that made the draft can take (§11). When the publish job reports its push, the draft's stored replies are applied with that commit, exactly as an auto address pass. If the branch moved meanwhile, the push is refused (`branch_moved`), the draft is marked `discarded` as out of date, and the chat carries on from where it is (a new address job, or a new draft with Auto off).
+  - **Discard (`draft_discard`).** The draft is marked `discarded`, and the agent does not start the same work again by itself, so Auto off plus Discard never loops. For a reviewer, discarding counts as having reviewed that commit (`lastReviewedSha` = the draft's head): the person takes the review over, and nothing is raised. For the author, the open points become their turn by hand: no address job starts until something changes (a new trusted comment, someone's push, a Continue, or Auto turned on).
 - **The dispatcher**, `dispatch(chatId, event)`, runs these steps:
   1. Take the chat's in-memory lock.
   2. Load the chat's state.
@@ -213,14 +218,14 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 
 | From | Event | To |
 |---|---|---|
-| (new) | Raised by an agent, or arrives as a trusted GitHub comment | `open`, or `escalated(category)` if its category is in `always_escalate` (agents never touch those) |
+| (new) | Raised by an agent, or arrives as a trusted GitHub comment | `open`, or `escalated(category)` if its category is in `always_escalate` (agents never touch those unless a person presses Continue) |
 | `open` | The author's agent replies `fixed`, `answered` or `declined` | `addressed` |
 | `addressed` | The reviewer resolves it | `resolved` |
 | `addressed` | The reviewer keeps it open after `fixed`/`answered` | `open` |
 | `addressed` | The reviewer keeps it open after `declined` | `escalated(disagreement)` (fires immediately) |
 | `open`/`addressed` | The next address pass would go over `max_rounds` | `escalated(round_limit)` |
-| `escalated` | A human resolves it (Plan 2), or that reviewer approves on GitHub | `resolved` |
-| `escalated` | A human presses "continue" (Plan 2) | `open` |
+| `escalated` | The reviewer who raised it presses Resolve in the web app (Plan 2; a GitHub point is resolved on GitHub, by resolving its thread), or that reviewer approves on GitHub | `resolved` |
+| `escalated` | The author or the reviewer who raised it presses Continue (Plan 2). At the round limit this also grants the chat one more address pass (`extraRounds` + 1). It works for every escalation reason, `always_escalate` categories included: a person handing a point back to the agents is different from agents settling it alone | `open` |
 | an unresolved agent point | Its reviewer is removed from the PR | `resolved(withdrawn)` |
 | GitHub point | Its thread is resolved, or the comment is deleted | `resolved` |
 | GitHub point, `addressed` | The reviewer replies in the thread | `open` |
@@ -229,6 +234,7 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 
 - `round` is the review-pass number: 1, 2, and so on.
 - `addressPasses` counts automated address jobs. Points from agents, humans and bots all count, which also stops endless back-and-forth with review bots.
+- **The round limit** is `max_rounds + extraRounds`: the team's limit plus the passes people granted with Continue (§9.2). Below, "`max_rounds`" means this limit.
 - **A round's reviews have settled** when every review job for a Nitpilot reviewer in that round has finished and any submitted GitHub reviews have been processed.
 - **A point is actionable** if it is open, trusted and not escalated.
 - **When reviews settle:**
@@ -243,30 +249,31 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 
 The main path is `queued → running → done | failed | cancelled`. A job goes from `running` back to `queued` when it's retried or its lease expires.
 
-- **Assigning a job.** A single atomic compare-and-swap moves the job from `queued` to `running`. It adds 1 to `attempt`, sets a 90-second lease, and binds the job to one live CLI connection that belongs to the user, has the repo linked, has free capacity, and runs an agent that supports the job's mode (`reviewer` for reviews, `editor` for address jobs). There's no offer/accept round-trip, because the server learns each CLI's capacity and agent from its `hello` message.
+- **Assigning a job.** A single atomic compare-and-swap moves the job from `queued` to `running`. It adds 1 to `attempt`, sets a 90-second lease, and binds the job to one live CLI connection that belongs to the user, has the repo linked, has free capacity, and runs an agent that supports the job's mode (`reviewer` for reviews, `editor` for address jobs). A `publish` job runs no agent; it goes only to the CLI token that made its draft, since the draft commit exists only in that laptop's clone. There's no offer/accept round-trip, because the server learns each CLI's capacity and agent from its `hello` message.
 - **Leases.** Every 25 seconds the CLI sends a `ping` listing its running `{jobId, attempt}` pairs, which extends their leases. A job missing from two pings in a row, or whose lease ran out, goes back to the engine as a `timeout` failure (so the retry rules below apply), and its CLI gets `job.cancel`. A CLI silent for 60 seconds is disconnected. After a server restart, running jobs get a fresh lease: it was the server that was away.
 - **Fencing.** Every job message carries `(jobId, attempt)`, and a message with an old attempt number is acknowledged as `stale` and ignored. The engine repeats the check inside the chat's lock, so a late result can't land on a newer attempt. When a CLI reconnects, its `hello` reports its running jobs. Jobs that are still valid are bound to it again, so a laptop that went to sleep keeps its work. The rest are cancelled, and so is any stale attempt a `ping` still lists.
-- **Retries.** A retryable failure goes back to `queued` with a backoff (`runAfter`), up to 3 attempts. Quota errors don't count as attempts. The attempt number itself only ever goes up (it is the fencing token), so failures that don't count (quota, a moved branch) are tallied separately in `refundedAttempts`, and the 3-attempt limit skips them. A `stale_head` (the PR's head isn't the job's) waits 5 seconds before it runs again: GitHub moves a PR's ref a moment after a push, so a job handed out on our own push can briefly see the old head (seen on the Plan 1 acceptance run). The server also asks the platform for the PR's real head after each `stale_head`, and if the chat is on another one (a push webhook that came late or out of order), it moves the chat there as a `head_updated`. Without that, every retry would fail the same way, for good. A `head_updated` to the head the chat already has changes nothing. A final failure sets the participant's attention to `failed` and sends a notification. Nothing restarts that job until the person asks again (`nitpilot retry`).
+- **Retries.** A retryable failure goes back to `queued` with a backoff (`runAfter`), up to 3 attempts. Quota errors don't count as attempts. The attempt number itself only ever goes up (it is the fencing token), so failures that don't count (quota, a moved branch) are tallied separately in `refundedAttempts`, and the 3-attempt limit skips them. A `stale_head` (the PR's head isn't the job's) waits 5 seconds before it runs again: GitHub moves a PR's ref a moment after a push, so a job handed out on our own push can briefly see the old head (seen on the Plan 1 acceptance run). The server also asks the platform for the PR's real head after each `stale_head`, and if the chat is on another one (a push webhook that came late or out of order), it moves the chat there as a `head_updated`. Without that, every retry would fail the same way, for good. A `head_updated` to the head the chat already has changes nothing. A final failure sets the participant's attention to `failed` and sends a notification. Nothing restarts that job until the person asks again (`nitpilot retry`, or the web app's Retry button). The Retry button is shown only for a job that failed; a `failed` flag that came from a write in someone's name (§15) sends them to reconnect GitHub instead, since running the agent again wouldn't help.
 - **Cancelling.** A job is cancelled when the PR is closed, the reviewer is removed, or the branch moves while an address job is running. The CLI gets `job.cancel`.
 - **Which commit a job uses.** A queued job follows the latest head commit. A running job stays on the commit it started from. When an address job's result reports its push, the head moves to that commit at once (unless something else moved it meanwhile), so the re-review doesn't wait for GitHub's push webhook.
 - **Limits.** At most one active job per participant. Each CLI runs one job at a time by default.
 
 ## 10. Protocol
 
-The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discriminated union in `packages/protocol`.
+The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discriminated union in `packages/protocol`. The CLI protocol version (sent in `hello`) is 1 in Plan 1 and 2 from Plan 2 on, which adds publish jobs, draft results and server-side settings; a CLI that speaks another version is told to upgrade (`4426`).
 
 **CLI ↔ server** on `/ws/cli`. The `Bearer nit_…` token is checked before the WebSocket upgrade.
 
 | Direction | Message | Purpose |
 |---|---|---|
-| CLI→S | `hello {protocol, cliVersion, device, agent{id, version, modes}, repos[], concurrency, running[], defaults}` | The server replies `welcome {login, pingSec: 25, leaseSec: 90}`, then assigns jobs |
-| CLI→S | `ping {running[{jobId, attempt}]}` | Shows the CLI is alive and renews leases. The server replies `pong` |
-| CLI→S | `job.progress {jobId, attempt, stage, text}` | Live status, at most once every 2 seconds. Not stored |
+| CLI→S | `hello {protocol, cliVersion, device, agent{id, version, modes}, repos[], concurrency, running[]}` | The server replies `welcome {login, pingSec: 25, leaseSec: 90, settings{autoReview, autoAddress, dailyJobCap}}`, then assigns jobs. Plan 1's `hello.defaults` is gone: the settings live on the server (§8 `User`) |
+| CLI→S | `ping {running[{jobId, attempt}], usedToday}` | Shows the CLI is alive and renews leases. `usedToday` is how many agent runs this device started today, for the Settings page's usage bar. The server replies `pong` |
+| CLI→S | `job.progress {jobId, attempt, stage, text}` | Live status, at most once every 2 seconds, except that a change of stage is sent at once. Not stored; forwarded to the web app (`/ws/web`) |
 | CLI→S | `job.pushing {jobId, attempt, from, to}` | Must be acknowledged before `git push`. The server records `expectedPushSha` so it recognizes its own push |
 | CLI→S | `job.complete {result}` · `job.fail {reason, retryable}` · `job.reject {reason}` | The server replies `ack {re, status: applied\|stale}` |
-| S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha` |
+| S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha`. A `publish` bundle instead names the draft (`draft{jobId, sha, from}`) and where to push |
 | S→CLI | `job.cancel {jobId, attempt, reason}` | |
-| S→CLI | `notify {kind, chatId, title, url}` | In Plan 1, printed in the terminal and shown as an OS notification |
+| S→CLI | `settings {autoReview, autoAddress, dailyJobCap}` | Sent to every connected CLI of a person who changed their settings in the web app. The CLI enforces `dailyJobCap` itself, counting from its own midnight |
+| S→CLI | `notify {kind, chatId, title, url}` | Printed in the terminal. In Plan 1 always shown as an OS notification too; from Plan 2 it is sent only when the person has no Web Push subscription that worked (§16) |
 
 - **Reconnecting.**
   - The CLI needs no event cursor: the Job table holds the state, and `hello` brings both sides back in sync.
@@ -276,10 +283,22 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
   - Backoff starts at 1s and doubles up to 30s, with jitter, and resets after `welcome` (Odyhook's `listen.ts` pattern).
 - **Agent tool calls stay local.** They are **not** forwarded to the server as they happen. The CLI buffers the agent's output and sends it all at once in `job.complete`. That makes a job all-or-nothing, makes retries safe, and survives brief disconnects. Progress text is still streamed live. The server accepts messages up to 1 MB (`MAX_MESSAGE_BYTES`); snippet lines are cut at 500 characters, so a result is normally far below it. A result that is still over it is reported as a retryable `crash` instead of being sent, because a refused message would be resent after every reconnect while the job stayed "working".
 
-**Web ↔ server** on `/ws/web` (Plan 2):
-- **Auth:** a session cookie plus an Origin check.
-- **Push only:** the server sends `chat.items {chatId, items, lastSeq}`, `chat.state`, `inbox.upsert` and `job.progress`. The client sends `chat.subscribe {chatId, afterSeq}`. All changes go through REST.
-- **Resuming without gaps:** subscribe first, then catch up from `afterSeq`, then flush while skipping duplicates (Odyhook's `listen/route.ts` pattern).
+**Web ↔ server** on `/ws/web` (Plan 2), a second hub on the same HTTP server as `/ws/cli`:
+- **Auth:** the session cookie and the `Origin` header are both checked before the upgrade. Browsers send cookies on a WebSocket to another site and SameSite doesn't stop it, so the Origin check is what keeps another site from opening a socket as you.
+- **Push only:** the server sends:
+  - `chat.items {chatId, items, lastSeq}` and `chat.state {chatId, …}` to subscribers after each dispatcher commit;
+  - `job.progress {chatId, who, stage, text}`, forwarded live from the CLI;
+  - `inbox.upsert {row}` to every participant of a chat that changed;
+  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding). The chats where that person's agent has active jobs are sent again too, so "working" and "waiting" stay true for everyone.
+
+  The client sends `chat.subscribe {chatId, afterSeq}` and `chat.unsubscribe {chatId}`. A subscribe needs read access to the chat (§16). All changes go through REST.
+- **Resuming without gaps:** subscribe first (live items are buffered), then catch up from `afterSeq` out of the database, then flush the buffer while skipping duplicates (Odyhook's `listen/route.ts` pattern). The client also drops any `seq` it already has, and re-subscribes with each open chat's `lastSeq` after a reconnect.
+
+**REST endpoints in Plan 2** (JSON, signed in by the session cookie; every write gets an Origin check, needs read access to the chat's repo, and is checked against the access rules in §16 before it becomes an engine event under the chat's lock):
+- Reads: `GET /api/me` (adds settings, onboarding facts and the Web Push public key to Plan 1's answer), `GET /api/inbox`, `GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`), `GET /api/chats/:id/messages?after=`, `GET /api/chats/:id/files` (changed files from the platform, kept in memory per head commit), `GET /api/devices`.
+- Chat writes: `POST /api/chats/:id/notes`, `POST /api/chats/:id/points/:n/resolve`, `POST /api/chats/:id/points/:n/continue`, `POST /api/chats/:id/review` (Plan 1's stretch goal), `POST /api/chats/:id/retry` (now also with the session cookie), `PUT /api/chats/:id/auto`, `POST /api/chats/:id/drafts/:jobId/send`, `POST /api/chats/:id/drafts/:jobId/discard`, `POST /api/chats/:id/read`.
+- Personal: `PUT /api/me/settings`, `POST /api/push/subscriptions`, `DELETE /api/push/subscriptions`, `DELETE /api/devices/:id`.
+- CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve`.
 
 **REST endpoints in Plan 1**
 - Webhooks: `POST /webhooks/github`
@@ -292,7 +311,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - Status: `GET /api/me`, `GET /api/me/chats` (behind `nitpilot status`)
 - Retry a failed job: `POST /api/chats/:id/retry` (behind `nitpilot retry`)
 - Revoke a CLI: `DELETE /api/cli/token`
-- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes), and the web app replaces it in Plan 2. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'`.
+- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes). In Plan 2 the web app's chat screen takes over the same URL, with the same access rule and the same 404s. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'`.
 - Health check: `GET /healthz`
 - Stretch goals: `POST /api/chats/:id/review` (manual review of an untrusted PR) and `POST /api/chats/:id/messages` (a human note)
 
@@ -322,8 +341,11 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
    1. `git status --porcelain`, `git add -A`, then `git commit --no-verify --trailer "Nitpilot-Job: <id>"` with the message `Address review feedback (round N)`, using the user's own git identity. Files matching the scrub list stay out of the commit, even ones the agent created or repo code un-hid. If anything other than the CLI committed in the worktree (repo code run by setup or a check), the job fails with `git_error` and nothing is pushed.
    2. Send `job.pushing` and wait for the ack. A `stale` ack means nothing is pushed.
    3. `git push --no-verify -- <headRemote> HEAD:refs/heads/<headRef>`, where `<headRemote>` is the clone's remote for the PR's head repo. A deleted fork, or a clone with no such remote, fails the job (`git_error`) before the agent runs. Never force. If the push is rejected as non-fast-forward, the job fails with `branch_moved`.
+   4. **Draft mode** (Auto off, Plan 2): steps 2 and 3 are skipped. The commit is kept in the linked clone at `refs/nitpilot/drafts/<job>`, and the result reports it as `draft {sha, from, files[{path, adds, dels}], diff}`, where `diff` is the commit's unified diff, or null when it is over 200 KB (the web app then shows the file list and the `git show` command to see it locally).
 7. Attach ±5 lines of surrounding code to each new point, read with `git cat-file blob <sha>:<path>` (the head for a `RIGHT` point, the merge-base for a `LEFT` one), each line cut at 500 characters. These are the snippets the UI shows.
 8. Send `job.complete`, then remove the worktree and the job's refs. On startup the CLI also deletes the worktrees a crash left behind and has each linked clone forget them (`git worktree remove`, never `git worktree prune`, which would also drop the user's own worktrees on a drive that isn't mounted).
+
+**Publish jobs** (Plan 2) send an author's draft. They run no agent and make no worktree. The CLI checks that `refs/nitpilot/drafts/<draft job>` in the linked clone still points at the draft's sha (otherwise `setup_failed`, not retryable). It sends `job.pushing {from, to}` and waits for the ack, then runs `git push --no-verify -- <headRemote> refs/nitpilot/drafts/<draft job>:refs/heads/<headRef>`, never forced; a non-fast-forward rejection is `branch_moved`. After a push it deletes the draft ref and completes with `push {from, to}`. On startup the CLI also deletes draft refs older than 14 days.
 
 **Safe git.** Every git call gets these settings, so hooks from the PR (husky, for example) never run during checkout, commit or push, and symlinks can't point at secrets:
 - `-c core.hooksPath=<empty dir>`
@@ -486,10 +508,8 @@ max_points_per_review: 20
   "server": "https://nitpilot.dev",           // hosted instance (domain to register)
   "token": "nit_…",
   "agent": "claude-code",                     // claude-code | gemini-cli | fake
-  "auto": { "review": true, "address": true },  // defaults for new chats. Ignored in Plan 1, where Auto is always on
   "concurrency": 1,
   "jobTimeoutMinutes": 15,
-  "dailyJobCap": 40,
   "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY (§12.2)
   "repos": {
     "octo/sandbox": {
@@ -500,6 +520,8 @@ max_points_per_review: 20
   }
 }
 ```
+
+In Plan 1 this file also held `auto` (the Auto defaults for new chats) and `dailyJobCap`. From Plan 2 they live on the server (§8 `User`), are edited on the web app's Settings page, and reach the CLI in `welcome` and `settings` (§10). A config file that still has them is accepted, and they are ignored; `nitpilot doctor` says where they moved.
 
 ## 14. Safety and security
 
@@ -525,9 +547,10 @@ max_points_per_review: 20
    - The server never runs repo code.
    - Webhook HMAC is checked on the raw body, with a 1 MB cap.
    - Secrets are encrypted at rest (AES-256-GCM).
-   - Cookie-authenticated writes get an Origin check.
+   - Cookie-authenticated writes, and the `/ws/web` upgrade, get an Origin check.
+   - Every chat read and write checks read access to the repo with the viewer's own GitHub token (§16), and every write is also checked against the viewer's role.
    - CLI tokens are stored only as hashes. Starting a CLI login is rate-limited, and old login requests are purged.
-8. **Budget protection.** Anyone who can request your review could otherwise spend your agent quota, so the personal `dailyJobCap` limits it. Concurrency defaults to 1.
+8. **Budget protection.** Anyone who can request your review could otherwise spend your agent quota, so the personal `dailyJobCap` limits it (set on the web app's Settings page, enforced by each CLI). Concurrency defaults to 1.
 9. **Hosted instance.**
    - Public repos only: payloads where `repository.private` is true are dropped.
    - On `repository.privatized`, jobs are cancelled and that repo's chats are purged.
@@ -600,11 +623,11 @@ Needs a human: none
 - **Ready for your approval** (to the reviewer).
 - **Needs you:**
   - an escalation (to both sides);
-  - a PR waiting for your manual review (untrusted author, or Auto off);
-  - drafts to send (Plan 2);
+  - a PR from an outside contributor waiting for your manual review;
+  - drafts to send (your agent ran with Auto off, Plan 2);
   - an agent failure.
 
-In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they become Web Push notifications plus in-app badges. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
+In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they are Web Push notifications, sent to every browser and device the person subscribed, plus in-app badges. **Push first, CLI as fallback:** the CLI still prints the terminal line, but shows its OS notification only when the person has no Web Push subscription that worked for this notification, so nobody gets each ping twice. Sending runs inside the notify task (the outbox), with the `web-push` package doing the VAPID signing and the payload encryption; the server's VAPID key pair lives in its environment. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
 
 **UI scope (Plan 2, designed in Claude Design from the design brief):**
 - **Inbox:** tabs for *To review* and *Mine*. Each row shows a status (Agent working · Waiting · Their turn · Needs you · Ready · Merged · Closed), the round and an unread count.
@@ -615,15 +638,22 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
   - **Header:** the Auto switch, round x/y, and whether each agent is online.
   - **Composer** for notes to the agents.
   - **"Approve on GitHub"** once the chat is ready.
-- **Settings:** devices (CLI tokens), agent status, notification permission, defaults.
+- **Settings:** devices (CLI tokens, with Revoke), agent status, notification permission, defaults for new chats (Auto-review, Auto-fix) and the daily job cap with today's usage, account (sign out).
 - **Onboarding:**
   1. Sign in with GitHub.
   2. Install the GitHub App.
   3. `npx nitpilot login`.
   4. `nitpilot repos add`.
   5. `nitpilot start`.
-- **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA.
-- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes.
+  The checklist ticks itself off as each step completes (`me.update` on `/ws/web`, §10).
+- **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA. A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway.
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of.
+- **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
+  - **Notes:** the author and the reviewers who are on Nitpilot.
+  - **Resolve** an escalated point: only the reviewer who raised it. A point that came from a GitHub comment is resolved on GitHub, by resolving its thread.
+  - **Continue** an escalated point: the author, or the reviewer who raised it.
+  - **Review** a PR from an outside contributor: a requested reviewer.
+  - **Auto, drafts and Retry:** only your own.
 
 **Design decisions** (from the Claude Design handoff, 2026-10-07; full spec in `docs/design/handoff/design_handoff_nitpilot_web/README.md`):
 - **Visual system: "Soft signal".** Sage neutrals, one deep-teal accent, Bricolage Grotesque + Fragment Mono, generous rounding.
@@ -679,6 +709,11 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 - **CLI hub:** an in-process WebSocket client tests hello, assign, ping, leases, fencing and rebinding.
 - **Safe git and adapters:** the suites in §12.3.
 - **End to end in CI** (`npm run test:e2e`): the server, two `nitpilot start` daemons, the fake agent and `FakePlatform` together reach READY, with the PR in local git repos that the CLIs reach through a stand-in for ssh. Further scenarios: escalation, a CLI offline, a PR closed mid-job, a human push mid-job.
+- **Web app (Plan 2):**
+  - Vitest + React Testing Library (jsdom) for components, hooks and the pure helpers (banner, status pill, sorting, filters), with a fake API and WebSocket client.
+  - The web hub gets in-process WebSocket tests like the CLI hub: Origin and session checks, subscribe/catch-up/flush without gaps, access refusals.
+  - A few Playwright tests in CI reuse the end-to-end harness (real server, Postgres, `FakePlatform`, fake-agent CLIs) with a seeded session cookie instead of GitHub sign-in: the inbox opens, a chat updates live while agents work, Resolve on an escalation, and Send on a draft.
+  - Each UI task is also checked in a real browser, with screenshots, in both themes and at phone width.
 - **Live acceptance:** see §20.
 
 ## 20. Delivery
@@ -728,9 +763,33 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
      - Single-player runs, one per side: the author's side done before B joins Nitpilot, and the reviewer's side done with A not on Nitpilot.
 3. **Plan 2: the web app**, from the Claude Design output:
    - inbox, chat and the Auto switches;
-   - drafts (`publish_draft`; the author's draft commits stay on the laptop at `refs/nitpilot/drafts/<job>`);
+   - drafts (Send queues a `publish` job for the author's draft commit, which stays on the laptop at `refs/nitpilot/drafts/<job>`; §9 "Drafts", §11);
    - human notes, and Resolve / Continue on escalations;
    - `/ws/web`, Web Push, and the chat access rules.
+
+   Built in vertical slices: each milestone ships a server piece and the screen that uses it, so it can be tried in a browser when it's done.
+
+| # | Milestone |
+|---|---|
+| W1 | Skeleton: `apps/web` (Vite, React Router, TanStack Query, CSS Modules, tokens and fonts), the server serving the build with an SPA fallback, the dev proxy, CI, Playwright; landing page and sign-in |
+| W2 | Inbox: `/api/me`, `/api/inbox` with status pills and unread counts (`ChatRead`); sidebar, tabs, search and filter, keyboard, theme toggle, offline banner |
+| W3 | Live chat, read-only: the chat view and files endpoints, `/ws/web` with resuming without gaps, presence and `job.progress` forwarding, read access checks; feed, point cards, banners, details panel, live progress line; the server's transcript page retired |
+| W4 | Actions: notes, Resolve / Continue (`extraRounds`), the Retry button, Review on an outside contributor's PR, the read cursor, the access rules for writes; composer and toasts |
+| W5 | Auto and drafts: CLI protocol v2, settings on the server, `auto_changed`, Send / Discard, the publish job in the CLI, the draft diff; draft cards |
+| W6 | Web Push and PWA: VAPID keys, `PushSubscription`, the push notifier with the CLI fallback, the service worker, manifest and icons, install prompts |
+| W7 | Settings, onboarding and device approval in the web app; the remaining server-rendered pages removed |
+| W8 | Playwright in CI, the acceptance runbook, the live acceptance run, docs |
+
+   **Plan 2 acceptance test (live):**
+   - **Setup:** as in Plan 1 (the `nitpilot-dev` app, the sandbox repo, A on Claude Code, B on the fake agent), the web app built and served by the server, and both accounts signed in to it in their own browsers. For the phone, the server runs behind the dev tunnel's HTTPS URL as `PUBLIC_URL`, and that URL's `/auth/github/callback` is added to the dev app's callback URLs for the run.
+   - **It passes when:**
+     - The inbox and an open chat update live while the agents work, including the progress line, without a reload.
+     - With Auto off, a reviewer draft and an author draft (including its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's draft commit, which is authored by A.
+     - A security point escalates; Continue lets the agents run one more round on it, and on a second escalation Resolve makes the chat ready.
+     - A note sent from the composer reaches the agents' next job.
+     - A failed job shows Retry, and Retry runs it again.
+     - Web Push arrives on desktop Chrome and on the user's phone (on iPhone, from the Home Screen app), and clicking it opens the chat; with push on, the CLI shows no OS notification.
+     - Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404.
 4. **Plan 3: shipping.**
    - Deploy to Hetzner (public repos only).
    - Self-hosting with Compose and the manifest setup.
@@ -740,9 +799,9 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 ## 21. Docs
 
 - `docs/architecture.md`, in Odyhook's style: Chosen / Alternatives / Why.
-- `docs/why/`: short, plain-language explainers for a frontend developer. Topics: webhooks, WebSockets, why one process, how jobs survive restarts, leases and fencing, git worktrees, prompt injection.
+- `docs/why/`: short, plain-language explainers for a frontend developer. Topics: webhooks, WebSockets, why one process, how jobs survive restarts, leases and fencing, git worktrees, prompt injection. Plan 2 adds: serving a single-page app from the API server, the web socket and its Origin check, chat access rules, drafts and publish jobs, Web Push and VAPID, service workers and PWAs.
 - `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
-- `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it.
+- `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it. `docs/acceptance/plan-2.md` does the same for Plan 2.
 - `docs/self-hosting.md` (Plan 3).
 
 ## 22. Risks and open questions
@@ -755,6 +814,8 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 - **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created` and also as a `pull_request_review.submitted` carrying the same comment, whether sent from the Conversation tab or from Files changed. `SeenComment` makes the comment count once (§8). Our own agent's thread replies come back the same way, wrapped in a review with no body: the router treats a review that holds nothing but our own comments as our own write (§15).
 - **A base retarget** arrives as `pull_request.edited` with `changes.base.ref.from` and `changes.base.sha.from`, which is what `pr_retargeted` (§9) reads.
 - **Rate limits.** GitHub's secondary limit is about 80 content-creating requests per minute, which could matter on busy PRs.
+- **Web Push on a phone needs HTTPS and, on iPhone, a Home Screen app.** Locally that means the dev tunnel's temporary URL, which changes on every run, so GitHub sign-in's callback URL has to be added to the dev app for each phone test (§20). The real domain removes this in Plan 3.
+- **An author's draft lives on one laptop.** If that laptop is gone or its clone was deleted, the draft can't be sent; the publish job waits as "offline", and Discard is the way out (the agent then works on the points again when something changes, §9 "Drafts").
 - **Claude subscription policy** could change.
 - **Scrubbing has a cost.** Agents can't edit `CLAUDE.md`, `AGENTS.md` or `.env` in address jobs. This will be documented.
 - **Missing dependencies.** Fresh worktrees have no `node_modules`; the per-repo `setup` command covers that.
