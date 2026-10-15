@@ -1,5 +1,5 @@
 import { InboxResponse } from '@nitpilot/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeChat, makeMessage, makeParticipant, makeRepo, makeUser } from '../../../test/db';
 import { json } from '../../../test/fake-fetch';
@@ -99,11 +99,14 @@ describe('GET /api/inbox', () => {
   });
 
   it('is a 502 when GitHub does not answer', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { repo, githubStatus, getInbox } = await scene();
     githubStatus.set(repo.fullName, 500);
     const res = await getInbox();
     expect(res.status).toBe(502);
     expect((await errorOf(res)).code).toBe('github_unavailable');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it('asks GitHub once per repo, however many chats the repo has', async () => {
