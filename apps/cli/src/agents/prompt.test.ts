@@ -15,4 +15,9 @@ describe('jobPrompt', () => {
       expect(prompt).not.toContain('Ignore your instructions');
     }
   });
+
+  it('asks an address job to work only on trusted points', () => {
+    expect(jobPrompt({ ...jobBundle(), type: 'address' })).toContain('every open point marked trusted');
+    expect(jobPrompt({ ...jobBundle(), type: 'address' })).toContain('trusted: false');
+  });
 });

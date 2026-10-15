@@ -24,6 +24,8 @@ export const BundlePoint = z.object({
   status: PointStatus,
   authorResolution: Resolution.nullable(),
   round: z.number().int().positive(),
+  /** False for a GitHub comment from someone outside the repo (spec §6.1): the agent may read it, never act on it. */
+  trusted: z.boolean(),
   thread: z.array(ThreadEntry),
 });
 export type BundlePoint = z.infer<typeof BundlePoint>;

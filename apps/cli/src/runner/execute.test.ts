@@ -19,7 +19,7 @@ const lines = (n: number, text = 'line') => Array.from({ length: n }, (_, i) => 
 function openPoint(number: number, title: string): BundlePoint {
   return {
     number, origin: 'agent', raisedBy: 'leo', path: 'src/orders.ts', line: 1, side: 'RIGHT', severity: 'major', category: 'bug',
-    title, body: `${title}.`, status: 'open', authorResolution: null, round: 1, thread: [],
+    title, body: `${title}.`, status: 'open', authorResolution: null, round: 1, trusted: true, thread: [],
   };
 }
 

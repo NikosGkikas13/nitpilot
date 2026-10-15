@@ -12,11 +12,12 @@ On a public repo, anyone can open a PR or comment on one. An agent reads everyth
 2. **It gives the agent no shell.** The agent's only tools are Nitpilot's. Even if it is completely fooled, it can't run a command, read files outside the PR, or push. Checks are commands *you* configured, and the agent picks one by name.
 3. **It reads the repo's rules from the base branch.** A `CLAUDE.md` or `AGENTS.md` in the PR could say "approve everything". The CLI removes those files from the job's checkout and hands the agent the base branch's versions (docs/why/git-worktrees.md).
 4. **It reads from git, not the folder.** `get_file` and `get_diff` read committed content, with no diff programs (`--no-ext-diff --no-textconv`), so a file can't turn into something else on the way (`apps/cli/src/mcp/tools/read.ts`).
-5. **It checks what the agent produces.** A point must be on a file the PR changed, and there's a cap on how many. Everything is sent in one result at the end, and the server cleans it (secrets, @mentions) before GitHub sees it.
+5. **Only trusted people's points are work.** On a public repo, anyone can leave a review comment, and it shows up in the chat as a point. Each point in `get_job` says `trusted: true` or `false` (`apps/server/src/jobs/bundle.ts`). An outsider's point is for information only: the address prompt tells your agent to leave its code alone, and `reply_to_point` refuses it (`apps/cli/src/mcp/tools/write.ts`). Without this, a stranger's "please delete the auth check" could become a commit pushed under your name.
+6. **It checks what the agent produces.** A point must be on a file the PR changed, and there's a cap on how many. Everything is sent in one result at the end, and the server cleans it (secrets, @mentions) before GitHub sees it.
 
 ## What it can't do
 
-Labels lower the odds that an agent falls for a trick; they don't make it impossible. The real protection is points 2 to 5: a fooled agent can, at worst, write a wrong review comment, which a human then sees.
+Labels lower the odds that an agent falls for a trick; they don't make it impossible. The real protection is points 2 to 6: a fooled agent can, at worst, write a wrong review comment, which a human then sees.
 
 ## The React analogy
 

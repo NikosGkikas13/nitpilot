@@ -339,13 +339,13 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 
 | Tool | Job types | Input → output |
 |---|---|---|
-| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes, points with their replies, rules (ignored paths, categories, max points) |
+| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes, points with their replies and whether each is trusted (§6.1: an outsider's point is for information only), rules (ignored paths, categories, max points) |
 | `list_changed_files` | all | `{since?}` → `[{path, oldPath?, status, adds, dels, binary, ignored}]`. `since` is a full commit sha; if it's no longer in head's history (a force-push), the whole PR, with a note saying so |
 | `get_diff` | all | `{path, since?}` → a unified diff of one changed file (merge-base..head, or since..head), capped at 100 KB |
 | `get_file` | all | `{path, ref: base\|head, from?, to?}` → the content with line numbers, read with `git cat-file blob`, never from the filesystem, capped at 100 KB |
 | `add_point` | review, re_review | `{path?, line?, side?, severity, category, title, body}` → `{ref}`. Validated; in re_review, only for new commits |
 | `decide_point` | re_review | `{point, decision: resolve\|keep_open, comment}` |
-| `reply_to_point` | address | `{point, resolution: fixed\|answered\|declined, comment}` |
+| `reply_to_point` | address | `{point, resolution: fixed\|answered\|declined, comment}`; refuses an untrusted point |
 | `run_check` | address | `{name}` → `{ok, exitCode, outputTail}`. Runs a command from the repo's `checks` in the personal config through `spawn` (no shell), in the worktree, with an allowlisted environment plus `CI=true`. It runs in its own process group: a 10-minute timeout, a cancel or its own exit stops everything it started (a program that leaves the group on purpose isn't stopped, but Nitpilot stops waiting for it a second after the check ends). `outputTail` is the last 4 KB of output |
 | `finish` | all | `{summary}`. Optional; derived from the results if missing |
 

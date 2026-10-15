@@ -70,6 +70,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
       status: p.status,
       authorResolution: p.authorResolution,
       round: p.round,
+      trusted: p.trusted,
       // The point itself is its first message; the thread is everything said about it after that.
       thread: chat.messages
         .filter((m) => m.pointNumber === p.number && m.kind !== 'point_raised')
