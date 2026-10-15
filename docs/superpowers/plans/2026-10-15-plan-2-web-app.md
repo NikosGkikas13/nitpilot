@@ -2598,7 +2598,7 @@ In `.github/workflows/ci.yml`, add after `- run: npm run test:e2e`:
 
 Run `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` and open `http://127.0.0.1:4319/` in the browser: the landing page as in the handoff's canvas 3b, at 1280 px in light and dark and at 375 px (one column, nothing scrolls sideways). Screenshots of all three go in the task report. Stop the server.
 
-- [ ] **Step 12: Live check: sign in through Vite (ask first)**
+- [x] **Step 12: Live check: sign in through Vite (ask first)**
 
 This changes the dev GitHub App's settings, so ask before doing it. Then the person, signed in to github.com as **NikosGkikas13** (the app's owner):
 1. Opens https://github.com/settings/apps, clicks **nitpilot-dev**, and on the **General** tab scrolls to **Callback URL**.
