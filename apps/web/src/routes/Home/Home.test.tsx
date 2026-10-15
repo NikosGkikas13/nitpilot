@@ -7,7 +7,7 @@ import { Home } from './Home';
 
 function renderHome() {
   return render(
-    <QueryClientProvider client={makeQueryClient()}>
+    <QueryClientProvider client={makeQueryClient({ retryDelay: 0 })}>
       <Home />
     </QueryClientProvider>,
   );
@@ -37,10 +37,10 @@ describe('Home', () => {
 
   it('shows the error with a way to try again, instead of a blank page', async () => {
     const fail: [number, unknown] = [500, { error: { code: 'server_error', message: 'internal server error' } }];
-    // The first try and the client's two retries fail; "Try again" then succeeds.
+    // The first try and the client's two retries (no waiting between them in tests) fail; "Try again" then succeeds.
     answers(fail, fail, fail, [200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' }]);
     renderHome();
-    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }, { timeout: 10_000 }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
   });
 });

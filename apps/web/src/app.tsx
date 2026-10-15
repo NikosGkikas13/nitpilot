@@ -4,8 +4,9 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { retryUnlessClientError } from './api/client';
 import { Home } from './routes/Home/Home';
 
-export function makeQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError } } });
+/** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
+export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError, ...queries } } });
 }
 
 /** The whole app: the data cache, then the routes. */
