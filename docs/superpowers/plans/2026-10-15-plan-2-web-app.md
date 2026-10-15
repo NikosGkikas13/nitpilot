@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1 at step level; W2–W8 at task level.** The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1 and W2 at step level; W3–W8 at task level.** W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -107,6 +107,26 @@ W1 was written at step level on 2026-10-15, against branch `plan-2-web-app` at `
 - **Playwright's plumbing:** the ports live in `e2e/ports.ts`, because Playwright refuses imports from its config file in tests. `test/test-env.ts` holds the environment both Vitest and the Playwright server use. The harness gets `port` and `webDistDir` options. The control API has only `POST /signin` for now; later tasks add what they need. The Playwright server listens on `127.0.0.1:4319` (control on 4320), and its `PUBLIC_URL` is that origin. CI installs Chromium and uploads traces when a test fails.
 - **The live sign-in check moved from Task 2 to Task 3** (Step 12), where there is a sign-in button to click.
 - **npm 11.21 holds back install scripts** (it warns about esbuild's); nothing in W1 needs them.
+
+## Checked against the code (W2)
+
+W2 was written at step level on 2026-10-15, against branch `plan-2-web-app` at `b6cf319` (W1 done, plus the CLI's Node 22 WebSocket fix from the first CI run). Its code was built and run in a scratch worktree first, on a database of its own (protocol 43 → 44 → 45, server 621 → 637 → 655, web 28 → 69, CLI 293 + 14 skipped unchanged, end to end 5, Playwright 3 → 4; typecheck and lint clean), and every code block below was generated from those tested files by a script. The inbox was looked at in a real browser at 1280 px and 375 px, light and dark, with six seeded PRs covering every status. Where W2 differs from the task-level text, and why:
+
+- **`inboxStatus` takes `you`** (the reader's login), because "a human turn that is yours is Needs you" can't be decided without it, **and no `closed` flag**: phase `closed` already says it, and `merged` tells Merged from Closed.
+- **"A waiting agent beats a working one"** is `deriveActivity`'s rule and already has its test ("shows the agent that waits when another is working"); `inbox-status.test.ts` instead pins "what you have to do beats an agent at work".
+- **Counting queries:** `lib/prisma.ts` now emits a `query` event per query and `test/queries.ts` counts them. The tests pin the property (1 chat and 3 or 30 chats take the same number of queries), not an exact count: Prisma sends one query per `include`d relation, so "three queries" would be wrong and brittle. No chats, no queries. New explainer: `docs/why/n-plus-one-queries.md`.
+- **`loadActivity` of a chat that is gone answers `none`** instead of throwing, which settles Plan 1b's "chat read twice → 500" minor without touching `transcript.tsx`.
+- **Two carry-forward tests pass at once** (running beats an earlier queued job; the transcript's plain 403 is "Nothing here"): they pin behaviour that was right and untested.
+- **Prisma 7's `migrate dev` doesn't regenerate the client**, so Task 5 runs `db:generate` after it.
+- **Marking read needs a participant, not a GitHub access check** (spec §10 updated in Task 5): it only moves your own cursor. The cursor never passes the chat's newest item, and only moves forward. A plain `upsert` raced (Prisma reads, then inserts) and failed the "two tabs at once" test under the full parallel run; the route creates the row, ignores a unique violation (`isUniqueViolation`), then moves the cursor forward.
+- **`loadInboxRow(chatId, userId, …)`** looks the user up itself; Task 9 has participants' user ids. **`InboxRow.url`** is the PR on GitHub; the web app builds its own `/c/…` path (`chatPath`). **`other`** never picks you (an author who also reviews), and its avatar falls back to GitHub's public `avatars.githubusercontent.com/u/<id>`, which the CSP already allows.
+- **`needsYou`** is decided on the server (escalated, needs you, or a reviewer's ready); `tabCounts` just counts it, so "ready counts only for reviewer rows" is tested in Task 5.
+- **No generic `Popover` or `Banner` component** (YAGNI): the filter popover owns its outside-click handling (`InboxFilter`), the two inbox banners live in `InboxBanners.tsx`, and the chat's banners (Task 10) are a different shape. `searchRows` is part of `filterRows`. **New small parts:** `Ping` (the pill now, the progress line in Task 10), `lib/time.ts` (`rowTime`), `lib/viewport.ts` (`useIsDesktop`), and `defaultTab` (the inbox opens on the tab that needs you).
+- **Routes:** `Home` is the layout route: signed out it shows the landing page on any path; signed in it renders `Shell`, whose `<Outlet>` shows the index (`EmptyPane` "Pick a pull request"), `/c/:owner/:repo/:number` (`ChatPlaceholder` until Task 10), `/settings` (`SettingsPlaceholder` with Sign out until Task 21, since W1's signed-in placeholder that had it is gone) and `*`. A full page load of `/c/…` still reaches the server's transcript until Task 10, so the placeholder links to it with a plain `<a>`.
+- **The keyboard cursor takes the focus** (the listbox pattern): the screen test found that after clicking a row, `j` then Enter opened the clicked row (the focused button), not the cursor's. Now Enter reaches the cursor's row as a button press, `useInboxKeys` handles Enter only when no button has focus, and the focus ring and the cursor ring are one inset ring. Esc on a phone goes back through `useEscapeBack` in `Shell`, where the inbox isn't mounted.
+- **Pill words:** "leo's agent working" uses the login as GitHub spells it ("Your agent working" for yours). Merged and Closed have no glyph (handoff); the glyph-plus-word rule is for live statuses.
+- **The landing page's sample pills are `StatusPill`s** (Task 3's deferred minor).
+- **Playwright:** the control API gains `POST /pr` (a real `pull_request.opened` webhook), and the signed-in landing test now expects the inbox.
 
 ## How to work in this repo
 
@@ -2627,93 +2647,3791 @@ W2 shows a person their real inbox: every chat they're part of, with the right s
 
 **Files at the end of W2:**
 ```
-packages/protocol/src/web-api.ts      InboxStatus, InboxRow, InboxResponse
-apps/server/src/
-  chats/inbox-status.ts               inboxStatus (pure)
-  chats/activity.ts                   loadActivities (many chats, one read each), typed failures
-  chats/inbox.ts                      loadInboxRows, loadInboxRow, unreadCounts
-  http/routes/inbox.ts                GET /api/inbox, POST /api/chats/:id/read
-  prisma: ChatRead
+packages/protocol/src/web-api.ts      InboxStatus, InboxRow, InboxResponse, MarkReadRequest; WebMe.agentOnline
+apps/server/
+  prisma: ChatRead (migration 2026…_chat_read)
+  src/lib/prisma.ts                   the client emits query events (tests count them)
+  src/chats/inbox-status.ts           inboxStatus (pure)
+  src/chats/activity.ts               loadActivities (many chats, a fixed number of queries), typed failures
+  src/chats/inbox.ts                  loadInboxRows, loadInboxRow, unreadCounts
+  src/http/routes/inbox.ts            GET /api/inbox, POST /api/chats/:id/read
+  src/http/routes/me.ts               + agentOnline
+  test/queries.ts                     countQueries
+  test/db.ts                          + makeParticipant, makeMessage
+  test/e2e/web-server.ts              + control POST /pr
 apps/web/src/
-  routes/Shell/…                      desktop sidebar + main, phone single pane
+  api/inbox.ts                        useInbox
+  lib/inbox.ts                        sortRows, filterRows, statusFilterOf, tabCounts, defaultTab, chatPath
+  lib/keys.ts                         useInboxKeys, useEscapeBack, isTyping
+  lib/time.ts                         rowTime
+  lib/viewport.ts                     useIsDesktop (760 px)
+  components/{StatusPill,Avatar,AgentBadge,Kbd,Ping}/…
+  routes/Shell/{Shell,Pane}.tsx       desktop sidebar + main, phone single pane; EmptyPane
   routes/Inbox/…                      header, banners, search, filter, tabs, rows, empty states, footer
-  components/{StatusPill,Avatar,AgentBadge,Kbd,Popover}/…
-  lib/inbox.ts                        sortRows, filterRows, tabCounts, searchRows
-  lib/keys.ts                         useInboxKeys (j/k/↓/↑/Enter/'/'/Esc, ignored while typing)
+  routes/Chat/ChatPlaceholder.tsx     /c/:owner/:repo/:number until Task 10
+  routes/Settings/SettingsPlaceholder.tsx   /settings (Sign out) until Task 21
+  test/render.tsx                     fakeApi, renderApp, fakeViewport
+apps/web/e2e/inbox.spec.ts            the inbox in a real browser
+docs/why/n-plus-one-queries.md
 ```
+
+No new packages: W2 uses what W1 installed.
 
 ### Task 4: Inbox status and activity for many chats
 
 **Files:**
-- Create: `apps/server/src/chats/inbox-status.ts` and `inbox-status.test.ts`.
-- Modify: `apps/server/src/chats/activity.ts` and its tests (`loadActivities`, typed `failure`), `packages/protocol/src/web-api.ts` (`InboxStatus`), `apps/server/src/http/routes/transcript.tsx` (uses the chat it already loaded; removed in Task 10 anyway).
+- Create: `apps/server/src/chats/inbox-status.ts`, `apps/server/src/chats/inbox-status.test.ts`, `apps/server/test/queries.ts`, `docs/why/n-plus-one-queries.md`.
+- Modify: `apps/server/src/lib/prisma.ts` (query events), `apps/server/src/chats/activity.ts` (`loadActivities`, typed `failure`, a gone chat has no activity), `apps/server/src/chats/activity.test.ts`, `apps/server/src/chats/activity.db.test.ts`, `apps/server/src/http/routes/transcript.db.test.ts` (the plain-403 carry-forward), `packages/protocol/src/web-api.ts` (`InboxStatus`), `packages/protocol/src/web-api.test.ts`.
 
 **Interfaces:**
-- Consumes: `deriveActivity(facts)`, `Activity` (`chats/activity.ts`).
-- Produces: `InboxStatus = { kind: 'working' | 'waiting' | 'their_turn' | 'needs_you' | 'escalated' | 'ready' | 'merged' | 'closed' | 'quiet'; who: string | null; reason: 'offline' | 'repo_not_linked' | 'cap_reached' | 'decision' | 'manual_review' | 'failed' | 'drafts' | null }`. `inboxStatus(f: { phase: Phase; merged: boolean; closed: boolean; activity: Activity; attention: Attention; role: Role }): InboxStatus`. `loadActivities(chatIds: string[], clis: LiveClis, now?): Promise<Map<string, Activity>>` (three queries total, whatever the number of chats); `loadActivity(chatId, …)` becomes a one-item call of it. `ActiveJob.failure: FailureReason | null`.
+- Consumes: `deriveActivity(facts)`, `Activity`, `LiveClis` (`chats/activity.ts`); `Phase`, `Role`, `Attention`, `FailureReason` (protocol).
+- Produces: `InboxStatus = { kind: 'working' | 'waiting' | 'their_turn' | 'needs_you' | 'escalated' | 'ready' | 'merged' | 'closed' | 'quiet'; who: string | null; reason: 'offline' | 'repo_not_linked' | 'cap_reached' | 'decision' | 'manual_review' | 'failed' | 'drafts' | null }` (protocol). `inboxStatus(f: InboxStatusFacts): InboxStatus` with `InboxStatusFacts = { phase: Phase; merged: boolean; activity: Activity; attention: Attention; role: Role; you: string }` (`you` = the reader's login). `loadActivities(chatIds: string[], clis: LiveClis, now?): Promise<Map<string, Activity>>` (a chat id that doesn't exist is left out; no ids, no queries); `loadActivity(chatId, clis, now?)` is a one-item call of it and answers `{ kind: 'none' }` for a chat that is gone. `ActiveJob.failure: FailureReason | null`. `countQueries(run: () => Promise<unknown>): Promise<number>` (`test/queries.ts`).
 
-**Behavior** (one table, most important first):
-- `merged` → `merged`; closed without merging → `closed` (§16 fix).
-- Your attention `decision` → `escalated` (red pill); `manual_review`, `failed`, `drafts` → `needs_you` with that `reason`.
-- Phase `ready`: a reviewer sees `ready` ("Ready"); the author sees `their_turn` ("Their turn": waiting for approval).
-- Activity `agent_waiting` → `waiting` with `who` and `reason`; `agent_working` → `working` with `who` ("Leo's agent working"); `human_turn` → `their_turn` with `who`, or `needs_you` when `who` is you.
-- Anything else (idle, nothing pending) → `quiet` (no pill; the row shows the last activity only).
+- [ ] **Step 1: Let tests count queries**
 
-**Tests this task must include:**
-- `inbox-status.test.ts`: the table above, one row per case, including "your own human turn is Needs you", "a waiting agent beats a working one", and "merged beats escalated".
-- `activity` tests: `loadActivities` for three chats makes one read per table (counted with a Prisma query listener) and gives each chat the same answer `loadActivity` gives; **carry-forwards:** a running job beats an earlier queued one in `deriveActivity`; the transcript route's 403-from-GitHub path renders "Nothing here" (route-level test).
+"No N+1" means reading 30 chats takes as many database queries as reading 1. To test it, the Prisma client emits an event per query and a test helper counts them. In `apps/server/src/lib/prisma.ts`, replace `createPrisma` and the `globalForPrisma` line:
+
+```ts
+function createPrisma(): PrismaClient {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL is not set');
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: url }), log: ['error'] });
+}
+
+// One client per process. In development, keep it on globalThis so hot reloads reuse it.
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+```
+
+with:
+
+```ts
+/** The client, able to tell listeners about each query it sends (tests count them: test/queries.ts). */
+type Client = PrismaClient<'query'>;
+
+function createPrisma(): Client {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL is not set');
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString: url }),
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'stdout', level: 'error' },
+    ],
+  });
+}
+
+// One client per process. In development, keep it on globalThis so hot reloads reuse it.
+const globalForPrisma = globalThis as unknown as { prisma?: Client };
+```
+
+(`PrismaClient<'query'>` is still a `PrismaClient` wherever one is expected: Prisma's log type parameter only adds `$on('query')`.)
+
+Create `apps/server/test/queries.ts`:
+
+```ts
+import { prisma } from '../src/lib/prisma';
+
+// Counts the SQL queries Prisma sends, for "no N+1" tests: reading 30 chats must take as many queries as
+// reading 1. See docs/why/n-plus-one-queries.md.
+
+let sent = 0;
+let listening = false;
+
+/** How many queries `run` sent to the database. */
+export async function countQueries(run: () => Promise<unknown>): Promise<number> {
+  if (!listening) {
+    prisma.$on('query', () => (sent += 1));
+    listening = true;
+  }
+  const before = sent;
+  await run();
+  return sent - before;
+}
+```
+
+Create `docs/why/n-plus-one-queries.md` (CLAUDE.md: the first time a backend concept shows up in the code):
+
+````markdown
+# N+1 queries: why the inbox reads all its chats at once
+
+**In one sentence:** the inbox needs facts about many chats, and asking the database once per chat would make the page slower with every PR a person is part of, so the server asks once for all of them (`loadActivities` in `apps/server/src/chats/activity.ts`, and the inbox rows in `apps/server/src/chats/inbox.ts`).
+
+## The problem
+
+The obvious way to build a list is a loop: read the list (1 query), then for each item read its details (N more queries). That's "N+1". With 3 chats it's 4 queries and nobody notices. With 200 chats it's 201 round trips to Postgres, one after another, every time someone opens the inbox.
+
+Each query costs a round trip (the request goes to Postgres and the answer comes back), even when Postgres finds the rows instantly. Round trips add up; rows mostly don't.
+
+## The fix
+
+Ask for everything at once and sort it out in memory:
+
+```ts
+// N+1: one query per chat
+for (const id of chatIds) activities.set(id, await loadActivity(id, clis));
+
+// Constant: one query for all the chats, then plain JavaScript
+const chats = await prisma.prChat.findMany({ where: { id: { in: chatIds } }, include: { jobs: true, … } });
+for (const chat of chats) activities.set(chat.id, deriveActivity(…));
+```
+
+Prisma's `include` still sends a few queries (one per relation: the chats, then their jobs, then their participants…), but that number is fixed. Reading 1 chat or 200 chats takes the same handful of queries.
+
+## How the tests check it
+
+`test/queries.ts` has `countQueries(run)`: it counts the SQL queries Prisma sends while `run` runs (Prisma emits a `query` event for each one; `apps/server/src/lib/prisma.ts` turns the events on). A test reads 1 chat, then 3 (or 30), and expects the same count. It doesn't pin the exact number, which would break whenever Prisma changes how it splits an `include`; it pins the property that matters: the count doesn't grow with the list.
+
+## The React analogy
+
+It's the difference between each `<InboxRow>` calling `useQuery(['chat', id])` on mount, which sends one request per row (a waterfall the Network tab makes obvious), and the `<Inbox>` calling `useQuery(['inbox'])` once and handing each row its data as props. Same screen, one request instead of a hundred.
+````
+
+- [ ] **Step 2: Write the failing test for the status pill**
+
+Create `apps/server/src/chats/inbox-status.test.ts`:
+
+```ts
+import type { InboxStatus } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import type { Activity } from './activity';
+import { inboxStatus, type InboxStatusFacts } from './inbox-status';
+
+const working: Activity = { kind: 'agent_working', who: 'leo' };
+
+function facts(over: Partial<InboxStatusFacts> = {}): InboxStatusFacts {
+  return { phase: 'reviewing', merged: false, activity: { kind: 'none' }, attention: 'none', role: 'author', you: 'maya', ...over };
+}
+
+const status = (kind: InboxStatus['kind'], who: string | null = null, reason: InboxStatus['reason'] = null): InboxStatus => ({ kind, who, reason });
+
+describe('inboxStatus (spec §16 "Inbox", handoff §1 status pills)', () => {
+  it('is merged or closed once the PR is', () => {
+    expect(inboxStatus(facts({ phase: 'closed', merged: true }))).toEqual(status('merged'));
+    expect(inboxStatus(facts({ phase: 'closed' }))).toEqual(status('closed'));
+  });
+
+  it('is merged even when an escalation was still waiting for you', () => {
+    expect(inboxStatus(facts({ phase: 'closed', merged: true, attention: 'decision' }))).toEqual(status('merged'));
+  });
+
+  it('is escalated (the red pill) when a decision waits for you', () => {
+    expect(inboxStatus(facts({ phase: 'escalated', attention: 'decision' }))).toEqual(status('escalated', null, 'decision'));
+  });
+
+  it('is needs_you, with the reason, for a manual review, a failure or drafts', () => {
+    for (const attention of ['manual_review', 'failed', 'drafts'] as const) {
+      expect(inboxStatus(facts({ attention }))).toEqual(status('needs_you', null, attention));
+    }
+  });
+
+  it('puts what you have to do before an agent at work', () => {
+    expect(inboxStatus(facts({ attention: 'failed', activity: working }))).toEqual(status('needs_you', null, 'failed'));
+  });
+
+  it('is ready for a reviewer, and their turn (approving) for the author, once nothing is open', () => {
+    expect(inboxStatus(facts({ phase: 'ready', role: 'reviewer' }))).toEqual(status('ready'));
+    expect(inboxStatus(facts({ phase: 'ready', role: 'author' }))).toEqual(status('their_turn'));
+  });
+
+  it('is waiting, with who and why, when an agent can not start', () => {
+    expect(inboxStatus(facts({ activity: { kind: 'agent_waiting', who: 'leo', why: 'offline', offlineSince: null } }))).toEqual(status('waiting', 'leo', 'offline'));
+    expect(inboxStatus(facts({ activity: { kind: 'agent_waiting', who: 'leo', why: 'repo_not_linked' } }))).toEqual(status('waiting', 'leo', 'repo_not_linked'));
+    expect(inboxStatus(facts({ activity: { kind: 'agent_waiting', who: 'leo', why: 'cap_reached' } }))).toEqual(status('waiting', 'leo', 'cap_reached'));
+  });
+
+  it("is working, with whose agent, while one works", () => {
+    expect(inboxStatus(facts({ activity: working }))).toEqual(status('working', 'leo'));
+  });
+
+  it("is their turn when a person is up, and needs_you when that person is you", () => {
+    expect(inboxStatus(facts({ phase: 'addressing', activity: { kind: 'human_turn', who: 'leo' } }))).toEqual(status('their_turn', 'leo'));
+    expect(inboxStatus(facts({ phase: 'addressing', activity: { kind: 'human_turn', who: 'maya' } }))).toEqual(status('needs_you'));
+  });
+
+  it('is quiet when nothing is pending', () => {
+    expect(inboxStatus(facts())).toEqual(status('quiet'));
+    expect(inboxStatus(facts({ phase: 'idle' }))).toEqual(status('quiet'));
+  });
+});
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `npm run test:unit -w apps/server -- src/chats/inbox-status.test.ts`
+Expected: FAIL, `Error: Cannot find module './inbox-status'`.
+
+- [ ] **Step 4: The `InboxStatus` body**
+
+Append to `packages/protocol/src/web-api.ts`:
+
+```ts
+
+/**
+ * A row's status pill in the inbox (spec §16, handoff §1), worked out on the server for the person reading
+ * it (`apps/server/src/chats/inbox-status.ts`). `who` is a GitHub login ("leo" → "Leo's agent working");
+ * `reason` says why someone waits or is needed. `quiet` shows no pill.
+ */
+export const InboxStatus = z.object({
+  kind: z.enum(['working', 'waiting', 'their_turn', 'needs_you', 'escalated', 'ready', 'merged', 'closed', 'quiet']),
+  who: z.string().nullable(),
+  reason: z.enum(['offline', 'repo_not_linked', 'cap_reached', 'decision', 'manual_review', 'failed', 'drafts']).nullable(),
+});
+export type InboxStatus = z.infer<typeof InboxStatus>;
+```
+
+In `packages/protocol/src/web-api.test.ts`, import it (`import { InboxStatus, WebMe } from './web-api';`) and add, after the last test:
+
+```ts
+
+  it('knows every inbox status, and nothing else', () => {
+    expect(InboxStatus.parse({ kind: 'waiting', who: 'leo', reason: 'offline' })).toEqual({ kind: 'waiting', who: 'leo', reason: 'offline' });
+    expect(() => InboxStatus.parse({ kind: 'busy', who: null, reason: null })).toThrow();
+  });
+```
+
+- [ ] **Step 5: Work out the pill**
+
+Create `apps/server/src/chats/inbox-status.ts`:
+
+```ts
+import type { Attention, InboxStatus, Phase, Role } from '@nitpilot/protocol';
+import type { Activity } from './activity';
+
+/** What a chat looks like to one person reading their inbox. */
+export type InboxStatusFacts = {
+  phase: Phase;
+  merged: boolean;
+  activity: Activity;
+  /** The reader's attention in this chat, for this role. */
+  attention: Attention;
+  /** The reader's role in this chat: the author's row and a reviewer's row can differ. */
+  role: Role;
+  /** The reader's GitHub login, so "your turn" can be told from "their turn". */
+  you: string;
+};
+
+/**
+ * The status pill of one inbox row (spec §16, handoff §1). Rules are checked in order, most important first:
+ * a finished PR, then what you have to do, then a ready chat, then what the agents and people are doing.
+ */
+export function inboxStatus(f: InboxStatusFacts): InboxStatus {
+  if (f.merged) return pill('merged');
+  if (f.phase === 'closed') return pill('closed');
+
+  if (f.attention === 'decision') return pill('escalated', null, 'decision');
+  if (f.attention !== 'none') return pill('needs_you', null, f.attention);
+
+  // Nothing open: the reviewer approves on GitHub, and the author waits for that.
+  if (f.phase === 'ready') return pill(f.role === 'reviewer' ? 'ready' : 'their_turn');
+
+  const a = f.activity;
+  if (a.kind === 'agent_waiting') return pill('waiting', a.who, a.why);
+  if (a.kind === 'agent_working') return pill('working', a.who);
+  if (a.kind === 'human_turn') return a.who === f.you ? pill('needs_you') : pill('their_turn', a.who);
+  return pill('quiet');
+}
+
+function pill(kind: InboxStatus['kind'], who: string | null = null, reason: InboxStatus['reason'] = null): InboxStatus {
+  return { kind, who, reason };
+}
+```
+
+- [ ] **Step 6: Run the tests to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/chats/inbox-status.test.ts && npm test -w packages/protocol`
+Expected: PASS, 10 tests; protocol 44.
+
+- [ ] **Step 7: Write the failing tests for many chats at once**
+
+In `apps/server/src/chats/activity.test.ts`, the failure strings become typed, so mark the loop's list `as const`:
+
+```ts
+    for (const failure of ['daily_cap', 'quota'] as const) {
+```
+
+and add, before `it("is human_turn for the author …`:
+
+```ts
+  it('names the running agent before a queued one that could start too', () => {
+    const jobs = [job({ login: 'sam', userId: 'user-sam' }), job({ status: 'running' })];
+    expect(deriveActivity(facts({ jobs }, { 'user-sam': online([REPO]) }))).toEqual({ kind: 'agent_working', who: 'leo' });
+  });
+
+```
+
+(This one passes at once: it pins a rule `deriveActivity` already follows and no test covered, a Plan 1b carry-forward.)
+
+Replace `apps/server/src/chats/activity.db.test.ts` with:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeRepo, makeUser } from '../../test/db';
+import { countQueries } from '../../test/queries';
+import { prisma } from '../lib/prisma';
+import { loadActivities, loadActivity, type LiveClis } from './activity';
+
+const noClis = { connectionsFor: () => [] };
+
+/** A reviewing chat with no job, and one addressed point raised by leo, a reviewer, with this origin. */
+async function chatWithAddressedPoint(origin: 'agent' | 'github') {
+  const maya = await makeUser({ login: 'maya' });
+  const leo = await makeUser({ login: 'leo' });
+  const chat = await makeChat((await makeRepo()).id, { authorGithubId: maya.githubId });
+  await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'reviewing' } });
+  await prisma.participant.create({ data: { chatId: chat.id, githubId: maya.githubId, role: 'author', userId: maya.id, login: 'maya' } });
+  await prisma.participant.create({ data: { chatId: chat.id, githubId: leo.githubId, role: 'reviewer', userId: leo.id, login: 'leo' } });
+  await prisma.point.create({
+    data: { chatId: chat.id, number: 1, raisedByGithubId: leo.githubId, origin, severity: 'major', category: 'bug', title: 'A point', body: 'Body.', status: 'addressed', authorResolution: 'answered', round: 1 },
+  });
+  return chat;
+}
+
+/** A reviewing chat whose reviewer has a review job in this state. Their CLI was last seen at `lastSeenAt`. */
+async function chatWithJob(status: 'queued' | 'running', lastSeenAt: Date) {
+  const author = await makeUser();
+  const reviewer = await makeUser();
+  const chat = await makeChat((await makeRepo()).id, { authorGithubId: author.githubId });
+  await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'reviewing' } });
+  const participant = await prisma.participant.create({ data: { chatId: chat.id, githubId: reviewer.githubId, role: 'reviewer', userId: reviewer.id, login: reviewer.login } });
+  await prisma.job.create({ data: { chatId: chat.id, participantId: participant.id, activeFor: participant.id, userId: reviewer.id, type: 'review', status, round: 1, headSha: chat.headSha } });
+  await prisma.cliToken.create({ data: { userId: reviewer.id, name: 'laptop', tokenHash: `hash-${reviewer.id}`, prefix: 'nit_x', lastSeenAt } });
+  return { chat, reviewer };
+}
+
+describe('loadActivity (spec §9.1)', () => {
+  it("is nobody's turn for an addressed point an agent raised", async () => {
+    const chat = await chatWithAddressedPoint('agent');
+    expect(await loadActivity(chat.id, noClis)).toEqual({ kind: 'none' });
+  });
+
+  it("is the reviewer's turn for an addressed point they raised on GitHub", async () => {
+    const chat = await chatWithAddressedPoint('github');
+    expect(await loadActivity(chat.id, noClis)).toEqual({ kind: 'human_turn', who: 'leo' });
+  });
+
+  it("is none for a chat that is gone, so a page that read it a moment ago still renders", async () => {
+    expect(await loadActivity('no-such-chat', noClis)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('loadActivities (many chats at once, for the inbox)', () => {
+  it('gives each chat the answer loadActivity gives it', async () => {
+    const seen = new Date('2026-10-15T09:30:00.000Z');
+    const a = await chatWithJob('running', seen);
+    const b = await chatWithJob('queued', seen);
+    const c = await chatWithAddressedPoint('github');
+    const clis: LiveClis = { connectionsFor: () => [] };
+
+    const all = await loadActivities([a.chat.id, b.chat.id, c.id], clis);
+    expect(all.get(a.chat.id)).toEqual({ kind: 'agent_working', who: a.reviewer.login });
+    expect(all.get(b.chat.id)).toEqual({ kind: 'agent_waiting', who: b.reviewer.login, why: 'offline', offlineSince: seen });
+    expect(all.get(c.id)).toEqual({ kind: 'human_turn', who: 'leo' });
+    for (const id of [a.chat.id, b.chat.id, c.id]) expect(all.get(id)).toEqual(await loadActivity(id, clis));
+  });
+
+  it('reads three chats with as many queries as one (no query per chat)', async () => {
+    const seen = new Date('2026-10-15T09:30:00.000Z');
+    const chats = [await chatWithJob('queued', seen), await chatWithJob('queued', seen), await chatWithJob('running', seen)];
+    const one = await countQueries(() => loadActivities([chats[0]!.chat.id], noClis));
+    const three = await countQueries(() => loadActivities(chats.map((c) => c.chat.id), noClis));
+    expect(one).toBeGreaterThan(0);
+    expect(three).toBe(one);
+  });
+
+  it('asks the database nothing for no chats', async () => {
+    expect(await countQueries(() => loadActivities([], noClis))).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 8: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/activity.db.test.ts`
+Expected: FAIL, 4 tests: `TypeError: loadActivities is not a function` (3), and the gone chat throws `PrismaClientKnownRequestError` (`findUniqueOrThrow`).
+
+- [ ] **Step 9: Read many chats with a fixed number of queries**
+
+In `apps/server/src/chats/activity.ts`:
+
+1. The first import becomes `import { FailureReason, type Phase } from '@nitpilot/protocol';`.
+2. `ActiveJob.failure` becomes typed: `export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: FailureReason | null };`
+3. So does the set of limits: `const LIMITS: ReadonlySet<FailureReason> = new Set(['daily_cap', 'quota']);`
+4. Replace `loadActivity` (from its doc comment to the end of the file) with:
+
+```ts
+/** The activity of one chat, read from the database and the connected CLIs. A chat that is gone has none. */
+export async function loadActivity(chatId: string, clis: LiveClis, now = new Date()): Promise<Activity> {
+  const activities = await loadActivities([chatId], clis, now);
+  return activities.get(chatId) ?? { kind: 'none' };
+}
+
+/**
+ * The activity of many chats, by chat id, for the inbox. The number of queries doesn't grow with the number
+ * of chats: one read of the chats with their people, points and jobs, and one of when each person's CLIs were
+ * last seen (docs/why/n-plus-one-queries.md). A chat id that doesn't exist is left out.
+ */
+export async function loadActivities(chatIds: string[], clis: LiveClis, now = new Date()): Promise<Map<string, Activity>> {
+  if (chatIds.length === 0) return new Map();
+  const chats = await prisma.prChat.findMany({
+    where: { id: { in: chatIds } },
+    include: {
+      repo: true,
+      participants: true,
+      // Only a point a person raised on GitHub waits for them to answer; an agent's point doesn't.
+      points: { where: { status: 'addressed', origin: 'github' }, orderBy: { number: 'asc' } },
+      jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true }, orderBy: { createdAt: 'asc' } },
+    },
+  });
+  const userIds = [...new Set(chats.flatMap((chat) => chat.jobs.map((j) => j.userId)))];
+  // When each of them was last seen: the newest lastSeenAt of their CLI tokens (spec §8).
+  const seen = userIds.length > 0 ? await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } }) : [];
+  const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
+  const presence = (userId: string): Presence => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) });
+
+  const activities = new Map<string, Activity>();
+  for (const chat of chats) {
+    const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? null;
+    activities.set(
+      chat.id,
+      deriveActivity({
+        phase: chat.phase as Phase,
+        repoFullName: chat.repo.fullName,
+        author: loginOf(chat.authorGithubId),
+        reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
+        jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: failureOf(j.failure) })),
+        presence,
+        now,
+      }),
+    );
+  }
+  return activities;
+}
+
+/** The stored failure as a FailureReason, or null for one this version doesn't know. */
+function failureOf(stored: string | null): FailureReason | null {
+  const parsed = FailureReason.safeParse(stored);
+  return parsed.success ? parsed.data : null;
+}
+```
+
+`transcript.tsx` keeps calling `loadActivity(chat.id, …)`: a chat deleted between its two reads now shows no activity instead of a 500 (Plan 1b's "chat read twice" minor).
+
+- [ ] **Step 10: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/chats/activity.test.ts && npm run test:db -w apps/server -- src/chats/activity.db.test.ts`
+Expected: PASS, 10 and 6 tests.
+
+- [ ] **Step 11: The transcript's plain 403 (carry-forward)**
+
+A route-level test that GitHub's plain 403 (no rate limit) renders "Nothing here", like its 404. In `apps/server/src/http/routes/transcript.db.test.ts`, give `scene` a `forbidden` option:
+
+```ts
+async function scene(opts: { canRead?: boolean; forbidden?: boolean; revoked?: boolean; githubDown?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
+```
+
+and in its `fakeFetch`, answer it after the `canRead === false` case:
+
+```ts
+  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.githubDown ? json({ message: 'Server Error' }, 500) : opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : opts.forbidden ? json({ message: 'Resource not accessible' }, 403) : { id: Number(repo.id) }) });
+```
+
+Add, after the test "answers 404 when GitHub says the viewer can't read the repo …":
+
+```ts
+  it("shows 'Nothing here' when GitHub answers a plain 403 (no rate limit), like a 404", async () => {
+    const { maya, view } = await scene({ forbidden: true });
+    await githubAuthFor(maya.id);
+    const res = await view(maya.id);
+    expect(res.status).toBe(404);
+    expect(await textOf(res)).toContain('Nothing here');
+  });
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/transcript.db.test.ts`
+Expected: PASS, 16 tests (the new one passes at once: it pins `RepoAccess`'s existing rule at the route).
+
+- [ ] **Step 12: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: protocol 44, CLI 293 passed + 14 skipped, server 637, web 28; typecheck and lint clean.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add packages/protocol/src/web-api.ts packages/protocol/src/web-api.test.ts apps/server/src/lib/prisma.ts apps/server/test/queries.ts apps/server/src/chats/inbox-status.ts apps/server/src/chats/inbox-status.test.ts apps/server/src/chats/activity.ts apps/server/src/chats/activity.test.ts apps/server/src/chats/activity.db.test.ts apps/server/src/http/routes/transcript.db.test.ts docs/why/n-plus-one-queries.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): inbox status, and the activity of many chats in a fixed number of queries
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 5: `GET /api/inbox`, `ChatRead` and unread counts
 
 **Files:**
-- Create: `apps/server/src/chats/inbox.ts`, `apps/server/src/chats/inbox.db.test.ts`, `apps/server/src/http/routes/inbox.ts`, `apps/server/src/http/routes/inbox.db.test.ts`, a migration (`ChatRead`).
-- Modify: `apps/server/prisma/schema.prisma`, `packages/protocol/src/web-api.ts` (`InboxRow`, `InboxResponse`, `MarkReadRequest`, `WebMe.agentOnline`), `apps/server/src/http/routes/me.ts`, `apps/server/src/http/app.ts`, `apps/server/test/db.ts` (`makeParticipant`, `makeMessage` helpers if missing).
+- Create: `apps/server/src/chats/inbox.ts`, `apps/server/src/chats/inbox.db.test.ts`, `apps/server/src/http/routes/inbox.ts`, `apps/server/src/http/routes/inbox.db.test.ts`, the migration `apps/server/prisma/migrations/<timestamp>_chat_read/`.
+- Modify: `apps/server/prisma/schema.prisma` (`ChatRead`), `packages/protocol/src/web-api.ts` and its test (`InboxRow`, `InboxResponse`, `MarkReadRequest`, `WebMe.agentOnline`), `apps/server/src/http/routes/me.ts` and `me.db.test.ts`, `apps/server/src/http/app.ts`, `apps/server/test/db.ts` (`makeParticipant`, `makeMessage`), `apps/web/src/routes/Home/Home.test.tsx` (its `/api/me` answers gain `agentOnline`), `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§10: what marking read needs; §16: how the inbox status is worked out).
 
 **Interfaces:**
-- Consumes: `loadActivities`, `inboxStatus` (Task 4), `requireUser`, `requireSameOrigin` (Task 3).
-- Produces: model `ChatRead { id, userId, chatId, lastReadSeq Int, createdAt, updatedAt; @@unique([userId, chatId]) }` with cascading deletes. `InboxRow = { chatId, repo, number, title, url, role: Role, other: { login: string; avatarUrl: string | null; agentActive: boolean } | null, status: InboxStatus, round: number, maxRounds: number, lastActivity: string, updatedAt: string, unread: number, needsYou: boolean }`. `loadInboxRows(user: SessionUser, clis: LiveClis): Promise<InboxRow[]>`; `loadInboxRow(chatId, userId, clis): Promise<InboxRow[]>` (one per role the person has in that chat, for Task 9's `inbox.upsert`). `GET /api/inbox` → `InboxResponse { rows }`. `POST /api/chats/:id/read { seq }` → 204: `lastReadSeq = max(current, seq)`, only for a participant.
+- Consumes: `loadActivities`, `inboxStatus`, `countQueries` (Task 4); `requireUser`, `requireSameOrigin`, `UserVariables` (Task 3); `rulesFromJson` (`chats/rules.ts`); `isUniqueViolation` (`lib/prisma.ts`).
+- Produces: model `ChatRead { id, userId, chatId, lastReadSeq Int @default(0), createdAt, updatedAt; @@unique([userId, chatId]) }`, cascading from `User` and `PrChat`. `InboxRow = { chatId, repo, number, title, url (the PR on GitHub), role: Role, other: { login: string; avatarUrl: string | null; agentActive: boolean } | null, status: InboxStatus, round, maxRounds, lastActivity, updatedAt, unread, needsYou }`; `InboxResponse = { rows: InboxRow[] }`; `MarkReadRequest = { seq: int ≥ 0 }`; `WebMe.agentOnline: boolean`. `loadInboxRows(user: InboxViewer, clis, now?): Promise<InboxRow[]>`, `loadInboxRow(chatId, userId, clis, now?): Promise<InboxRow[]>` (one row per role that person has in that chat, for Task 9's `inbox.upsert`), `unreadCounts(user, chats): Promise<Map<string, number>>` with `InboxViewer = { id; githubId; login }` (`chats/inbox.ts`). `inboxRoutes(deps: { clis })`: `GET /api/inbox` → `InboxResponse`; `POST /api/chats/:id/read { seq }` → 204. `meRoutes(deps: { clis })`. Test helpers `makeParticipant(chatId, user, role, over?)` and `makeMessage(chatId, author | null, body?)`.
 
-**Behavior:**
-- Rows: every chat where a participant row has your GitHub id, one row per role (an author who is also a reviewer gets two rows, one per tab); open chats plus chats closed in the last 14 days; at most 200, newest first.
-- `other`: for the author's row, the first requested reviewer (else the first reviewer); for a reviewer's row, the author. `agentActive` = that person has a queued or running job in the chat. `avatarUrl` from `User` when they're on Nitpilot, else `https://avatars.githubusercontent.com/u/<githubId>` (GitHub's public avatar URL).
-- `unread` = timeline items after your `lastReadSeq` whose author isn't you; system items count. No `ChatRead` row = everything is unread.
-- `lastActivity` = the newest timeline item's body, one line, cut at 120 characters. `maxRounds` = the repo's `max_rounds`; Task 11 adds the chat's `extraRounds` to it when that column exists.
-- `WebMe.agentOnline` (this task adds it to `/api/me`, which now takes `clis`): true when any CLI of yours is connected. The inbox's offline banner reads it.
-- `needsYou` = `status.kind` is `needs_you` or `escalated`, or `ready` for a reviewer (the handoff's tab count).
+- [ ] **Step 1: The `ChatRead` table**
 
-**Tests this task must include:**
-- Rows for author and reviewer roles, a person in both roles getting two rows, a chat closed 15 days ago left out, another person's chat never listed.
-- Unread: no row → all others' items; after `read {seq: 5}` only later items count; your own items never count; a lower `seq` never moves the cursor back.
-- `read` on a chat you're not part of → 404; from another Origin → 403.
-- The number of queries for 30 chats stays constant (no N+1), measured like Task 4.
+In `apps/server/prisma/schema.prisma`, add the back-relations: `chatReads     ChatRead[]` as the last field of `User` (after `jobs`), and `reads        ChatRead[]` after `githubWrites GithubWrite[]` in `PrChat`. Then add the model before `/// One item in a chat's timeline.`:
+
+```prisma
+/// How far a person has read a chat (Plan 2). The inbox's unread count is the number of timeline items
+/// after `lastReadSeq` that someone else wrote.
+model ChatRead {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId      String
+  chat        PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  lastReadSeq Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, chatId])
+}
+```
+
+Run: `npm run db:migrate -w apps/server -- --name chat_read`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` no longer regenerates the client by itself; without this step `prisma.chatRead` doesn't exist).
+Expected: a new `prisma/migrations/<timestamp>_chat_read/migration.sql`:
+
+```sql
+-- CreateTable
+CREATE TABLE "ChatRead" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "chatId" TEXT NOT NULL,
+    "lastReadSeq" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChatRead_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChatRead_userId_chatId_key" ON "ChatRead"("userId", "chatId");
+
+-- AddForeignKey
+ALTER TABLE "ChatRead" ADD CONSTRAINT "ChatRead_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChatRead" ADD CONSTRAINT "ChatRead_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "PrChat"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+```
+
+- [ ] **Step 2: The inbox bodies**
+
+Replace `packages/protocol/src/web-api.ts` with:
+
+```ts
+import { z } from 'zod';
+import { MeResponse } from './api';
+import { Role } from './enums';
+
+// REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
+// answer with these, as the CLI does with api.ts.
+
+/**
+ * `GET /api/me`, as the web app reads it: the CLI's answer plus who you are. The CLI parses the same answer
+ * with `MeResponse`, which ignores the extra fields. Later milestones add settings, onboarding and push.
+ */
+export const WebMe = MeResponse.extend({
+  id: z.string(),
+  githubId: z.string(),
+  /** True while any of your CLIs is connected: the inbox's "Your agent is offline" banner reads it. */
+  agentOnline: z.boolean(),
+});
+export type WebMe = z.infer<typeof WebMe>;
+
+/**
+ * A row's status pill in the inbox (spec §16, handoff §1), worked out on the server for the person reading
+ * it (`apps/server/src/chats/inbox-status.ts`). `who` is a GitHub login ("leo" → "Leo's agent working");
+ * `reason` says why someone waits or is needed. `quiet` shows no pill.
+ */
+export const InboxStatus = z.object({
+  kind: z.enum(['working', 'waiting', 'their_turn', 'needs_you', 'escalated', 'ready', 'merged', 'closed', 'quiet']),
+  who: z.string().nullable(),
+  reason: z.enum(['offline', 'repo_not_linked', 'cap_reached', 'decision', 'manual_review', 'failed', 'drafts']).nullable(),
+});
+export type InboxStatus = z.infer<typeof InboxStatus>;
+
+/** One row of `GET /api/inbox`: one chat, seen in one of your roles (an author who also reviews gets two rows). */
+export const InboxRow = z.object({
+  chatId: z.string(),
+  repo: z.string(),
+  number: z.number().int().positive(),
+  title: z.string(),
+  /** The PR on GitHub. */
+  url: z.string(),
+  role: Role,
+  /** The person on the other side: a reviewer for your PR, the author for a review. */
+  other: z.object({ login: z.string(), avatarUrl: z.string().nullable(), agentActive: z.boolean() }).nullable(),
+  status: InboxStatus,
+  round: z.number().int().positive(),
+  maxRounds: z.number().int().positive(),
+  /** The newest timeline item, on one line. */
+  lastActivity: z.string(),
+  updatedAt: z.string(),
+  /** Timeline items someone else wrote after the last one you read. */
+  unread: z.number().int().nonnegative(),
+  /** Counts toward the tab's "need you" badge. */
+  needsYou: z.boolean(),
+});
+export type InboxRow = z.infer<typeof InboxRow>;
+
+export const InboxResponse = z.object({ rows: z.array(InboxRow) });
+export type InboxResponse = z.infer<typeof InboxResponse>;
+
+/** `POST /api/chats/:id/read`: you've read up to this timeline item. */
+export const MarkReadRequest = z.object({ seq: z.number().int().nonnegative() });
+export type MarkReadRequest = z.infer<typeof MarkReadRequest>;
+```
+
+Replace `packages/protocol/src/web-api.test.ts` with:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { MeResponse } from './api';
+import { InboxResponse, InboxStatus, MarkReadRequest, WebMe, type InboxRow } from './web-api';
+
+describe('web API bodies', () => {
+  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+
+  it('round-trips WebMe', () => {
+    expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
+  });
+
+  it('leaves the CLI able to read the same /api/me answer', () => {
+    expect(MeResponse.parse(me)).toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'ok' });
+  });
+
+  it('knows every inbox status, and nothing else', () => {
+    expect(InboxStatus.parse({ kind: 'waiting', who: 'leo', reason: 'offline' })).toEqual({ kind: 'waiting', who: 'leo', reason: 'offline' });
+    expect(() => InboxStatus.parse({ kind: 'busy', who: null, reason: null })).toThrow();
+  });
+
+  it('round-trips an inbox row, and refuses a negative read cursor', () => {
+    const row: InboxRow = {
+      chatId: 'chat_1', repo: 'acme/shop-api', number: 142, title: 'Cursor pagination', url: 'https://github.com/acme/shop-api/pull/142',
+      role: 'author', other: { login: 'leo', avatarUrl: null, agentActive: true }, status: { kind: 'working', who: 'leo', reason: null },
+      round: 2, maxRounds: 3, lastActivity: 'leo raised 2 points', updatedAt: '2026-10-15T12:00:00.000Z', unread: 2, needsYou: false,
+    };
+    expect(InboxResponse.parse(JSON.parse(JSON.stringify({ rows: [row] })))).toEqual({ rows: [row] });
+    expect(() => MarkReadRequest.parse({ seq: -1 })).toThrow();
+  });
+});
+```
+
+In `apps/web/src/routes/Home/Home.test.tsx`, both `/api/me` answers gain the new field: `{ id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true }` (Task 6 rewrites this file).
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 45 tests. (`npm run typecheck` fails in `me.ts` until Step 8: `agentOnline` is missing there.)
+
+- [ ] **Step 3: Test helpers for people and timeline items**
+
+In `apps/server/test/db.ts`, add before `resetDb`:
+
+```ts
+/** `user` as a participant of a chat, the way the dispatcher saves one. */
+export async function makeParticipant(
+  chatId: string,
+  user: { id?: string; githubId: string; login: string },
+  role: 'author' | 'reviewer',
+  over: { requested?: boolean; attention?: string } = {},
+) {
+  return prisma.participant.create({
+    data: { chatId, githubId: user.githubId, login: user.login, userId: user.id ?? null, role, requested: over.requested ?? false, attention: over.attention ?? 'none' },
+  });
+}
+
+/** The chat's next timeline item, with its seq taken the way the dispatcher takes one (`++lastSeq`). `author` null = a system item. */
+export async function makeMessage(chatId: string, author: { githubId: string; login: string } | null, body = 'Something happened.') {
+  const chat = await prisma.prChat.update({ where: { id: chatId }, data: { lastSeq: { increment: 1 } } });
+  return prisma.message.create({
+    data: { chatId, seq: chat.lastSeq, kind: author ? 'human' : 'system', authorGithubId: author?.githubId ?? null, authorLogin: author?.login ?? null, body },
+  });
+}
+```
+
+(`resetDb`'s `TRUNCATE … CASCADE` empties `ChatRead` with `User` and `PrChat`.)
+
+- [ ] **Step 4: Write the failing tests for the rows**
+
+Create `apps/server/src/chats/inbox.db.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeMessage, makeParticipant, makeRepo, makeUser } from '../../test/db';
+import { countQueries } from '../../test/queries';
+import type { SessionUser } from '../auth/session';
+import { prisma } from '../lib/prisma';
+import type { LiveClis } from './activity';
+import { loadInboxRow, loadInboxRows } from './inbox';
+
+const noClis: LiveClis = { connectionsFor: () => [] };
+const DAY = 86_400_000;
+
+const viewer = (u: { id: string; githubId: string; login: string; avatarUrl: string | null }): SessionUser => ({ id: u.id, githubId: u.githubId, login: u.login, avatarUrl: u.avatarUrl });
+
+/** maya's PR, reviewed by leo (requested, on Nitpilot) and sam (not on Nitpilot). */
+async function scene() {
+  const maya = await makeUser({ login: 'maya' });
+  const leo = await prisma.user.update({ where: { id: (await makeUser({ login: 'leo' })).id }, data: { avatarUrl: 'https://avatars.githubusercontent.com/u/2' } });
+  const sam = { githubId: `gh-sam-${maya.id}`, login: 'sam' };
+  const repo = await makeRepo();
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+  await makeParticipant(chat.id, maya, 'author');
+  await makeParticipant(chat.id, sam, 'reviewer');
+  await makeParticipant(chat.id, leo, 'reviewer', { requested: true });
+  return { maya, leo, sam, repo, chat };
+}
+
+describe('loadInboxRows (spec §16 "Inbox")', () => {
+  it('lists the author row with the requested reviewer, and the reviewer row with the author', async () => {
+    const { maya, leo, repo, chat } = await scene();
+    const [mine] = await loadInboxRows(viewer(maya), noClis);
+    expect(mine).toMatchObject({
+      chatId: chat.id, repo: repo.fullName, number: chat.number, title: chat.title, url: chat.url, role: 'author',
+      other: { login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/2', agentActive: false },
+      status: { kind: 'quiet', who: null, reason: null }, round: 1, maxRounds: 3, needsYou: false,
+    });
+    const [review] = await loadInboxRows(viewer(leo), noClis);
+    expect(review).toMatchObject({ chatId: chat.id, role: 'reviewer', other: { login: 'maya', avatarUrl: `https://avatars.githubusercontent.com/u/${maya.githubId}` } });
+  });
+
+  it('gives a person who is both author and reviewer one row per role', async () => {
+    const { maya, chat } = await scene();
+    await makeParticipant(chat.id, maya, 'reviewer');
+    const rows = await loadInboxRows(viewer(maya), noClis);
+    expect(rows.map((r) => r.role).sort()).toEqual(['author', 'reviewer']);
+  });
+
+  it("keeps chats closed in the last 14 days, and never lists someone else's chat", async () => {
+    const { maya, leo, repo } = await scene();
+    const recent = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    await makeParticipant(recent.id, maya, 'author');
+    await prisma.prChat.update({ where: { id: recent.id }, data: { phase: 'closed', closedAt: new Date(Date.now() - 2 * DAY) } });
+    const old = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    await makeParticipant(old.id, maya, 'author');
+    await prisma.prChat.update({ where: { id: old.id }, data: { phase: 'closed', closedAt: new Date(Date.now() - 15 * DAY) } });
+    const leosOwn = await makeChat(repo.id, { authorGithubId: leo.githubId });
+    await makeParticipant(leosOwn.id, leo, 'author');
+
+    const ids = (await loadInboxRows(viewer(maya), noClis)).map((r) => r.chatId);
+    expect(ids).toContain(recent.id);
+    expect(ids).not.toContain(old.id);
+    expect(ids).not.toContain(leosOwn.id);
+  });
+
+  it('marks the other side’s agent active while it has a job, and says who works', async () => {
+    const { maya, leo, chat } = await scene();
+    const leoAsReviewer = await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: leo.githubId } });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'reviewing' } });
+    await prisma.job.create({ data: { chatId: chat.id, participantId: leoAsReviewer.id, activeFor: leoAsReviewer.id, userId: leo.id, type: 'review', status: 'running', round: 1, headSha: chat.headSha } });
+    const [row] = await loadInboxRows(viewer(maya), noClis);
+    expect(row!.other).toMatchObject({ login: 'leo', agentActive: true });
+    expect(row!.status).toEqual({ kind: 'working', who: 'leo', reason: null });
+  });
+
+  it('counts a ready chat as needing the reviewer, not the author', async () => {
+    const { maya, leo, chat } = await scene();
+    await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'ready' } });
+    expect((await loadInboxRows(viewer(leo), noClis))[0]).toMatchObject({ status: { kind: 'ready' }, needsYou: true });
+    expect((await loadInboxRows(viewer(maya), noClis))[0]).toMatchObject({ status: { kind: 'their_turn' }, needsYou: false });
+  });
+
+  it('shows the newest timeline item on one line, cut at 120 characters', async () => {
+    const { maya, leo, chat } = await scene();
+    await makeMessage(chat.id, null, 'Pull request opened by maya');
+    await makeMessage(chat.id, leo, `First line\nsecond   line ${'x'.repeat(200)}`);
+    const [row] = await loadInboxRows(viewer(maya), noClis);
+    expect(row!.lastActivity).toHaveLength(120);
+    expect(row!.lastActivity.startsWith('First line second line xxx')).toBe(true);
+    expect(row!.lastActivity.endsWith('…')).toBe(true);
+  });
+
+  it("counts as unread everything someone else wrote (system items too) until the person reads it, and never their own", async () => {
+    const { maya, leo, chat } = await scene();
+    await makeMessage(chat.id, null); // 1: system
+    await makeMessage(chat.id, leo); // 2
+    await makeMessage(chat.id, maya); // 3: maya's own
+    await makeMessage(chat.id, leo); // 4
+    await makeMessage(chat.id, leo); // 5
+    await makeMessage(chat.id, leo); // 6
+    expect((await loadInboxRows(viewer(maya), noClis))[0]!.unread).toBe(5);
+
+    await prisma.chatRead.create({ data: { userId: maya.id, chatId: chat.id, lastReadSeq: 5 } });
+    expect((await loadInboxRows(viewer(maya), noClis))[0]!.unread).toBe(1);
+  });
+
+  it('reads 30 chats with as many queries as one (no query per chat)', async () => {
+    const { maya, leo, repo, chat } = await scene();
+    await makeMessage(chat.id, leo);
+    const user = viewer(maya);
+    const one = await countQueries(() => loadInboxRows(user, noClis));
+    for (let i = 0; i < 29; i++) {
+      const more = await makeChat(repo.id, { authorGithubId: maya.githubId });
+      await makeParticipant(more.id, maya, 'author');
+      await makeParticipant(more.id, leo, 'reviewer', { requested: true });
+      await makeMessage(more.id, leo);
+    }
+    const rows = await loadInboxRows(user, noClis);
+    expect(rows).toHaveLength(30);
+    expect(await countQueries(() => loadInboxRows(user, noClis))).toBe(one);
+  });
+});
+
+describe('loadInboxRow (one chat, for live updates)', () => {
+  it('gives the same rows the full list gives for that chat', async () => {
+    const { maya, chat } = await scene();
+    await makeParticipant(chat.id, maya, 'reviewer');
+    const all = (await loadInboxRows(viewer(maya), noClis)).filter((r) => r.chatId === chat.id);
+    expect(await loadInboxRow(chat.id, maya.id, noClis)).toEqual(all);
+  });
+});
+```
+
+- [ ] **Step 5: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/inbox.db.test.ts`
+Expected: FAIL, `Error: Cannot find module './inbox'`.
+
+- [ ] **Step 6: Build the rows**
+
+Create `apps/server/src/chats/inbox.ts`:
+
+```ts
+import type { Attention, InboxRow, InboxStatus, Phase, Role } from '@nitpilot/protocol';
+import type { Prisma } from '../generated/prisma/client';
+import { prisma } from '../lib/prisma';
+import { loadActivities, type LiveClis } from './activity';
+import { inboxStatus } from './inbox-status';
+import { rulesFromJson } from './rules';
+
+/** How long a closed or merged PR stays in the inbox. */
+export const CLOSED_KEEP_MS = 14 * 86_400_000;
+
+/** The most rows the inbox lists. */
+export const MAX_ROWS = 200;
+
+/** How long the "last activity" line may be. */
+const LAST_ACTIVITY_CHARS = 120;
+
+/** The person whose inbox it is. */
+export type InboxViewer = { id: string; githubId: string; login: string };
+
+/** Each of the viewer's participant rows comes with its chat, the chat's people and its active jobs. */
+const WITH_CHAT = {
+  chat: {
+    include: {
+      repo: true,
+      participants: { orderBy: { createdAt: 'asc' } },
+      jobs: { where: { status: { in: ['queued', 'running'] } }, select: { participant: { select: { githubId: true } } } },
+    },
+  },
+} satisfies Prisma.ParticipantInclude;
+
+type Mine = Prisma.ParticipantGetPayload<{ include: typeof WITH_CHAT }>;
+type Chat = Mine['chat'];
+
+/**
+ * Your inbox (spec §16): one row per chat and role you have in it, open chats and those closed in the last
+ * 14 days, newest first. Every fact for every row is read with a fixed number of queries, however many
+ * chats there are (docs/why/n-plus-one-queries.md).
+ */
+export async function loadInboxRows(user: InboxViewer, clis: LiveClis, now = new Date()): Promise<InboxRow[]> {
+  const closedSince = new Date(now.getTime() - CLOSED_KEEP_MS);
+  const mine = await prisma.participant.findMany({
+    where: { githubId: user.githubId, chat: { OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] } },
+    include: WITH_CHAT,
+    orderBy: [{ chat: { updatedAt: 'desc' } }, { role: 'asc' }],
+    take: MAX_ROWS,
+  });
+  return buildRows(user, mine, clis, now);
+}
+
+/** The rows one chat has in one person's inbox (one per role), for live updates (Task 9's `inbox.upsert`). */
+export async function loadInboxRow(chatId: string, userId: string, clis: LiveClis, now = new Date()): Promise<InboxRow[]> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return [];
+  const mine = await prisma.participant.findMany({ where: { chatId, githubId: user.githubId }, include: WITH_CHAT, orderBy: { role: 'asc' } });
+  return buildRows(user, mine, clis, now);
+}
+
+async function buildRows(user: InboxViewer, mine: Mine[], clis: LiveClis, now: Date): Promise<InboxRow[]> {
+  if (mine.length === 0) return [];
+  const chats = [...new Map(mine.map((p) => [p.chat.id, p.chat])).values()];
+  const others = mine.map((p) => otherSide(p, user.githubId));
+  const [activities, avatars, lastItems, unread] = await Promise.all([
+    loadActivities(chats.map((c) => c.id), clis, now),
+    avatarsOf(others.flatMap((o) => (o ? [o.githubId] : []))),
+    lastItemsOf(chats),
+    unreadCounts(user, chats),
+  ]);
+
+  return mine.map((p, i): InboxRow => {
+    const chat = p.chat;
+    const role = p.role as Role;
+    const other = others[i];
+    const status = inboxStatus({
+      phase: chat.phase as Phase,
+      merged: chat.merged,
+      activity: activities.get(chat.id) ?? { kind: 'none' },
+      attention: p.attention as Attention,
+      role,
+      you: user.login,
+    });
+    return {
+      chatId: chat.id,
+      repo: chat.repo.fullName,
+      number: chat.number,
+      title: chat.title,
+      url: chat.url,
+      role,
+      other: other
+        ? { login: other.login, avatarUrl: avatars.get(other.githubId) ?? githubAvatar(other.githubId), agentActive: chat.jobs.some((j) => j.participant.githubId === other.githubId) }
+        : null,
+      status,
+      round: chat.round,
+      maxRounds: rulesFromJson(chat.repo.rulesJson).max_rounds,
+      lastActivity: oneLine(lastItems.get(chat.id) ?? ''),
+      updatedAt: chat.updatedAt.toISOString(),
+      unread: unread.get(chat.id) ?? 0,
+      needsYou: needsYou(status),
+    };
+  });
+}
+
+/** Who a row shows: for your PR, the first requested reviewer (else the first reviewer); for a review, the author. */
+function otherSide(p: Mine, yourGithubId: string): { githubId: string; login: string } | null {
+  const others = p.chat.participants.filter((q) => q.githubId !== yourGithubId);
+  if (p.role === 'author') return others.find((q) => q.role === 'reviewer' && q.requested) ?? others.find((q) => q.role === 'reviewer') ?? null;
+  return others.find((q) => q.role === 'author') ?? null;
+}
+
+/** The tab badge counts these (handoff "State management"). A ready chat is only ever a reviewer's `ready`. */
+function needsYou(status: InboxStatus): boolean {
+  return status.kind === 'needs_you' || status.kind === 'escalated' || status.kind === 'ready';
+}
+
+/** Profile pictures of the people who are on Nitpilot, by GitHub id. */
+async function avatarsOf(githubIds: string[]): Promise<Map<string, string>> {
+  if (githubIds.length === 0) return new Map();
+  const users = await prisma.user.findMany({ where: { githubId: { in: [...new Set(githubIds)] } }, select: { githubId: true, avatarUrl: true } });
+  return new Map(users.flatMap((u) => (u.avatarUrl ? [[u.githubId, u.avatarUrl] as const] : [])));
+}
+
+/** GitHub's public profile picture for anyone, on Nitpilot or not. */
+function githubAvatar(githubId: string): string {
+  return `https://avatars.githubusercontent.com/u/${githubId}`;
+}
+
+/** The body of each chat's newest timeline item: the one whose seq is the chat's `lastSeq`. */
+async function lastItemsOf(chats: Chat[]): Promise<Map<string, string>> {
+  const newest = chats.filter((c) => c.lastSeq > 0).map((c) => ({ chatId: c.id, seq: c.lastSeq }));
+  if (newest.length === 0) return new Map();
+  const items = await prisma.message.findMany({ where: { OR: newest }, select: { chatId: true, body: true } });
+  return new Map(items.map((m) => [m.chatId, m.body]));
+}
+
+/**
+ * How many timeline items in each chat someone else wrote after the last one `user` read (spec §8 `ChatRead`).
+ * System items have no author and count. No `ChatRead` row means nothing was read yet.
+ */
+export async function unreadCounts(user: InboxViewer, chats: Pick<Chat, 'id' | 'lastSeq'>[]): Promise<Map<string, number>> {
+  if (chats.length === 0) return new Map();
+  const reads = await prisma.chatRead.findMany({ where: { userId: user.id, chatId: { in: chats.map((c) => c.id) } } });
+  const lastRead = (chatId: string) => reads.find((r) => r.chatId === chatId)?.lastReadSeq ?? 0;
+  const behind = chats.filter((c) => c.lastSeq > lastRead(c.id));
+  if (behind.length === 0) return new Map();
+  const counts = await prisma.message.groupBy({
+    by: ['chatId'],
+    where: {
+      AND: [
+        { OR: behind.map((c) => ({ chatId: c.id, seq: { gt: lastRead(c.id) } })) },
+        { OR: [{ authorGithubId: null }, { authorGithubId: { not: user.githubId } }] },
+      ],
+    },
+    _count: { _all: true },
+  });
+  return new Map(counts.map((c) => [c.chatId, c._count._all]));
+}
+
+/** One line of at most 120 characters, with … when it was cut. */
+function oneLine(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > LAST_ACTIVITY_CHARS ? `${flat.slice(0, LAST_ACTIVITY_CHARS - 1)}…` : flat;
+}
+```
+
+- [ ] **Step 7: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/chats/inbox.db.test.ts`
+Expected: PASS, 9 tests.
+
+- [ ] **Step 8: Write the failing route tests**
+
+Create `apps/server/src/http/routes/inbox.db.test.ts`:
+
+```ts
+import { InboxResponse } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeChat, makeMessage, makeParticipant, makeRepo, makeUser } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+import { prisma } from '../../lib/prisma';
+
+const ORIGIN = 'http://localhost:8787'; // PUBLIC_URL in test/test-env.ts
+
+/** maya's PR with leo reviewing, and six items in its timeline, all written by leo. */
+async function scene() {
+  const maya = await makeUser({ login: 'maya' });
+  const leo = await makeUser({ login: 'leo' });
+  const chat = await makeChat((await makeRepo()).id, { authorGithubId: maya.githubId });
+  await makeParticipant(chat.id, maya, 'author');
+  await makeParticipant(chat.id, leo, 'reviewer', { requested: true });
+  for (let i = 0; i < 6; i++) await makeMessage(chat.id, leo);
+  const app = testApp();
+  const cookie = await sessionCookieFor(maya.id);
+  const inbox = async () => InboxResponse.parse(await (await app.request('/api/inbox', { headers: { cookie } })).json());
+  const read = (seq: unknown, headers: Record<string, string> = { origin: ORIGIN }, chatId = chat.id) =>
+    app.request(`/api/chats/${chatId}/read`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', ...headers }, body: JSON.stringify({ seq }) });
+  return { maya, leo, chat, app, cookie, inbox, read };
+}
+
+describe('GET /api/inbox', () => {
+  it('lists the signed-in person’s chats', async () => {
+    const { chat, inbox } = await scene();
+    const { rows } = await inbox();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ chatId: chat.id, role: 'author', unread: 6 });
+  });
+
+  it('is a 401 for a browser that is not signed in', async () => {
+    expect((await testApp().request('/api/inbox')).status).toBe(401);
+  });
+});
+
+describe('POST /api/chats/:id/read', () => {
+  it('moves the read cursor, so only later items count as unread', async () => {
+    const { read, inbox } = await scene();
+    expect((await read(5)).status).toBe(204);
+    expect((await inbox()).rows[0]!.unread).toBe(1);
+  });
+
+  it('never moves the cursor back', async () => {
+    const { read, inbox } = await scene();
+    await read(5);
+    expect((await read(2)).status).toBe(204);
+    expect((await inbox()).rows[0]!.unread).toBe(1);
+  });
+
+  it('stops at the newest item, so items that arrive later are unread', async () => {
+    const { leo, chat, read, inbox } = await scene();
+    await read(999);
+    await makeMessage(chat.id, leo);
+    expect((await inbox()).rows[0]!.unread).toBe(1);
+  });
+
+  it("is a 404 for a chat you're not part of, or one that doesn't exist", async () => {
+    const { read } = await scene();
+    const outsider = await scene();
+    expect((await read(1, { origin: ORIGIN }, outsider.chat.id)).status).toBe(404);
+    expect((await read(1, { origin: ORIGIN }, 'no-such-chat')).status).toBe(404);
+  });
+
+  it('is a 403 from another site (the Origin check), and a 400 for a bad seq', async () => {
+    const { read } = await scene();
+    expect((await read(1, { origin: 'https://evil.example' })).status).toBe(403);
+    expect((await read(-1)).status).toBe(400);
+  });
+
+  it('stores one cursor per person and chat, however many times it is called', async () => {
+    const { maya, chat, read } = await scene();
+    await Promise.all([read(3), read(4), read(2)]);
+    const rows = await prisma.chatRead.findMany({ where: { userId: maya.id, chatId: chat.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.lastReadSeq).toBe(4);
+  });
+});
+```
+
+In `apps/server/src/http/routes/me.db.test.ts`, the first test's expected body gains `agentOnline: false` (`…, githubAuth: 'needs_reauth', agentOnline: false });`), and a test follows it:
+
+```ts
+
+  it('says whether any of your CLIs is connected', async () => {
+    const user = await makeUser({ login: 'maya-online' });
+    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ repos: new Set<string>() }] : []) };
+    const res = await testApp({ clis }).request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(await res.json()).toMatchObject({ agentOnline: true });
+  });
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/inbox.db.test.ts src/http/routes/me.db.test.ts`
+Expected: FAIL: everything new except the 404 test, which passes already because the route doesn't exist yet (the app's JSON 404 answers).
+
+- [ ] **Step 9: The routes**
+
+Create `apps/server/src/http/routes/inbox.ts`:
+
+```ts
+import { MarkReadRequest, type InboxResponse } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import type { LiveClis } from '../../chats/activity';
+import { loadInboxRows } from '../../chats/inbox';
+import { isUniqueViolation, prisma } from '../../lib/prisma';
+import { HttpError } from '../errors';
+
+/** `GET /api/inbox` and `POST /api/chats/:id/read` (spec §10 "REST endpoints in Plan 2"). */
+export function inboxRoutes(deps: { clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  app.get('/api/inbox', requireUser, async (c) => {
+    const body: InboxResponse = { rows: await loadInboxRows(c.get('user'), deps.clis) };
+    return c.json(body);
+  });
+
+  // You've read the chat up to `seq`. Only someone in the chat has a cursor; for anyone else the chat
+  // doesn't exist, like everywhere else (spec §16).
+  app.post('/api/chats/:id/read', requireUser, requireSameOrigin, async (c) => {
+    const { seq } = MarkReadRequest.parse(await c.req.json());
+    const user = c.get('user');
+    const chat = await prisma.prChat.findFirst({ where: { id: c.req.param('id'), participants: { some: { githubId: user.githubId } } } });
+    if (!chat) throw new HttpError('not_found', 'No such chat.');
+    // Never past the newest item: items that arrive later must count as unread.
+    const upTo = Math.min(seq, chat.lastSeq);
+    const key = { userId: user.id, chatId: chat.id };
+    // Two tabs can mark the same chat at the same moment. Both may find no row and both create one; the
+    // unique (userId, chatId) lets only one through, and the other carries on. Then the cursor only moves forward.
+    try {
+      await prisma.chatRead.create({ data: { ...key, lastReadSeq: upTo } });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
+    await prisma.chatRead.updateMany({ where: { ...key, lastReadSeq: { lt: upTo } }, data: { lastReadSeq: upTo } });
+    return c.body(null, 204);
+  });
+
+  return app;
+}
+```
+
+Why not `prisma.chatRead.upsert`: for this upsert Prisma reads first and then inserts, so two tabs marking the same chat at the same moment can both find no row and both insert; the second gets a unique-constraint error and the request a 500. The "stores one cursor …" test caught exactly that when the database tests ran in parallel.
+
+In `apps/server/src/http/routes/me.ts`: import `type LiveClis` from `'../../chats/activity'`, take the CLIs, and answer `agentOnline`:
+
+```ts
+/**
+ * `GET /api/me` (spec §10): who you are, whether your GitHub sign-in still works, and whether one of your CLIs
+ * is connected. For the web app and the CLI alike.
+ */
+export function meRoutes(deps: { clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+```
+
+```ts
+      githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth',
+      agentOnline: deps.clis.connectionsFor(user.id).length > 0,
+    };
+```
+
+In `apps/server/src/http/app.ts`: `import { inboxRoutes } from './routes/inbox';`, and replace `app.route('/', meRoutes());` with:
+
+```ts
+  app.route('/', meRoutes(deps));
+  app.route('/', inboxRoutes(deps));
+```
+
+- [ ] **Step 10: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/inbox.db.test.ts src/http/routes/me.db.test.ts`
+Expected: PASS, 8 and 4 tests. Then run `npm run test:db -w apps/server` twice: the concurrent-cursor test must pass under the full parallel load too.
+
+- [ ] **Step 11: Record the decisions in the spec**
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10, after the "Chat writes:" list's last item (`` `POST /api/chats/:id/read`. ``), add: "Marking a chat read only moves the person's own cursor and changes nothing anyone else sees, so it needs the Origin check and the person being a participant, not a GitHub access check; for anyone else the chat is a 404."
+
+In §16, the **Inbox** bullet gains: "The server works the status out for the person reading it: a finished PR first, then what that person has to do (an escalation is the red Needs you), then Ready (a reviewer's) or Their turn (the author waiting for approval), then a waiting or working agent, then whose turn it is; with nothing pending the row shows no pill."
+
+- [ ] **Step 12: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
+Expected: protocol 45, CLI 293 passed + 14 skipped, server 655, web 28; end to end 5; typecheck and lint clean.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add apps/server/prisma packages/protocol/src/web-api.ts packages/protocol/src/web-api.test.ts apps/server/src/chats/inbox.ts apps/server/src/chats/inbox.db.test.ts apps/server/src/http/routes/inbox.ts apps/server/src/http/routes/inbox.db.test.ts apps/server/src/http/routes/me.ts apps/server/src/http/routes/me.db.test.ts apps/server/src/http/app.ts apps/server/test/db.ts apps/web/src/routes/Home/Home.test.tsx docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): GET /api/inbox with unread counts, and marking a chat read
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 6: The inbox screen
 
 **Files:**
-- Create: `apps/web/src/routes/Shell/…`, `apps/web/src/routes/Inbox/{Inbox.tsx,InboxHeader.tsx,InboxRow.tsx,InboxFilter.tsx,InboxTabs.tsx,EmptyState.tsx,*.module.css,*.test.tsx}`, `apps/web/src/components/{StatusPill,Avatar,AgentBadge,Kbd,Popover,Banner}/…`, `apps/web/src/lib/inbox.ts` and `inbox.test.ts`, `apps/web/src/lib/keys.ts` and `keys.test.ts`, `apps/web/src/api/inbox.ts`.
-- Modify: `apps/web/src/app.tsx` (routes: `/` = Shell with the inbox; `/c/:owner/:repo/:number` placeholder for Task 10), `apps/web/e2e/` (an inbox smoke).
+- Create: `apps/web/src/lib/{inbox,time,keys,viewport}.ts` (and `inbox.test.ts`, `time.test.ts`, `keys.test.tsx`), `apps/web/src/api/inbox.ts`, `apps/web/src/test/render.tsx`, `apps/web/src/components/{StatusPill,Avatar,AgentBadge,Kbd,Ping}/…` (`StatusPill.test.tsx`), `apps/web/src/routes/Inbox/{Inbox,InboxHeader,InboxBanners,InboxFilter,InboxTabs,InboxRow,EmptyState}.tsx` with their `.module.css` and `Inbox.test.tsx`, `apps/web/src/routes/Shell/{Shell,Pane}.tsx` with their `.module.css` and `Shell.test.tsx`, `apps/web/src/routes/Chat/ChatPlaceholder.tsx`, `apps/web/src/routes/Settings/SettingsPlaceholder.tsx`, `apps/web/e2e/inbox.spec.ts`.
+- Modify: `apps/web/src/app.tsx` (`AppRoutes`: Home is the layout route), `apps/web/src/routes/Home/{Home.tsx,Home.module.css,Home.test.tsx}` (signed in = the Shell; Sign out moves to the Settings placeholder), `apps/web/src/routes/Landing/{Landing.tsx,Landing.module.css}` (the sample rows use `StatusPill`: Task 3's deferred minor), `apps/web/e2e/{control.ts,landing.spec.ts}`, `apps/server/test/e2e/web-server.ts` (control `POST /pr`).
 
 **Interfaces:**
-- Consumes: `InboxRow`, `InboxStatus`, `WebMe` (protocol), `useMe`, `api`.
-- Produces: `useInbox()`; `sortRows(rows)` ("Needs you" first, then by `updatedAt` desc); `filterRows(rows, { tab: 'review' | 'mine'; query: string; repos: Set<string>; statuses: Set<StatusFilter> })`; `tabCounts(rows) → { review: number; mine: number }` (needsYou only); `<StatusPill status={InboxStatus} viewerLogin={string} />`; `useInboxKeys({ rows, cursor, setCursor, open, focusSearch })`. `<Shell>` renders the 360 px sidebar + `<Outlet>` at ≥760 px, and one pane on a phone (the inbox, or the chat when a chat route is open).
+- Consumes: `InboxRow`, `InboxStatus`, `InboxResponse`, `WebMe` (protocol, Task 5), `useMe`, `api`, `makeQueryClient` (W1), `Wordmark`, `ThemeToggle`, `ErrorState` (W1).
+- Produces: `useInbox()` (query key `['inbox']`, data = rows). `Tab = 'review' | 'mine'`, `STATUS_FILTERS`, `StatusFilter`, `statusFilterOf(status)`, `sortRows(rows)` (needs you first, then `updatedAt` desc), `filterRows(rows, { tab, query, repos, statuses })`, `tabCounts(rows) → { review, mine }`, `defaultTab(rows)`, `chatPath(row) → '/c/<repo>/<number>'` (`lib/inbox.ts`). `rowTime(iso, now?)` (`lib/time.ts`). `useInboxKeys({ rows, cursor, setCursor, open, focusSearch, escape })`, `useEscapeBack(active, back)`, `isTyping(target)` (`lib/keys.ts`). `useIsDesktop()` (`lib/viewport.ts`, 760 px). `<StatusPill status viewerLogin />`, `<Avatar login src size={32|38}>{badge}</Avatar>`, `<AgentBadge login />`, `<Kbd boxed? />`, `<Ping />`. `<Shell me />` renders the inbox and an `<Outlet>`; `<Pane>` and `<EmptyPane title body />` (`routes/Shell/Pane.tsx`) are the right-hand pages. `AppRoutes` (`app.tsx`). Test helpers `fakeApi(routes)`, `renderApp(path)`, `fakeViewport(desktop)` (`src/test/render.tsx`). Playwright: `openPr({ number, title, author, reviewer })` (`e2e/control.ts`).
 
-**Behavior** (handoff §1, both themes):
-- Header row: wordmark, theme toggle, the avatar linking to `/settings` (Task 21 adds the page; until then it is a plain link).
-- Banners: "Your agent is offline" with the copyable `nitpilot start` chip (Copy → "Copied" for 1.6 s) when `me.agentOnline` is false (Task 5); the amber "GitHub sign-in expired" strip with **Reconnect** (`/auth/github/login?next=<here>`) when `me.githubAuth === 'needs_reauth'`.
-- Search (34 px, `/` hint on desktop), Filter (popover: repos from the rows, statuses Needs you / Agent working / Waiting / Their turn / Ready / Closed; "Filter · N" with an accent border when active).
-- Tabs "To review" / "Mine" with the needs-you count badge (hidden at 0, `aria-label` "2 need you").
-- Rows: 38 px avatar with the agent badge when `other.agentActive`; mono `repo #n` and the relative time; the title (600 when unread) with the unread dot; the pill, last activity and mono `2/3`. Merged/Closed rows: muted, Merged with line-through, Closed without.
-- Empty states: "All quiet." / "Nitpilot will ping you when you're needed."; search: "No matches" / "No pull requests match "…"."
-- Keys: j/k and ↓/↑ move the cursor, Enter opens, `/` focuses search, Esc closes the filter (and on a phone goes back to the inbox); all ignored while typing in an input. Footer hint on desktop.
-- Accessibility: tabs `role=tab` + `aria-selected`, rows `role=option` in a `role=listbox`, every pill a glyph plus a word.
+- [ ] **Step 1: Write the failing tests for the list logic**
 
-**Tests this task must include:**
-- `inbox.test.ts`: `sortRows`, `filterRows` (tab, query on repo/number/title, repo and status filters), `tabCounts` (ready counts only for reviewer rows).
-- `keys.test.ts`: keys move and open; typing "j" in the search box doesn't move the cursor.
-- `StatusPill.test.tsx`: each `kind` renders its glyph and words ("Leo's agent working", "Needs you", "Closed"), escalation uses the red variant.
-- `Inbox.test.tsx`: with a fake API, rows render in sorted order, the badge counts, the offline banner and the expired strip appear from `me`.
-- Playwright: signed in with two seeded chats, the inbox shows both under the right tabs.
-- Browser check: desktop and 375 px, light and dark, screenshots in the report.
+Create `apps/web/src/lib/inbox.test.ts`:
+
+```ts
+import type { InboxRow, InboxStatus } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { chatPath, defaultTab, filterRows, sortRows, statusFilterOf, tabCounts, type InboxFilters } from './inbox';
+
+const status = (kind: InboxStatus['kind'], who: string | null = null): InboxStatus => ({ kind, who, reason: null });
+
+function row(over: Partial<InboxRow> = {}): InboxRow {
+  return {
+    chatId: 'chat-1', repo: 'acme/shop-api', number: 142, title: 'Add cursor pagination to /orders', url: 'https://github.com/acme/shop-api/pull/142',
+    role: 'author', other: { login: 'leo', avatarUrl: null, agentActive: false }, status: status('quiet'),
+    round: 1, maxRounds: 3, lastActivity: '', updatedAt: '2026-10-15T12:00:00.000Z', unread: 0, needsYou: false, ...over,
+  };
+}
+
+const noFilters: InboxFilters = { tab: 'mine', query: '', repos: new Set(), statuses: new Set() };
+
+describe('sortRows', () => {
+  it('puts the rows that need you first, then the newest first', () => {
+    const rows = [
+      row({ chatId: 'old', updatedAt: '2026-10-15T09:00:00.000Z' }),
+      row({ chatId: 'needs-old', needsYou: true, updatedAt: '2026-10-14T09:00:00.000Z' }),
+      row({ chatId: 'new', updatedAt: '2026-10-15T11:00:00.000Z' }),
+      row({ chatId: 'needs-new', needsYou: true, updatedAt: '2026-10-15T10:00:00.000Z' }),
+    ];
+    expect(sortRows(rows).map((r) => r.chatId)).toEqual(['needs-new', 'needs-old', 'new', 'old']);
+  });
+});
+
+describe('filterRows', () => {
+  const rows = [
+    row({ chatId: 'mine-142' }),
+    row({ chatId: 'review-139', role: 'reviewer', number: 139, title: 'Fix race in session refresh', other: { login: 'sam', avatarUrl: null, agentActive: false } }),
+    row({ chatId: 'mine-other-repo', repo: 'acme/web', number: 7, title: 'Dark mode', status: status('working', 'leo') }),
+    row({ chatId: 'mine-merged', number: 136, title: 'Remove legacy coupons', status: status('merged') }),
+  ];
+  const ids = (filters: Partial<InboxFilters>) => filterRows(rows, { ...noFilters, ...filters }).map((r) => r.chatId);
+
+  it('keeps the tab’s rows: To review is where you review, Mine is your PRs', () => {
+    expect(ids({ tab: 'review' })).toEqual(['review-139']);
+    expect(ids({ tab: 'mine' })).toEqual(['mine-142', 'mine-other-repo', 'mine-merged']);
+  });
+
+  it('searches the repo, the number, the title and the other person, ignoring case', () => {
+    expect(ids({ query: 'ACME/WEB' })).toEqual(['mine-other-repo']);
+    expect(ids({ query: '#136' })).toEqual(['mine-merged']);
+    expect(ids({ query: 'coupons' })).toEqual(['mine-merged']);
+    expect(ids({ tab: 'review', query: 'sam' })).toEqual(['review-139']);
+    expect(ids({ query: '   ' })).toHaveLength(3);
+  });
+
+  it('keeps only the chosen repos and statuses (Merged counts as Closed)', () => {
+    expect(ids({ repos: new Set(['acme/web']) })).toEqual(['mine-other-repo']);
+    expect(ids({ statuses: new Set(['working']) })).toEqual(['mine-other-repo']);
+    expect(ids({ statuses: new Set(['closed']) })).toEqual(['mine-merged']);
+    expect(ids({ statuses: new Set(['working', 'closed']) })).toEqual(['mine-other-repo', 'mine-merged']);
+  });
+});
+
+describe('statusFilterOf', () => {
+  it('files an escalation under Needs you, Merged under Closed, and a quiet row under nothing', () => {
+    expect(statusFilterOf(status('escalated'))).toBe('needs_you');
+    expect(statusFilterOf(status('merged'))).toBe('closed');
+    expect(statusFilterOf(status('quiet'))).toBeNull();
+    expect(statusFilterOf(status('their_turn'))).toBe('their_turn');
+  });
+});
+
+describe('tabCounts', () => {
+  it('counts the rows that need you, per tab', () => {
+    const rows = [row({ needsYou: true }), row({ role: 'reviewer', needsYou: true }), row({ role: 'reviewer', needsYou: true }), row({ role: 'reviewer' })];
+    expect(tabCounts(rows)).toEqual({ review: 2, mine: 1 });
+  });
+});
+
+describe('defaultTab', () => {
+  it('opens the tab that needs you, else To review if it has anything, else Mine', () => {
+    expect(defaultTab([row({ needsYou: true }), row({ role: 'reviewer' })])).toBe('mine');
+    expect(defaultTab([row({ needsYou: true }), row({ role: 'reviewer', needsYou: true })])).toBe('review');
+    expect(defaultTab([row(), row({ role: 'reviewer' })])).toBe('review');
+    expect(defaultTab([row()])).toBe('mine');
+    expect(defaultTab([])).toBe('review');
+  });
+});
+
+describe('chatPath', () => {
+  it("is the chat's address in the app", () => {
+    expect(chatPath(row())).toBe('/c/acme/shop-api/142');
+  });
+});
+```
+
+Create `apps/web/src/lib/time.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { rowTime } from './time';
+
+// Local times, so the test reads the same in every time zone.
+const now = new Date(2026, 9, 15, 18, 30); // Thursday 15 October 2026, 18:30
+const at = (day: number, hour: number, minute: number, second = 0) => new Date(2026, 9, day, hour, minute, second).toISOString();
+
+describe('rowTime (the time on an inbox row)', () => {
+  it('says "now" for the last minute', () => {
+    expect(rowTime(at(15, 18, 29, 30), now)).toBe('now');
+  });
+
+  it('shows the clock time earlier today', () => {
+    expect(rowTime(at(15, 9, 5), now)).toBe('09:05');
+    expect(rowTime(at(15, 16, 40), now)).toBe('16:40');
+  });
+
+  it('says "Yesterday", then the weekday for the last week, then the date', () => {
+    expect(rowTime(at(14, 23, 59), now)).toBe('Yesterday');
+    expect(rowTime(at(12, 10, 0), now)).toBe('Mon');
+    expect(rowTime(at(3, 10, 0), now)).toBe('Oct 3');
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/lib`
+Expected: FAIL, `Failed to resolve import "./inbox"` and `"./time"`.
+
+- [ ] **Step 3: Sort, filter, count, and say when**
+
+Create `apps/web/src/lib/inbox.ts`:
+
+```ts
+import type { InboxRow, InboxStatus } from '@nitpilot/protocol';
+
+/** The inbox tabs (spec §16): PRs you review, and your own. */
+export type Tab = 'review' | 'mine';
+
+/** The Filter popover's status choices, in the handoff's order. */
+export const STATUS_FILTERS = [
+  ['needs_you', 'Needs you'],
+  ['working', 'Agent working'],
+  ['waiting', 'Waiting'],
+  ['their_turn', 'Their turn'],
+  ['ready', 'Ready'],
+  ['closed', 'Closed'],
+] as const;
+export type StatusFilter = (typeof STATUS_FILTERS)[number][0];
+
+export type InboxFilters = { tab: Tab; query: string; repos: ReadonlySet<string>; statuses: ReadonlySet<StatusFilter> };
+
+/** Which status filter a row falls under: an escalation is a Needs you, Merged is Closed, a quiet row is none. */
+export function statusFilterOf(status: InboxStatus): StatusFilter | null {
+  switch (status.kind) {
+    case 'escalated':
+      return 'needs_you';
+    case 'merged':
+      return 'closed';
+    case 'quiet':
+      return null;
+    default:
+      return status.kind;
+  }
+}
+
+/** The rows that need you first, then the most recently changed (handoff §1). */
+export function sortRows(rows: readonly InboxRow[]): InboxRow[] {
+  return [...rows].sort((a, b) => Number(b.needsYou) - Number(a.needsYou) || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** The rows of one tab that match the search and the filters. An empty set of repos or statuses means all. */
+export function filterRows(rows: readonly InboxRow[], f: InboxFilters): InboxRow[] {
+  const role = f.tab === 'review' ? 'reviewer' : 'author';
+  const query = f.query.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (row.role !== role) return false;
+    if (f.repos.size > 0 && !f.repos.has(row.repo)) return false;
+    if (f.statuses.size > 0) {
+      const kind = statusFilterOf(row.status);
+      if (kind === null || !f.statuses.has(kind)) return false;
+    }
+    if (query && !`${row.repo} #${row.number} ${row.title} ${row.other?.login ?? ''}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+}
+
+/** Each tab's badge: how many of its rows need you. */
+export function tabCounts(rows: readonly InboxRow[]): Record<Tab, number> {
+  return {
+    review: rows.filter((r) => r.role === 'reviewer' && r.needsYou).length,
+    mine: rows.filter((r) => r.role === 'author' && r.needsYou).length,
+  };
+}
+
+/** The tab the inbox opens on: the one that needs you, else To review when it has anything, else Mine. */
+export function defaultTab(rows: readonly InboxRow[]): Tab {
+  const counts = tabCounts(rows);
+  if (counts.review > 0) return 'review';
+  if (counts.mine > 0) return 'mine';
+  const reviews = rows.some((r) => r.role === 'reviewer');
+  const mine = rows.some((r) => r.role === 'author');
+  return mine && !reviews ? 'mine' : 'review';
+}
+
+/** A chat's address in the app: the same URL as its transcript (spec §10). */
+export function chatPath(row: Pick<InboxRow, 'repo' | 'number'>): string {
+  return `/c/${row.repo}/${row.number}`;
+}
+```
+
+Create `apps/web/src/lib/time.ts`:
+
+```ts
+const DAY_MS = 86_400_000;
+
+/**
+ * When a row last changed, the way the handoff writes it: "now", "16:40" today, "Yesterday", "Mon" within the
+ * last week, then "Oct 3". In the reader's own time zone.
+ */
+export function rowTime(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  if (now.getTime() - at.getTime() < 60_000) return 'now';
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
+  if (days === 0) return `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return at.toLocaleDateString('en-US', { weekday: 'short' });
+  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+```
+
+Run: `npm test -w apps/web -- src/lib`
+Expected: PASS, 11 tests.
+
+- [ ] **Step 4: Write the failing test for the keyboard**
+
+Create `apps/web/src/lib/keys.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useRef, useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { useInboxKeys } from './keys';
+
+const ROWS = [{ chatId: 'a' }, { chatId: 'b' }, { chatId: 'c' }];
+
+/** A search box and the cursor, driven by the inbox keys. */
+function Harness({ open = vi.fn(), escape = vi.fn() }: { open?: (id: string) => void; escape?: () => void }) {
+  const [cursor, setCursor] = useState<string | null>(null);
+  const search = useRef<HTMLInputElement>(null);
+  useInboxKeys({ rows: ROWS, cursor, setCursor, open, focusSearch: () => search.current?.focus(), escape });
+  return (
+    <>
+      <input ref={search} aria-label="Search pull requests" />
+      <output aria-label="cursor">{cursor ?? 'none'}</output>
+    </>
+  );
+}
+
+const cursor = () => screen.getByLabelText('cursor').textContent;
+
+describe('useInboxKeys (handoff "Keyboard")', () => {
+  it('moves the cursor with j/k and the arrow keys, and stops at the ends', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('a');
+    await userEvent.keyboard('j{ArrowDown}j');
+    expect(cursor()).toBe('c');
+    await userEvent.keyboard('k{ArrowUp}k');
+    expect(cursor()).toBe('a');
+  });
+
+  it('opens the row under the cursor with Enter, and nothing without a cursor', async () => {
+    const open = vi.fn();
+    render(<Harness open={open} />);
+    await userEvent.keyboard('{Enter}');
+    expect(open).not.toHaveBeenCalled();
+    await userEvent.keyboard('jj{Enter}');
+    expect(open).toHaveBeenCalledWith('b');
+  });
+
+  it('focuses the search box with /, and ignores the keys while you type in it', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('/');
+    expect(screen.getByLabelText('Search pull requests')).toHaveFocus();
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('none');
+    expect(screen.getByLabelText('Search pull requests')).toHaveValue('j');
+  });
+
+  it('leaves the search box on Esc, and calls escape when not typing', async () => {
+    const escape = vi.fn();
+    render(<Harness escape={escape} />);
+    await userEvent.keyboard('/');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByLabelText('Search pull requests')).not.toHaveFocus();
+    expect(escape).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(escape).toHaveBeenCalledOnce();
+  });
+
+  it('leaves shortcuts with a modifier (⌘J, Ctrl+K) to the browser', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('{Meta>}j{/Meta}{Control>}k{/Control}');
+    expect(cursor()).toBe('none');
+  });
+});
+```
+
+Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
+Expected: FAIL, `Failed to resolve import "./keys"`.
+
+- [ ] **Step 5: The keyboard**
+
+Create `apps/web/src/lib/keys.ts`:
+
+```ts
+import { useEffect, useEffectEvent } from 'react';
+
+/** True while the person is typing somewhere: then the letters are theirs, not shortcuts. */
+export function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target.isContentEditable;
+}
+
+/** A focused button or link handles Enter itself. */
+function isButton(target: EventTarget | null): boolean {
+  return target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement;
+}
+
+type InboxKeys = {
+  /** The rows on screen, in order. */
+  rows: readonly { chatId: string }[];
+  cursor: string | null;
+  setCursor(chatId: string | null): void;
+  open(chatId: string): void;
+  focusSearch(): void;
+  /** Esc outside a text field: closes the filter, and on a phone goes back to the inbox. */
+  escape(): void;
+};
+
+/**
+ * The inbox's keyboard (handoff "Keyboard"): j/k or ↓/↑ move the cursor, Enter opens its row, / jumps to the
+ * search box, Esc leaves it. Ignored while typing, and when ⌘, Ctrl or Alt is held (those are the browser's).
+ */
+export function useInboxKeys(keys: InboxKeys): void {
+  // An effect event always sees the latest rows and cursor, so the listener is added once, not on every render.
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (isTyping(e.target)) {
+      if (e.key === 'Escape' && e.target instanceof HTMLElement) e.target.blur();
+      return;
+    }
+    const at = keys.cursor === null ? -1 : keys.rows.findIndex((r) => r.chatId === keys.cursor);
+    const last = keys.rows.length - 1;
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = keys.rows[Math.min(last, at + 1)];
+      if (next) keys.setCursor(next.chatId);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = keys.rows[Math.max(0, at - 1)];
+      if (next) keys.setCursor(next.chatId);
+    } else if (e.key === 'Enter' && at >= 0 && !isButton(e.target)) {
+      // The cursor's row has focus, so Enter usually reaches it as a button press; this covers the rest.
+      keys.open(keys.rows[at]!.chatId);
+    } else if (e.key === '/') {
+      e.preventDefault();
+      keys.focusSearch();
+    } else if (e.key === 'Escape') {
+      keys.escape();
+    }
+  });
+
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKey(e);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
+}
+
+/** Esc goes back to the inbox. For the phone, where an open chat or page covers the inbox. */
+export function useEscapeBack(active: boolean, back: () => void): void {
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (active && e.key === 'Escape' && !isTyping(e.target)) back();
+  });
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKey(e);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
+}
+```
+
+Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
+Expected: PASS, 5 tests.
+
+- [ ] **Step 6: Write the failing test for the pill**
+
+Create `apps/web/src/components/StatusPill/StatusPill.test.tsx`:
+
+```tsx
+import type { InboxStatus } from '@nitpilot/protocol';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { StatusPill } from './StatusPill';
+
+const pill = (kind: InboxStatus['kind'], who: string | null = null) => render(<StatusPill status={{ kind, who, reason: null }} viewerLogin="maya" />);
+
+describe('StatusPill (handoff §1 "Status pills")', () => {
+  it.each([
+    ['working', 'leo', "leo's agent working"],
+    ['working', 'maya', 'Your agent working'],
+    ['waiting', 'leo', 'Waiting'],
+    ['their_turn', 'leo', 'Their turn'],
+    ['needs_you', null, 'Needs you'],
+    ['escalated', null, 'Needs you'],
+    ['ready', null, 'Ready'],
+    ['merged', null, 'Merged'],
+    ['closed', null, 'Closed'],
+  ] as const)('%s (%s) reads "%s"', (kind, who, words) => {
+    pill(kind, who);
+    expect(screen.getByText(words)).toBeInTheDocument();
+  });
+
+  it('gives every live status a glyph next to its word, and Merged and Closed none', () => {
+    for (const kind of ['working', 'waiting', 'their_turn', 'needs_you', 'escalated', 'ready'] as const) {
+      const { container, unmount } = pill(kind, 'leo');
+      expect(container.querySelector('[data-glyph]'), kind).not.toBeNull();
+      unmount();
+    }
+    for (const kind of ['merged', 'closed'] as const) {
+      const { container, unmount } = pill(kind);
+      expect(container.querySelector('[data-glyph]'), kind).toBeNull();
+      unmount();
+    }
+  });
+
+  it('is red only for an escalation', () => {
+    const { container, unmount } = pill('escalated');
+    expect(container.firstElementChild).toHaveAttribute('data-tone', 'red');
+    expect(container.querySelector('[data-glyph]')).toHaveAttribute('data-glyph', 'diamond');
+    unmount();
+    expect(pill('needs_you').container.firstElementChild).toHaveAttribute('data-tone', 'accent');
+  });
+
+  it('shows nothing for a quiet chat', () => {
+    expect(pill('quiet').container).toBeEmptyDOMElement();
+  });
+});
+```
+
+Run: `npm test -w apps/web -- src/components/StatusPill`
+Expected: FAIL, `Failed to resolve import "./StatusPill"`.
+
+- [ ] **Step 7: The pill and the small parts of a row**
+
+Create `apps/web/src/components/Ping/Ping.tsx`:
+
+```tsx
+import styles from './Ping.module.css';
+
+/** "An agent is working": a 7 px accent dot with a ring that grows and fades, looping (handoff "Motion"). */
+export function Ping() {
+  return (
+    <span className={styles.ping} aria-hidden="true">
+      <span className={styles.ring} />
+    </span>
+  );
+}
+```
+
+Create `apps/web/src/components/Ping/Ping.module.css`:
+
+```css
+.ping {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+  animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* global.css turns this off for prefers-reduced-motion. */
+@keyframes ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+```
+
+Create `apps/web/src/components/StatusPill/StatusPill.tsx`:
+
+```tsx
+import type { InboxStatus } from '@nitpilot/protocol';
+import { Ping } from '../Ping/Ping';
+import styles from './StatusPill.module.css';
+
+type Tone = 'muted' | 'accent' | 'red' | 'ok' | 'done';
+type Glyph = 'ping' | 'ring' | 'dot' | 'diamond' | 'check' | null;
+
+/** How each status looks (handoff §1 "Status pills"). Every live status is a glyph and a word, never colour alone. */
+const LOOK: Record<Exclude<InboxStatus['kind'], 'quiet'>, { tone: Tone; glyph: Glyph; word: string }> = {
+  working: { tone: 'muted', glyph: 'ping', word: 'Agent working' },
+  waiting: { tone: 'muted', glyph: 'ring', word: 'Waiting' },
+  their_turn: { tone: 'muted', glyph: 'ring', word: 'Their turn' },
+  needs_you: { tone: 'accent', glyph: 'dot', word: 'Needs you' },
+  // Red is for escalations only.
+  escalated: { tone: 'red', glyph: 'diamond', word: 'Needs you' },
+  ready: { tone: 'ok', glyph: 'check', word: 'Ready' },
+  merged: { tone: 'done', glyph: null, word: 'Merged' },
+  closed: { tone: 'done', glyph: null, word: 'Closed' },
+};
+
+/** An inbox row's status. A quiet chat has none. */
+export function StatusPill({ status, viewerLogin }: { status: InboxStatus; viewerLogin: string }) {
+  if (status.kind === 'quiet') return null;
+  const look = LOOK[status.kind];
+  return (
+    <span className={`${styles.pill} ${styles[look.tone]} ${status.kind === 'merged' ? styles.struck : ''}`} data-tone={look.tone}>
+      {look.glyph && <GlyphMark glyph={look.glyph} />}
+      {status.kind === 'working' ? workingWords(status.who, viewerLogin) : look.word}
+    </span>
+  );
+}
+
+/** "leo's agent working", or "Your agent working" when it's yours. */
+function workingWords(who: string | null, viewerLogin: string): string {
+  if (who === null) return 'Agent working';
+  return who === viewerLogin ? 'Your agent working' : `${who}'s agent working`;
+}
+
+function GlyphMark({ glyph }: { glyph: Exclude<Glyph, null> }) {
+  if (glyph === 'ping') {
+    return (
+      <span data-glyph="ping" className={styles.glyphBox}>
+        <Ping />
+      </span>
+    );
+  }
+  if (glyph === 'check') {
+    return (
+      <span data-glyph="check" className={styles.check} aria-hidden="true">
+        ✓
+      </span>
+    );
+  }
+  return <span data-glyph={glyph} className={styles[glyph]} aria-hidden="true" />;
+}
+```
+
+Create `apps/web/src/components/StatusPill/StatusPill.module.css`:
+
+```css
+.pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.muted {
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.accent {
+  background: var(--acc-tint);
+  color: var(--acc-text);
+}
+
+.red {
+  background: var(--red-tint);
+  color: var(--red-fg);
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.done {
+  background: transparent;
+  color: var(--fg3);
+}
+
+.struck {
+  text-decoration: line-through;
+}
+
+.glyphBox {
+  display: inline-flex;
+}
+
+.ring {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid currentColor;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+}
+
+.diamond {
+  width: 6px;
+  height: 6px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.check {
+  font-size: 10px;
+  font-weight: 700;
+}
+```
+
+Create `apps/web/src/components/AgentBadge/AgentBadge.tsx`:
+
+```tsx
+import styles from './AgentBadge.module.css';
+
+/** The mark on a person's avatar while their agent works (handoff: a dark rounded square holding a diamond). */
+export function AgentBadge({ login }: { login: string }) {
+  return (
+    <span className={styles.badge} role="img" aria-label={`${login}'s agent is active`}>
+      <span className={styles.diamond} />
+    </span>
+  );
+}
+```
+
+Create `apps/web/src/components/AgentBadge/AgentBadge.module.css`:
+
+```css
+.badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--fg1);
+  box-shadow: 0 0 0 2px var(--side);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diamond {
+  width: 5px;
+  height: 5px;
+  background: var(--side);
+  transform: rotate(45deg);
+}
+```
+
+Create `apps/web/src/components/Avatar/Avatar.tsx`:
+
+```tsx
+import { useState, type ReactNode } from 'react';
+import styles from './Avatar.module.css';
+
+/**
+ * A person's GitHub picture in a circle, or their initials when there is none or it doesn't load.
+ * `children` sits on top, bottom-right (the AgentBadge).
+ */
+export function Avatar({ login, src, size, children }: { login: string; src: string | null; size: 32 | 38; children?: ReactNode }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className={styles.avatar} style={{ width: size, height: size }}>
+      {src && !broken ? (
+        <img className={styles.image} src={src} alt={login} width={size} height={size} loading="lazy" onError={() => setBroken(true)} />
+      ) : (
+        <span className={styles.initials} style={{ fontSize: size === 38 ? 13 : 11 }} role="img" aria-label={login}>
+          {initials(login)}
+        </span>
+      )}
+      {children}
+    </span>
+  );
+}
+
+/** "maya" → "MA", "leo-park" → "LP". */
+export function initials(login: string): string {
+  const parts = login.split(/[-_.\s]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0]![0]! + parts[1]![0]! : login.slice(0, 2);
+  return letters.toUpperCase();
+}
+```
+
+Create `apps/web/src/components/Avatar/Avatar.module.css`:
+
+```css
+.avatar {
+  position: relative;
+  flex: none;
+  display: inline-block;
+}
+
+.image,
+.initials {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+
+.image {
+  display: block;
+  object-fit: cover;
+  background: var(--muted);
+}
+
+.initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted);
+  color: var(--fg2);
+  font-weight: 600;
+}
+```
+
+Create `apps/web/src/components/Kbd/Kbd.tsx`:
+
+```tsx
+import type { ReactNode } from 'react';
+import styles from './Kbd.module.css';
+
+/** A key, as in "/ search". `boxed` draws the outline the search box's hint has. */
+export function Kbd({ children, boxed = false }: { children: ReactNode; boxed?: boolean }) {
+  return <kbd className={boxed ? `${styles.kbd} ${styles.boxed}` : styles.kbd}>{children}</kbd>;
+}
+```
+
+Create `apps/web/src/components/Kbd/Kbd.module.css`:
+
+```css
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg3);
+}
+
+.boxed {
+  padding: 0 5px;
+  border: 1px solid var(--b1);
+  border-radius: 4px;
+  line-height: 17px;
+}
+```
+
+Run: `npm test -w apps/web -- src/components/StatusPill`
+Expected: PASS, 12 tests.
+
+- [ ] **Step 8: The data, the viewport, and test helpers for whole screens**
+
+Create `apps/web/src/api/inbox.ts`:
+
+```ts
+import { InboxResponse } from '@nitpilot/protocol';
+import { useQuery } from '@tanstack/react-query';
+import { api } from './client';
+
+/** Your inbox rows, as the server sorted them (newest first). Not live yet: W3 pushes changes into this cache. */
+export function useInbox() {
+  return useQuery({
+    queryKey: ['inbox'],
+    queryFn: async () => (await api.get('/api/inbox', InboxResponse)).rows,
+  });
+}
+```
+
+Create `apps/web/src/lib/viewport.ts`:
+
+```ts
+import { useSyncExternalStore } from 'react';
+
+/** The handoff's breakpoint: the sidebar and the chat side by side from 760 px, one pane below. */
+const DESKTOP = '(min-width: 760px)';
+
+function subscribe(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') return () => {};
+  const query = window.matchMedia(DESKTOP);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+// Without matchMedia (tests, very old browsers), assume a desktop.
+function isDesktop(): boolean {
+  return typeof window.matchMedia !== 'function' || window.matchMedia(DESKTOP).matches;
+}
+
+/** True at 760 px and wider. Follows the window as it's resized. */
+export function useIsDesktop(): boolean {
+  return useSyncExternalStore(subscribe, isDesktop);
+}
+```
+
+Create `apps/web/src/test/render.tsx` (a pretend server answering by method and path, so a screen that asks for `/api/me` and `/api/inbox` in any order gets the right answers):
+
+```tsx
+import { QueryClientProvider } from '@tanstack/react-query';
+import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { vi } from 'vitest';
+import { AppRoutes, makeQueryClient } from '../app';
+
+/** One answer: the status and the JSON body. */
+export type Answer = [status: number, body: unknown];
+
+/**
+ * A pretend Nitpilot server for component tests: answers each request by its method and path ('GET /api/me').
+ * A request it has no answer for gets the server's JSON 404. Returns the fetch mock, to check what was sent.
+ */
+export function fakeApi(routes: Record<string, () => Answer>) {
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const key = `${init?.method ?? 'GET'} ${new URL(String(input), 'http://localhost').pathname}`;
+    const [status, body] = routes[key]?.() ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
+    return new Response(status === 204 ? null : JSON.stringify(body), { status });
+  });
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+/** The app's routes at `path`, with a fresh data cache that doesn't wait between retries. */
+export function renderApp(path = '/') {
+  return render(
+    <QueryClientProvider client={makeQueryClient({ retryDelay: 0 })}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRoutes />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+/** A stand-in for the browser's media queries: a phone (below 760 px) or a desktop, in the light theme. */
+export function fakeViewport(desktop: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('min-width') ? desktop : false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+```
+
+- [ ] **Step 9: Write the failing screen tests**
+
+Create `apps/web/src/routes/Inbox/Inbox.test.tsx`:
+
+```tsx
+import type { InboxRow, WebMe } from '@nitpilot/protocol';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+
+function row(over: Partial<InboxRow>): InboxRow {
+  return {
+    chatId: 'chat', repo: 'acme/shop-api', number: 1, title: 'A PR', url: 'https://github.com/acme/shop-api/pull/1', role: 'reviewer',
+    other: { login: 'sam', avatarUrl: null, agentActive: false }, status: { kind: 'quiet', who: null, reason: null },
+    round: 1, maxRounds: 3, lastActivity: '', updatedAt: '2026-10-15T10:00:00.000Z', unread: 0, needsYou: false, ...over,
+  };
+}
+
+const ROWS: InboxRow[] = [
+  row({ chatId: 'r144', number: 144, title: 'Refactor webhook retries', status: { kind: 'waiting', who: 'maya', reason: 'offline' }, updatedAt: '2026-10-15T18:11:00.000Z' }),
+  row({ chatId: 'r139', number: 139, title: 'Fix race in session refresh', status: { kind: 'escalated', who: null, reason: 'decision' }, needsYou: true, unread: 2, lastActivity: 'P1 needs a human decision', round: 2 }),
+  row({ chatId: 'm147', number: 147, role: 'author', title: 'Bump Prisma to 7.2', other: { login: 'leo', avatarUrl: null, agentActive: true }, status: { kind: 'working', who: 'leo', reason: null } }),
+];
+
+function serve(opts: { me?: Partial<WebMe>; rows?: InboxRow[] } = {}) {
+  return fakeApi({
+    'GET /api/me': (): Answer => [200, { ...me, ...opts.me }],
+    'GET /api/inbox': (): Answer => [200, { rows: opts.rows ?? ROWS }],
+  });
+}
+
+const list = async () => within(await screen.findByRole('listbox', { name: 'Pull requests' }));
+const titles = async () => (await list()).getAllByRole('option').map((o) => within(o).getByTestId('title').textContent);
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Inbox (handoff §1)', () => {
+  it('opens on the tab that needs you, with the rows that need you first', async () => {
+    serve();
+    renderApp('/');
+    expect(await screen.findByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await titles()).toEqual(['Fix race in session refresh', 'Refactor webhook retries']);
+    expect(screen.getByLabelText('1 need you')).toHaveTextContent('1');
+  });
+
+  it("shows each row's repo and number, pill, last activity, round and unread dot", async () => {
+    serve();
+    renderApp('/');
+    const first = (await list()).getAllByRole('option')[0]!;
+    expect(first).toHaveTextContent('acme/shop-api #139');
+    expect(within(first).getByText('Needs you')).toBeInTheDocument();
+    expect(first).toHaveTextContent('P1 needs a human decision');
+    expect(within(first).getByLabelText('Round 2 of 3')).toHaveTextContent('2/3');
+    expect(within(first).getByLabelText('Unread')).toBeInTheDocument();
+  });
+
+  it('switches to Mine, where the other side’s agent badge shows', async () => {
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('tab', { name: /Mine/ }));
+    expect(await titles()).toEqual(['Bump Prisma to 7.2']);
+    expect(screen.getByRole('img', { name: "leo's agent is active" })).toBeInTheDocument();
+    expect(screen.getByText("leo's agent working")).toBeInTheDocument();
+  });
+
+  it('says your agent is offline, with the command to copy', async () => {
+    serve({ me: { agentOnline: false } });
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn(async () => {}) } });
+    renderApp('/');
+    expect(await screen.findByText('Your agent is offline')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy nitpilot start' }));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('nitpilot start');
+    expect(screen.getByRole('button', { name: 'Copy nitpilot start' })).toHaveTextContent('Copied');
+  });
+
+  it('asks to reconnect GitHub when the sign-in expired, and stays quiet when all is well', async () => {
+    serve({ me: { githubAuth: 'needs_reauth' } });
+    renderApp('/');
+    expect(await screen.findByRole('alert')).toHaveTextContent('GitHub sign-in expired');
+    expect(screen.getByRole('link', { name: 'Reconnect' })).toHaveAttribute('href', '/auth/github/login?next=%2F');
+    expect(screen.queryByText('Your agent is offline')).not.toBeInTheDocument();
+  });
+
+  it('searches, and says when nothing matches', async () => {
+    serve();
+    renderApp('/');
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Search pull requests' }), 'webhook');
+    expect(await titles()).toEqual(['Refactor webhook retries']);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search pull requests' }), 'zzz');
+    expect(screen.getByText('No matches')).toBeInTheDocument();
+    expect(screen.getByText('No pull requests match “webhookzzz”.')).toBeInTheDocument();
+  });
+
+  it('filters by status, and counts the filters on the button', async () => {
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Filter' }));
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Waiting' }));
+    expect(await titles()).toEqual(['Refactor webhook retries']);
+    expect(screen.getByRole('button', { name: 'Filter · 1' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('is all quiet when there is nothing', async () => {
+    serve({ rows: [] });
+    renderApp('/');
+    expect(await screen.findByText('All quiet.')).toBeInTheDocument();
+    expect(screen.getByText("Nitpilot will ping you when you're needed.")).toBeInTheDocument();
+  });
+
+  it('opens a chat by click, and by j and Enter', async () => {
+    serve();
+    renderApp('/');
+    await userEvent.click((await list()).getAllByRole('option')[1]!);
+    expect(await screen.findByRole('heading', { name: 'Refactor webhook retries' })).toBeInTheDocument();
+    expect((await list()).getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('j{Enter}');
+    expect(await screen.findByRole('heading', { name: 'Fix race in session refresh' })).toBeInTheDocument();
+  });
+
+  it('shows the error with a way to try again', async () => {
+    let calls = 0;
+    fakeApi({
+      'GET /api/me': (): Answer => [200, me],
+      'GET /api/inbox': (): Answer => (++calls <= 3 ? [500, { error: { code: 'server_error', message: 'internal server error' } }] : [200, { rows: ROWS }]),
+    });
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await titles()).toHaveLength(2);
+  });
+});
+```
+
+Create `apps/web/src/routes/Shell/Shell.test.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+
+function serve() {
+  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Shell (handoff "App shell and layout")', () => {
+  it('shows the inbox beside the open page on a desktop', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a pull request' })).toBeInTheDocument();
+  });
+
+  it('shows one pane on a phone: the inbox at /, the page elsewhere, and Esc goes back', async () => {
+    fakeViewport(false);
+    serve();
+    renderApp('/c/acme/shop-api/139');
+    expect(await screen.findByRole('heading', { name: 'Pull request #139' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Pull request #139' })).not.toBeInTheDocument();
+  });
+
+  it('keeps Sign out on the Settings page, reached from your avatar', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('link', { name: 'Settings · maya' }));
+    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+});
+```
+
+Replace `apps/web/src/routes/Home/Home.test.tsx` (signed in now means the inbox, and the answers go by path):
+
+```tsx
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeApi, renderApp, type Answer } from '../../test/render';
+
+const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const noRows = (): Answer => [200, { rows: [] }];
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Home', () => {
+  it('tells a screen reader it is loading while /api/me has not answered', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    renderApp('/');
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+  });
+
+  it('shows the landing page to someone who is not signed in', async () => {
+    fakeApi({ 'GET /api/me': (): Answer => [401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }] });
+    renderApp('/');
+    expect(await screen.findByRole('link', { name: /Sign in with GitHub/ })).toBeInTheDocument();
+  });
+
+  it('opens the inbox for someone who is signed in', async () => {
+    fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': noRows });
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+  });
+
+  it('shows the error with a way to try again, instead of a blank page', async () => {
+    let calls = 0;
+    // The first try and the client's two retries (no waiting between them in tests) fail; "Try again" then succeeds.
+    fakeApi({
+      'GET /api/me': (): Answer => (++calls <= 3 ? [500, { error: { code: 'server_error', message: 'internal server error' } }] : [200, me]),
+      'GET /api/inbox': noRows,
+    });
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+  });
+});
+```
+
+Run: `npm test -w apps/web -- src/routes`
+Expected: FAIL: `app.tsx` has no `AppRoutes` yet, and there is no Shell or Inbox.
+
+- [ ] **Step 10: The inbox**
+
+Create `apps/web/src/routes/Inbox/InboxHeader.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { Link } from 'react-router';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import styles from './InboxHeader.module.css';
+
+/** The wordmark, the theme toggle, and your avatar, which leads to Settings. */
+export function InboxHeader({ me }: { me: WebMe }) {
+  return (
+    <header className={styles.header}>
+      <Wordmark />
+      <span className={styles.spacer} />
+      <ThemeToggle />
+      <Link to="/settings" className={styles.me} aria-label={`Settings · ${me.login}`}>
+        <Avatar login={me.login} src={me.avatarUrl} size={32} />
+      </Link>
+    </header>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxHeader.module.css`:
+
+```css
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.me {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  color: inherit;
+  text-decoration: none;
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxBanners.tsx`:
+
+```tsx
+import { BRAND } from '@nitpilot/protocol';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
+import styles from './InboxBanners.module.css';
+
+const START = `${BRAND.cli} start`;
+
+/** None of your CLIs is connected, so your agent can't pick anything up (handoff §1, item 2). */
+export function OfflineBanner() {
+  const [copied, setCopied] = useState(false);
+
+  // "Copied" for 1.6 s, then back to "Copy".
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  function copy() {
+    // The clipboard can be missing or refused (an insecure origin); the command is on screen either way.
+    navigator.clipboard?.writeText(START).catch(() => {});
+    setCopied(true);
+  }
+
+  return (
+    <div className={styles.offline} role="status">
+      <div className={styles.offlineTitle}>
+        <span className={styles.ring} aria-hidden="true" />
+        Your agent is offline
+      </div>
+      <div className={styles.offlineRun}>
+        Run
+        <button type="button" className={styles.chip} onClick={copy} aria-label={`Copy ${START}`}>
+          {START}
+          <span className={styles.copy}>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Your GitHub sign-in expired: Nitpilot can't act as you until you sign in again (handoff §10, `github`). */
+export function ExpiredStrip() {
+  const here = useLocation();
+  const next = encodeURIComponent(here.pathname + here.search);
+  return (
+    <div className={styles.expired} role="alert">
+      <span className={styles.bang} aria-hidden="true">
+        !
+      </span>
+      <span className={styles.expiredText}>GitHub sign-in expired</span>
+      {/* A full page load: the sign-in starts on the server. */}
+      <a className={styles.reconnect} href={`/auth/github/login?next=${next}`}>
+        Reconnect
+      </a>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxBanners.module.css`:
+
+```css
+.offline,
+.expired {
+  flex: none;
+  margin: 2px 12px 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+}
+
+.offline {
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.offlineTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ring {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.offlineRun {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-pill);
+  background: var(--code);
+  color: var(--fg1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy {
+  color: var(--fg3);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+
+.expired {
+  background: var(--warn-tint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bang {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--warn);
+  color: #1a1205;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expiredText {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.reconnect {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxFilter.tsx`:
+
+```tsx
+import { useEffect, useEffectEvent, useRef } from 'react';
+import { STATUS_FILTERS, type StatusFilter } from '../../lib/inbox';
+import styles from './InboxFilter.module.css';
+
+type Props = {
+  open: boolean;
+  setOpen(open: boolean): void;
+  /** Every repo in your inbox. */
+  repos: readonly string[];
+  chosenRepos: ReadonlySet<string>;
+  chosenStatuses: ReadonlySet<StatusFilter>;
+  toggleRepo(repo: string): void;
+  toggleStatus(status: StatusFilter): void;
+};
+
+/** The Filter button and its popover: repos, then statuses (handoff §1, item 4). Esc closes it (useInboxKeys). */
+export function InboxFilter(p: Props) {
+  const box = useRef<HTMLDivElement>(null);
+  const count = p.chosenRepos.size + p.chosenStatuses.size;
+
+  // A press anywhere outside the button and the popover closes it.
+  const close = useEffectEvent(() => p.setOpen(false));
+  useEffect(() => {
+    if (!p.open) return;
+    const onPress = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) close();
+    };
+    document.addEventListener('pointerdown', onPress);
+    return () => document.removeEventListener('pointerdown', onPress);
+  }, [p.open]);
+
+  return (
+    <div className={styles.box} ref={box}>
+      <button type="button" className={count > 0 ? `${styles.button} ${styles.active}` : styles.button} aria-expanded={p.open} aria-haspopup="menu" onClick={() => p.setOpen(!p.open)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d="M4 6h16M7 12h10M10 18h4" />
+        </svg>
+        {count > 0 ? `Filter · ${count}` : 'Filter'}
+      </button>
+      {p.open && (
+        <div className={styles.menu} role="menu" aria-label="Filter pull requests">
+          <div className={styles.group} aria-hidden="true">
+            Repo
+          </div>
+          {p.repos.map((repo) => (
+            <Choice key={repo} label={repo} mono on={p.chosenRepos.has(repo)} toggle={() => p.toggleRepo(repo)} />
+          ))}
+          <div className={styles.divider} />
+          <div className={styles.group} aria-hidden="true">
+            Status
+          </div>
+          {STATUS_FILTERS.map(([status, label]) => (
+            <Choice key={status} label={label} on={p.chosenStatuses.has(status)} toggle={() => p.toggleStatus(status)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Choice({ label, on, toggle, mono = false }: { label: string; on: boolean; toggle(): void; mono?: boolean }) {
+  return (
+    <button type="button" role="menuitemcheckbox" aria-checked={on} className={mono ? `${styles.choice} ${styles.mono}` : styles.choice} onClick={toggle}>
+      <span className={styles.mark} aria-hidden="true">
+        {on ? '✓' : ''}
+      </span>
+      {label}
+    </button>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxFilter.module.css`:
+
+```css
+.box {
+  position: relative;
+  flex: none;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.active {
+  border-color: var(--acc);
+}
+
+.menu {
+  position: absolute;
+  z-index: 5;
+  top: 40px;
+  right: 0;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  padding: 6px 8px 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--b2);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--hover);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.mark {
+  width: 14px;
+  color: var(--acc-text);
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxTabs.tsx`:
+
+```tsx
+import type { Tab } from '../../lib/inbox';
+import styles from './InboxTabs.module.css';
+
+const TABS: [Tab, string][] = [
+  ['review', 'To review'],
+  ['mine', 'Mine'],
+];
+
+/** "To review" and "Mine", each with a badge counting what needs you (hidden at 0). */
+export function InboxTabs({ tab, counts, pick }: { tab: Tab; counts: Record<Tab, number>; pick(tab: Tab): void }) {
+  return (
+    <div className={styles.tabs} role="tablist" aria-label="Inbox tabs">
+      {TABS.map(([id, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={tab === id} className={styles.tab} onClick={() => pick(id)}>
+          {label}
+          {counts[id] > 0 && (
+            <span className={styles.count} aria-label={`${counts[id]} need you`}>
+              {counts[id]}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxTabs.module.css`:
+
+```css
+.tabs {
+  flex: none;
+  display: flex;
+  gap: 18px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--b1);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  margin-bottom: -1px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fg3);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--fg1);
+  border-bottom-color: var(--fg1);
+}
+
+.count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxRow.tsx` (the cursor's row takes the focus, so Enter reaches it as a button press and a screen reader reads the row the cursor is on):
+
+```tsx
+import type { InboxRow } from '@nitpilot/protocol';
+import { useEffect, useRef } from 'react';
+import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { StatusPill } from '../../components/StatusPill/StatusPill';
+import { rowTime } from '../../lib/time';
+import styles from './InboxRow.module.css';
+
+type Props = {
+  row: InboxRow;
+  viewerLogin: string;
+  /** The chat open on the right (desktop). */
+  selected: boolean;
+  /** The keyboard cursor is on this row: it takes the focus, so Enter opens it and a screen reader reads it. */
+  cursor: boolean;
+  onOpen(): void;
+};
+
+/** One pull request in the list (handoff §1, item 6). */
+export function InboxRowItem({ row, viewerLogin, selected, cursor, onOpen }: Props) {
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (cursor) button.current?.focus();
+  }, [cursor]);
+  const finished = row.status.kind === 'merged' || row.status.kind === 'closed';
+  const classes = [styles.row, selected && styles.selected, cursor && styles.cursor, finished && styles.finished].filter(Boolean).join(' ');
+  return (
+    <button ref={button} type="button" role="option" aria-selected={selected} className={classes} onClick={onOpen}>
+      <Avatar login={row.other?.login ?? '?'} src={row.other?.avatarUrl ?? null} size={38}>
+        {row.other?.agentActive && <AgentBadge login={row.other.login} />}
+      </Avatar>
+      <span className={styles.text}>
+        <span className={styles.top}>
+          <span className={styles.ref}>
+            {row.repo} #{row.number}
+          </span>
+          <span className={styles.time}>{rowTime(row.updatedAt)}</span>
+        </span>
+        <span className={styles.middle}>
+          <span className={row.unread > 0 ? `${styles.title} ${styles.unread}` : styles.title} data-testid="title">
+            {row.title}
+          </span>
+          {row.unread > 0 && <span className={styles.dot} role="img" aria-label="Unread" />}
+        </span>
+        <span className={styles.bottom}>
+          <StatusPill status={row.status} viewerLogin={viewerLogin} />
+          <span className={styles.last}>{row.lastActivity}</span>
+          <span className={styles.round} aria-label={`Round ${row.round} of ${row.maxRounds}`}>
+            {row.round}/{row.maxRounds}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/InboxRow.module.css`:
+
+```css
+.row {
+  flex: none;
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.selected,
+.selected:hover {
+  background: var(--sel);
+}
+
+/* The keyboard cursor (j/k), which is also where the focus is: one inset ring, not an outline as well. */
+.cursor,
+.row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acc);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.top,
+.middle,
+.bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ref,
+.title,
+.last {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.time {
+  flex: none;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg1);
+}
+
+.unread {
+  font-weight: 600;
+}
+
+.finished .title {
+  color: var(--fg3);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+}
+
+.last {
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.round {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg3);
+}
+```
+
+Create `apps/web/src/routes/Inbox/EmptyState.tsx`:
+
+```tsx
+import styles from './EmptyState.module.css';
+
+/** The list has nothing to show: a calm inbox, or a search or filter that matched nothing (handoff §1, item 7). */
+export function EmptyState({ query, filtering }: { query: string; filtering: boolean }) {
+  const [title, body] = query
+    ? ['No matches', `No pull requests match “${query}”.`]
+    : filtering
+      ? ['No matches', 'Nothing in this tab matches the filter.']
+      : ['All quiet.', "Nitpilot will ping you when you're needed."];
+  return (
+    <div className={styles.empty}>
+      <span className={styles.diamond} aria-hidden="true" />
+      <div className={styles.title}>{title}</div>
+      <div className={styles.body}>{body}</div>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Inbox/EmptyState.module.css`:
+
+```css
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.diamond {
+  width: 10px;
+  height: 10px;
+  margin-bottom: 6px;
+  background: var(--b1);
+  transform: rotate(45deg);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.body {
+  max-width: 240px;
+  font-size: 13px;
+  color: var(--fg3);
+  text-wrap: pretty;
+}
+```
+
+Create `apps/web/src/routes/Inbox/Inbox.tsx`:
+
+```tsx
+import type { InboxRow, WebMe } from '@nitpilot/protocol';
+import { useRef, useState } from 'react';
+import { useMatch, useNavigate } from 'react-router';
+import { useInbox } from '../../api/inbox';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Kbd } from '../../components/Kbd/Kbd';
+import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type StatusFilter, type Tab } from '../../lib/inbox';
+import { useInboxKeys } from '../../lib/keys';
+import { EmptyState } from './EmptyState';
+import styles from './Inbox.module.css';
+import { ExpiredStrip, OfflineBanner } from './InboxBanners';
+import { InboxFilter } from './InboxFilter';
+import { InboxHeader } from './InboxHeader';
+import { InboxRowItem } from './InboxRow';
+import { InboxTabs } from './InboxTabs';
+
+/** The inbox (spec §16, handoff §1): the sidebar on a desktop, the whole screen on a phone. */
+export function Inbox({ me }: { me: WebMe }) {
+  const inbox = useInbox();
+  const navigate = useNavigate();
+  const open = useMatch('/c/:owner/:repo/:number')?.params;
+  const search = useRef<HTMLInputElement>(null);
+
+  // Until you pick a tab, the inbox shows the one that needs you.
+  const [chosenTab, setChosenTab] = useState<Tab | null>(null);
+  const [query, setQuery] = useState('');
+  const [repos, setRepos] = useState<ReadonlySet<string>>(new Set());
+  const [statuses, setStatuses] = useState<ReadonlySet<StatusFilter>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
+
+  const all = inbox.data ?? [];
+  const tab = chosenTab ?? defaultTab(all);
+  const rows = sortRows(filterRows(all, { tab, query, repos, statuses }));
+  const allRepos = [...new Set(all.map((r) => r.repo))].sort();
+  const isOpen = (row: InboxRow) => open !== undefined && row.repo === `${open.owner}/${open.repo}` && String(row.number) === open.number;
+
+  useInboxKeys({
+    rows,
+    cursor,
+    setCursor,
+    open: (chatId) => {
+      const row = rows.find((r) => r.chatId === chatId);
+      if (row) void navigate(chatPath(row));
+    },
+    focusSearch: () => search.current?.focus(),
+    escape: () => setFilterOpen(false),
+  });
+
+  function pickTab(next: Tab) {
+    setChosenTab(next);
+    setCursor(null);
+  }
+
+  return (
+    <section className={styles.inbox} aria-label="Inbox">
+      <InboxHeader me={me} />
+      {!me.agentOnline && <OfflineBanner />}
+      {me.githubAuth === 'needs_reauth' && <ExpiredStrip />}
+
+      <div className={styles.tools}>
+        <label className={styles.search}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            ref={search}
+            className={styles.searchInput}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setCursor(null);
+            }}
+            placeholder="Search pull requests"
+            aria-label="Search pull requests"
+          />
+          {!query && (
+            <span className={styles.slashHint}>
+              <Kbd boxed>/</Kbd>
+            </span>
+          )}
+        </label>
+        <InboxFilter
+          open={filterOpen}
+          setOpen={setFilterOpen}
+          repos={allRepos}
+          chosenRepos={repos}
+          chosenStatuses={statuses}
+          toggleRepo={(repo) => setRepos((set) => toggled(set, repo))}
+          toggleStatus={(status) => setStatuses((set) => toggled(set, status))}
+        />
+      </div>
+
+      <InboxTabs tab={tab} counts={tabCounts(all)} pick={pickTab} />
+
+      <div className={styles.scroll}>
+        {inbox.isPending ? (
+          <p className={styles.loading} role="status">
+            Loading…
+          </p>
+        ) : inbox.isError ? (
+          <ErrorState message={inbox.error.message} onRetry={() => void inbox.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState query={query.trim()} filtering={repos.size + statuses.size > 0} />
+        ) : (
+          <div className={styles.list} role="listbox" aria-label="Pull requests">
+            {rows.map((row) => (
+              <InboxRowItem
+                key={row.chatId}
+                row={row}
+                viewerLogin={me.login}
+                selected={isOpen(row)}
+                cursor={row.chatId === cursor}
+                onOpen={() => {
+                  setCursor(null);
+                  void navigate(chatPath(row));
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <footer className={styles.footer}>
+        <span>
+          <Kbd>j</Kbd> <Kbd>k</Kbd> move
+        </span>
+        <span>
+          <Kbd>↵</Kbd> open
+        </span>
+        <span>
+          <Kbd>/</Kbd> search
+        </span>
+      </footer>
+    </section>
+  );
+}
+
+/** A copy of `set` with `item` added, or removed if it was there. */
+function toggled<T>(set: ReadonlySet<T>, item: T): ReadonlySet<T> {
+  const next = new Set(set);
+  if (next.has(item)) next.delete(item);
+  else next.add(item);
+  return next;
+}
+```
+
+Create `apps/web/src/routes/Inbox/Inbox.module.css`:
+
+```css
+.inbox {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--side);
+}
+
+.tools {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg3);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: var(--fg1);
+}
+
+.searchInput::placeholder {
+  color: var(--fg3);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.list {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.loading {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--fg3);
+  font-size: 13px;
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  gap: 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--b2);
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+/* The keyboard hints are for desktops. */
+@media (max-width: 759px) {
+  .slashHint,
+  .footer {
+    display: none;
+  }
+}
+```
+
+- [ ] **Step 11: The shell, the pages beside it, and the routes**
+
+Create `apps/web/src/routes/Shell/Shell.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { Outlet, useMatch, useNavigate } from 'react-router';
+import { useEscapeBack } from '../../lib/keys';
+import { useIsDesktop } from '../../lib/viewport';
+import { Inbox } from '../Inbox/Inbox';
+import styles from './Shell.module.css';
+
+/**
+ * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
+ * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back.
+ */
+export function Shell({ me }: { me: WebMe }) {
+  const desktop = useIsDesktop();
+  const atInbox = useMatch('/') !== null;
+  const navigate = useNavigate();
+  useEscapeBack(!desktop && !atInbox, () => void navigate('/'));
+
+  if (!desktop) {
+    return atInbox ? (
+      <div className={styles.phone}>
+        <Inbox me={me} />
+      </div>
+    ) : (
+      <main className={styles.phone}>
+        <Outlet />
+      </main>
+    );
+  }
+  return (
+    <div className={styles.shell}>
+      <div className={styles.sidebar}>
+        <Inbox me={me} />
+      </div>
+      <main className={styles.main}>
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Shell/Shell.module.css`:
+
+```css
+.shell {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 360px;
+  flex: none;
+  min-height: 0;
+  border-right: 1px solid var(--b1);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.phone {
+  height: 100%;
+  overflow: auto;
+}
+```
+
+Create `apps/web/src/routes/Shell/Pane.tsx`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { Link } from 'react-router';
+import styles from './Pane.module.css';
+
+/** A page on the right of the inbox (or on its own on a phone, with a way back). */
+export function Pane({ children }: { children: ReactNode }) {
+  return (
+    <div className={styles.pane}>
+      <Link to="/" className={styles.back} aria-label="Back to inbox">
+        <span className={styles.chevron} aria-hidden="true" />
+      </Link>
+      {children}
+    </div>
+  );
+}
+
+/** The right side when nothing is open, or when the address leads nowhere. */
+export function EmptyPane({ title, body }: { title: string; body: string }) {
+  return (
+    <Pane>
+      <div className={styles.empty}>
+        <span className={styles.diamond} aria-hidden="true" />
+        <h1 className={styles.emptyTitle}>{title}</h1>
+        <p className={styles.muted}>{body}</p>
+      </div>
+    </Pane>
+  );
+}
+```
+
+Create `apps/web/src/routes/Shell/Pane.module.css`:
+
+```css
+.pane {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The way back to the inbox: only on a phone, where the inbox isn't beside the page. */
+.back {
+  display: none;
+  width: 44px;
+  height: 44px;
+  margin: -10px 0 0 -12px;
+  align-items: center;
+  justify-content: center;
+  color: var(--acc-text);
+}
+
+.chevron {
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+@media (max-width: 759px) {
+  .pane {
+    padding: 16px 12px;
+  }
+
+  .back {
+    display: inline-flex;
+  }
+}
+
+.empty {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.diamond {
+  width: 10px;
+  height: 10px;
+  margin-bottom: 6px;
+  background: var(--b1);
+  transform: rotate(45deg);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+.ref {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg2);
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+```
+
+Create `apps/web/src/routes/Chat/ChatPlaceholder.tsx` (until Task 10: a full page load of `/c/…` still gets the server's transcript, so the link to it is a plain `<a>`):
+
+```tsx
+import { useParams } from 'react-router';
+import { useInbox } from '../../api/inbox';
+import { Pane } from '../Shell/Pane';
+import styles from '../Shell/Pane.module.css';
+
+/** `/c/:owner/:repo/:number` until the chat screen arrives (Task 10): the PR's name and the way to its transcript. */
+export function ChatPlaceholder() {
+  const { owner, repo, number } = useParams();
+  const fullName = `${owner}/${repo}`;
+  const row = useInbox().data?.find((r) => r.repo === fullName && String(r.number) === number);
+  return (
+    <Pane>
+      <p className={styles.ref}>
+        {fullName} #{number}
+      </p>
+      <h1 className={styles.title}>{row?.title ?? `Pull request #${number}`}</h1>
+      <p className={styles.muted}>The live chat opens here soon. Until then, the transcript shows everything so far.</p>
+      <div className={styles.actions}>
+        {/* A full page load: the server still renders the transcript at this address. */}
+        <a className={styles.button} href={`/c/${fullName}/${number}`}>
+          Open the transcript
+        </a>
+        {row && (
+          <a className={styles.button} href={row.url} target="_blank" rel="noreferrer">
+            Open on GitHub <span aria-hidden="true">↗</span>
+          </a>
+        )}
+      </div>
+    </Pane>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/SettingsPlaceholder.tsx` (Sign out stays reachable until Task 21's Settings page):
+
+```tsx
+import { useMe } from '../../api/me';
+import { Pane } from '../Shell/Pane';
+import styles from '../Shell/Pane.module.css';
+
+/** `/settings` until the Settings page arrives (Task 21): who you are, and Sign out. */
+export function SettingsPlaceholder() {
+  const me = useMe().data;
+  return (
+    <Pane>
+      <h1 className={styles.title}>Signed in as @{me?.login}</h1>
+      <p className={styles.muted}>Devices, notifications and defaults come to this page later.</p>
+      {/* A plain form: the browser sends our Origin, which /auth/logout checks, then follows its redirect. */}
+      <form method="post" action="/auth/logout">
+        <button type="submit" className={styles.button}>
+          Sign out
+        </button>
+      </form>
+    </Pane>
+  );
+}
+```
+
+Replace `apps/web/src/app.tsx` with:
+
+```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router';
+import { retryUnlessClientError } from './api/client';
+import { ChatPlaceholder } from './routes/Chat/ChatPlaceholder';
+import { Home } from './routes/Home/Home';
+import { SettingsPlaceholder } from './routes/Settings/SettingsPlaceholder';
+import { EmptyPane } from './routes/Shell/Pane';
+
+/** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
+export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError, ...queries } } });
+}
+
+/** The whole app: the data cache, then the routes. */
+export function App({ queryClient }: { queryClient?: QueryClient }) {
+  // Made once and kept across re-renders; a new client would drop every cached query.
+  const [client] = useState(() => queryClient ?? makeQueryClient());
+  return (
+    <QueryClientProvider client={client}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * Every page. Home decides between the landing page (signed out) and the app; signed in, the pages below
+ * open beside the inbox (routes/Shell/Shell.tsx).
+ */
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<Home />}>
+        <Route index element={<EmptyPane title="Pick a pull request" body="Its chat opens here." />} />
+        <Route path="c/:owner/:repo/:number" element={<ChatPlaceholder />} />
+        <Route path="settings" element={<SettingsPlaceholder />} />
+        <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
+      </Route>
+    </Routes>
+  );
+}
+```
+
+Replace `apps/web/src/routes/Home/Home.tsx` with:
+
+```tsx
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { useMe } from '../../api/me';
+import { Landing } from '../Landing/Landing';
+import { Shell } from '../Shell/Shell';
+import styles from './Home.module.css';
+
+/** Every page starts here: the landing page when signed out, the app (inbox and pages) when signed in. */
+export function Home() {
+  const me = useMe();
+  if (me.isPending) {
+    return (
+      <div className={styles.loading} role="status" aria-busy="true">
+        <Wordmark size={26} />
+        <span className={styles.visuallyHidden}>Loading…</span>
+      </div>
+    );
+  }
+  if (me.isError) return <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.data === null) return <Landing />;
+  return <Shell me={me.data} />;
+}
+```
+
+Replace `apps/web/src/routes/Home/Home.module.css` with (the signed-in placeholder's styles go):
+
+```css
+.loading {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+```
+
+- [ ] **Step 12: Run the web tests to see them pass**
+
+Run: `npm test -w apps/web`
+Expected: PASS, 69 tests.
+
+- [ ] **Step 13: The landing page's sample rows use the real pill (Task 3's deferred minor)**
+
+In `apps/web/src/routes/Landing/Landing.tsx`: the imports become
+
+```ts
+import { BRAND, type InboxStatus } from '@nitpilot/protocol';
+import { StatusPill } from '../../components/StatusPill/StatusPill';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+```
+
+delete the `Tone` type and the `TONE` map, replace `SAMPLE_ROWS` with
+
+```ts
+// The pills are the inbox's own (components/StatusPill), so the picture matches the product.
+const SAMPLE_ROWS: { ref: string; time: string; title: string; initials: string; status: InboxStatus; last: string }[] = [
+  { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', status: { kind: 'escalated', who: null, reason: 'decision' }, last: 'A security point needs you' },
+  { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', status: { kind: 'working', who: 'Leo', reason: null }, last: 'reading src/db/client.ts' },
+  { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', status: { kind: 'ready', who: null, reason: null }, last: '2 rounds, 3 points resolved' },
+];
+```
+
+and the row's pill `<span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>` with `<StatusPill status={row.status} viewerLogin="" />`. In `Landing.module.css`, delete the `.pill`, `.pillRed`, `.pillMuted` and `.pillOk` rules.
+
+Run: `npm test -w apps/web && npm run typecheck && npm run lint`
+Expected: PASS, 69 tests; typecheck and lint clean.
+
+- [ ] **Step 14: The inbox in a real browser (Playwright)**
+
+The Playwright server learns to open a PR the way GitHub does, with a webhook. In `apps/server/test/e2e/web-server.ts`, after `const { sessionCookieFor } = await import('../http');` add
+
+```ts
+const { people, prEvent, pull } = await import('../fixtures/github');
+```
+
+and before `serve({ fetch: control.fetch, … })`:
+
+```ts
+/** Open a PR on octo/sandbox, as GitHub's webhook would: `author`'s PR, with `reviewer` requested. */
+control.post('/pr', async (c) => {
+  const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
+  const base = pull();
+  await e2e.deliver(
+    'pull_request',
+    prEvent('opened', {
+      pull: {
+        number,
+        title,
+        html_url: `https://github.com/${base.base.repo.full_name}/pull/${number}`,
+        user: people[author],
+        requested_reviewers: [people[reviewer]],
+        head: { ...base.head, ref: `feature-${number}`, sha: e2e.github.headSha },
+        base: { ...base.base, sha: e2e.github.baseSha },
+      },
+    }),
+  );
+  return c.body(null, 204);
+});
+```
+
+In `apps/web/e2e/control.ts`, add before `pageProblems`:
+
+```ts
+/** Open a pull request on the test repo (octo/sandbox), as GitHub's webhook would. */
+export async function openPr(pr: { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' }): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/pr`, { method: 'POST', body: JSON.stringify(pr) });
+  if (!res.ok) throw new Error(`opening PR #${pr.number} failed: ${res.status} ${await res.text()}`);
+}
+
+```
+
+In `apps/web/e2e/landing.spec.ts`, the last test becomes:
+
+```ts
+test('someone signed in lands in their inbox', async ({ page, context }) => {
+  await signIn(context, 'maya');
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Inbox' })).toBeVisible();
+});
+```
+
+Create `apps/web/e2e/inbox.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { openPr, pageProblems, signIn } from './control';
+
+test('the inbox lists the PRs you review and your own, each under its tab', async ({ page, context }) => {
+  await openPr({ number: 42, title: 'Cursor pagination for orders', author: 'maya', reviewer: 'leo' });
+  await openPr({ number: 43, title: 'Retry webhooks with backoff', author: 'leo', reviewer: 'maya' });
+  const errors = pageProblems(page);
+  await signIn(context, 'maya');
+  await page.goto('/');
+
+  const list = page.getByRole('listbox', { name: 'Pull requests' });
+  await expect(page.getByRole('tab', { name: 'To review' })).toHaveAttribute('aria-selected', 'true');
+  await expect(list.getByRole('option')).toHaveCount(1);
+  await expect(list.getByRole('option').first()).toContainText('octo/sandbox #43');
+  await expect(list.getByRole('option').first()).toContainText('Retry webhooks with backoff');
+
+  await page.getByRole('tab', { name: 'Mine' }).click();
+  await expect(list.getByRole('option')).toHaveCount(1);
+  // leo's review is queued, and leo's CLI isn't connected: his agent waits.
+  await expect(list.getByRole('option').first()).toContainText('Cursor pagination for orders');
+  await expect(list.getByRole('option').first()).toContainText('Waiting');
+
+  await list.getByRole('option').first().click();
+  await expect(page.getByRole('heading', { name: 'Cursor pagination for orders' })).toBeVisible();
+  await expect(page).toHaveURL(/\/c\/octo\/sandbox\/42$/);
+  expect(errors).toEqual([]);
+});
+```
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 4 tests.
+
+- [ ] **Step 15: Look at it (controller, in the in-app browser)**
+
+Start the Playwright server (launch config `nitpilot-e2e-web`), seed it, and sign in:
+
+```bash
+for pr in '139|Fix race in session refresh|leo|maya' '151|Add Turkish translations|leo|maya' '144|Refactor webhook retries|leo|maya' '147|Bump Prisma to 7.2|maya|leo' '142|Add cursor pagination to /orders|maya|leo' '136|Remove legacy coupon endpoint|maya|leo'; do IFS='|' read n t a r <<< "$pr"; curl -s -X POST http://127.0.0.1:4320/pr -d "{\"number\":$n,\"title\":\"$t\",\"author\":\"$a\",\"reviewer\":\"$r\"}"; done
+```
+
+Then give the rows every kind of status, in the test database (`docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot_test`): `#139` phase `escalated` and maya's attention `decision`; `#151` maya's attention `manual_review`; `#147`'s job `running`; `#142` phase `ready` with its job `done` (`activeFor` null); `#136` phase `closed`, `merged` true, `closedAt` a day ago, its job `cancelled`. Sign in with `curl -s -X POST http://127.0.0.1:4320/signin -d '{"login":"maya"}'` and set that cookie in the tab (`document.cookie`).
+
+Check at 1280 px and 375 px, light and dark: the red escalated pill with its diamond, the accent Needs you, the ring for Waiting and Their turn, the ping and the agent badge on #147, Merged muted with a line through; the unread dots; the offline banner and the expired strip (the test users have no GitHub sign-in); the filter popover (repos, then statuses) and Esc closing it; `j` drawing one inset ring on the first row; a click opening the PR beside the inbox (desktop) or on its own with ‹ and Esc going back (phone); the `/` hint and the footer hidden on the phone; GitHub avatars loading (the CSP allows them); no console errors after sign-in. Screenshots in the task report.
+
+- [ ] **Step 16: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run test:e2e -w apps/web`
+Expected: protocol 45, CLI 293 passed + 14 skipped, server 655, web 69; end to end 5; Playwright 4; typecheck and lint clean.
+
+```bash
+git add apps/web apps/server/test/e2e/web-server.ts docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): the inbox, with tabs, search, filters, keys, and the phone layout
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
