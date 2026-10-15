@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testApp } from '../../test/app';
-import { BUILD_HINT } from './spa';
+import { BUILD_HINT, contentSecurityPolicy } from './spa';
 
 // A pretend build: dist/ with an index, a hashed asset and a service worker, and a secret next to it.
 let outer: string;
@@ -84,5 +84,27 @@ describe('serving the web app', () => {
     const res = await testApp({ webDistDir: path.join(outer, 'missing') }).request('/inbox');
     expect(res.status).toBe(503);
     expect(await res.text()).toBe(BUILD_HINT);
+  });
+});
+
+describe('the Content-Security-Policy', () => {
+  // Pinned in full so that any loosening fails here. Change it only together with docs/why/content-security-policy.md.
+  it('is exactly this for an https site', () => {
+    expect(contentSecurityPolicy('https://nitpilot.dev')).toBe(
+      [
+        "default-src 'self'",
+        "connect-src 'self' wss://nitpilot.dev",
+        "img-src 'self' data: https://avatars.githubusercontent.com",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+      ].join('; '),
+    );
+  });
+
+  it('allows a plain ws:// socket for the http dev address', () => {
+    expect(contentSecurityPolicy('http://localhost:5173')).toContain("connect-src 'self' ws://localhost:5173;");
   });
 });
