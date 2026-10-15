@@ -3174,7 +3174,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `loadActivities`, `inboxStatus`, `countQueries` (Task 4); `requireUser`, `requireSameOrigin`, `UserVariables` (Task 3); `rulesFromJson` (`chats/rules.ts`); `isUniqueViolation` (`lib/prisma.ts`).
 - Produces: model `ChatRead { id, userId, chatId, lastReadSeq Int @default(0), createdAt, updatedAt; @@unique([userId, chatId]) }`, cascading from `User` and `PrChat`. `InboxRow = { chatId, repo, number, title, url (the PR on GitHub), role: Role, other: { login: string; avatarUrl: string | null; agentActive: boolean } | null, status: InboxStatus, round, maxRounds, lastActivity, updatedAt, unread, needsYou }`; `InboxResponse = { rows: InboxRow[] }`; `MarkReadRequest = { seq: int ≥ 0 }`; `WebMe.agentOnline: boolean`. `loadInboxRows(user: InboxViewer, clis, now?): Promise<InboxRow[]>`, `loadInboxRow(chatId, userId, clis, now?): Promise<InboxRow[]>` (one row per role that person has in that chat, for Task 9's `inbox.upsert`), `unreadCounts(user, chats): Promise<Map<string, number>>` with `InboxViewer = { id; githubId; login }` (`chats/inbox.ts`). `inboxRoutes(deps: { clis })`: `GET /api/inbox` → `InboxResponse`; `POST /api/chats/:id/read { seq }` → 204. `meRoutes(deps: { clis })`. Test helpers `makeParticipant(chatId, user, role, over?)` and `makeMessage(chatId, author | null, body?)`.
 
-- [ ] **Step 1: The `ChatRead` table**
+- [x] **Step 1: The `ChatRead` table**
 
 In `apps/server/prisma/schema.prisma`, add the back-relations: `chatReads     ChatRead[]` as the last field of `User` (after `jobs`), and `reads        ChatRead[]` after `githubWrites GithubWrite[]` in `PrChat`. Then add the model before `/// One item in a chat's timeline.`:
 
@@ -3221,7 +3221,7 @@ ALTER TABLE "ChatRead" ADD CONSTRAINT "ChatRead_userId_fkey" FOREIGN KEY ("userI
 ALTER TABLE "ChatRead" ADD CONSTRAINT "ChatRead_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "PrChat"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ```
 
-- [ ] **Step 2: The inbox bodies**
+- [x] **Step 2: The inbox bodies**
 
 Replace `packages/protocol/src/web-api.ts` with:
 
@@ -3329,7 +3329,7 @@ In `apps/web/src/routes/Home/Home.test.tsx`, both `/api/me` answers gain the new
 Run: `npm test -w packages/protocol`
 Expected: PASS, 45 tests. (`npm run typecheck` fails in `me.ts` until Step 8: `agentOnline` is missing there.)
 
-- [ ] **Step 3: Test helpers for people and timeline items**
+- [x] **Step 3: Test helpers for people and timeline items**
 
 In `apps/server/test/db.ts`, add before `resetDb`:
 
@@ -3357,7 +3357,7 @@ export async function makeMessage(chatId: string, author: { githubId: string; lo
 
 (`resetDb`'s `TRUNCATE … CASCADE` empties `ChatRead` with `User` and `PrChat`.)
 
-- [ ] **Step 4: Write the failing tests for the rows**
+- [x] **Step 4: Write the failing tests for the rows**
 
 Create `apps/server/src/chats/inbox.db.test.ts`:
 
@@ -3493,12 +3493,12 @@ describe('loadInboxRow (one chat, for live updates)', () => {
 });
 ```
 
-- [ ] **Step 5: Run them to see them fail**
+- [x] **Step 5: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/inbox.db.test.ts`
 Expected: FAIL, `Error: Cannot find module './inbox'`.
 
-- [ ] **Step 6: Build the rows**
+- [x] **Step 6: Build the rows**
 
 Create `apps/server/src/chats/inbox.ts`:
 
@@ -3666,12 +3666,12 @@ function oneLine(text: string): string {
 }
 ```
 
-- [ ] **Step 7: Run them to see them pass**
+- [x] **Step 7: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/inbox.db.test.ts`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 8: Write the failing route tests**
+- [x] **Step 8: Write the failing route tests**
 
 Create `apps/server/src/http/routes/inbox.db.test.ts`:
 
@@ -3773,7 +3773,7 @@ In `apps/server/src/http/routes/me.db.test.ts`, the first test's expected body g
 Run: `npm run test:db -w apps/server -- src/http/routes/inbox.db.test.ts src/http/routes/me.db.test.ts`
 Expected: FAIL: everything new except the 404 test, which passes already because the route doesn't exist yet (the app's JSON 404 answers).
 
-- [ ] **Step 9: The routes**
+- [x] **Step 9: The routes**
 
 Create `apps/server/src/http/routes/inbox.ts`:
 
@@ -3845,23 +3845,23 @@ In `apps/server/src/http/app.ts`: `import { inboxRoutes } from './routes/inbox';
   app.route('/', inboxRoutes(deps));
 ```
 
-- [ ] **Step 10: Run them to see them pass**
+- [x] **Step 10: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/inbox.db.test.ts src/http/routes/me.db.test.ts`
 Expected: PASS, 8 and 4 tests. Then run `npm run test:db -w apps/server` twice: the concurrent-cursor test must pass under the full parallel load too.
 
-- [ ] **Step 11: Record the decisions in the spec**
+- [x] **Step 11: Record the decisions in the spec**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10, after the "Chat writes:" list's last item (`` `POST /api/chats/:id/read`. ``), add: "Marking a chat read only moves the person's own cursor and changes nothing anyone else sees, so it needs the Origin check and the person being a participant, not a GitHub access check; for anyone else the chat is a 404."
 
 In §16, the **Inbox** bullet gains: "The server works the status out for the person reading it: a finished PR first, then what that person has to do (an escalation is the red Needs you), then Ready (a reviewer's) or Their turn (the author waiting for approval), then a waiting or working agent, then whose turn it is; with nothing pending the row shows no pill."
 
-- [ ] **Step 12: Run the full suite**
+- [x] **Step 12: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: protocol 45, CLI 293 passed + 14 skipped, server 655, web 28; end to end 5; typecheck and lint clean.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add apps/server/prisma packages/protocol/src/web-api.ts packages/protocol/src/web-api.test.ts apps/server/src/chats/inbox.ts apps/server/src/chats/inbox.db.test.ts apps/server/src/http/routes/inbox.ts apps/server/src/http/routes/inbox.db.test.ts apps/server/src/http/routes/me.ts apps/server/src/http/routes/me.db.test.ts apps/server/src/http/app.ts apps/server/test/db.ts apps/web/src/routes/Home/Home.test.tsx docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

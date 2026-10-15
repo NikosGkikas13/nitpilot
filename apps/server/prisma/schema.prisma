@@ -23,6 +23,7 @@ model User {
   cliTokens     CliToken[]
   loginRequests CliLoginRequest[]
   jobs          Job[]
+  chatReads     ChatRead[]
 }
 
 /// The user's GitHub user access token (8 h) and refresh token (6 months, single use), encrypted.
@@ -145,6 +146,7 @@ model PrChat {
   jobs         Job[]
   tasks        Task[]
   githubWrites GithubWrite[]
+  reads        ChatRead[]
 
   @@unique([repoId, number])
 }
@@ -204,6 +206,21 @@ model Point {
 
   @@unique([chatId, number])
   @@unique([chatId, githubCommentId])
+}
+
+/// How far a person has read a chat (Plan 2). The inbox's unread count is the number of timeline items
+/// after `lastReadSeq` that someone else wrote.
+model ChatRead {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId      String
+  chat        PrChat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  lastReadSeq Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, chatId])
 }
 
 /// One item in a chat's timeline. `seq` is the resume cursor (spec §10).

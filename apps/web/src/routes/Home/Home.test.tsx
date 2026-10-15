@@ -36,7 +36,7 @@ describe('Home', () => {
   });
 
   it('greets someone who is signed in', async () => {
-    answers([200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' }]);
+    answers([200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true }]);
     renderHome();
     expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
   });
@@ -44,7 +44,7 @@ describe('Home', () => {
   it('shows the error with a way to try again, instead of a blank page', async () => {
     const fail: [number, unknown] = [500, { error: { code: 'server_error', message: 'internal server error' } }];
     // The first try and the client's two retries (no waiting between them in tests) fail; "Try again" then succeeds.
-    answers(fail, fail, fail, [200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' }]);
+    answers(fail, fail, fail, [200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true }]);
     renderHome();
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();

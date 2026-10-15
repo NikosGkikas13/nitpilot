@@ -9,7 +9,14 @@ describe('GET /api/me', () => {
     const user = await makeUser({ login: 'maya-me' });
     const res = await testApp().request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
     expect(res.status).toBe(200);
-    expect(WebMe.parse(await res.json())).toEqual({ id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth' });
+    expect(WebMe.parse(await res.json())).toEqual({ id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth', agentOnline: false });
+  });
+
+  it('says whether any of your CLIs is connected', async () => {
+    const user = await makeUser({ login: 'maya-online' });
+    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ repos: new Set<string>() }] : []) };
+    const res = await testApp({ clis }).request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(await res.json()).toMatchObject({ agentOnline: true });
   });
 
   it('gives a CLI the same answer', async () => {

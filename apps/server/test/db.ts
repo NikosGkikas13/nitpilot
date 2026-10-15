@@ -80,6 +80,26 @@ export async function makeChat(repoId: string, over: { number?: number; authorGi
   });
 }
 
+/** `user` as a participant of a chat, the way the dispatcher saves one. */
+export async function makeParticipant(
+  chatId: string,
+  user: { id?: string; githubId: string; login: string },
+  role: 'author' | 'reviewer',
+  over: { requested?: boolean; attention?: string } = {},
+) {
+  return prisma.participant.create({
+    data: { chatId, githubId: user.githubId, login: user.login, userId: user.id ?? null, role, requested: over.requested ?? false, attention: over.attention ?? 'none' },
+  });
+}
+
+/** The chat's next timeline item, with its seq taken the way the dispatcher takes one (`++lastSeq`). `author` null = a system item. */
+export async function makeMessage(chatId: string, author: { githubId: string; login: string } | null, body = 'Something happened.') {
+  const chat = await prisma.prChat.update({ where: { id: chatId }, data: { lastSeq: { increment: 1 } } });
+  return prisma.message.create({
+    data: { chatId, seq: chat.lastSeq, kind: author ? 'human' : 'system', authorGithubId: author?.githubId ?? null, authorLogin: author?.login ?? null, body },
+  });
+}
+
 /** Empty every table. Only for tests of sweeps over all rows (task runner, replay, purge). Refuses any database not named *_test. */
 export async function resetDb(): Promise<void> {
   const [{ name }] = await prisma.$queryRaw<{ name: string }[]>`SELECT current_database() AS name`;
