@@ -63,7 +63,12 @@ export function openSocket(h: SocketHandlers): ServerSocket {
     }
     h.onMessage(parsed.data);
   });
-  // An 'error' is always followed by 'close', which says what we need to know.
+  // A socket that never opened (refused, unreachable) ends at its 'error': Node 22 sends no 'close' after it,
+  // so waiting for one would hang the daemon. 1006 is the code for "closed without a close frame".
+  ws.addEventListener('error', () => {
+    if (!opened) end({ code: 1006, reason: '', opened });
+  });
+  // Once open, an 'error' is followed by 'close', which says what we need to know (e.g. 4401).
   ws.addEventListener('close', (event) => end({ code: event.code, reason: event.reason, opened }));
 
   return {
