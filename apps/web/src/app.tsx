@@ -1,30 +1,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
-import { ThemeToggle } from './components/ThemeToggle/ThemeToggle';
-import { Wordmark } from './components/Wordmark/Wordmark';
+import { retryUnlessClientError } from './api/client';
+import { Home } from './routes/Home/Home';
 
 export function makeQueryClient(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: 1 } } });
+  return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError } } });
 }
 
-/** The whole app: data cache, then routes. Task 3 replaces the placeholder with the landing page and the inbox. */
-export function App({ queryClient = makeQueryClient() }: { queryClient?: QueryClient }) {
+/** The whole app: the data cache, then the routes. */
+export function App({ queryClient }: { queryClient?: QueryClient }) {
+  // Made once and kept across re-renders; a new client would drop every cached query.
+  const [client] = useState(() => queryClient ?? makeQueryClient());
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <BrowserRouter>
         <Routes>
-          <Route path="*" element={<Placeholder />} />
+          <Route path="*" element={<Home />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
-  );
-}
-
-function Placeholder() {
-  return (
-    <main style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <Wordmark />
-      <ThemeToggle />
-    </main>
   );
 }

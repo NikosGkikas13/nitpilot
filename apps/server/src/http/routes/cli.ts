@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import {
   BRAND, CliLoginPollRequest, CliLoginStartRequest,
-  type Attention, type MeResponse, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
+  type Attention, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
 } from '@nitpilot/protocol';
 import { Hono, type Context } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
@@ -38,12 +38,6 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
   app.post('/api/cli/login/poll', async (c) => {
     const { deviceCode } = CliLoginPollRequest.parse(await c.req.json());
     return c.json(await pollCliLogin(deviceCode));
-  });
-
-  app.get('/api/me', requireCliToken, async (c) => {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId }, include: { githubAuth: true } });
-    const body: MeResponse = { login: user.login, avatarUrl: user.avatarUrl, githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth' };
-    return c.json(body);
   });
 
   app.get('/api/me/chats', requireCliToken, async (c) => {

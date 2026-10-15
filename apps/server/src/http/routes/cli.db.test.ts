@@ -52,7 +52,7 @@ describe('nitpilot login', () => {
     expect(await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()).toEqual({ status: 'expired' });
 
     const auth = { authorization: `Bearer ${approved.token}` };
-    expect(await (await app().request('/api/me', { headers: auth })).json()).toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'needs_reauth' });
+    expect(await (await app().request('/api/me', { headers: auth })).json()).toMatchObject({ login: 'maya', avatarUrl: null, githubAuth: 'needs_reauth' });
     expect((await app().request('/api/cli/token', { method: 'DELETE', headers: auth })).status).toBe(204);
     expect((await app().request('/api/me', { headers: auth })).status).toBe(401);
   });

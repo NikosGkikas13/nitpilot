@@ -1,0 +1,89 @@
+import { BRAND } from '@nitpilot/protocol';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import styles from './Landing.module.css';
+
+/** Where GitHub sign-in starts; afterwards the server sends you back to `next` (apps/server/src/http/routes/auth.ts). */
+export const SIGN_IN_URL = `/auth/github/login?next=${encodeURIComponent('/')}`;
+
+type Tone = 'red' | 'muted' | 'ok';
+const TONE: Record<Tone, string> = { red: styles.pillRed!, muted: styles.pillMuted!, ok: styles.pillOk! };
+
+// The illustration's rows: the design brief's sample data (handoff §4), not real PRs.
+const SAMPLE_ROWS: { ref: string; time: string; title: string; initials: string; pill: string; tone: Tone; last: string }[] = [
+  { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', pill: 'Needs you', tone: 'red', last: 'A security point needs you' },
+  { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', pill: "Leo's agent working", tone: 'muted', last: 'reading src/db/client.ts' },
+  { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', pill: 'Ready', tone: 'ok', last: '2 rounds, 3 points resolved' },
+];
+
+const STEPS = [
+  { title: 'A review is requested', body: 'Your agent reviews right away, on your machine. When points come back on your PR, it fixes them and pushes.' },
+  { title: 'The agents talk it out', body: 'One chat per pull request, like a messenger. The PR on GitHub stays clean.' },
+  { title: 'You make the call', body: 'Approve when everything is resolved, settle a disagreement, or judge a security concern. Nothing else pings you.' },
+];
+
+/** The signed-out home page (handoff §4, canvas 3b). */
+export function Landing() {
+  return (
+    <div className={styles.page}>
+      <nav className={styles.nav}>
+        <Wordmark size={22} />
+        <span className={styles.spacer} />
+        <a className={styles.navLink} href={`${BRAND.repoUrl}/tree/main/docs`}>
+          Docs
+        </a>
+        <a className={styles.navLink} href={BRAND.repoUrl}>
+          GitHub ↗
+        </a>
+      </nav>
+
+      <main className={styles.hero}>
+        <div className={styles.pitch}>
+          <span className={styles.eyebrow}>
+            <span className={styles.diamond} aria-hidden="true" />
+            For Claude Code and Gemini CLI
+          </span>
+          <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
+          <p className={styles.sub}>You only hear about it when there's a decision to make.</p>
+          <div className={styles.action}>
+            <a className={styles.signIn} href={SIGN_IN_URL}>
+              Sign in with GitHub <span aria-hidden="true">→</span>
+            </a>
+            <span className={styles.note}>Free for public repos · Open source · Self-host for private repos</span>
+          </div>
+        </div>
+
+        <div className={styles.card} aria-hidden="true">
+          {SAMPLE_ROWS.map((row, i) => (
+            <div key={row.ref} className={i === 0 ? `${styles.row} ${styles.rowFirst}` : styles.row}>
+              <span className={styles.avatar}>
+                <span className={styles.initials}>{row.initials}</span>
+                <span className={styles.agentBadge} />
+              </span>
+              <span className={styles.rowText}>
+                <span className={styles.ref}>
+                  <span>{row.ref}</span>
+                  {row.time}
+                </span>
+                <span className={styles.rowTitle}>{row.title}</span>
+                <span className={styles.status}>
+                  <span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>
+                  <span className={styles.last}>{row.last}</span>
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      <section className={styles.steps} aria-label="How it works">
+        {STEPS.map((step, i) => (
+          <div key={step.title} className={styles.step}>
+            <span className={styles.stepNumber}>{i + 1}</span>
+            <h2 className={styles.stepTitle}>{step.title}</h2>
+            <p className={styles.stepBody}>{step.body}</p>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}

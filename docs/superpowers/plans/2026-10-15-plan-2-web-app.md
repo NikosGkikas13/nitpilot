@@ -1281,7 +1281,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces (server): `type UserVariables = { user: SessionUser; via: 'session' | 'cli' }`, `requireUser`, `requireSameOrigin` (`auth/request-user.ts`); `meRoutes()`; `TEST_ENV` (`test/test-env.ts`); `startE2e(opts?: { port?: number; webDistDir?: string })`; the test-only control API `POST /signin { login: 'maya' | 'leo' } → { name, value }` (the session cookie).
 - Produces (web): `api.get(path, schema)`, `api.send(method, path, body?, schema?)`, `class ApiError { status; code; message }`, `retryUnlessClientError(failureCount, error)` (`src/api/client.ts`); `useMe()` (`src/api/me.ts`); `<Landing />`, `SIGN_IN_URL`; `<Home />`; `<ErrorState message onRetry />`; `signIn(context, login)`, `pageProblems(page)` (`e2e/control.ts`); `WEB_PORT`, `CONTROL_PORT`, `BASE_URL`, `CONTROL_URL` (`e2e/ports.ts`).
 
-- [ ] **Step 1: `WebMe` in the protocol**
+- [x] **Step 1: `WebMe` in the protocol**
 
 Create `packages/protocol/src/web-api.test.ts`:
 
@@ -1336,7 +1336,7 @@ In `packages/protocol/src/index.ts`, add `export * from './web-api';` after `exp
 Run: `npm test -w packages/protocol`
 Expected: `Tests  43 passed (43)`.
 
-- [ ] **Step 2: Write the failing server tests**
+- [x] **Step 2: Write the failing server tests**
 
 Create `apps/server/src/auth/request-user.db.test.ts`:
 
@@ -1432,7 +1432,7 @@ describe('GET /api/me', () => {
 Run: `npm run test:db -w apps/server -- src/auth/request-user.db.test.ts src/http/routes/me.db.test.ts`
 Expected: `request-user.db.test.ts` fails with `Cannot find module './request-user'`; in `me.db.test.ts`, `tells a signed-in browser who it is` fails with `expected 401 to be 200` (today `/api/me` only knows the CLI's token).
 
-- [ ] **Step 3: Who is asking, and `/api/me` for both**
+- [x] **Step 3: Who is asking, and `/api/me` for both**
 
 Create `apps/server/src/auth/request-user.ts`:
 
@@ -1519,7 +1519,7 @@ In `apps/server/src/http/routes/cli.db.test.ts`, the `/api/me` check now gets tw
 Run: `npm run test:db -w apps/server -- src/auth/request-user.db.test.ts src/http/routes/me.db.test.ts src/http/routes/cli.db.test.ts`
 Expected: `Tests  21 passed (21)` (6 + 3 + the CLI routes' 12).
 
-- [ ] **Step 4: Write the failing web tests**
+- [x] **Step 4: Write the failing web tests**
 
 Create `apps/web/src/api/client.test.ts`:
 
@@ -1658,7 +1658,7 @@ describe('Home', () => {
 Run: `npm test -w apps/web`
 Expected: 3 failed suites, e.g. `Error: Failed to resolve import "./client" from "apps/web/src/api/client.test.ts". Does the file exist?`
 
-- [ ] **Step 5: The API client and `useMe`**
+- [x] **Step 5: The API client and `useMe`**
 
 Create `apps/web/src/api/client.ts` (the server's errors are `{ error: { code, message } }`, `http/errors.ts`):
 
@@ -1742,7 +1742,7 @@ export function useMe() {
 }
 ```
 
-- [ ] **Step 6: The landing page, the home switch and the error state**
+- [x] **Step 6: The landing page, the home switch and the error state**
 
 Create `apps/web/src/routes/Landing/Landing.module.css`:
 
@@ -2315,7 +2315,7 @@ export function App({ queryClient = makeQueryClient() }: { queryClient?: QueryCl
 Run: `npm test -w apps/web`
 Expected: `Test Files  6 passed (6)`, `Tests  22 passed (22)` (the "Try again" test waits out the client's two retries, about 3 s).
 
-- [ ] **Step 7: A shared test environment and a harness on a fixed port**
+- [x] **Step 7: A shared test environment and a harness on a fixed port**
 
 Create `apps/server/test/test-env.ts`:
 
@@ -2456,7 +2456,7 @@ In `apps/server/package.json`, add the script `"e2e:web-server": "tsx test/e2e/w
 Run: `npm test -w apps/server && npm run test:e2e`
 Expected: server 615 (606 + 6 + 3), end to end 5.
 
-- [ ] **Step 8: Playwright**
+- [x] **Step 8: Playwright**
 
 ```bash
 npm install -D -w apps/web --no-audit --no-fund @playwright/test@^1.64.1
@@ -2572,12 +2572,12 @@ test('someone signed in is greeted by name', async ({ page, context }) => {
 Run: `CI=1 npm run test:web-e2e`
 Expected: the build, then `3 passed`.
 
-- [ ] **Step 9: Prove the CSP check matters**
+- [x] **Step 9: Prove the CSP check matters**
 
 In `apps/web/vite.config.ts`, change `assetsInlineLimit: 0` to `assetsInlineLimit: 4096` (Vite's default) and run `CI=1 npm run test:web-e2e` again.
 Expected: 1 failed, `someone signed out gets the landing page, with nothing blocked or broken`, listing `Loading the font 'data:font/woff2;base64,…' violates the following Content Security Policy directive: "font-src 'self'"`. Put `0` back and run it again: 3 passed.
 
-- [ ] **Step 10: CI**
+- [x] **Step 10: CI**
 
 In `.github/workflows/ci.yml`, add after `- run: npm run test:e2e`:
 
@@ -2594,7 +2594,7 @@ In `.github/workflows/ci.yml`, add after `- run: npm run test:e2e`:
 
 (`npm run build` already runs earlier in the job, from Task 2.)
 
-- [ ] **Step 11: Look at it**
+- [x] **Step 11: Look at it**
 
 Run `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` and open `http://127.0.0.1:4319/` in the browser: the landing page as in the handoff's canvas 3b, at 1280 px in light and dark and at 375 px (one column, nothing scrolls sideways). Screenshots of all three go in the task report. Stop the server.
 
@@ -2607,7 +2607,7 @@ This changes the dev GitHub App's settings, so ask before doing it. Then the per
 
 Then start `npm run dev -w apps/server` and `npm run dev -w apps/web` (two Terminal-panel tabs), open `http://localhost:5173`, click **Sign in with GitHub →**, approve on GitHub if asked, and see "Signed in as @NikosGkikas13". **Sign out** returns to the landing page. Stop both.
 
-- [ ] **Step 13: The whole suite, then commit**
+- [x] **Step 13: The whole suite, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && CI=1 npm run test:web-e2e`
 Expected: protocol 43, CLI 293 passed + 14 skipped, server 615, web 22; typecheck and lint clean; end to end 5; Playwright 3.

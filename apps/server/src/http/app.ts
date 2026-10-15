@@ -11,6 +11,7 @@ import { errorBody, onError } from './errors';
 import { authRoutes } from './routes/auth';
 import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
+import { meRoutes } from './routes/me';
 import { setupRoutes } from './routes/setup';
 import { transcriptRoutes } from './routes/transcript';
 import { webhookRoutes } from './routes/webhooks';
@@ -35,6 +36,7 @@ export function createApp(deps: AppDeps): Hono {
     return c.json(body);
   });
   app.route('/', authRoutes(deps));
+  app.route('/', meRoutes());
   app.route('/', cliRoutes(deps));
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));

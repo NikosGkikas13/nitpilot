@@ -13,6 +13,7 @@
     "test:unit": "vitest run --project unit",
     "test:db": "vitest run --project db",
     "test:e2e": "vitest run --project e2e",
+    "e2e:web-server": "tsx test/e2e/web-server.ts",
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "dev:tunnel": "tsx scripts/dev-tunnel.ts",

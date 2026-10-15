@@ -43,3 +43,11 @@ jobs:
       - run: npm test
       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
       - run: npm run test:e2e
+      # Plan 2: the web app in a real browser against that same setup (spec §19).
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -w apps/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/

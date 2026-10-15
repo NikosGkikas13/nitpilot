@@ -7,3 +7,4 @@ export * from './envelope';
 export * from './cli-messages';
 export * from './close-codes';
 export * from './api';
+export * from './web-api';

@@ -1,0 +1,24 @@
+import { defineConfig, devices } from '@playwright/test';
+import { BASE_URL, CONTROL_PORT, WEB_PORT } from './e2e/ports';
+
+export default defineConfig({
+  testDir: './e2e',
+  // One server and one database for every test, so one test at a time.
+  workers: 1,
+  retries: 0,
+  reporter: process.env.CI ? 'github' : 'list',
+  use: {
+    baseURL: BASE_URL,
+    trace: 'retain-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // The server for these tests: apps/server/test/e2e/web-server.ts.
+  webServer: {
+    command: 'npm run e2e:web-server -w apps/server',
+    cwd: '../..',
+    url: `${BASE_URL}/healthz`,
+    env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+});

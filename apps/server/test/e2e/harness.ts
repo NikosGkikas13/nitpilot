@@ -34,9 +34,10 @@ export type RunningCli = { lines: string[]; configDir: string; agentStarted: boo
 /**
  * Plan 1 end to end (spec §19): the server, wired exactly like main.ts with GitHub replaced by
  * FakePlatform and local git folders, on a random port; and one `nitpilot start` per person, each with
- * its own config folder, clone and git identity, running the fake agent.
+ * its own config folder, clone and git identity, running the fake agent. The Playwright tests' server
+ * (web-server.ts) passes a fixed port and the built web app.
  */
-export async function startE2e() {
+export async function startE2e(opts: { port?: number; webDistDir?: string } = {}) {
   await resetDb();
   const github = localGithub();
   const platform = new FakePlatform();
@@ -59,7 +60,7 @@ export async function startE2e() {
   hub.onMessage(async (conn, msg) => intercept?.(conn, msg));
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
@@ -84,7 +85,7 @@ export async function startE2e() {
   // If anything below throws, stop what already started (otherwise the server and its timers keep running).
   try {
     const listening = await new Promise<Server>((resolve) => {
-      const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => resolve(s as Server));
+      const s = serve({ fetch: app.fetch, port: opts.port ?? 0, hostname: '127.0.0.1' }, () => resolve(s as Server));
     });
     server = listening;
     hub.attach(listening);
