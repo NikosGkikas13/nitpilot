@@ -1,4 +1,4 @@
-import type { Phase } from '@nitpilot/protocol';
+import { FailureReason, type Phase } from '@nitpilot/protocol';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -14,7 +14,7 @@ export type Activity =
   | { kind: 'none' };
 
 /** A queued or running job, and whose agent it's for. */
-export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: string | null };
+export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: FailureReason | null };
 
 /** A person's CLIs: the repos each connected one has linked, and when any of them was last seen. */
 export type Presence = { connected: ReadonlySet<string>[]; lastSeenAt: Date | null };
@@ -36,7 +36,7 @@ export type ActivityFacts = {
 };
 
 /** Jobs a CLI turned down because its owner's limits were reached: they wait (spec §9.4). */
-const LIMITS = new Set(['daily_cap', 'quota']);
+const LIMITS: ReadonlySet<FailureReason> = new Set(['daily_cap', 'quota']);
 
 export function deriveActivity(f: ActivityFacts): Activity {
   // An agent that can't start is what a person needs to hear about, so it comes first.
@@ -61,10 +61,21 @@ function waitingFor(job: ActiveJob, f: ActivityFacts): Activity | null {
   return null;
 }
 
-/** The activity of one chat, read from the database and the connected CLIs. */
+/** The activity of one chat, read from the database and the connected CLIs. A chat that is gone has none. */
 export async function loadActivity(chatId: string, clis: LiveClis, now = new Date()): Promise<Activity> {
-  const chat = await prisma.prChat.findUniqueOrThrow({
-    where: { id: chatId },
+  const activities = await loadActivities([chatId], clis, now);
+  return activities.get(chatId) ?? { kind: 'none' };
+}
+
+/**
+ * The activity of many chats, by chat id, for the inbox. The number of queries doesn't grow with the number
+ * of chats: one read of the chats with their people, points and jobs, and one of when each person's CLIs were
+ * last seen (docs/why/n-plus-one-queries.md). A chat id that doesn't exist is left out.
+ */
+export async function loadActivities(chatIds: string[], clis: LiveClis, now = new Date()): Promise<Map<string, Activity>> {
+  if (chatIds.length === 0) return new Map();
+  const chats = await prisma.prChat.findMany({
+    where: { id: { in: chatIds } },
     include: {
       repo: true,
       participants: true,
@@ -73,18 +84,33 @@ export async function loadActivity(chatId: string, clis: LiveClis, now = new Dat
       jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true }, orderBy: { createdAt: 'asc' } },
     },
   });
-  const userIds = [...new Set(chat.jobs.map((j) => j.userId))];
+  const userIds = [...new Set(chats.flatMap((chat) => chat.jobs.map((j) => j.userId)))];
   // When each of them was last seen: the newest lastSeenAt of their CLI tokens (spec §8).
-  const seen = await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } });
+  const seen = userIds.length > 0 ? await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } }) : [];
   const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
-  const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? null;
-  return deriveActivity({
-    phase: chat.phase as Phase,
-    repoFullName: chat.repo.fullName,
-    author: loginOf(chat.authorGithubId),
-    reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
-    jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: j.failure })),
-    presence: (userId) => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) }),
-    now,
-  });
+  const presence = (userId: string): Presence => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) });
+
+  const activities = new Map<string, Activity>();
+  for (const chat of chats) {
+    const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? null;
+    activities.set(
+      chat.id,
+      deriveActivity({
+        phase: chat.phase as Phase,
+        repoFullName: chat.repo.fullName,
+        author: loginOf(chat.authorGithubId),
+        reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
+        jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: failureOf(j.failure) })),
+        presence,
+        now,
+      }),
+    );
+  }
+  return activities;
+}
+
+/** The stored failure as a FailureReason, or null for one this version doesn't know. */
+function failureOf(stored: string | null): FailureReason | null {
+  const parsed = FailureReason.safeParse(stored);
+  return parsed.success ? parsed.data : null;
 }

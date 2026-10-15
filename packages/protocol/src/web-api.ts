@@ -13,3 +13,15 @@ export const WebMe = MeResponse.extend({
   githubId: z.string(),
 });
 export type WebMe = z.infer<typeof WebMe>;
+
+/**
+ * A row's status pill in the inbox (spec §16, handoff §1), worked out on the server for the person reading
+ * it (`apps/server/src/chats/inbox-status.ts`). `who` is a GitHub login ("leo" → "Leo's agent working");
+ * `reason` says why someone waits or is needed. `quiet` shows no pill.
+ */
+export const InboxStatus = z.object({
+  kind: z.enum(['working', 'waiting', 'their_turn', 'needs_you', 'escalated', 'ready', 'merged', 'closed', 'quiet']),
+  who: z.string().nullable(),
+  reason: z.enum(['offline', 'repo_not_linked', 'cap_reached', 'decision', 'manual_review', 'failed', 'drafts']).nullable(),
+});
+export type InboxStatus = z.infer<typeof InboxStatus>;

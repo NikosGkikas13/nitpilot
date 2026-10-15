@@ -2687,7 +2687,7 @@ No new packages: W2 uses what W1 installed.
 - Consumes: `deriveActivity(facts)`, `Activity`, `LiveClis` (`chats/activity.ts`); `Phase`, `Role`, `Attention`, `FailureReason` (protocol).
 - Produces: `InboxStatus = { kind: 'working' | 'waiting' | 'their_turn' | 'needs_you' | 'escalated' | 'ready' | 'merged' | 'closed' | 'quiet'; who: string | null; reason: 'offline' | 'repo_not_linked' | 'cap_reached' | 'decision' | 'manual_review' | 'failed' | 'drafts' | null }` (protocol). `inboxStatus(f: InboxStatusFacts): InboxStatus` with `InboxStatusFacts = { phase: Phase; merged: boolean; activity: Activity; attention: Attention; role: Role; you: string }` (`you` = the reader's login). `loadActivities(chatIds: string[], clis: LiveClis, now?): Promise<Map<string, Activity>>` (a chat id that doesn't exist is left out; no ids, no queries); `loadActivity(chatId, clis, now?)` is a one-item call of it and answers `{ kind: 'none' }` for a chat that is gone. `ActiveJob.failure: FailureReason | null`. `countQueries(run: () => Promise<unknown>): Promise<number>` (`test/queries.ts`).
 
-- [ ] **Step 1: Let tests count queries**
+- [x] **Step 1: Let tests count queries**
 
 "No N+1" means reading 30 chats takes as many database queries as reading 1. To test it, the Prisma client emits an event per query and a test helper counts them. In `apps/server/src/lib/prisma.ts`, replace `createPrisma` and the `globalForPrisma` line:
 
@@ -2786,7 +2786,7 @@ Prisma's `include` still sends a few queries (one per relation: the chats, then 
 It's the difference between each `<InboxRow>` calling `useQuery(['chat', id])` on mount, which sends one request per row (a waterfall the Network tab makes obvious), and the `<Inbox>` calling `useQuery(['inbox'])` once and handing each row its data as props. Same screen, one request instead of a hundred.
 ````
 
-- [ ] **Step 2: Write the failing test for the status pill**
+- [x] **Step 2: Write the failing test for the status pill**
 
 Create `apps/server/src/chats/inbox-status.test.ts`:
 
@@ -2855,12 +2855,12 @@ describe('inboxStatus (spec §16 "Inbox", handoff §1 status pills)', () => {
 });
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/chats/inbox-status.test.ts`
 Expected: FAIL, `Error: Cannot find module './inbox-status'`.
 
-- [ ] **Step 4: The `InboxStatus` body**
+- [x] **Step 4: The `InboxStatus` body**
 
 Append to `packages/protocol/src/web-api.ts`:
 
@@ -2889,7 +2889,7 @@ In `packages/protocol/src/web-api.test.ts`, import it (`import { InboxStatus, We
   });
 ```
 
-- [ ] **Step 5: Work out the pill**
+- [x] **Step 5: Work out the pill**
 
 Create `apps/server/src/chats/inbox-status.ts`:
 
@@ -2936,12 +2936,12 @@ function pill(kind: InboxStatus['kind'], who: string | null = null, reason: Inbo
 }
 ```
 
-- [ ] **Step 6: Run the tests to see them pass**
+- [x] **Step 6: Run the tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/chats/inbox-status.test.ts && npm test -w packages/protocol`
 Expected: PASS, 10 tests; protocol 44.
 
-- [ ] **Step 7: Write the failing tests for many chats at once**
+- [x] **Step 7: Write the failing tests for many chats at once**
 
 In `apps/server/src/chats/activity.test.ts`, the failure strings become typed, so mark the loop's list `as const`:
 
@@ -3044,12 +3044,12 @@ describe('loadActivities (many chats at once, for the inbox)', () => {
 });
 ```
 
-- [ ] **Step 8: Run them to see them fail**
+- [x] **Step 8: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/activity.db.test.ts`
 Expected: FAIL, 4 tests: `TypeError: loadActivities is not a function` (3), and the gone chat throws `PrismaClientKnownRequestError` (`findUniqueOrThrow`).
 
-- [ ] **Step 9: Read many chats with a fixed number of queries**
+- [x] **Step 9: Read many chats with a fixed number of queries**
 
 In `apps/server/src/chats/activity.ts`:
 
@@ -3116,12 +3116,12 @@ function failureOf(stored: string | null): FailureReason | null {
 
 `transcript.tsx` keeps calling `loadActivity(chat.id, …)`: a chat deleted between its two reads now shows no activity instead of a 500 (Plan 1b's "chat read twice" minor).
 
-- [ ] **Step 10: Run them to see them pass**
+- [x] **Step 10: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/chats/activity.test.ts && npm run test:db -w apps/server -- src/chats/activity.db.test.ts`
 Expected: PASS, 10 and 6 tests.
 
-- [ ] **Step 11: The transcript's plain 403 (carry-forward)**
+- [x] **Step 11: The transcript's plain 403 (carry-forward)**
 
 A route-level test that GitHub's plain 403 (no rate limit) renders "Nothing here", like its 404. In `apps/server/src/http/routes/transcript.db.test.ts`, give `scene` a `forbidden` option:
 
@@ -3150,12 +3150,12 @@ Add, after the test "answers 404 when GitHub says the viewer can't read the repo
 Run: `npm run test:db -w apps/server -- src/http/routes/transcript.db.test.ts`
 Expected: PASS, 16 tests (the new one passes at once: it pins `RepoAccess`'s existing rule at the route).
 
-- [ ] **Step 12: Run the full suite**
+- [x] **Step 12: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: protocol 44, CLI 293 passed + 14 skipped, server 637, web 28; typecheck and lint clean.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add packages/protocol/src/web-api.ts packages/protocol/src/web-api.test.ts apps/server/src/lib/prisma.ts apps/server/test/queries.ts apps/server/src/chats/inbox-status.ts apps/server/src/chats/inbox-status.test.ts apps/server/src/chats/activity.ts apps/server/src/chats/activity.test.ts apps/server/src/chats/activity.db.test.ts apps/server/src/http/routes/transcript.db.test.ts docs/why/n-plus-one-queries.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

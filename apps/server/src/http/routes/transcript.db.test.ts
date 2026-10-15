@@ -29,7 +29,7 @@ const result = (over: Partial<JobResult>): JobResult => ({ summary: 'Done.', poi
  * queued, but leo's CLI isn't connected. `canRead` is what GitHub says about the viewer and the repo
  * (`revoked`: GitHub no longer takes the viewer's token; `githubDown`: it answers 500); `clis` are the connected CLIs (none by default).
  */
-async function scene(opts: { canRead?: boolean; revoked?: boolean; githubDown?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
+async function scene(opts: { canRead?: boolean; forbidden?: boolean; revoked?: boolean; githubDown?: boolean; clis?: (leoId: string) => LiveClis } = {}) {
   const maya = await makeUser({ login: 'maya' });
   const leo = await makeUser({ login: 'leo' });
   const repo = await makeRepo();
@@ -51,7 +51,7 @@ async function scene(opts: { canRead?: boolean; revoked?: boolean; githubDown?: 
   }));
   await runJob(result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Now 20.' }, { point: 2, resolution: 'declined', comment: 'Kept for the API.' }] }));
 
-  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.githubDown ? json({ message: 'Server Error' }, 500) : opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : { id: Number(repo.id) }) });
+  const github = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (opts.githubDown ? json({ message: 'Server Error' }, 500) : opts.revoked ? json({ message: 'Bad credentials' }, 401) : opts.canRead === false ? json({ message: 'Not Found' }, 404) : opts.forbidden ? json({ message: 'Resource not accessible' }, 403) : { id: Number(repo.id) }) });
   const app = testApp({ github: new GithubClient(github), dispatch: dispatcher.dispatch, ...(opts.clis ? { clis: opts.clis(leo.id) } : {}) });
   const path = `/c/${repo.fullName}/${chat.number}`;
   const view = async (viewerId: string | null, at = path) => app.request(at, { headers: viewerId ? { cookie: await sessionCookieFor(viewerId) } : {} });
@@ -71,6 +71,14 @@ describe('GET /c/:owner/:repo/:number (spec §10 "Transcript")', () => {
     await githubAuthFor(maya.id);
     expect((await view(maya.id)).status).toBe(404);
     expect((await view(maya.id, `/c/${repo.fullName}/999`)).status).toBe(404);
+  });
+
+  it("shows 'Nothing here' when GitHub answers a plain 403 (no rate limit), like a 404", async () => {
+    const { maya, view } = await scene({ forbidden: true });
+    await githubAuthFor(maya.id);
+    const res = await view(maya.id);
+    expect(res.status).toBe(404);
+    expect(await textOf(res)).toContain('Nothing here');
   });
 
   it("answers a chat that doesn't exist like one that does, for a viewer who must sign in again (it must not tell which chats exist)", async () => {

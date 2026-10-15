@@ -45,7 +45,7 @@ describe('deriveActivity (spec §9.1)', () => {
 
   it('waits with cap_reached after the daily cap or the agent quota turned the job down', () => {
     const later = new Date(NOW.getTime() + 60 * 60_000);
-    for (const failure of ['daily_cap', 'quota']) {
+    for (const failure of ['daily_cap', 'quota'] as const) {
       expect(deriveActivity(facts({ jobs: [job({ failure, runAfter: later })] }, { 'user-leo': online([REPO]) }))).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'cap_reached' });
     }
     // Once the wait is over, it's up for grabs again.
@@ -55,6 +55,11 @@ describe('deriveActivity (spec §9.1)', () => {
   it('shows the agent that waits when another is working', () => {
     const jobs = [job({ status: 'running' }), job({ login: 'sam', userId: 'user-sam' })];
     expect(deriveActivity(facts({ jobs }, { 'user-sam': offline(LAST_SEEN) }))).toEqual({ kind: 'agent_waiting', who: 'sam', why: 'offline', offlineSince: LAST_SEEN });
+  });
+
+  it('names the running agent before a queued one that could start too', () => {
+    const jobs = [job({ login: 'sam', userId: 'user-sam' }), job({ status: 'running' })];
+    expect(deriveActivity(facts({ jobs }, { 'user-sam': online([REPO]) }))).toEqual({ kind: 'agent_working', who: 'leo' });
   });
 
   it("is human_turn for the author while addressing with no agent at work, and for a reviewer whose answered point waits", () => {
