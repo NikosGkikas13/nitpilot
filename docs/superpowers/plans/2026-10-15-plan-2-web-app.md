@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: task level only (2026-10-15).** Written against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. Each milestone is written at step level (full TDD steps: test and implementation code, exact commands, expected output) just before it is built, checked against the code at the head at that point, and gets a "Checked against the code (Wn)" section listing where it differs from the task-level text below. No app code exists for Plan 2 yet.
+> **Status: W1 at step level; W2–W8 at task level.** The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -89,6 +89,25 @@ Read from `main` at `97268c9`; the step-level text re-checks each one.
 - **`packages/protocol` exports TypeScript source** (`"exports": { ".": "./src/index.ts" }`) and imports only `zod`, so Vite can consume it as is.
 - **CI** (`.github/workflows/ci.yml`) runs typecheck, lint, `npm test` and `npm run test:e2e` against a Postgres service.
 
+## Checked against the code (W1)
+
+W1 was written at step level on 2026-10-15, against branch `plan-2-web-app` at `eebbddd` (main `97268c9` plus the Plan 2 spec and this plan). Its code was built and run in a scratch worktree first (protocol 41 → 43, server 599 → 606 → 615, web 0 → 10 → 22, CLI 293 + 14 skipped unchanged, end to end 5, Playwright 3; typecheck and lint clean), and every code block below was generated from those tested files by a script. The two guards were checked by breaking them: dropping the path check in `spa.ts` fails the traversal test, and letting Vite inline small files fails the Playwright test with the CSP violation. The landing page was looked at in a real browser at 1280 px (light and dark) and 375 px. Where W1 differs from the task-level text, and why:
+
+- **The server's error body is `{ error: { code, message } }`** (`http/errors.ts`), not `{ code, message }`. `ApiError` reads that shape.
+- **Unmatched routes are JSON 404s for every method** (`app.notFound`). Hono's default was a plain-text 404, which the web app couldn't parse.
+- **The dev proxy also forwards `/c/` and `/cli/`** until Tasks 10 and 23 retire those server pages: with `PUBLIC_URL` on port 5173, `nitpilot login` sends people to `http://localhost:5173/cli/approve`, which must still reach the server.
+- **The CSP is a whole policy**, not only `frame-ancestors 'none'`: `default-src 'self'`, `connect-src 'self'` plus the WebSocket origin from `PUBLIC_URL` (Safari doesn't count `ws:` as `'self'`), `img-src` adds GitHub's avatars and `data:`, `style-src` allows inline `style` attributes (React uses them), `font-src 'self'`, `base-uri` and `form-action 'self'`. Vite's asset inlining is off (`assetsInlineLimit: 0`), because an inlined font is a `data:` URL the policy blocks; the Playwright test found it.
+- **Server tests never serve a real build:** `testApp` defaults `webDistDir` to a folder that doesn't exist, so the server's tests don't depend on whether `apps/web/dist` was built. A test that serves the app passes its own temporary folder.
+- **The home page's two checks change** (Task 2): `auth.db.test.ts`'s "shows who is signed in on the home page" is deleted (Task 3's `me.db.test.ts` replaces it), and `transcript.db.test.ts` checks that `/` *contains* `frame-ancestors 'none'`. `home.tsx` had no tests of its own.
+- **`/api/me` moved to `routes/me.ts`** behind `requireUser`, with one answer for both callers (`WebMe`, a superset of `MeResponse`); the CLI's zod parse drops the extra fields, and `cli.db.test.ts`'s exact match becomes `toMatchObject`. A request that sends an `Authorization` header is always treated as a CLI: a wrong token is a 401 even with a valid cookie.
+- **No `Button` component yet** (YAGNI): the landing's call to action and the placeholder's Sign out are styled where they are. Task 6 adds shared controls when the inbox needs them. **`ErrorState`** is new: the "one plain error line with Retry" the task-level text asked for.
+- **`BRAND.repoUrl`** is new: the landing's Docs and GitHub links are name-bearing strings.
+- **The signed-in placeholder keeps Sign out** (a plain form POST to `/auth/logout`, which checks the Origin), because the server home page that had it is gone until Settings (Task 21).
+- **Fonts:** `@fontsource-variable/bricolage-grotesque/opsz.css` (weights and the optical-size axis the handoff asks for) and `@fontsource/fragment-mono/400.css`. The families are `'Bricolage Grotesque Variable'` and `'Fragment Mono'`.
+- **Playwright's plumbing:** the ports live in `e2e/ports.ts`, because Playwright refuses imports from its config file in tests. `test/test-env.ts` holds the environment both Vitest and the Playwright server use. The harness gets `port` and `webDistDir` options. The control API has only `POST /signin` for now; later tasks add what they need. The Playwright server listens on `127.0.0.1:4319` (control on 4320), and its `PUBLIC_URL` is that origin. CI installs Chromium and uploads traces when a test fails.
+- **The live sign-in check moved from Task 2 to Task 3** (Step 12), where there is a sign-in button to click.
+- **npm 11.21 holds back install scripts** (it warns about esbuild's); nothing in W1 needs them.
+
 ## How to work in this repo
 
 - Plans 1a and 1b's "How to work in this repo" apply: Postgres in Docker on port 5433 (`open -a Docker`, then `docker start nitpilot-postgres-1`), `apps/server/.env`, tests use the `nitpilot_test` database.
@@ -103,93 +122,2502 @@ Read from `main` at `97268c9`; the step-level text re-checks each one.
 
 ## Milestone W1: Skeleton
 
-W1 makes `apps/web` exist and reach the browser two ways: through Vite in development and served by the Nitpilot server in production. It ends with the landing page and GitHub sign-in working, and Playwright running one smoke test against a real server.
+W1 makes `apps/web` exist and reach the browser two ways: through Vite in development and served by the Nitpilot server in production. It ends with the landing page and GitHub sign-in working, and Playwright running three smoke tests against a real server.
 
 **Files at the end of W1:**
 ```
 apps/web/
-  package.json, tsconfig.json, vite.config.ts, index.html, eslint (react-hooks) in the root config
-  src/main.tsx, src/app.tsx              router + QueryClientProvider
+  package.json, tsconfig.json, vite.config.ts, index.html, playwright.config.ts
+  src/main.tsx, src/app.tsx                 the data cache and the routes
   src/styles/tokens.css, src/styles/global.css
-  src/theme.ts                           system | light | dark, remembered in localStorage
-  src/api/client.ts                      api.get / api.send with zod parsing, ApiError
-  src/api/me.ts                          useMe
-  src/components/{Wordmark,ThemeToggle,Button}/…
-  src/routes/{Landing,Home}/…            Home = Landing when signed out, a placeholder inbox when signed in
-  playwright.config.ts, e2e/landing.spec.ts
-apps/server/src/
-  http/spa.ts                            static files + SPA fallback + CSP
-  auth/request-user.ts                   requireUser (cookie or CLI token), requireSameOrigin
-  http/routes/me.ts                      GET /api/me for both (moved out of routes/cli.ts)
-apps/server/test/e2e/web-server.ts       the harness on a port, serving apps/web/dist, plus a test-only control API
-packages/protocol/src/web-api.ts         WebMe
+  src/theme.ts                              system | light | dark, remembered in localStorage
+  src/api/client.ts                         api.get / api.send with zod parsing, ApiError, retryUnlessClientError
+  src/api/me.ts                             useMe (null = signed out)
+  src/components/{Wordmark,ThemeToggle,ErrorState}/…
+  src/routes/{Landing,Home}/…               Home = Landing when signed out, a placeholder when signed in
+  src/test/setup.ts
+  e2e/{ports.ts,control.ts,landing.spec.ts}
+apps/server/
+  src/http/spa.ts                           the built app's files, the SPA fallback, the CSP
+  src/auth/request-user.ts                  requireUser (cookie or CLI token), requireSameOrigin
+  src/http/routes/me.ts                     GET /api/me for the browser and the CLI (moved out of routes/cli.ts)
+  test/test-env.ts                          the environment every test run uses
+  test/e2e/web-server.ts                    the harness on a fixed port, serving apps/web/dist, plus a test-only control API
+  (deleted) src/http/pages/home.tsx
+packages/protocol/src/web-api.ts            WebMe; BRAND.repoUrl
 docs/why/serving-a-spa.md
 ```
+
+Package versions (checked against npm on 2026-10-15): `react` and `react-dom` 19.3.1, `react-router` 8.4.0, `@tanstack/react-query` 5.104.3, `vite` 8.3.3 (the one Vitest already brings), `@vitejs/plugin-react` 6.1.2, `jsdom` 30.1.3, `@testing-library/react` 16.3.3, `@testing-library/dom` 10.4.2, `@testing-library/user-event` 14.6.8, `@testing-library/jest-dom` 7.0.1, `@types/react` and `@types/react-dom` 19.3.0, `@fontsource-variable/bricolage-grotesque` and `@fontsource/fragment-mono` 5.3.0, `eslint-plugin-react-hooks` 7.1.1, `globals` 17.13.0, `@playwright/test` 1.64.1 (Chromium only). Vitest stays on 4.1.11, which accepts Vite 8.
 
 ### Task 1: `apps/web` skeleton: Vite, React, router, tokens, theme
 
 **Files:**
-- Create: `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/vite.config.ts` (React plugin, dev proxy for `/api`, `/auth`, `/github`, `/ws` with `ws: true`, Vitest `environment: 'jsdom'` and a setup file for `@testing-library/jest-dom`), `apps/web/index.html`, `apps/web/src/main.tsx`, `apps/web/src/app.tsx`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/global.css`, `apps/web/src/theme.ts`, `apps/web/src/components/Wordmark/{Wordmark.tsx,Wordmark.module.css}`, `apps/web/src/components/ThemeToggle/…`, `apps/web/src/test/setup.ts`.
-- Modify: root `package.json` (workspace scripts include web: `test`, `typecheck`; a root `build` that runs `npm run build -w apps/web`), `eslint.config.mjs` (browser globals and `react-hooks` rules for `apps/web/**`), `.gitignore` (`apps/web/dist`).
+- Create: `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/vite.config.ts`, `apps/web/index.html`, `apps/web/src/test/setup.ts`, `apps/web/src/theme.ts` and `theme.test.ts`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/global.css`, `apps/web/src/components/Wordmark/{Wordmark.tsx,Wordmark.module.css,Wordmark.test.tsx}`, `apps/web/src/components/ThemeToggle/{ThemeToggle.tsx,ThemeToggle.module.css,ThemeToggle.test.tsx}`, `apps/web/src/app.tsx`, `apps/web/src/main.tsx`.
+- Modify: root `package.json` (a `build` script; `eslint-plugin-react-hooks` and `globals` as dev dependencies), `package-lock.json`, `eslint.config.mjs`.
 
 **Interfaces:**
-- Produces: `type ThemeChoice = 'system' | 'light' | 'dark'`; `readTheme(): ThemeChoice` and `writeTheme(choice)` (localStorage wrapped in try/catch: storage can be missing or throw); `applyTheme(choice)` sets `document.documentElement.dataset.theme` (`light`/`dark`) or removes it for `system`. `tokens.css` defines every handoff token on `:root` (light), under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`, and under `:root[data-theme="dark"]`. `<Wordmark size={19 | 22 | 26} />` renders `nıtpilot` in Fragment Mono with the teal diamond over the ı. `<App />` wraps `RouterProvider`-free `BrowserRouter` routes in a `QueryClientProvider` (retry off for 4xx).
+- Produces: `type ThemeChoice = 'system' | 'light' | 'dark'`, `THEME_KEY`, `readTheme(store?)`, `writeTheme(choice, store?)`, `applyTheme(choice, root?)`, `systemPrefersDark()`, `shownTheme(choice, systemDark)` (`src/theme.ts`); `<Wordmark size?: 19 | 22 | 26 />`; `<ThemeToggle />`; `makeQueryClient()` and `<App queryClient? />` (`src/app.tsx`). `tokens.css` defines every handoff token as a CSS variable, plus `--font-sans`, `--font-mono`, the radii and the shadows.
 
-**Behavior:**
-- Fonts from `@fontsource-variable/bricolage-grotesque` (opsz, 400–700) and `@fontsource/fragment-mono` (400), imported in `main.tsx`.
-- `global.css`: body background `--bg`, text `--fg1`, `:focus-visible` 2 px accent outline with 2 px offset, and a `prefers-reduced-motion: reduce` block that disables animations and transitions everywhere.
-- The theme toggle cycles light ↔ dark from whatever is showing now and remembers the choice; with nothing remembered the system decides.
+- [ ] **Step 1: The package**
 
-**Tests this task must include:**
-- `theme.test.ts`: `readTheme` falls back to `system` when localStorage throws or holds junk; `applyTheme` sets and clears `data-theme`.
-- `Wordmark.test.tsx`: renders accessible text "nitpilot" (an `aria-label`, since the dotless ı is decorative).
-- `ThemeToggle.test.tsx`: a click switches to the opposite of the current theme and stores it.
-- `npm run build -w apps/web` produces `dist/index.html`; `npm run typecheck` and `npm run lint` cover `apps/web`.
+Create `apps/web/package.json`:
+
+```json
+{
+  "name": "@nitpilot/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/fragment-mono": "^5.3.0",
+    "@nitpilot/protocol": "*",
+    "@tanstack/react-query": "^5.104.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router": "^8.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^30.1.3",
+    "vite": "^8.3.3"
+  }
+}
+```
+
+Then install it, and the two lint packages at the root:
+
+```bash
+npm install --no-audit --no-fund
+npm install -D --no-audit --no-fund eslint-plugin-react-hooks@^7.1.1 globals@^17.13.0
+```
+
+Expected: both finish without errors (npm 11 may warn that it held back esbuild's install script; nothing here needs it). `git status` shows `apps/web/package.json`, `package.json` and `package-lock.json`.
+
+- [ ] **Step 2: TypeScript, Vite and the test setup**
+
+Create `apps/web/tsconfig.json` (the browser's types instead of Node's; Task 3 adds Playwright's files):
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}
+```
+
+Create `apps/web/vite.config.ts`. The proxy is what makes development one origin (docs/why/serving-a-spa.md, Task 2). Two server-rendered pages are proxied too, until Tasks 10 and 23 replace them: with `PUBLIC_URL` on port 5173, `nitpilot login` sends people to `http://localhost:5173/cli/approve`, which must still reach the server. No asset is inlined as a `data:` URL, because Task 2's Content-Security-Policy only allows the app's own files (Task 3's Playwright test catches an inlined font):
+
+```ts
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
+
+/** Where `npm run dev -w apps/server` listens. Vite forwards the server's paths there, so the browser sees one origin. */
+const SERVER = 'http://localhost:8787';
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    // Never inline files as data: URLs: the server's Content-Security-Policy only allows our own files
+    // (apps/server/src/http/spa.ts), so an inlined font would be blocked.
+    assetsInlineLimit: 0,
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': SERVER,
+      '/auth': SERVER,
+      '/github': SERVER,
+      '/ws': { target: SERVER, ws: true },
+      // Still rendered by the server: the transcript until Task 10, device approval until Task 23.
+      '/c/': SERVER,
+      '/cli/': SERVER,
+    },
+  },
+  test: {
+    environment: 'jsdom',
+    // Only the unit tests: e2e/*.spec.ts are Playwright's (npm run test:e2e).
+    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['./src/test/setup.ts'],
+  },
+});
+```
+
+Create `apps/web/index.html`:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#16707f" />
+    <title>Nitpilot</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+Create `apps/web/src/test/setup.ts`:
+
+```ts
+// Adds matchers such as toBeInTheDocument() to Vitest's expect.
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
+
+// Each test starts with an empty page.
+afterEach(() => cleanup());
+```
+
+- [ ] **Step 3: Write the failing tests**
+
+Create `apps/web/src/theme.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { applyTheme, readTheme, shownTheme, THEME_KEY, writeTheme } from './theme';
+
+function memory(initial: Record<string, string> = {}) {
+  const items = new Map(Object.entries(initial));
+  return {
+    getItem: (k: string) => items.get(k) ?? null,
+    setItem: (k: string, v: string) => void items.set(k, v),
+    removeItem: (k: string) => void items.delete(k),
+    items,
+  };
+}
+
+describe('theme', () => {
+  it('reads a saved choice, and anything else as "system"', () => {
+    expect(readTheme(memory({ [THEME_KEY]: 'dark' }))).toBe('dark');
+    expect(readTheme(memory({ [THEME_KEY]: 'purple' }))).toBe('system');
+    expect(readTheme(memory())).toBe('system');
+    expect(readTheme(null)).toBe('system');
+  });
+
+  it('falls back to "system" when storage throws', () => {
+    const broken = { getItem: () => { throw new Error('SecurityError'); } };
+    expect(readTheme(broken)).toBe('system');
+  });
+
+  it('remembers light and dark, and forgets "system"', () => {
+    const store = memory();
+    writeTheme('dark', store);
+    expect(store.items.get(THEME_KEY)).toBe('dark');
+    writeTheme('system', store);
+    expect(store.items.has(THEME_KEY)).toBe(false);
+  });
+
+  it('does not throw when storage refuses to save', () => {
+    const full = { setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => {} };
+    expect(() => writeTheme('light', full)).not.toThrow();
+  });
+
+  it('sets data-theme for light and dark, and removes it for system', () => {
+    const root = document.createElement('html');
+    applyTheme('dark', root);
+    expect(root.dataset.theme).toBe('dark');
+    applyTheme('system', root);
+    expect(root.dataset.theme).toBeUndefined();
+  });
+
+  it('works out the theme on screen', () => {
+    expect(shownTheme('system', true)).toBe('dark');
+    expect(shownTheme('system', false)).toBe('light');
+    expect(shownTheme('light', true)).toBe('light');
+  });
+});
+```
+
+Create `apps/web/src/components/Wordmark/Wordmark.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { Wordmark } from './Wordmark';
+
+describe('Wordmark', () => {
+  it('is announced as the product name, not as its letters', () => {
+    render(<Wordmark />);
+    expect(screen.getByRole('img', { name: 'Nitpilot' })).toBeInTheDocument();
+  });
+
+  it('draws the name with a dotless i', () => {
+    const { container } = render(<Wordmark size={22} />);
+    expect(container.textContent).toBe('nıtpilot');
+  });
+});
+```
+
+Create `apps/web/src/components/ThemeToggle/ThemeToggle.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it } from 'vitest';
+import { THEME_KEY } from '../../theme';
+import { ThemeToggle } from './ThemeToggle';
+
+afterEach(() => {
+  localStorage.clear();
+  delete document.documentElement.dataset.theme;
+});
+
+describe('ThemeToggle', () => {
+  it('switches to the opposite of what is on screen and remembers it', async () => {
+    // jsdom has no matchMedia, so "system" shows light here.
+    render(<ThemeToggle />);
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem(THEME_KEY)).toBe('dark');
+    expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
+  });
+
+  it('starts from the remembered choice', () => {
+    localStorage.setItem(THEME_KEY, 'dark');
+    render(<ThemeToggle />);
+    expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 4: Run them to see them fail**
+
+Run: `npm test -w apps/web`
+Expected: 3 failed suites, starting with `Error: Failed to resolve import "./theme" from "apps/web/src/theme.test.ts". Does the file exist?`
+
+- [ ] **Step 5: The tokens, the global styles and the theme**
+
+Create `apps/web/src/styles/tokens.css` (every value from the handoff's color table; dark applies when the system is dark and the toggle didn't choose light, or when the toggle chose dark):
+
+```css
+/*
+ * Design tokens from the Claude Design handoff (docs/design/handoff/design_handoff_nitpilot_web/README.md).
+ * Light is the default. Dark follows the system unless the theme toggle chose light, or applies when it chose dark.
+ */
+:root {
+  --font-sans: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --font-mono: 'Fragment Mono', ui-monospace, monospace;
+
+  --bg: #eef2ee;
+  --side: #f7f9f6;
+  --surface: #ffffff;
+  --muted: #e8ede7;
+  --hover: #eef2ed;
+  --sel: #e6ece6;
+  --fg1: #16201b;
+  --fg2: #44514a;
+  --fg3: #5f6c65;
+  --fg4: #9aa59f;
+  --b1: #dfe6df;
+  --b2: #edf1ec;
+  --acc: #16707f;
+  --on-acc: #ffffff;
+  --acc-tint: #e0f0f2;
+  --acc-text: #0f6170;
+  --acc-line: #b7dbe0;
+  --bubble: #dcefef;
+  --hl: #e0f0f2;
+  --code: #f7f9f6;
+  --ok: #2f9e5b;
+  --ok-fg: #1f7444;
+  --ok-tint: #e3f3e8;
+  --warn: #e09a1a;
+  --warn-fg: #93600a;
+  --warn-tint: #fbf0d9;
+  --red: #d6453a;
+  --red-fg: #b3322a;
+  --red-tint: #fbe9e6;
+  --red-line: #f1c6c0;
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-input: 18px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(16, 32, 24, 0.05), 0 6px 20px rgba(16, 32, 24, 0.06);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-toast: 0 6px 20px rgba(0, 0, 0, 0.18);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0f1412;
+    --side: #121815;
+    --surface: #18201c;
+    --muted: #222b26;
+    --hover: #1c2420;
+    --sel: #202925;
+    --fg1: #e8efea;
+    --fg2: #bfcac3;
+    --fg3: #93a198;
+    --fg4: #5f6c65;
+    --b1: #2b3630;
+    --b2: #1f2823;
+    --acc: #5cc3d1;
+    --on-acc: #06191c;
+    --acc-tint: #13292c;
+    --acc-text: #86d6e1;
+    --acc-line: #245055;
+    --bubble: #13292c;
+    --hl: #13292c;
+    --code: #121815;
+    --ok: #3fbf74;
+    --ok-fg: #62d293;
+    --ok-tint: #13261b;
+    --warn: #efaa34;
+    --warn-fg: #f3bf62;
+    --warn-tint: #2a2213;
+    --red: #ef5e52;
+    --red-fg: #ff8579;
+    --red-tint: #2b1715;
+    --red-line: #5a2a25;
+    --shadow-card: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1412;
+  --side: #121815;
+  --surface: #18201c;
+  --muted: #222b26;
+  --hover: #1c2420;
+  --sel: #202925;
+  --fg1: #e8efea;
+  --fg2: #bfcac3;
+  --fg3: #93a198;
+  --fg4: #5f6c65;
+  --b1: #2b3630;
+  --b2: #1f2823;
+  --acc: #5cc3d1;
+  --on-acc: #06191c;
+  --acc-tint: #13292c;
+  --acc-text: #86d6e1;
+  --acc-line: #245055;
+  --bubble: #13292c;
+  --hl: #13292c;
+  --code: #121815;
+  --ok: #3fbf74;
+  --ok-fg: #62d293;
+  --ok-tint: #13261b;
+  --warn: #efaa34;
+  --warn-fg: #f3bf62;
+  --warn-tint: #2a2213;
+  --red: #ef5e52;
+  --red-fg: #ff8579;
+  --red-tint: #2b1715;
+  --red-line: #5a2a25;
+  --shadow-card: none;
+  color-scheme: dark;
+}
+```
+
+Create `apps/web/src/styles/global.css`:
+
+```css
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+}
+
+/* Every interactive element gets the same keyboard focus ring (handoff: "Focus"). */
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+/* The handoff: reduced motion turns off the ping, the spinner and every transition. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+Create `apps/web/src/theme.ts`:
+
+```ts
+import { BRAND } from '@nitpilot/protocol';
+
+/** What the person picked. `system` follows the operating system's light or dark setting. */
+export type ThemeChoice = 'system' | 'light' | 'dark';
+
+export const THEME_KEY = `${BRAND.cli}.theme`;
+
+/**
+ * localStorage can be missing or throw (a private window, blocked site data), so every use is
+ * wrapped: without it, the theme just follows the system.
+ */
+function storage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readTheme(store: Pick<Storage, 'getItem'> | null = storage()): ThemeChoice {
+  try {
+    const saved = store?.getItem(THEME_KEY);
+    return saved === 'light' || saved === 'dark' ? saved : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+export function writeTheme(choice: ThemeChoice, store: Pick<Storage, 'setItem' | 'removeItem'> | null = storage()): void {
+  try {
+    if (choice === 'system') store?.removeItem(THEME_KEY);
+    else store?.setItem(THEME_KEY, choice);
+  } catch {
+    // Not remembered; the choice still applies until the page reloads.
+  }
+}
+
+/** tokens.css reads `data-theme` on <html>: none means "follow the system". */
+export function applyTheme(choice: ThemeChoice, root: HTMLElement = document.documentElement): void {
+  if (choice === 'system') delete root.dataset.theme;
+  else root.dataset.theme = choice;
+}
+
+export function systemPrefersDark(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+/** The theme on screen right now. */
+export function shownTheme(choice: ThemeChoice, systemDark: boolean): 'light' | 'dark' {
+  if (choice === 'system') return systemDark ? 'dark' : 'light';
+  return choice;
+}
+```
+
+- [ ] **Step 6: The wordmark and the theme toggle**
+
+Create `apps/web/src/components/Wordmark/Wordmark.module.css`:
+
+```css
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--fg1);
+  white-space: nowrap;
+}
+
+/* The dotless ı carries the mark: a teal diamond in place of the dot. */
+.dot {
+  position: relative;
+}
+
+.diamond {
+  position: absolute;
+  left: 50%;
+  top: -0.02em;
+  width: 0.26em;
+  height: 0.26em;
+  background: var(--acc);
+  transform: translateX(-50%) rotate(45deg);
+}
+```
+
+Create `apps/web/src/components/Wordmark/Wordmark.tsx`:
+
+```tsx
+import { BRAND } from '@nitpilot/protocol';
+import styles from './Wordmark.module.css';
+
+// The wordmark is the CLI name with its first "i" drawn as a dotless ı under a teal diamond.
+const SPLIT = BRAND.cli.indexOf('i');
+const BEFORE = BRAND.cli.slice(0, SPLIT);
+const AFTER = BRAND.cli.slice(SPLIT + 1);
+
+/** `nıtpilot` in Fragment Mono with the teal diamond (handoff: "Mark"). 19 px in the sidebar, 22 on the landing nav, 26 on the splash. */
+export function Wordmark({ size = 19 }: { size?: 19 | 22 | 26 }) {
+  return (
+    <span className={styles.wordmark} style={{ fontSize: size }} role="img" aria-label={BRAND.name}>
+      <span aria-hidden="true">
+        {BEFORE}
+        <span className={styles.dot}>
+          ı<span className={styles.diamond} />
+        </span>
+        {AFTER}
+      </span>
+    </span>
+  );
+}
+```
+
+Create `apps/web/src/components/ThemeToggle/ThemeToggle.module.css`:
+
+```css
+.toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--hover);
+}
+```
+
+Create `apps/web/src/components/ThemeToggle/ThemeToggle.tsx`:
+
+```tsx
+import { useState } from 'react';
+import { applyTheme, readTheme, shownTheme, systemPrefersDark, writeTheme, type ThemeChoice } from '../../theme';
+import styles from './ThemeToggle.module.css';
+
+/** Switches between light and dark, starting from whatever is on screen, and remembers the choice. */
+export function ThemeToggle() {
+  const [choice, setChoice] = useState<ThemeChoice>(() => readTheme());
+  const shown = shownTheme(choice, systemPrefersDark());
+  const next = shown === 'dark' ? 'light' : 'dark';
+
+  function toggle() {
+    writeTheme(next);
+    applyTheme(next);
+    setChoice(next);
+  }
+
+  return (
+    <button type="button" className={styles.toggle} aria-label={`Switch to ${next} theme`} onClick={toggle}>
+      {shown === 'dark' ? <SunIcon /> : <MoonIcon />}
+    </button>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+```
+
+- [ ] **Step 7: Run the tests to see them pass**
+
+Run: `npm test -w apps/web`
+Expected: `Test Files  3 passed (3)`, `Tests  10 passed (10)`.
+
+- [ ] **Step 8: The app, its entry point, lint and the build**
+
+Create `apps/web/src/app.tsx` (a placeholder route; Task 3 replaces it):
+
+```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Route, Routes } from 'react-router';
+import { ThemeToggle } from './components/ThemeToggle/ThemeToggle';
+import { Wordmark } from './components/Wordmark/Wordmark';
+
+export function makeQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: 1 } } });
+}
+
+/** The whole app: data cache, then routes. Task 3 replaces the placeholder with the landing page and the inbox. */
+export function App({ queryClient = makeQueryClient() }: { queryClient?: QueryClient }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<Placeholder />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+
+function Placeholder() {
+  return (
+    <main style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <Wordmark />
+      <ThemeToggle />
+    </main>
+  );
+}
+```
+
+Create `apps/web/src/main.tsx` (the fonts come from the `@fontsource` packages: the variable Bricolage Grotesque with its optical-size axis, and Fragment Mono 400):
+
+```tsx
+import '@fontsource-variable/bricolage-grotesque/opsz.css';
+import '@fontsource/fragment-mono/400.css';
+import './styles/global.css';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { App } from './app';
+import { applyTheme, readTheme } from './theme';
+
+// Before the first paint, so a dark choice never flashes light.
+applyTheme(readTheme());
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+```
+
+In `eslint.config.mjs`, add the two imports after `import js from '@eslint/js';`:
+
+```js
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
+```
+
+and this block right after `...tseslint.configs.recommended,`:
+
+```js
+  {
+    // The web app runs in the browser, and its components follow React's rules of hooks.
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    ...reactHooks.configs.flat['recommended-latest'],
+  },
+```
+
+In the root `package.json`, add `"build": "npm run build -w apps/web"` as the first script. (`dist/` is already in `.gitignore`.)
+
+Run: `npm run build && npm run typecheck && npm run lint`
+Expected: Vite prints `✓ built in …` with `dist/index.html`, the fonts under `dist/assets/` as `.woff2` files, and one CSS and one JS file; typecheck and lint print no errors.
+
+- [ ] **Step 9: Look at it**
+
+Run `npm run dev -w apps/web` and open `http://localhost:5173`. Expected: the wordmark `nıtpilot` in Fragment Mono with the teal diamond over the ı, and the 32 px theme button; clicking it switches light ↔ dark (background `#eef2ee` ↔ `#0f1412`), and a reload keeps the choice. Take a screenshot of each theme for the task report. Stop Vite.
+
+- [ ] **Step 10: The whole suite, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: protocol 41, CLI 293 passed + 14 skipped, server 599, web 10; typecheck and lint clean.
+
+```bash
+git add apps/web package.json package-lock.json eslint.config.mjs docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): apps/web skeleton with the design tokens, theme and wordmark
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 2: The server serves the web app (SPA fallback, CSP, dev setup)
 
 **Files:**
 - Create: `apps/server/src/http/spa.ts`, `apps/server/src/http/spa.test.ts`, `docs/why/serving-a-spa.md`.
-- Modify: `apps/server/src/http/app.ts` (mount the SPA last; remove the `/` home route), `apps/server/src/lib/env.ts` (`WEB_DIST_DIR`, default `../web/dist` resolved from the server package), `apps/server/.env.example` (`PUBLIC_URL=http://localhost:5173` for development, with a comment), `.github/workflows/ci.yml` (build the web app before the tests), the spec only if something differs.
-- Delete: `apps/server/src/http/pages/home.tsx` and its tests (the landing page is the SPA's from Task 3).
+- Modify: `apps/server/src/http/app.ts` (mount the app last, a JSON 404 for everything else, no `/` home route), `apps/server/src/lib/env.ts` (`WEB_DIST_DIR`), `apps/server/test/app.ts` (tests never use a real build), `apps/server/src/http/routes/auth.db.test.ts` and `transcript.db.test.ts` (the home page's two checks), `apps/server/.env.example`, `.github/workflows/ci.yml`.
+- Delete: `apps/server/src/http/pages/home.tsx` (no tests of its own; the landing page is the web app's from Task 3).
 
 **Interfaces:**
-- Produces: `spaRoutes(opts: { distDir: string }): Hono`. Mounted after every other route. `GET /assets/*` and the other files in `dist` are served with `Cache-Control: public, max-age=31536000, immutable` for hashed assets and `no-cache` for `index.html`, `sw.js` and `manifest.webmanifest`. Any other GET whose path doesn't start with `/api/`, `/auth/`, `/github/`, `/webhooks/`, `/ws/` or equal `/healthz` gets `index.html` with status 200. Every response from it carries `Content-Security-Policy: frame-ancestors 'none'` (plus `default-src 'self'`, `connect-src 'self'`, `img-src 'self' https://avatars.githubusercontent.com data:`, `style-src 'self' 'unsafe-inline'` for CSS Modules in dev builds; the step level checks Vite's production output needs nothing more).
-- A missing `distDir` makes the fallback answer 503 with a one-line text: "The web app isn't built. Run `npm run build -w apps/web`." (so a server started without a build says why).
+- Consumes: `errorBody` (`http/errors.ts`), `getEnv`.
+- Produces: `spaRoutes(opts: { distDir: string; publicUrl: string }): Hono`, `contentSecurityPolicy(publicUrl): string`, `DEFAULT_WEB_DIST`, `BUILD_HINT` (`http/spa.ts`); `AppDeps.webDistDir?: string`; `Env.WEB_DIST_DIR?: string`. Every unmatched route answers `404 { error: { code: 'not_found', message: 'no such route' } }`.
 
-**Behavior:**
-- Unknown `/api/*` paths stay JSON 404s (`onError`), never `index.html`.
-- Paths are resolved inside `distDir` only: `..`, encoded `%2e%2e` and absolute paths never leave it.
-- Development: `PUBLIC_URL=http://localhost:5173`, so GitHub's OAuth callback lands on Vite and is proxied to the server. **Live step (ask first):** the person adds `http://localhost:5173/auth/github/callback` to the `nitpilot-dev` app's callback URLs (GitHub → Settings → Developer settings → GitHub Apps → nitpilot-dev → Callback URL → Add Callback URL), signed in as NikosGkikas13, with every click spelled out.
-- `docs/why/serving-a-spa.md`: what a single-page app's build is, why one origin (cookies, no CORS), what the fallback does and why `/api` must never fall back, and the dev proxy, in React terms; points to `http/spa.ts` and `apps/web/vite.config.ts`.
+- [ ] **Step 1: Tests never serve a real build**
 
-**Tests this task must include:**
-- `GET /inbox/whatever` → 200 `index.html` with the CSP header; `GET /assets/<hashed>.js` → the file with the immutable cache header; `GET /api/nope` → JSON 404; `GET /healthz` unchanged; `GET /..%2f..%2fpackage.json` and `GET /assets/..%2f..%2f.env` → never a file outside `distDir`; a missing `distDir` → 503 with the build hint. Tests use a temporary `dist` folder.
+In `apps/server/test/app.ts`, add to the object `testDeps` returns, after the `clis` line:
+
+```ts
+    // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
+    webDistDir: '/nonexistent/nitpilot-web-dist',
+```
+
+- [ ] **Step 2: Write the failing test**
+
+Create `apps/server/src/http/spa.test.ts`:
+
+```ts
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { testApp } from '../../test/app';
+import { BUILD_HINT } from './spa';
+
+// A pretend build: dist/ with an index, a hashed asset and a service worker, and a secret next to it.
+let outer: string;
+let dist: string;
+
+beforeAll(() => {
+  outer = mkdtempSync(path.join(tmpdir(), 'nitpilot-spa-'));
+  dist = path.join(outer, 'dist');
+  mkdirSync(path.join(dist, 'assets'), { recursive: true });
+  writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>app</title>');
+  writeFileSync(path.join(dist, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(path.join(dist, 'sw.js'), 'self.addEventListener("push", () => {})');
+  writeFileSync(path.join(outer, 'secret.txt'), 'TOP-SECRET');
+});
+
+afterAll(() => rmSync(outer, { recursive: true, force: true }));
+
+describe('serving the web app', () => {
+  it('answers an app route with index.html, the CSP and no-cache', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/inbox/whatever');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(await res.text()).toContain('<title>app</title>');
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+    expect(res.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('answers / with the app', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/');
+    expect(await res.text()).toContain('<title>app</title>');
+  });
+
+  it('serves a hashed asset with a long cache, and other files with no-cache', async () => {
+    const app = testApp({ webDistDir: dist });
+    const asset = await app.request('/assets/index-abc123.js');
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('content-type')).toContain('text/javascript');
+    expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    const sw = await app.request('/sw.js');
+    expect(await sw.text()).toContain('push');
+    expect(sw.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('keeps unknown server paths as JSON 404s', async () => {
+    const app = testApp({ webDistDir: dist });
+    for (const url of ['/api/nope', '/auth/nope', '/webhooks/nope']) {
+      const res = await app.request(url);
+      expect(res.status, url).toBe(404);
+      expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'no such route' } });
+    }
+  });
+
+  it('answers only GETs with the app', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/inbox', { method: 'POST' });
+    expect(res.status).toBe(404);
+  });
+
+  it('leaves the health check alone', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/healthz');
+    expect(await res.json()).toMatchObject({ ok: true });
+  });
+
+  it('never serves a file outside dist, however the path is spelled', async () => {
+    const app = testApp({ webDistDir: dist });
+    for (const url of ['/..%2fsecret.txt', '/assets/..%2f..%2fsecret.txt', '/%2e%2e/secret.txt', '/assets/%252e%252e/%252e%252e/secret.txt']) {
+      const res = await app.request(url);
+      expect(await res.text(), url).not.toContain('TOP-SECRET');
+    }
+  });
+
+  it('says how to build the app when there is no build', async () => {
+    const res = await testApp({ webDistDir: path.join(outer, 'missing') }).request('/inbox');
+    expect(res.status).toBe(503);
+    expect(await res.text()).toBe(BUILD_HINT);
+  });
+});
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
+Expected: FAIL, `Error: Cannot find module './spa'`.
+
+- [ ] **Step 4: Serve the app**
+
+Create `apps/server/src/http/spa.ts`:
+
+```ts
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Hono } from 'hono';
+
+/** apps/web/dist, next to this package. WEB_DIST_DIR overrides it (the Playwright server, a container). */
+export const DEFAULT_WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
+
+/** Paths the server answers itself. A miss under them is a JSON 404, never the web app's page. */
+const SERVER_PREFIXES = ['/api/', '/auth/', '/github/', '/webhooks/', '/ws/'];
+const SERVER_PATHS = new Set(['/api', '/auth', '/github', '/webhooks', '/ws', '/healthz']);
+
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/web`, then restart the server.";
+
+/**
+ * What the browser may load, for every page and file the web app is served with. `frame-ancestors 'none'`
+ * keeps other sites from framing it (spec §10). Styles allow inline `style` attributes, which React uses.
+ */
+export function contentSecurityPolicy(publicUrl: string): string {
+  const url = new URL(publicUrl);
+  const socket = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
+  return [
+    "default-src 'self'",
+    `connect-src 'self' ${socket}`,
+    "img-src 'self' data: https://avatars.githubusercontent.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
+function isServerPath(pathname: string): boolean {
+  return SERVER_PATHS.has(pathname) || SERVER_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/** The file a URL path names inside `root`, or null when there's none (or the path tries to leave `root`). */
+async function fileIn(root: string, pathname: string): Promise<string | null> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const relative = decoded.replace(/^\/+/, '');
+  if (relative === '') return null;
+  const full = path.resolve(root, relative);
+  // `..` in any spelling ends up outside root after resolve(): refuse it.
+  if (!full.startsWith(root + path.sep)) return null;
+  const info = await stat(full).catch(() => null);
+  return info?.isFile() ? full : null;
+}
+
+/**
+ * Serves the built web app (spec §7): its files, and its index.html for every other GET that isn't one of
+ * the server's own paths, so a link like /c/octo/sandbox/42 opens the app, which then shows that chat.
+ * Mounted after every other route. See docs/why/serving-a-spa.md.
+ */
+export function spaRoutes(opts: { distDir: string; publicUrl: string }): Hono {
+  const app = new Hono();
+  const root = path.resolve(opts.distDir);
+  const csp = contentSecurityPolicy(opts.publicUrl);
+
+  app.get('*', async (c, next) => {
+    if (isServerPath(c.req.path)) return next();
+    c.header('Content-Security-Policy', csp);
+
+    const file = await fileIn(root, c.req.path);
+    if (file) {
+      // Vite puts a content hash in every name under assets/, so those never change; the rest must be re-checked.
+      const hashed = file.startsWith(path.join(root, 'assets') + path.sep);
+      c.header('Cache-Control', hashed ? 'public, max-age=31536000, immutable' : 'no-cache');
+      c.header('Content-Type', TYPES[path.extname(file)] ?? 'application/octet-stream');
+      return c.body(await readFile(file));
+    }
+
+    const index = await readFile(path.join(root, 'index.html')).catch(() => null);
+    if (!index) return c.text(BUILD_HINT, 503);
+    c.header('Cache-Control', 'no-cache');
+    return c.html(index.toString('utf8'));
+  });
+
+  return app;
+}
+```
+
+In `apps/server/src/lib/env.ts`, add before `PUBLIC_REPOS_ONLY`:
+
+```ts
+  /** Where the built web app is (apps/web/dist by default; see http/spa.ts). */
+  WEB_DIST_DIR: z.string().min(1).optional(),
+```
+
+Replace `apps/server/src/http/app.ts` with (the home page route and its imports go; the app is mounted last, and anything still unmatched is a JSON 404):
+
+```ts
+import type { HealthResponse } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import type { LiveClis } from '../chats/activity';
+import type { Dispatch } from '../chats/dispatch';
+import type { Ingest } from '../ingest/process';
+import { getEnv } from '../lib/env';
+import type { AppAuth } from '../platform/github/app-auth';
+import type { GithubClient } from '../platform/github/client';
+import { SERVER_VERSION } from '../version';
+import { errorBody, onError } from './errors';
+import { authRoutes } from './routes/auth';
+import { cliRoutes } from './routes/cli';
+import { cliApproveRoutes } from './routes/cli-approve';
+import { setupRoutes } from './routes/setup';
+import { transcriptRoutes } from './routes/transcript';
+import { webhookRoutes } from './routes/webhooks';
+import { DEFAULT_WEB_DIST, spaRoutes } from './spa';
+
+/** What the HTTP layer needs from outside. Tests pass fakes. Later tasks add fields. */
+export type AppDeps = {
+  github: GithubClient;
+  appAuth: AppAuth;
+  ingest: Ingest;
+  dispatch: Dispatch;
+  clis: LiveClis;
+  /** The built web app (apps/web/dist). Tests pass a folder of their own. */
+  webDistDir?: string;
+};
+
+export function createApp(deps: AppDeps): Hono {
+  const app = new Hono();
+  app.onError(onError);
+  app.get('/healthz', (c) => {
+    const body: HealthResponse = { ok: true, version: SERVER_VERSION };
+    return c.json(body);
+  });
+  app.route('/', authRoutes(deps));
+  app.route('/', cliRoutes(deps));
+  app.route('/', cliApproveRoutes());
+  app.route('/', setupRoutes(deps));
+  app.route('/', transcriptRoutes(deps));
+  app.route('/', webhookRoutes(deps));
+  // Last: everything else is the web app's (spec §7).
+  const env = getEnv();
+  app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: env.PUBLIC_URL }));
+  app.notFound((c) => c.json(errorBody('not_found', 'no such route'), 404));
+  return app;
+}
+```
+
+Delete the old home page: `git rm apps/server/src/http/pages/home.tsx`.
+
+- [ ] **Step 5: Run the test to see it pass**
+
+Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
+Expected: `Tests  8 passed (8)`.
+
+- [ ] **Step 6: Prove the path check matters**
+
+In `spa.ts`, delete the line `  if (!full.startsWith(root + path.sep)) return null;` and run the test again.
+Expected: 1 failed, `× never serves a file outside dist, however the path is spelled`. Put the line back (`git diff apps/server/src/http/spa.ts` shows nothing beyond Step 4's file) and run it again: 8 passed.
+
+- [ ] **Step 7: The home page's two checks**
+
+Run: `npm test -w apps/server`
+Expected: 2 failed: `auth.db.test.ts > GitHub sign-in > shows who is signed in on the home page` (the page is gone) and `transcript.db.test.ts > … frame-ancestors …` (`/` now carries the web app's whole policy).
+
+In `apps/server/src/http/routes/auth.db.test.ts`, delete the test `it('shows who is signed in on the home page', …)` (Task 3's `me.db.test.ts` checks who is signed in). In `apps/server/src/http/routes/transcript.db.test.ts`, replace its last assertion with:
+
+```ts
+    // The web app's pages say the same (http/spa.ts).
+    expect((await testApp().request('/')).headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+```
+
+Run: `npm test -w apps/server`
+Expected: `Tests  606 passed (606)`.
+
+- [ ] **Step 8: The explainer, the example environment and CI**
+
+Create `docs/why/serving-a-spa.md`:
+
+```markdown
+# Serving the web app from the API server
+
+**In one sentence:** the Nitpilot server hands out the built React app itself, from the same address as its API, and answers every app URL it doesn't know with the app's `index.html` (spec §7, `apps/server/src/http/spa.ts`).
+
+## What a "build" is
+
+`npm run build -w apps/web` turns the React code into plain files in `apps/web/dist`: one `index.html`, and JavaScript, CSS and fonts under `assets/`. A browser needs nothing else. Something has to send those files when the browser asks, and in Nitpilot that something is the server that already runs the API, so there is still one process to deploy.
+
+## Why the same address (origin) matters
+
+An origin is scheme + host + port: `https://nitpilot.dev` and `https://api.nitpilot.dev` are two origins; so are `localhost:5173` and `localhost:8787`.
+
+- **The sign-in cookie just works.** The browser sends a site's cookie with requests to that same origin. With the app and the API on one origin, every `fetch('/api/…')` carries the session, with no cross-site cookie settings.
+- **No CORS.** A page may call another origin only if that origin says so in special headers (CORS). On one origin there's nothing to allow, so nothing to get wrong.
+
+## The fallback: why every app URL gets `index.html`
+
+The app has its own routes (`/`, `/c/octo/sandbox/42`, `/settings`), but there is no file called `c/octo/sandbox/42`. React Router reads the address bar once the app loads. So for any GET the server doesn't know, it sends `index.html`, the app starts, and the router shows the right screen. That is why a link in a GitHub summary comment opens the chat directly.
+
+Two rules keep the fallback honest:
+
+- **The server's own paths never fall back.** A typo under `/api/…`, `/auth/…`, `/github/…`, `/webhooks/…` or `/ws/…` gets a JSON 404. Otherwise a broken API call would get a 200 with a web page in it, and the app would choke on it in a confusing way.
+- **Files come only from `dist`.** A path such as `/..%2f..%2f.env` is resolved and refused if it would leave the folder, however it's spelled.
+
+## Caching
+
+Vite puts a content hash in every file name under `assets/` (`index-Dywsqop4.js`): a new build means a new name. So those are cached for a year. `index.html`, the service worker and the manifest keep their names across builds, so the browser must check them every time (`no-cache`), or an old `index.html` would point at files that no longer exist.
+
+## In development
+
+You run two things: the API server on port 8787 and Vite on port 5173, which rebuilds as you type. Vite **proxies** the server's paths (`/api`, `/auth`, `/github`, `/ws`, plus the two pages the server still renders for now) to 8787 (`apps/web/vite.config.ts`). The browser only ever talks to 5173, so it's one origin there too. That's why `PUBLIC_URL` is `http://localhost:5173` in development: GitHub's sign-in sends you back to that address, and Vite passes the callback on to the server.
+
+## The React analogy
+
+The fallback is the server side of client-side routing. It's like a `<Route path="*">` at the very end of your routes, except that on the server it doesn't show "not found": it boots the app, and the app's own routes decide what to show.
+```
+
+In `apps/server/.env.example`, replace the `PUBLIC_URL` lines with:
+
+```bash
+# Where people reach Nitpilot. In development that's Vite (npm run dev -w apps/web), which passes the
+# server's paths on to port 8787 (docs/why/serving-a-spa.md); with the dev tunnel it's the tunnel URL.
+PUBLIC_URL=http://localhost:5173
+```
+
+and add before `# Hosted instance only`:
+
+```bash
+# The built web app; leave unset to use apps/web/dist
+# WEB_DIST_DIR=
+
+```
+
+Your own `apps/server/.env` needs the same `PUBLIC_URL` change for development; GitHub's sign-in only accepts it once Task 3's live step has added the callback URL (until then, sign-in from port 8787 keeps working with the old value).
+
+In `.github/workflows/ci.yml`, add after `- run: npm run typecheck`:
+
+```yaml
+      # The web app's files, which the server serves (spec §7).
+      - run: npm run build
+```
+
+- [ ] **Step 9: Look at it through the server**
+
+Run `npm run build`, then `npm run dev -w apps/server` (it serves `apps/web/dist`), and open `http://localhost:8787/` and `http://localhost:8787/c/x/y/1`: the first shows Task 1's placeholder; the second is still the server's transcript route (signed out, it sends you to GitHub sign-in), because server routes come first. `curl -s -o /dev/null -w '%{http_code}\n' localhost:8787/api/nope` prints `404`. Stop the server.
+
+- [ ] **Step 10: The whole suite, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: protocol 41, CLI 293 passed + 14 skipped, server 606, web 10; typecheck and lint clean.
+
+```bash
+git add apps/server docs/why/serving-a-spa.md .github/workflows/ci.yml docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): serve the web app with an SPA fallback and a CSP
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 3: Sign-in, `/api/me` for the browser, landing page, Playwright
 
 **Files:**
-- Create: `apps/server/src/auth/request-user.ts` (+ test), `apps/server/src/http/routes/me.ts` (+ db test), `packages/protocol/src/web-api.ts` (+ round-trip tests), `apps/web/src/api/client.ts` (+ test), `apps/web/src/api/me.ts`, `apps/web/src/routes/Landing/…`, `apps/web/src/routes/Home/…`, `apps/web/src/components/Button/…`, `apps/web/playwright.config.ts`, `apps/web/e2e/landing.spec.ts`, `apps/server/test/e2e/web-server.ts`.
-- Modify: `apps/server/src/http/routes/cli.ts` (`/api/me` moves to `me.ts`; the CLI keeps its answer shape), `apps/server/src/http/app.ts`, `packages/protocol/src/index.ts`, root `package.json` (`test:web-e2e`), `apps/server/package.json` (`e2e:web-server`), `.github/workflows/ci.yml` (install Chromium, run `test:web-e2e`).
+- Create: `packages/protocol/src/web-api.ts` and `web-api.test.ts`; `apps/server/src/auth/request-user.ts` and `request-user.db.test.ts`, `apps/server/src/http/routes/me.ts` and `me.db.test.ts`, `apps/server/test/test-env.ts`, `apps/server/test/e2e/web-server.ts`; `apps/web/src/api/{client.ts,client.test.ts,me.ts}`, `apps/web/src/components/ErrorState/{ErrorState.tsx,ErrorState.module.css}`, `apps/web/src/routes/Landing/{Landing.tsx,Landing.module.css,Landing.test.tsx}`, `apps/web/src/routes/Home/{Home.tsx,Home.module.css,Home.test.tsx}`, `apps/web/playwright.config.ts`, `apps/web/e2e/{ports.ts,control.ts,landing.spec.ts}`.
+- Modify: `packages/protocol/src/index.ts`, `packages/protocol/src/brand.ts` (`repoUrl`); `apps/server/src/http/routes/cli.ts` (`/api/me` moves out), `apps/server/src/http/app.ts`, `apps/server/src/http/routes/cli.db.test.ts`, `apps/server/vitest.config.ts`, `apps/server/test/e2e/harness.ts`, `apps/server/package.json`; `apps/web/src/app.tsx`, `apps/web/tsconfig.json`, `apps/web/package.json`; root `package.json`, `package-lock.json`, `.gitignore`, `.github/workflows/ci.yml`.
 
 **Interfaces:**
-- Consumes: `currentUser(c)` (`auth/session.ts`), `authenticateCliToken` (`auth/cli-token.ts`), `isAllowedOrigin` (`lib/csrf.ts`).
-- Produces (server): `requireUser: MiddlewareHandler<{ Variables: { user: SessionUser; via: 'session' | 'cli' } }>`: a valid session cookie or a valid `Bearer nit_…` token, else 401 `{ code: 'unauthorized' }`. `requireSameOrigin`: for `via === 'session'` and a non-GET method, `isAllowedOrigin` must pass, else 403. Every later write route uses both.
-- Produces (protocol): `WebMe = MeResponse.extend({ id: z.string(), githubId: z.string() })`. Later tasks extend it (`settings`, `usedToday`, `onboarding`, `push`, `agentOnline`). The CLI's `MeResponse` parse keeps working because zod strips unknown keys.
-- Produces (web): `api.get<T>(path, schema): Promise<T>`, `api.send<T>(method, path, body, schema?): Promise<T>` (sends JSON with `credentials: 'same-origin'`), `class ApiError { status: number; code: string; message: string }` built from the server's `{ code, message }` error body; `useMe()` → `UseQueryResult<WebMe | null>` (a 401 resolves to `null`, which means "signed out").
-- Produces (tests): `apps/server/test/e2e/web-server.ts` starts the end-to-end harness on a fixed port with `WEB_DIST_DIR` pointing at the built app, and mounts a **test-only** control API on a second port (`POST /signin {login}` → a `Set-Cookie` for a seeded user, `POST /webhook {name, payload}` to send a recorded or synthesized webhook, `GET /state`). It is never imported by `src/`.
+- Consumes: `currentUser` (`auth/session.ts`), `authenticateCliToken` (`auth/cli-token.ts`), `isAllowedOrigin` (`lib/csrf.ts`), `startE2e` (`test/e2e/harness.ts`), `sessionCookieFor` (`test/http.ts`).
+- Produces (protocol): `WebMe` = `MeResponse` + `id`, `githubId`; `BRAND.repoUrl`.
+- Produces (server): `type UserVariables = { user: SessionUser; via: 'session' | 'cli' }`, `requireUser`, `requireSameOrigin` (`auth/request-user.ts`); `meRoutes()`; `TEST_ENV` (`test/test-env.ts`); `startE2e(opts?: { port?: number; webDistDir?: string })`; the test-only control API `POST /signin { login: 'maya' | 'leo' } → { name, value }` (the session cookie).
+- Produces (web): `api.get(path, schema)`, `api.send(method, path, body?, schema?)`, `class ApiError { status; code; message }`, `retryUnlessClientError(failureCount, error)` (`src/api/client.ts`); `useMe()` (`src/api/me.ts`); `<Landing />`, `SIGN_IN_URL`; `<Home />`; `<ErrorState message onRetry />`; `signIn(context, login)`, `pageProblems(page)` (`e2e/control.ts`); `WEB_PORT`, `CONTROL_PORT`, `BASE_URL`, `CONTROL_URL` (`e2e/ports.ts`).
 
-**Behavior:**
-- Landing (handoff §4): nav (22 px wordmark, Docs, GitHub ↗), the hero with eyebrow pill, H1, sub, **Sign in with GitHub →** linking to `/auth/github/login?next=/`, the mono note, the product card with three sample inbox rows (static sample data from the handoff, clearly the landing's illustration), and the three "How it works" cards. Both themes; wraps at phone width.
-- `/` shows Landing when `useMe()` is `null`, and a placeholder "Inbox" heading with the user's login when signed in (replaced in Task 6).
-- A 5xx or network failure shows one plain error line with Retry, never a blank page.
+- [ ] **Step 1: `WebMe` in the protocol**
 
-**Tests this task must include:**
-- `request-user.test.ts`: cookie → `via: session`; bearer → `via: cli`; neither → 401; a session POST from another Origin → 403; a CLI-token POST needs no Origin.
-- `me.db.test.ts`: the browser gets `WebMe` with the cookie; the CLI gets the same `/api/me` with its token (existing `cli.db.test.ts` cases still pass).
-- `client.test.ts`: a `{ code, message }` error body becomes `ApiError`; a body that fails the schema is an error, not silently accepted.
-- `Landing.test.tsx`: the sign-in link points at `/auth/github/login?next=%2F`.
-- Playwright `landing.spec.ts`: signed out → the landing's H1 and sign-in button; signed in through the control API → the placeholder shows the seeded login. `npm run test:web-e2e` runs it; CI runs it after `npm run build`.
+Create `packages/protocol/src/web-api.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { MeResponse } from './api';
+import { WebMe } from './web-api';
+
+describe('web API bodies', () => {
+  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' };
+
+  it('round-trips WebMe', () => {
+    expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
+  });
+
+  it('leaves the CLI able to read the same /api/me answer', () => {
+    expect(MeResponse.parse(me)).toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'ok' });
+  });
+});
+```
+
+Run: `npm test -w packages/protocol`
+Expected: FAIL, `Error: Cannot find module './web-api'`.
+
+Create `packages/protocol/src/web-api.ts`:
+
+```ts
+import { z } from 'zod';
+import { MeResponse } from './api';
+
+// REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
+// answer with these, as the CLI does with api.ts.
+
+/**
+ * `GET /api/me`, as the web app reads it: the CLI's answer plus who you are. The CLI parses the same answer
+ * with `MeResponse`, which ignores the extra fields. Later milestones add settings, onboarding and push.
+ */
+export const WebMe = MeResponse.extend({
+  id: z.string(),
+  githubId: z.string(),
+});
+export type WebMe = z.infer<typeof WebMe>;
+```
+
+In `packages/protocol/src/index.ts`, add `export * from './web-api';` after `export * from './api';`. In `packages/protocol/src/brand.ts`, add after `userAgent`:
+
+```ts
+  /** Where the code and docs live; the web app's landing page links here. */
+  repoUrl: 'https://github.com/NikosGkikas13/nitpilot',
+```
+
+Run: `npm test -w packages/protocol`
+Expected: `Tests  43 passed (43)`.
+
+- [ ] **Step 2: Write the failing server tests**
+
+Create `apps/server/src/auth/request-user.db.test.ts`:
+
+```ts
+import { Hono } from 'hono';
+import { describe, expect, it } from 'vitest';
+import { makeCliToken, makeUser } from '../../test/db';
+import { sessionCookieFor } from '../../test/http';
+import { onError } from '../http/errors';
+import { requireSameOrigin, requireUser, type UserVariables } from './request-user';
+
+// A small app with one read and one write, behind the two checks.
+const app = new Hono<{ Variables: UserVariables }>();
+app.onError(onError);
+app.get('/who', requireUser, (c) => c.json({ login: c.get('user').login, via: c.get('via') }));
+app.post('/change', requireUser, requireSameOrigin, (c) => c.json({ ok: true }));
+
+const OURS = { origin: 'http://localhost:8787' };
+
+describe('requireUser', () => {
+  it('knows a browser by its session cookie', async () => {
+    const user = await makeUser({ login: 'maya-web' });
+    const res = await app.request('/who', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(await res.json()).toEqual({ login: 'maya-web', via: 'session' });
+  });
+
+  it('knows a CLI by its token', async () => {
+    const user = await makeUser({ login: 'maya-cli' });
+    const { raw } = await makeCliToken(user.id);
+    const res = await app.request('/who', { headers: { authorization: `Bearer ${raw}` } });
+    expect(await res.json()).toEqual({ login: 'maya-cli', via: 'cli' });
+  });
+
+  it('turns away a request with neither', async () => {
+    const res = await app.request('/who');
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } });
+  });
+
+  it('does not fall back to the cookie when the token is wrong', async () => {
+    const user = await makeUser();
+    const res = await app.request('/who', { headers: { authorization: 'Bearer nit_wrong', cookie: await sessionCookieFor(user.id) } });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('requireSameOrigin', () => {
+  it('lets a browser change things from our own pages only', async () => {
+    const cookie = await sessionCookieFor((await makeUser()).id);
+    expect((await app.request('/change', { method: 'POST', headers: { cookie, ...OURS } })).status).toBe(200);
+    expect((await app.request('/change', { method: 'POST', headers: { cookie, origin: 'https://evil.example' } })).status).toBe(403);
+    expect((await app.request('/change', { method: 'POST', headers: { cookie } })).status).toBe(403);
+  });
+
+  it('needs no Origin from a CLI', async () => {
+    const { raw } = await makeCliToken((await makeUser()).id);
+    expect((await app.request('/change', { method: 'POST', headers: { authorization: `Bearer ${raw}` } })).status).toBe(200);
+  });
+});
+```
+
+Create `apps/server/src/http/routes/me.db.test.ts`:
+
+```ts
+import { WebMe } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeCliToken, makeUser } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+
+describe('GET /api/me', () => {
+  it('tells a signed-in browser who it is', async () => {
+    const user = await makeUser({ login: 'maya-me' });
+    const res = await testApp().request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(res.status).toBe(200);
+    expect(WebMe.parse(await res.json())).toEqual({ id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth' });
+  });
+
+  it('gives a CLI the same answer', async () => {
+    const user = await makeUser({ login: 'maya-me-cli' });
+    const { raw } = await makeCliToken(user.id);
+    const res = await testApp().request('/api/me', { headers: { authorization: `Bearer ${raw}` } });
+    expect(await res.json()).toMatchObject({ login: 'maya-me-cli', githubAuth: 'needs_reauth' });
+  });
+
+  it('is a 401 for a browser that is not signed in', async () => {
+    const res = await testApp().request('/api/me');
+    expect(res.status).toBe(401);
+  });
+});
+```
+
+Run: `npm run test:db -w apps/server -- src/auth/request-user.db.test.ts src/http/routes/me.db.test.ts`
+Expected: `request-user.db.test.ts` fails with `Cannot find module './request-user'`; in `me.db.test.ts`, `tells a signed-in browser who it is` fails with `expected 401 to be 200` (today `/api/me` only knows the CLI's token).
+
+- [ ] **Step 3: Who is asking, and `/api/me` for both**
+
+Create `apps/server/src/auth/request-user.ts`:
+
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { createMiddleware } from 'hono/factory';
+import { HttpError } from '../http/errors';
+import { isAllowedOrigin } from '../lib/csrf';
+import { getEnv } from '../lib/env';
+import { prisma } from '../lib/prisma';
+import { authenticateCliToken } from './cli-token';
+import { currentUser, type SessionUser } from './session';
+
+/** Who is asking, and how they proved it: the web app's session cookie, or a CLI's token. */
+export type UserVariables = { user: SessionUser; via: 'session' | 'cli' };
+
+/**
+ * For routes both the web app and the CLI call (`/api/me`, retry). A request with an `Authorization` header
+ * is a CLI and must carry a valid `Bearer nit_…` token; anything else must have a signed-in session cookie.
+ */
+export const requireUser = createMiddleware<{ Variables: UserVariables }>(async (c, next) => {
+  const header = c.req.header('authorization');
+  if (header) {
+    const auth = await authenticateCliToken(header);
+    if (!auth) throw new HttpError('unauthorized', `Missing or invalid CLI token. Run \`${BRAND.cli} login\`.`);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    c.set('user', { id: user.id, githubId: user.githubId, login: user.login, avatarUrl: user.avatarUrl });
+    c.set('via', 'cli');
+  } else {
+    const user = await currentUser(c);
+    if (!user) throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    c.set('user', user);
+    c.set('via', 'session');
+  }
+  await next();
+});
+
+/**
+ * A browser sends our cookie with any request to us, even one another site's page started. So a change made
+ * with the cookie must come from our own pages (spec §14). A CLI's token isn't sent by browsers on their own,
+ * so CLI requests need no such check. Goes after `requireUser`.
+ */
+export const requireSameOrigin = createMiddleware<{ Variables: UserVariables }>(async (c, next) => {
+  const changes = c.req.method !== 'GET' && c.req.method !== 'HEAD';
+  if (changes && c.get('via') === 'session' && !isAllowedOrigin(c.req.raw, getEnv().PUBLIC_URL)) {
+    throw new HttpError('forbidden', 'Request did not come from Nitpilot.');
+  }
+  await next();
+});
+```
+
+Create `apps/server/src/http/routes/me.ts`:
+
+```ts
+import type { WebMe } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { requireUser, type UserVariables } from '../../auth/request-user';
+import { prisma } from '../../lib/prisma';
+
+/** `GET /api/me` (spec §10): who you are and whether your GitHub sign-in still works. For the web app and the CLI alike. */
+export function meRoutes(): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  app.get('/api/me', requireUser, async (c) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('user').id }, include: { githubAuth: true } });
+    const body: WebMe = {
+      id: user.id,
+      githubId: user.githubId,
+      login: user.login,
+      avatarUrl: user.avatarUrl,
+      githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth',
+    };
+    return c.json(body);
+  });
+
+  return app;
+}
+```
+
+In `apps/server/src/http/routes/cli.ts`, delete the `app.get('/api/me', requireCliToken, …)` route and `type MeResponse` from the protocol import. In `apps/server/src/http/app.ts`, import `meRoutes` (`import { meRoutes } from './routes/me';`, after the `cli-approve` import) and mount it first among the API routes: `app.route('/', meRoutes());` right before `app.route('/', cliRoutes(deps));`.
+
+In `apps/server/src/http/routes/cli.db.test.ts`, the `/api/me` check now gets two more fields: change its `.toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'needs_reauth' })` to `.toMatchObject(…)` with the same object.
+
+Run: `npm run test:db -w apps/server -- src/auth/request-user.db.test.ts src/http/routes/me.db.test.ts src/http/routes/cli.db.test.ts`
+Expected: `Tests  21 passed (21)` (6 + 3 + the CLI routes' 12).
+
+- [ ] **Step 4: Write the failing web tests**
+
+Create `apps/web/src/api/client.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { api, ApiError, retryUnlessClientError } from './client';
+
+function answer(status: number, body: unknown) {
+  return vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('api', () => {
+  const Thing = z.object({ name: z.string() });
+
+  it('returns a body that matches the schema', async () => {
+    vi.stubGlobal('fetch', answer(200, { name: 'maya' }));
+    await expect(api.get('/api/thing', Thing)).resolves.toEqual({ name: 'maya' });
+  });
+
+  it("turns the server's error body into an ApiError", async () => {
+    vi.stubGlobal('fetch', answer(409, { error: { code: 'conflict', message: 'Someone already resolved P1.' } }));
+    const err = await api.send('POST', '/api/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409, code: 'conflict', message: 'Someone already resolved P1.' });
+  });
+
+  it('refuses a body with the wrong shape instead of passing it on', async () => {
+    vi.stubGlobal('fetch', answer(200, { nom: 'maya' }));
+    await expect(api.get('/api/thing', Thing)).rejects.toMatchObject({ code: 'bad_response' });
+  });
+
+  it('says so when the server cannot be reached', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    await expect(api.get('/api/thing', Thing)).rejects.toMatchObject({ status: 0, code: 'network' });
+  });
+
+  it('sends JSON with the cookie', async () => {
+    const fetch = answer(200, {});
+    vi.stubGlobal('fetch', fetch);
+    await api.send('POST', '/api/chats/c1/notes', { body: 'hi' });
+    expect(fetch).toHaveBeenCalledWith('/api/chats/c1/notes', expect.objectContaining({ method: 'POST', credentials: 'same-origin', body: '{"body":"hi"}' }));
+  });
+});
+
+describe('retryUnlessClientError', () => {
+  it('retries network failures and 5xx a little, and 4xx never', () => {
+    expect(retryUnlessClientError(0, new ApiError(0, 'network', ''))).toBe(true);
+    expect(retryUnlessClientError(0, new ApiError(503, 'server_error', ''))).toBe(true);
+    expect(retryUnlessClientError(2, new ApiError(503, 'server_error', ''))).toBe(false);
+    expect(retryUnlessClientError(0, new ApiError(404, 'not_found', ''))).toBe(false);
+  });
+});
+```
+
+Create `apps/web/src/routes/Landing/Landing.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { Landing } from './Landing';
+
+describe('Landing', () => {
+  it('pitches Nitpilot and starts GitHub sign-in, coming back to the home page', () => {
+    render(<Landing />);
+    expect(screen.getByRole('heading', { level: 1, name: "Your agents review each other's PRs the moment they open." })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sign in with GitHub/ })).toHaveAttribute('href', '/auth/github/login?next=%2F');
+  });
+
+  it('explains how it works in three steps', () => {
+    render(<Landing />);
+    const steps = screen.getByRole('region', { name: 'How it works' });
+    expect(steps.querySelectorAll('h2')).toHaveLength(3);
+  });
+
+  it('keeps the sample inbox out of the accessibility tree', () => {
+    render(<Landing />);
+    expect(screen.queryByText('Fix race in session refresh')?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+});
+```
+
+Create `apps/web/src/routes/Home/Home.test.tsx`:
+
+```tsx
+import { QueryClientProvider } from '@tanstack/react-query';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makeQueryClient } from '../../app';
+import { Home } from './Home';
+
+function renderHome() {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <Home />
+    </QueryClientProvider>,
+  );
+}
+
+function answers(...responses: [number, unknown][]) {
+  const fetch = vi.fn();
+  for (const [status, body] of responses) fetch.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Home', () => {
+  it('shows the landing page to someone who is not signed in', async () => {
+    answers([401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }]);
+    renderHome();
+    expect(await screen.findByRole('link', { name: /Sign in with GitHub/ })).toBeInTheDocument();
+  });
+
+  it('greets someone who is signed in', async () => {
+    answers([200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' }]);
+    renderHome();
+    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+  });
+
+  it('shows the error with a way to try again, instead of a blank page', async () => {
+    const fail: [number, unknown] = [500, { error: { code: 'server_error', message: 'internal server error' } }];
+    // The first try and the client's two retries fail; "Try again" then succeeds.
+    answers(fail, fail, fail, [200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok' }]);
+    renderHome();
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }, { timeout: 10_000 }));
+    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+  });
+});
+```
+
+Run: `npm test -w apps/web`
+Expected: 3 failed suites, e.g. `Error: Failed to resolve import "./client" from "apps/web/src/api/client.test.ts". Does the file exist?`
+
+- [ ] **Step 5: The API client and `useMe`**
+
+Create `apps/web/src/api/client.ts` (the server's errors are `{ error: { code, message } }`, `http/errors.ts`):
+
+```ts
+import { z } from 'zod';
+
+/** Every failed request, in one shape: the HTTP status (0 = no answer), the server's error code, and a message to show. */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/** How the server answers an error (apps/server/src/http/errors.ts). */
+const ErrorBody = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+
+async function request<T>(method: string, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      // The session cookie goes along; it's the same origin (docs/why/serving-a-spa.md).
+      credentials: 'same-origin',
+      headers: body === undefined ? { accept: 'application/json' } : { accept: 'application/json', 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'network', "Can't reach Nitpilot. Check your connection and try again.");
+  }
+
+  if (!res.ok) {
+    const error = ErrorBody.safeParse(await res.json().catch(() => null));
+    if (error.success) throw new ApiError(res.status, error.data.error.code, error.data.error.message);
+    throw new ApiError(res.status, 'server_error', `Nitpilot answered ${res.status}. Try again in a moment.`);
+  }
+  if (schema === null || res.status === 204) return undefined as T;
+
+  // Never trust an answer's shape: a body that doesn't match the schema is an error, not data.
+  const parsed = schema.safeParse(await res.json().catch(() => undefined));
+  if (!parsed.success) throw new ApiError(res.status, 'bad_response', `Unexpected answer from ${path}.`);
+  return parsed.data;
+}
+
+export const api = {
+  get: <T>(path: string, schema: z.ZodType<T>) => request('GET', path, schema),
+  send: <T = void>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, schema: z.ZodType<T> | null = null) => request<T>(method, path, schema, body),
+};
+
+/** A 4xx won't change by asking again; a network failure or a 5xx might. Used as TanStack Query's `retry`. */
+export function retryUnlessClientError(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+  return failureCount < 2;
+}
+```
+
+Create `apps/web/src/api/me.ts`:
+
+```ts
+import { WebMe } from '@nitpilot/protocol';
+import { useQuery } from '@tanstack/react-query';
+import { api, ApiError } from './client';
+
+/** Who is signed in. `null` means nobody: the server answered 401. */
+export function useMe() {
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: async (): Promise<WebMe | null> => {
+      try {
+        return await api.get('/api/me', WebMe);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) return null;
+        throw err;
+      }
+    },
+  });
+}
+```
+
+- [ ] **Step 6: The landing page, the home switch and the error state**
+
+Create `apps/web/src/routes/Landing/Landing.module.css`:
+
+```css
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav,
+.hero,
+.steps {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.navLink {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: var(--fg1);
+}
+
+.hero {
+  padding: clamp(20px, 4vw, 56px) 24px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  align-items: center;
+}
+
+.pitch {
+  flex: 1 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.eyebrow {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--b1);
+  font-size: 13px;
+  color: var(--fg2);
+}
+
+.diamond {
+  width: 6px;
+  height: 6px;
+  background: var(--acc);
+  transform: rotate(45deg);
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(34px, 4.6vw, 60px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.sub {
+  margin: 0;
+  max-width: 30em;
+  font-size: clamp(17px, 1.6vw, 20px);
+  line-height: 1.45;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.signIn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.note {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+/* An illustration of the inbox: three rows from the design brief's sample data. */
+.card {
+  flex: 1 1 380px;
+  min-width: 0;
+  max-width: 520px;
+  padding: 14px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--b1);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.rowFirst {
+  background: var(--bg);
+}
+
+.avatar {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 38px;
+}
+
+.initials {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  color: var(--fg2);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentBadge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  background: var(--fg1);
+  box-shadow: 0 0 0 2px var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agentBadge::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ref {
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.ref span:first-child {
+  flex: 1;
+}
+
+.rowTitle {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pill {
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pillRed {
+  background: var(--red-tint);
+  color: var(--red-fg);
+}
+
+.pillMuted {
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.pillOk {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.last {
+  font-size: 12.5px;
+  color: var(--fg3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.steps {
+  padding: 8px 24px 40px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.step {
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--b1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stepNumber {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stepBody {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+@media (max-width: 759px) {
+  .nav,
+  .hero,
+  .steps {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+```
+
+Create `apps/web/src/routes/Landing/Landing.tsx` (copy and sample rows from the handoff §4 and the prototype's data):
+
+```tsx
+import { BRAND } from '@nitpilot/protocol';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import styles from './Landing.module.css';
+
+/** Where GitHub sign-in starts; afterwards the server sends you back to `next` (apps/server/src/http/routes/auth.ts). */
+export const SIGN_IN_URL = `/auth/github/login?next=${encodeURIComponent('/')}`;
+
+type Tone = 'red' | 'muted' | 'ok';
+const TONE: Record<Tone, string> = { red: styles.pillRed!, muted: styles.pillMuted!, ok: styles.pillOk! };
+
+// The illustration's rows: the design brief's sample data (handoff §4), not real PRs.
+const SAMPLE_ROWS: { ref: string; time: string; title: string; initials: string; pill: string; tone: Tone; last: string }[] = [
+  { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', pill: 'Needs you', tone: 'red', last: 'A security point needs you' },
+  { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', pill: "Leo's agent working", tone: 'muted', last: 'reading src/db/client.ts' },
+  { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', pill: 'Ready', tone: 'ok', last: '2 rounds, 3 points resolved' },
+];
+
+const STEPS = [
+  { title: 'A review is requested', body: 'Your agent reviews right away, on your machine. When points come back on your PR, it fixes them and pushes.' },
+  { title: 'The agents talk it out', body: 'One chat per pull request, like a messenger. The PR on GitHub stays clean.' },
+  { title: 'You make the call', body: 'Approve when everything is resolved, settle a disagreement, or judge a security concern. Nothing else pings you.' },
+];
+
+/** The signed-out home page (handoff §4, canvas 3b). */
+export function Landing() {
+  return (
+    <div className={styles.page}>
+      <nav className={styles.nav}>
+        <Wordmark size={22} />
+        <span className={styles.spacer} />
+        <a className={styles.navLink} href={`${BRAND.repoUrl}/tree/main/docs`}>
+          Docs
+        </a>
+        <a className={styles.navLink} href={BRAND.repoUrl}>
+          GitHub ↗
+        </a>
+      </nav>
+
+      <main className={styles.hero}>
+        <div className={styles.pitch}>
+          <span className={styles.eyebrow}>
+            <span className={styles.diamond} aria-hidden="true" />
+            For Claude Code and Gemini CLI
+          </span>
+          <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
+          <p className={styles.sub}>You only hear about it when there's a decision to make.</p>
+          <div className={styles.action}>
+            <a className={styles.signIn} href={SIGN_IN_URL}>
+              Sign in with GitHub <span aria-hidden="true">→</span>
+            </a>
+            <span className={styles.note}>Free for public repos · Open source · Self-host for private repos</span>
+          </div>
+        </div>
+
+        <div className={styles.card} aria-hidden="true">
+          {SAMPLE_ROWS.map((row, i) => (
+            <div key={row.ref} className={i === 0 ? `${styles.row} ${styles.rowFirst}` : styles.row}>
+              <span className={styles.avatar}>
+                <span className={styles.initials}>{row.initials}</span>
+                <span className={styles.agentBadge} />
+              </span>
+              <span className={styles.rowText}>
+                <span className={styles.ref}>
+                  <span>{row.ref}</span>
+                  {row.time}
+                </span>
+                <span className={styles.rowTitle}>{row.title}</span>
+                <span className={styles.status}>
+                  <span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>
+                  <span className={styles.last}>{row.last}</span>
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </main>
+
+      <section className={styles.steps} aria-label="How it works">
+        {STEPS.map((step, i) => (
+          <div key={step.title} className={styles.step}>
+            <span className={styles.stepNumber}>{i + 1}</span>
+            <h2 className={styles.stepTitle}>{step.title}</h2>
+            <p className={styles.stepBody}>{step.body}</p>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/components/ErrorState/ErrorState.module.css`:
+
+```css
+.error {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--fg2);
+}
+
+.retry {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--hover);
+}
+```
+
+Create `apps/web/src/components/ErrorState/ErrorState.tsx`:
+
+```tsx
+import styles from './ErrorState.module.css';
+
+/** One plain line and a way to try again, instead of a blank page. */
+export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className={styles.error} role="alert">
+      <p>{message}</p>
+      <button type="button" className={styles.retry} onClick={onRetry}>
+        Try again
+      </button>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Home/Home.module.css`:
+
+```css
+.loading {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signedIn {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.signOut {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+}
+```
+
+Create `apps/web/src/routes/Home/Home.tsx` (the signed-in placeholder keeps the old server home page's Sign out):
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { useMe } from '../../api/me';
+import { Landing } from '../Landing/Landing';
+import styles from './Home.module.css';
+
+/** `/`: the landing page when signed out; when signed in, a placeholder until the inbox arrives (Task 6). */
+export function Home() {
+  const me = useMe();
+  if (me.isPending) {
+    return (
+      <div className={styles.loading} aria-busy="true">
+        <Wordmark size={26} />
+      </div>
+    );
+  }
+  if (me.isError) return <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+  if (me.data === null) return <Landing />;
+  return <SignedIn me={me.data} />;
+}
+
+function SignedIn({ me }: { me: WebMe }) {
+  return (
+    <div className={styles.signedIn}>
+      <header className={styles.header}>
+        <Wordmark />
+        <span className={styles.spacer} />
+        <ThemeToggle />
+      </header>
+      <main>
+        <h1>Signed in as @{me.login}</h1>
+        {/* A plain form: the browser sends our Origin, which /auth/logout checks, then follows its redirect. */}
+        <form method="post" action="/auth/logout">
+          <button type="submit" className={styles.signOut}>
+            Sign out
+          </button>
+        </form>
+      </main>
+    </div>
+  );
+}
+```
+
+Replace `apps/web/src/app.tsx`:
+
+```tsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Route, Routes } from 'react-router';
+import { retryUnlessClientError } from './api/client';
+import { Home } from './routes/Home/Home';
+
+export function makeQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError } } });
+}
+
+/** The whole app: the data cache, then the routes. */
+export function App({ queryClient = makeQueryClient() }: { queryClient?: QueryClient }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<Home />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}
+```
+
+Run: `npm test -w apps/web`
+Expected: `Test Files  6 passed (6)`, `Tests  22 passed (22)` (the "Try again" test waits out the client's two retries, about 3 s).
+
+- [ ] **Step 7: A shared test environment and a harness on a fixed port**
+
+Create `apps/server/test/test-env.ts`:
+
+```ts
+/**
+ * Values the server reads from the environment, for every test run: Vitest (vitest.config.ts) and the
+ * Playwright tests' server (test/e2e/web-server.ts). Tests that care about one override it.
+ * DATABASE_URL isn't here: each runner points it at the test database (test/test-database.ts).
+ */
+export const TEST_ENV = {
+  NODE_ENV: 'test',
+  PUBLIC_URL: 'http://localhost:8787',
+  ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+  GITHUB_APP_ID: '12345',
+  GITHUB_APP_SLUG: 'nitpilot-dev',
+  GITHUB_APP_PRIVATE_KEY: 'tests-that-need-a-key-generate-one',
+  GITHUB_CLIENT_ID: 'Iv1.test',
+  GITHUB_CLIENT_SECRET: 'test-client-secret',
+  GITHUB_WEBHOOK_SECRET: 'test-webhook-secret',
+  PUBLIC_REPOS_ONLY: 'false',
+  ALLOWED_LOGINS: '',
+};
+```
+
+Replace `apps/server/vitest.config.ts` (the values move to `TEST_ENV`; the projects are unchanged):
+
+```ts
+import 'dotenv/config';
+import { defineConfig } from 'vitest/config';
+import { testDatabaseUrl } from './test/test-database.ts';
+import { TEST_ENV } from './test/test-env.ts';
+
+// Tests that care about one value override it with vi.stubEnv.
+const testEnv = {
+  ...TEST_ENV,
+  // Tests use their own database next to the dev one (nitpilot_test), so a test run never
+  // empties your dev data. test/global-setup.ts creates and migrates it.
+  ...(process.env.DATABASE_URL ? { DATABASE_URL: testDatabaseUrl(process.env.DATABASE_URL) } : {}),
+};
+
+export default defineConfig({
+  test: {
+    env: testEnv,
+    projects: [
+      {
+        extends: true,
+        test: { name: 'unit', include: ['src/**/*.test.{ts,tsx}', 'test/fixtures/**/*.test.ts'], exclude: ['**/*.db.test.{ts,tsx}'] },
+      },
+      {
+        // Real Postgres. Files run one at a time; tests use unique data (see test/db.ts).
+        extends: true,
+        test: {
+          name: 'db',
+          include: ['src/**/*.db.test.{ts,tsx}', 'test/**/*.db.test.ts'],
+          fileParallelism: false,
+          testTimeout: 20_000,
+          globalSetup: ['./test/global-setup.ts'],
+        },
+      },
+      {
+        // Plan 1 end to end (spec §19): the server, two CLIs and the fake agent. Slower, so it runs on its own
+        // (npm run test:e2e), against the same test database.
+        extends: true,
+        test: {
+          name: 'e2e',
+          include: ['test/e2e/**/*.e2e.test.ts'],
+          fileParallelism: false,
+          testTimeout: 90_000,
+          hookTimeout: 30_000,
+          globalSetup: ['./test/global-setup.ts'],
+        },
+      },
+    ],
+  },
+});
+```
+
+In `apps/server/test/e2e/harness.ts`: `startE2e()` becomes `startE2e(opts: { port?: number; webDistDir?: string } = {})`; its app is `testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) })`; `serve(…)` listens on `opts.port ?? 0`; and its doc comment gains "The Playwright tests' server (web-server.ts) passes a fixed port and the built web app."
+
+Create `apps/server/test/e2e/web-server.ts`:
+
+```ts
+/**
+ * The server the Playwright tests in apps/web/e2e talk to: Plan 1's end-to-end harness (the real server with
+ * FakePlatform, Postgres and fake-agent CLIs) on a fixed port, serving the built web app, plus a small
+ * control API on a second port that only the tests use (sign someone in, and later: send webhooks, read
+ * state). Playwright starts it (apps/web/playwright.config.ts); it is never imported by src/.
+ *
+ * Run by hand: E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server
+ */
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import setupTestDatabase from '../global-setup';
+import { testDatabaseUrl } from '../test-database';
+import { TEST_ENV } from '../test-env';
+
+const webPort = Number(process.env.E2E_WEB_PORT);
+const controlPort = Number(process.env.E2E_CONTROL_PORT);
+if (!webPort || !controlPort) throw new Error('Set E2E_WEB_PORT and E2E_CONTROL_PORT (apps/web/playwright.config.ts does).');
+
+// The test database, created and migrated as Vitest's global setup does (it reads the dev DATABASE_URL).
+await setupTestDatabase();
+const devUrl = process.env.DATABASE_URL!;
+// Then the environment the server reads. The page and its API are on this origin.
+Object.assign(process.env, TEST_ENV, { PUBLIC_URL: `http://127.0.0.1:${webPort}`, DATABASE_URL: testDatabaseUrl(devUrl) });
+
+// Only now load the server's modules: the database client reads DATABASE_URL when it's first imported.
+const { startE2e } = await import('./harness');
+const { sessionCookieFor } = await import('../http');
+
+const e2e = await startE2e({ port: webPort, webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)) });
+
+const control = new Hono();
+/** Sign someone in: answers the session cookie for the browser to use. */
+control.post('/signin', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  const [name, value] = (await sessionCookieFor(user.id)).split('=') as [string, string];
+  return c.json({ name, value });
+});
+serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
+
+console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}`);
+
+const stop = async () => {
+  await e2e.close();
+  process.exit(0);
+};
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+```
+
+In `apps/server/package.json`, add the script `"e2e:web-server": "tsx test/e2e/web-server.ts"`.
+
+Run: `npm test -w apps/server && npm run test:e2e`
+Expected: server 615 (606 + 6 + 3), end to end 5.
+
+- [ ] **Step 8: Playwright**
+
+```bash
+npm install -D -w apps/web --no-audit --no-fund @playwright/test@^1.64.1
+npx playwright install chromium
+```
+
+Expected: Playwright 1.64.1, and Chrome Headless Shell (about 100 MB) in `~/Library/Caches/ms-playwright/`.
+
+In `apps/web/package.json`, add the script `"test:e2e": "playwright test"`. In the root `package.json`, add after `"test:e2e"`: `"test:web-e2e": "npm run build && npm run test:e2e -w apps/web"`. In `apps/web/tsconfig.json`, `types` becomes `["vite/client", "node"]` and `include` becomes `["src", "e2e", "vite.config.ts", "playwright.config.ts"]`. Add to `.gitignore`:
+
+```
+# Playwright
+test-results/
+playwright-report/
+```
+
+Create `apps/web/e2e/ports.ts` (Playwright doesn't let tests import from its config file, so both import these):
+
+```ts
+// Where the Playwright tests' server listens (apps/server/test/e2e/web-server.ts): the app and its API on one
+// port, the tests' control API on another.
+export const WEB_PORT = 4319;
+export const CONTROL_PORT = 4320;
+export const BASE_URL = `http://127.0.0.1:${WEB_PORT}`;
+export const CONTROL_URL = `http://127.0.0.1:${CONTROL_PORT}`;
+```
+
+Create `apps/web/playwright.config.ts`:
+
+```ts
+import { defineConfig, devices } from '@playwright/test';
+import { BASE_URL, CONTROL_PORT, WEB_PORT } from './e2e/ports';
+
+export default defineConfig({
+  testDir: './e2e',
+  // One server and one database for every test, so one test at a time.
+  workers: 1,
+  retries: 0,
+  reporter: process.env.CI ? 'github' : 'list',
+  use: {
+    baseURL: BASE_URL,
+    trace: 'retain-on-failure',
+  },
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // The server for these tests: apps/server/test/e2e/web-server.ts.
+  webServer: {
+    command: 'npm run e2e:web-server -w apps/server',
+    cwd: '../..',
+    url: `${BASE_URL}/healthz`,
+    env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+});
+```
+
+Create `apps/web/e2e/control.ts`:
+
+```ts
+import type { BrowserContext, Page } from '@playwright/test';
+import { BASE_URL, CONTROL_URL } from './ports';
+
+/** Sign a test user in: the browser gets the session cookie a real GitHub sign-in would have set. */
+export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/signin`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`signing in ${login} failed: ${res.status} ${await res.text()}`);
+  const cookie = (await res.json()) as { name: string; value: string };
+  await context.addCookies([{ ...cookie, url: BASE_URL }]);
+}
+
+/**
+ * What went wrong on the page: a script error, or something the Content-Security-Policy blocked. (A request
+ * that answers 401 is logged by the browser too, but signed out that's expected, so it isn't collected.)
+ */
+export function pageProblems(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && msg.text().includes('Content Security Policy')) errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(err.message));
+  return errors;
+}
+```
+
+Create `apps/web/e2e/landing.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { pageProblems, signIn } from './control';
+
+test('someone signed out gets the landing page, with nothing blocked or broken', async ({ page }) => {
+  const errors = pageProblems(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText("Your agents review each other's PRs the moment they open.");
+  await expect(page.getByRole('link', { name: /Sign in with GitHub/ })).toHaveAttribute('href', '/auth/github/login?next=%2F');
+  // The bundled fonts loaded (a CSP that blocked them would log an error and fall back to system-ui).
+  expect(await page.evaluate(() => document.fonts.check('16px "Bricolage Grotesque Variable"'))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('a link deep into the app opens the app', async ({ page }) => {
+  await page.goto('/c/acme/shop-api/142?from=github');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+});
+
+test('someone signed in is greeted by name', async ({ page, context }) => {
+  await signIn(context, 'maya');
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Signed in as @maya' })).toBeVisible();
+});
+```
+
+Run: `CI=1 npm run test:web-e2e`
+Expected: the build, then `3 passed`.
+
+- [ ] **Step 9: Prove the CSP check matters**
+
+In `apps/web/vite.config.ts`, change `assetsInlineLimit: 0` to `assetsInlineLimit: 4096` (Vite's default) and run `CI=1 npm run test:web-e2e` again.
+Expected: 1 failed, `someone signed out gets the landing page, with nothing blocked or broken`, listing `Loading the font 'data:font/woff2;base64,…' violates the following Content Security Policy directive: "font-src 'self'"`. Put `0` back and run it again: 3 passed.
+
+- [ ] **Step 10: CI**
+
+In `.github/workflows/ci.yml`, add after `- run: npm run test:e2e`:
+
+```yaml
+      # Plan 2: the web app in a real browser against that same setup (spec §19).
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -w apps/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+```
+
+(`npm run build` already runs earlier in the job, from Task 2.)
+
+- [ ] **Step 11: Look at it**
+
+Run `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` and open `http://127.0.0.1:4319/` in the browser: the landing page as in the handoff's canvas 3b, at 1280 px in light and dark and at 375 px (one column, nothing scrolls sideways). Screenshots of all three go in the task report. Stop the server.
+
+- [ ] **Step 12: Live check: sign in through Vite (ask first)**
+
+This changes the dev GitHub App's settings, so ask before doing it. Then the person, signed in to github.com as **NikosGkikas13** (the app's owner):
+1. Opens https://github.com/settings/apps, clicks **nitpilot-dev**, and on the **General** tab scrolls to **Callback URL**.
+2. Clicks **Add Callback URL**, types `http://localhost:5173/auth/github/callback` in the new box, scrolls down and clicks **Save changes**. The page reloads with a green "Your GitHub App was updated" note.
+3. Sets `PUBLIC_URL=http://localhost:5173` in `apps/server/.env` (as Task 2's `.env.example` says).
+
+Then start `npm run dev -w apps/server` and `npm run dev -w apps/web` (two Terminal-panel tabs), open `http://localhost:5173`, click **Sign in with GitHub →**, approve on GitHub if asked, and see "Signed in as @NikosGkikas13". **Sign out** returns to the landing page. Stop both.
+
+- [ ] **Step 13: The whole suite, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && CI=1 npm run test:web-e2e`
+Expected: protocol 43, CLI 293 passed + 14 skipped, server 615, web 22; typecheck and lint clean; end to end 5; Playwright 3.
+
+```bash
+git add packages/protocol apps/server apps/web package.json package-lock.json .gitignore .github/workflows/ci.yml docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): landing page and sign-in, /api/me for the browser, Playwright smoke tests
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
