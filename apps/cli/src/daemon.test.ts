@@ -316,6 +316,18 @@ describe('startDaemon', () => {
     expect((await conn.next('job.fail')).d).toMatchObject({ ...JOB, reason: 'crash', retryable: true, detail: expect.stringContaining('boom') });
   });
 
+  it("fails a result too big for the server's 1 MB message limit as a crash, instead of sending it forever", async () => {
+    const replies = Array.from({ length: 300 }, (_, i) => ({ point: i + 1, resolution: 'answered' as const, comment: 'é'.repeat(4000) }));
+    const { hub, out } = await setup({ executor: async () => ({ kind: 'complete', result: { ...jobResult(), replies } }) });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    const fail = await conn.next('job.fail');
+    expect(fail.d).toMatchObject({ ...JOB, reason: 'crash', retryable: true, detail: expect.stringContaining('over the 1 MB a message may be') });
+    conn.send({ v: 1, t: 'ack', re: fail.id, d: { status: 'applied' } });
+    await vi.waitFor(() => expect(out.text()).toContain('failed (crash)'));
+    await conn.nothing('job.complete');
+  });
+
   it("fails a job as a crash, without running it, when the day's count can't be saved", async () => {
     const configDir = join(tempDir(), 'config');
     writeFileSync(configDir, 'a file where the config folder should be'); // state.json can't be written under a file

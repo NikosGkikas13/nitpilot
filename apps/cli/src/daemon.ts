@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import {
-  BRAND, CLOSE_CODES, PROTOCOL_VERSION,
+  BRAND, CLOSE_CODES, MAX_MESSAGE_BYTES, PROTOCOL_VERSION,
   type AgentId, type AgentMode, type CliToServer, type FailureReason, type JobBundle, type JobResult, type RunningJob, type ServerToCli,
 } from '@nitpilot/protocol';
 import type { PersonalConfig } from './config/config';
@@ -234,6 +234,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     }
     if (job.controller.signal.aborted) return; // cancelled or replaced meanwhile: the server has moved on
 
+    outcome = fitForServer(job, outcome);
     const status = await sendAcked(answerFor(job, outcome));
     if (running.get(job.jobId) === job) running.delete(job.jobId);
     out.log(status === 'applied' ? `✓ ${name}: ${describeOutcome(outcome)}` : `· ${name}: the server had moved on (stale), so this answer was dropped.`);
@@ -328,6 +329,17 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 /** A job that blew up inside the daemon or its executor, as a retryable crash. */
 function crashed(err: unknown): JobOutcome {
   return { kind: 'fail', reason: 'crash', retryable: true, detail: String((err as Error)?.stack ?? err) };
+}
+
+/**
+ * A result the server would refuse for its size, as a retryable crash. Sent as it is, the server would close the
+ * socket, and the daemon would send it again after every reconnect while the job sat "working" forever.
+ */
+function fitForServer(job: RunningJob, outcome: JobOutcome): JobOutcome {
+  if (outcome.kind !== 'complete') return outcome;
+  const bytes = Buffer.byteLength(JSON.stringify(answerFor(job, outcome)));
+  if (bytes <= MAX_MESSAGE_BYTES) return outcome;
+  return { kind: 'fail', reason: 'crash', retryable: true, detail: `The result is ${bytes} bytes, over the 1 MB a message may be, so it wasn't sent.` };
 }
 
 function answerFor(job: RunningJob, outcome: JobOutcome): AckedMessage {

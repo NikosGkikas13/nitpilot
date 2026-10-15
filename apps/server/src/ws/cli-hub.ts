@@ -1,15 +1,13 @@
 import { STATUS_CODES, type IncomingMessage, type Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import {
-  BRAND, CLI_WS_PATH, CLOSE_CODES, CliToServer, LEASE_SEC, PING_SEC, PROTOCOL_VERSION, type ServerToCli,
+  BRAND, CLI_WS_PATH, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli,
 } from '@nitpilot/protocol';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { authenticateCliToken, touchCliToken, type CliAuth } from '../auth/cli-token';
 import { prisma } from '../lib/prisma';
 import { SerialQueue } from '../lib/serial-queue';
 
-/** The biggest message we accept. A job.complete with 20 points of 4,000 characters is far below it. */
-const MAX_MESSAGE_BYTES = 1_000_000;
 /** A socket that hasn't said hello by then is closed. */
 const HELLO_TIMEOUT_MS = 10_000;
 /** WebSocket's "policy violation" close code: the CLI broke the rules of the conversation. */

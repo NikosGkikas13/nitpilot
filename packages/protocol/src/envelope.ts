@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 /** Bumped only for breaking changes; the server closes old CLIs with CLOSE_CODES.upgradeCli. */
 export const PROTOCOL_VERSION = 1;
+
+/** The biggest WebSocket message the server accepts (spec §10). The CLI checks a result against it before sending. */
+export const MAX_MESSAGE_BYTES = 1_000_000;
 /** The CLI pings every 25 s; a running job's lease lasts 90 s (spec §9.4). */
 export const PING_SEC = 25;
 export const LEASE_SEC = 90;
