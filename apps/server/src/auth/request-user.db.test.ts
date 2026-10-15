@@ -11,6 +11,12 @@ app.onError(onError);
 app.get('/who', requireUser, (c) => c.json({ login: c.get('user').login, via: c.get('via') }));
 app.post('/change', requireUser, requireSameOrigin, (c) => c.json({ ok: true }));
 
+// A route that forgot `requireUser`, or put `requireSameOrigin` before it: the check must not quietly pass.
+const misordered = new Hono<{ Variables: UserVariables }>();
+misordered.onError(onError);
+misordered.post('/alone', requireSameOrigin, (c) => c.json({ ok: true }));
+misordered.post('/backwards', requireSameOrigin, requireUser, (c) => c.json({ ok: true }));
+
 const OURS = { origin: 'http://localhost:8787' };
 
 describe('requireUser', () => {
@@ -51,5 +57,14 @@ describe('requireSameOrigin', () => {
   it('needs no Origin from a CLI', async () => {
     const { raw } = await makeCliToken((await makeUser()).id);
     expect((await app.request('/change', { method: 'POST', headers: { authorization: `Bearer ${raw}` } })).status).toBe(200);
+  });
+
+  it('fails closed: without requireUser first, a cookie POST with no Origin is refused', async () => {
+    const cookie = await sessionCookieFor((await makeUser()).id);
+    for (const path of ['/alone', '/backwards']) {
+      const res = await misordered.request(path, { method: 'POST', headers: { cookie } });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: { code: 'forbidden', message: 'Request did not come from Nitpilot.' } });
+    }
   });
 });

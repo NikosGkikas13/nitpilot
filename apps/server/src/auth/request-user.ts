@@ -34,11 +34,13 @@ export const requireUser = createMiddleware<{ Variables: UserVariables }>(async 
 /**
  * A browser sends our cookie with any request to us, even one another site's page started. So a change made
  * with the cookie must come from our own pages (spec §14). A CLI's token isn't sent by browsers on their own,
- * so CLI requests need no such check. Goes after `requireUser`.
+ * so CLI requests need no such check. Goes after `requireUser`. It fails closed: only a request `requireUser`
+ * marked as a CLI-token request skips the check, so a route that forgot `requireUser` (or put this one first)
+ * is checked rather than left open.
  */
 export const requireSameOrigin = createMiddleware<{ Variables: UserVariables }>(async (c, next) => {
   const changes = c.req.method !== 'GET' && c.req.method !== 'HEAD';
-  if (changes && c.get('via') === 'session' && !isAllowedOrigin(c.req.raw, getEnv().PUBLIC_URL)) {
+  if (changes && c.get('via') !== 'cli' && !isAllowedOrigin(c.req.raw, getEnv().PUBLIC_URL)) {
     throw new HttpError('forbidden', 'Request did not come from Nitpilot.');
   }
   await next();
