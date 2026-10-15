@@ -32,58 +32,60 @@ export function Landing() {
           Docs
         </a>
         <a className={styles.navLink} href={BRAND.repoUrl}>
-          GitHub ↗
+          GitHub <span aria-hidden="true">↗</span>
         </a>
       </nav>
 
-      <main className={styles.hero}>
-        <div className={styles.pitch}>
-          <span className={styles.eyebrow}>
-            <span className={styles.diamond} aria-hidden="true" />
-            For Claude Code and Gemini CLI
-          </span>
-          <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
-          <p className={styles.sub}>You only hear about it when there's a decision to make.</p>
-          <div className={styles.action}>
-            <a className={styles.signIn} href={SIGN_IN_URL}>
-              Sign in with GitHub <span aria-hidden="true">→</span>
-            </a>
-            <span className={styles.note}>Free for public repos · Open source · Self-host for private repos</span>
+      <main>
+        <div className={styles.hero}>
+          <div className={styles.pitch}>
+            <span className={styles.eyebrow}>
+              <span className={styles.diamond} aria-hidden="true" />
+              For Claude Code and Gemini CLI
+            </span>
+            <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
+            <p className={styles.sub}>You only hear about it when there's a decision to make.</p>
+            <div className={styles.action}>
+              <a className={styles.signIn} href={SIGN_IN_URL}>
+                Sign in with GitHub <span aria-hidden="true">→</span>
+              </a>
+              <span className={styles.note}>Free for public repos · Open source · Self-host for private repos</span>
+            </div>
+          </div>
+
+          <div className={styles.card} aria-hidden="true">
+            {SAMPLE_ROWS.map((row, i) => (
+              <div key={row.ref} className={i === 0 ? `${styles.row} ${styles.rowFirst}` : styles.row}>
+                <span className={styles.avatar}>
+                  <span className={styles.initials}>{row.initials}</span>
+                  <span className={styles.agentBadge} />
+                </span>
+                <span className={styles.rowText}>
+                  <span className={styles.ref}>
+                    <span>{row.ref}</span>
+                    {row.time}
+                  </span>
+                  <span className={styles.rowTitle}>{row.title}</span>
+                  <span className={styles.status}>
+                    <span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>
+                    <span className={styles.last}>{row.last}</span>
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className={styles.card} aria-hidden="true">
-          {SAMPLE_ROWS.map((row, i) => (
-            <div key={row.ref} className={i === 0 ? `${styles.row} ${styles.rowFirst}` : styles.row}>
-              <span className={styles.avatar}>
-                <span className={styles.initials}>{row.initials}</span>
-                <span className={styles.agentBadge} />
-              </span>
-              <span className={styles.rowText}>
-                <span className={styles.ref}>
-                  <span>{row.ref}</span>
-                  {row.time}
-                </span>
-                <span className={styles.rowTitle}>{row.title}</span>
-                <span className={styles.status}>
-                  <span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>
-                  <span className={styles.last}>{row.last}</span>
-                </span>
-              </span>
+        <section className={styles.steps} aria-label="How it works">
+          {STEPS.map((step, i) => (
+            <div key={step.title} className={styles.step}>
+              <span className={styles.stepNumber}>{i + 1}</span>
+              <h2 className={styles.stepTitle}>{step.title}</h2>
+              <p className={styles.stepBody}>{step.body}</p>
             </div>
           ))}
-        </div>
+        </section>
       </main>
-
-      <section className={styles.steps} aria-label="How it works">
-        {STEPS.map((step, i) => (
-          <div key={step.title} className={styles.step}>
-            <span className={styles.stepNumber}>{i + 1}</span>
-            <h2 className={styles.stepTitle}>{step.title}</h2>
-            <p className={styles.stepBody}>{step.body}</p>
-          </div>
-        ))}
-      </section>
     </div>
   );
 }

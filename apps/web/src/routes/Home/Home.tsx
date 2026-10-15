@@ -11,8 +11,9 @@ export function Home() {
   const me = useMe();
   if (me.isPending) {
     return (
-      <div className={styles.loading} aria-busy="true">
+      <div className={styles.loading} role="status" aria-busy="true">
         <Wordmark size={26} />
+        <span className={styles.visuallyHidden}>Loading…</span>
       </div>
     );
   }

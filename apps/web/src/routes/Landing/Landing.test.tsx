@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Landing } from './Landing';
 
@@ -18,5 +18,17 @@ describe('Landing', () => {
   it('keeps the sample inbox out of the accessibility tree', () => {
     render(<Landing />);
     expect(screen.queryByText('Fix race in session refresh')?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('does not make a screen reader say the arrow in the GitHub link', () => {
+    render(<Landing />);
+    expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument();
+  });
+
+  it('keeps the whole page body, steps included, in one main landmark', () => {
+    render(<Landing />);
+    const main = screen.getByRole('main');
+    expect(within(main).getByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(within(main).getByRole('heading', { level: 2, name: 'You make the call' })).toBeInTheDocument();
   });
 });

@@ -23,6 +23,12 @@ function answers(...responses: [number, unknown][]) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Home', () => {
+  it('tells a screen reader it is loading while /api/me has not answered', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    renderHome();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+  });
+
   it('shows the landing page to someone who is not signed in', async () => {
     answers([401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }]);
     renderHome();
