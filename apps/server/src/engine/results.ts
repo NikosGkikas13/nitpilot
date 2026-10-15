@@ -106,13 +106,17 @@ function severityCounts(result: JobResult): Partial<Record<Severity, number>> {
 export const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 30_000;
 /** The branch moved under the job: run it again on the new head right away. */
-const RUN_AGAIN_NOW: readonly FailureReason[] = ['stale_head', 'branch_moved'];
+const RUN_AGAIN_NOW: readonly FailureReason[] = ['branch_moved'];
 /** Not the agent's fault: wait, then try again without counting an attempt. */
 const WAIT_MS: Partial<Record<FailureReason, number>> = {
+  // GitHub moves a PR's ref a few seconds after a push, so a job handed out on our own push can see the old head.
+  stale_head: 5_000,
   quota: 15 * 60_000,
   daily_cap: 60 * 60_000,
   repo_not_linked: 10 * 60_000,
 };
+/** Waits too short to be worth a line in the chat. */
+const QUIET_WAITS: readonly FailureReason[] = ['stale_head'];
 
 export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const chat = ctx.chat;
@@ -129,7 +133,7 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const wait = WAIT_MS[e.reason];
   if (wait !== undefined) {
     requeue(ctx, job, addMs(ctx.now, wait), true, e.reason);
-    system(ctx, `${name} is waiting (${e.reason.replaceAll('_', ' ')}) and will try again later`, { reason: e.reason });
+    if (!QUIET_WAITS.includes(e.reason)) system(ctx, `${name} is waiting (${e.reason.replaceAll('_', ' ')}) and will try again later`, { reason: e.reason });
     return;
   }
   // Only the attempts that were the agent's problem count toward the limit and the backoff.

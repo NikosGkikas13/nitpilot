@@ -51,9 +51,17 @@ describe('job_failed', () => {
     expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(delay), refundAttempt: true, reason }]);
   });
 
-  it.each(['stale_head', 'branch_moved'] as const)('runs again right away after %s', (reason) => {
-    const out = failing(2, reason, false);
-    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: T0, refundAttempt: true, reason }]);
+  it('runs again right away after branch_moved', () => {
+    const out = failing(2, 'branch_moved', false);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: T0, refundAttempt: true, reason: 'branch_moved' }]);
+  });
+
+  // Seen live (acceptance run, 7.2): right after our own push, GitHub's PR ref lagged the announced head by 2.3 s,
+  // so a re-review handed out at once fetched the old head. Running again at once would spin while GitHub lags.
+  it('waits a few seconds after stale_head, without counting an attempt', () => {
+    const out = failing(2, 'stale_head', false);
+    expect(commandsOf(out, 'retry_job')).toEqual([{ type: 'retry_job', jobId: 'job-r1', runAfter: after(5_000), refundAttempt: true, reason: 'stale_head' }]);
+    expect(out.timeline).toEqual([]); // too short a wait to tell anyone about
   });
 
   it('ignores a failure from a job that is no longer running', () => {
