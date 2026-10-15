@@ -172,6 +172,8 @@ model Participant {
   jobs            Job[]
 
   @@unique([chatId, githubId, role])
+  /// The inbox lists a person's chats by their GitHub id.
+  @@index([githubId])
 }
 
 model Point {

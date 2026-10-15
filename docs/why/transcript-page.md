@@ -10,6 +10,8 @@ The summary comment on GitHub links here, so anyone could click it. A chat repea
 2. Signed in → Nitpilot asks GitHub `GET /repos/<owner>/<repo>` **with your own token**. GitHub answers 404 for a private repo you can't read, so a 404 (or a 403) means no.
 3. The answer is kept for 5 minutes per person and repo, so reading a chat doesn't call GitHub every time. The cost: someone removed from a repo can still see its chats for up to 5 minutes.
 
+`http/routes/inbox.ts` is a second place that uses the same `RepoAccess`: the inbox shows each PR's title and newest message, so it asks about each repo once and leaves out the rows of repos you can no longer read.
+
 "No such chat" and "you can't see it" get the **same** 404 page. Otherwise someone could try URLs and learn which private repos have chats. If your GitHub sign-in expired, the page asks you to sign in again instead.
 
 To keep those two answers identical for everyone, Nitpilot asks GitHub about the repo in the URL **before** it looks for the chat. Otherwise someone whose sign-in expired would get "sign in again" for a chat that exists and a 404 for one that doesn't, and could use that to find out which private chats exist. The cost: a made-up URL costs one GitHub call, with your own token, and the answer is kept for 5 minutes. Owner and repo names that aren't shaped like GitHub's (letters, digits, `-`, `_`, `.`) are turned away before any call, since they go into a GitHub API path.

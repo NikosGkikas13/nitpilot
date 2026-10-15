@@ -31,15 +31,20 @@ const WITH_CHAT = {
 type Mine = Prisma.ParticipantGetPayload<{ include: typeof WITH_CHAT }>;
 type Chat = Mine['chat'];
 
+/** Open chats, and those closed in the last 14 days: the chats an inbox lists. */
+function inInbox(now: Date): Prisma.PrChatWhereInput {
+  const closedSince = new Date(now.getTime() - CLOSED_KEEP_MS);
+  return { OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] };
+}
+
 /**
  * Your inbox (spec §16): one row per chat and role you have in it, open chats and those closed in the last
  * 14 days, newest first. Every fact for every row is read with a fixed number of queries, however many
  * chats there are (docs/why/n-plus-one-queries.md).
  */
 export async function loadInboxRows(user: InboxViewer, clis: LiveClis, now = new Date()): Promise<InboxRow[]> {
-  const closedSince = new Date(now.getTime() - CLOSED_KEEP_MS);
   const mine = await prisma.participant.findMany({
-    where: { githubId: user.githubId, chat: { OR: [{ closedAt: null }, { closedAt: { gte: closedSince } }] } },
+    where: { githubId: user.githubId, chat: inInbox(now) },
     include: WITH_CHAT,
     orderBy: [{ chat: { updatedAt: 'desc' } }, { role: 'asc' }],
     take: MAX_ROWS,
@@ -51,7 +56,7 @@ export async function loadInboxRows(user: InboxViewer, clis: LiveClis, now = new
 export async function loadInboxRow(chatId: string, userId: string, clis: LiveClis, now = new Date()): Promise<InboxRow[]> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return [];
-  const mine = await prisma.participant.findMany({ where: { chatId, githubId: user.githubId }, include: WITH_CHAT, orderBy: { role: 'asc' } });
+  const mine = await prisma.participant.findMany({ where: { chatId, githubId: user.githubId, chat: inInbox(now) }, include: WITH_CHAT, orderBy: { role: 'asc' } });
   return buildRows(user, mine, clis, now);
 }
 

@@ -42,6 +42,9 @@ describe('loadInboxRows (spec §16 "Inbox")', () => {
     await makeParticipant(chat.id, maya, 'reviewer');
     const rows = await loadInboxRows(viewer(maya), noClis);
     expect(rows.map((r) => r.role).sort()).toEqual(['author', 'reviewer']);
+    // `other` never picks you: on your own PR it is the requested reviewer; as a reviewer there is no other author.
+    expect(rows.find((r) => r.role === 'author')!.other).toMatchObject({ login: 'leo' });
+    expect(rows.find((r) => r.role === 'reviewer')!.other).toBeNull();
   });
 
   it("keeps chats closed in the last 14 days, and never lists someone else's chat", async () => {
@@ -120,6 +123,13 @@ describe('loadInboxRows (spec §16 "Inbox")', () => {
 });
 
 describe('loadInboxRow (one chat, for live updates)', () => {
+  it('keeps a chat closed more than 14 days ago out, as the full list does', async () => {
+    const { maya, chat } = await scene();
+    await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'closed', closedAt: new Date(Date.now() - 15 * DAY) } });
+    expect(await loadInboxRow(chat.id, maya.id, noClis)).toEqual([]);
+    expect(await loadInboxRows(viewer(maya), noClis)).toEqual([]);
+  });
+
   it('gives the same rows the full list gives for that chat', async () => {
     const { maya, chat } = await scene();
     await makeParticipant(chat.id, maya, 'reviewer');

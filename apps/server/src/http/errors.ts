@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'conflict'
   | 'payload_too_large'
   | 'rate_limited'
+  | 'github_unavailable'
   | 'server_error';
 
 const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
@@ -21,6 +22,7 @@ const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   conflict: 409,
   payload_too_large: 413,
   rate_limited: 429,
+  github_unavailable: 502,
   server_error: 500,
 };
 

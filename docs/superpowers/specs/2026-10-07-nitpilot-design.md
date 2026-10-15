@@ -647,7 +647,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
   5. `nitpilot start`.
   The checklist ticks itself off as each step completes (`me.update` on `/ws/web`, §10).
 - **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA. A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway.
-- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of.
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of, and only those in repos they can still read: the same check, made once per repo and kept for 5 minutes. An expired GitHub sign-in makes the inbox a 401 that says so, and GitHub not answering makes it a 502.
 - **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
   - **Notes:** the author and the reviewers who are on Nitpilot.
   - **Resolve** an escalated point: only the reviewer who raised it. A point that came from a GitHub comment is resolved on GitHub, by resolving its thread.
