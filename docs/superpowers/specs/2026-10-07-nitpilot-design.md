@@ -417,7 +417,7 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
   ```
 - **Editor:** the same, plus `Edit,Write` in `--tools`, and `--permission-mode acceptEdits`.
 - **MCP config:** `{"mcpServers":{"nitpilot":{"type":"http","url":…,"headers":{"Authorization":"Bearer …"},"alwaysLoad":true}}}`, written to a 0600 file. The token never appears in the command-line arguments.
-- **Environment:** built from an allowlist. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing.
+- **Environment:** built from an allowlist: `PATH`, `HOME`, the user and shell, the locale, `TMPDIR`, `TERM`, `CLAUDE_CONFIG_DIR` (where Claude Code keeps its login, for people with two accounts), the proxy variables and `NODE_EXTRA_CA_CERTS`. None of them is a secret. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing. `detect()` (and so `nitpilot doctor` and `start`) checks the login with this same environment, so it can't pass while every job fails `auth`.
 - **"Your setup" still applies:** user-level settings and the personal `~/.claude/CLAUDE.md`. Project-level files from the PR are scrubbed.
 - **Outcome:** a `result` line that isn't an error is success. Otherwise Nitpilot reads the failed `result` line and stderr, never the agent's own words: `error_max_turns` is `max_turns`; a 401 status, "Failed to authenticate", "Invalid API key" or "/login" is `auth`; a 429 status or "You've hit your limit" is `quota`. None is retried at once, because the same run would fail the same way. Anything else, a crash or a signal included, is a retryable `crash`.
 - **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed, but `ANTHROPIC_API_KEY` must be set.

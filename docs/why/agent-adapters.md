@@ -27,7 +27,7 @@ The fixtures in `claude-code/fixtures/` are real runs, recorded once (the quota 
 
 ## Your login, not a key
 
-Claude Code uses your own login (`claude auth login`), which `detect()` checks with `claude auth status`. Nitpilot never passes `ANTHROPIC_API_KEY` to it unless you set `"apiBilling": true`, because a key would bill your API account instead of your plan. With `apiBilling` on and no key set, `detect()` says so, so `nitpilot doctor` points at the key, not the login.
+Claude Code uses your own login (`claude auth login`), which `detect()` checks with `claude auth status`. It runs that check with the same short environment a job gets (`agentBaseEnv` in `apps/cli/src/agents/runner.ts`), not your whole shell's: if your login is only reachable through a variable the agent never sees, doctor should say so, not pass and then watch every job fail. That's why the allowlist keeps `CLAUDE_CONFIG_DIR`, your proxy and `NODE_EXTRA_CA_CERTS`: none is a secret, and Claude Code needs them to find its login and reach the internet. Nitpilot never passes `ANTHROPIC_API_KEY` to it unless you set `"apiBilling": true`, because a key would bill your API account instead of your plan. With `apiBilling` on and no key set, `detect()` says so, so `nitpilot doctor` points at the key, not the login.
 
 ## The React analogy
 

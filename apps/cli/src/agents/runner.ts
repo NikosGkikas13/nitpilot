@@ -10,8 +10,15 @@ const STDERR_TAIL_BYTES = 4 * 1024;
 /** How long to wait for the output to close after the agent has ended (a program it left behind may hold it). */
 const DRAIN_GRACE_MS = 1_000;
 
-/** The only variables an agent gets from your environment: enough to find programs and its own settings. No tokens (spec §12.3 S3). */
-const AGENT_ENV_ALLOWLIST = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TERM'];
+/**
+ * The only variables an agent gets from your environment: enough to find programs, its own settings and login
+ * (CLAUDE_CONFIG_DIR), and the network through your proxy and your company's certificates. No tokens (spec §12.3 S3).
+ */
+const AGENT_ENV_ALLOWLIST = [
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'TERM',
+  'CLAUDE_CONFIG_DIR',
+  'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'NODE_EXTRA_CA_CERTS',
+];
 
 export function agentBaseEnv(from: Record<string, string | undefined> = process.env): Record<string, string> {
   const env: Record<string, string> = {};

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { BRAND } from '@nitpilot/protocol';
 import { runProgram, type RunProgram } from '../../run-program';
+import { agentBaseEnv } from '../runner';
 import type { AgentAdapter, AgentEvent, AgentMode, AgentOutcome } from '../types';
 
 /** The Claude Code version these flags were checked against (spec §12.2). The live conformance suite catches drift. */
@@ -25,6 +26,8 @@ export type ClaudeCodeOptions = {
   apiKey?: string;
   /** You opted into API billing (`apiBilling`): then `apiKey` must be set. */
   apiBilling?: boolean;
+  /** Your environment (default: this process's). detect() checks Claude Code with the same allowlisted part a job gets. */
+  env?: Record<string, string | undefined>;
   /** Runs a program (tests pass a pretend one). */
   run?: RunProgram;
 };
@@ -41,12 +44,15 @@ export function claudeCodeAdapter(opts: ClaudeCodeOptions = {}): AgentAdapter {
     modes: ['reviewer', 'editor'],
     scrubPaths: SCRUB_PATHS,
     async detect() {
-      const version = await run('claude', ['--version']);
+      // The environment a job gets, not yours: otherwise a login found through a variable the agent never
+      // sees (CLAUDE_CONFIG_DIR, say) would pass here and fail every job.
+      const env = agentBaseEnv(opts.env ?? process.env);
+      const version = await run('claude', ['--version'], { env });
       if (version.code !== 0) return { ok: false, problem: '`claude` is not installed (or not on your PATH)' };
       const found = version.stdout.trim();
       if (opts.apiKey) return { ok: true, version: found };
       if (opts.apiBilling) return { ok: false, version: found, problem: 'apiBilling is on, but ANTHROPIC_API_KEY is not set: set it, or turn apiBilling off to use your Claude login' };
-      const auth = await run('claude', ['auth', 'status']);
+      const auth = await run('claude', ['auth', 'status'], { env });
       if (!isLoggedIn(auth.stdout)) return { ok: false, version: found, problem: 'Claude Code is not logged in: run `claude auth login`' };
       return { ok: true, version: found };
     },

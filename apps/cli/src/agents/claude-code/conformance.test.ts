@@ -98,6 +98,19 @@ describe('the Claude Code adapter', () => {
       expect(await claudeCodeAdapter({ run: loggedOut }).detect()).toEqual({ ok: false, version: '2.1.277 (Claude Code)', problem: 'Claude Code is not logged in: run `claude auth login`' });
     });
 
+    it("checks the login with the environment a job gets, so doctor can't pass while every job fails", async () => {
+      const seen: (Record<string, string> | undefined)[] = [];
+      const ready = run({ ...installed, 'claude auth status': { code: 0, stdout: '{"loggedIn":true}' } });
+      const watching = async (file: string, args: string[], opts?: { env?: Record<string, string> }) => {
+        seen.push(opts?.env);
+        return ready(file, args);
+      };
+      const env = { PATH: '/bin', HOME: '/home/maya', CLAUDE_CONFIG_DIR: '/home/maya/.claude-work', GITHUB_TOKEN: 'ghp_x', ANTHROPIC_API_KEY: 'sk-ant-x' };
+      expect(await claudeCodeAdapter({ env, run: watching }).detect()).toEqual({ ok: true, version: '2.1.277 (Claude Code)' });
+      expect(seen).toEqual([agentBaseEnv(env), agentBaseEnv(env)]);
+      expect(seen[0]).toEqual({ PATH: '/bin', HOME: '/home/maya', CLAUDE_CONFIG_DIR: '/home/maya/.claude-work' });
+    });
+
     it('says so when API billing is on but no key is set', async () => {
       expect(await claudeCodeAdapter({ apiBilling: true, run: run(installed) }).detect()).toEqual({
         ok: false,

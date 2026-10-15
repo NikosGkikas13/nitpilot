@@ -110,4 +110,12 @@ describe('agentBaseEnv', () => {
     const env = agentBaseEnv({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'x', NPM_TOKEN: 'x', AWS_SECRET_ACCESS_KEY: 'x', ANTHROPIC_API_KEY: 'sk-ant-x', NITPILOT_TOKEN: 'nit_x' });
     expect(env).toEqual({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8' });
   });
+
+  it('keeps where Claude Code keeps its login, and how you reach the network: none of them is a secret', () => {
+    const mine = {
+      CLAUDE_CONFIG_DIR: '/home/maya/.claude-work', HTTPS_PROXY: 'http://proxy:3128', HTTP_PROXY: 'http://proxy:3128', NO_PROXY: 'localhost',
+      https_proxy: 'http://proxy:3128', http_proxy: 'http://proxy:3128', no_proxy: 'localhost', NODE_EXTRA_CA_CERTS: '/etc/ssl/company.pem',
+    };
+    expect(agentBaseEnv({ PATH: '/bin', ...mine, GITHUB_TOKEN: 'ghp_x' })).toEqual({ PATH: '/bin', ...mine });
+  });
 });
