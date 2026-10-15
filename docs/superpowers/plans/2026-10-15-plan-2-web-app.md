@@ -159,7 +159,7 @@ Package versions (checked against npm on 2026-10-15): `react` and `react-dom` 19
 **Interfaces:**
 - Produces: `type ThemeChoice = 'system' | 'light' | 'dark'`, `THEME_KEY`, `readTheme(store?)`, `writeTheme(choice, store?)`, `applyTheme(choice, root?)`, `systemPrefersDark()`, `shownTheme(choice, systemDark)` (`src/theme.ts`); `<Wordmark size?: 19 | 22 | 26 />`; `<ThemeToggle />`; `makeQueryClient()` and `<App queryClient? />` (`src/app.tsx`). `tokens.css` defines every handoff token as a CSS variable, plus `--font-sans`, `--font-mono`, the radii and the shadows.
 
-- [ ] **Step 1: The package**
+- [x] **Step 1: The package**
 
 Create `apps/web/package.json`:
 
@@ -209,7 +209,7 @@ npm install -D --no-audit --no-fund eslint-plugin-react-hooks@^7.1.1 globals@^17
 
 Expected: both finish without errors (npm 11 may warn that it held back esbuild's install script; nothing here needs it). `git status` shows `apps/web/package.json`, `package.json` and `package-lock.json`.
 
-- [ ] **Step 2: TypeScript, Vite and the test setup**
+- [x] **Step 2: TypeScript, Vite and the test setup**
 
 Create `apps/web/tsconfig.json` (the browser's types instead of Node's; Task 3 adds Playwright's files):
 
@@ -293,7 +293,7 @@ import { afterEach } from 'vitest';
 afterEach(() => cleanup());
 ```
 
-- [ ] **Step 3: Write the failing tests**
+- [x] **Step 3: Write the failing tests**
 
 Create `apps/web/src/theme.test.ts`:
 
@@ -405,12 +405,12 @@ describe('ThemeToggle', () => {
 });
 ```
 
-- [ ] **Step 4: Run them to see them fail**
+- [x] **Step 4: Run them to see them fail**
 
 Run: `npm test -w apps/web`
 Expected: 3 failed suites, starting with `Error: Failed to resolve import "./theme" from "apps/web/src/theme.test.ts". Does the file exist?`
 
-- [ ] **Step 5: The tokens, the global styles and the theme**
+- [x] **Step 5: The tokens, the global styles and the theme**
 
 Create `apps/web/src/styles/tokens.css` (every value from the handoff's color table; dark applies when the system is dark and the toggle didn't choose light, or when the toggle chose dark):
 
@@ -654,7 +654,7 @@ export function shownTheme(choice: ThemeChoice, systemDark: boolean): 'light' | 
 }
 ```
 
-- [ ] **Step 6: The wordmark and the theme toggle**
+- [x] **Step 6: The wordmark and the theme toggle**
 
 Create `apps/web/src/components/Wordmark/Wordmark.module.css`:
 
@@ -777,12 +777,12 @@ function MoonIcon() {
 }
 ```
 
-- [ ] **Step 7: Run the tests to see them pass**
+- [x] **Step 7: Run the tests to see them pass**
 
 Run: `npm test -w apps/web`
 Expected: `Test Files  3 passed (3)`, `Tests  10 passed (10)`.
 
-- [ ] **Step 8: The app, its entry point, lint and the build**
+- [x] **Step 8: The app, its entry point, lint and the build**
 
 Create `apps/web/src/app.tsx` (a placeholder route; Task 3 replaces it):
 
@@ -863,11 +863,11 @@ In the root `package.json`, add `"build": "npm run build -w apps/web"` as the fi
 Run: `npm run build && npm run typecheck && npm run lint`
 Expected: Vite prints `✓ built in …` with `dist/index.html`, the fonts under `dist/assets/` as `.woff2` files, and one CSS and one JS file; typecheck and lint print no errors.
 
-- [ ] **Step 9: Look at it**
+- [x] **Step 9: Look at it**
 
 Run `npm run dev -w apps/web` and open `http://localhost:5173`. Expected: the wordmark `nıtpilot` in Fragment Mono with the teal diamond over the ı, and the 32 px theme button; clicking it switches light ↔ dark (background `#eef2ee` ↔ `#0f1412`), and a reload keeps the choice. Take a screenshot of each theme for the task report. Stop Vite.
 
-- [ ] **Step 10: The whole suite, then commit**
+- [x] **Step 10: The whole suite, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint`
 Expected: protocol 41, CLI 293 passed + 14 skipped, server 599, web 10; typecheck and lint clean.

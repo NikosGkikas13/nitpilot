@@ -1,4 +1,6 @@
 import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -6,6 +8,12 @@ export default tseslint.config(
   { ignores: ['**/node_modules/**', '**/dist/**', 'apps/server/src/generated/**', 'docs/**', '.superpowers/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // The web app runs in the browser, and its components follow React's rules of hooks.
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    ...reactHooks.configs.flat['recommended-latest'],
+  },
   {
     // The engine is a pure function: same input, same output, no I/O.
     // See docs/why/pure-engine.md.

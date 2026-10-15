@@ -1,0 +1,24 @@
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--fg1);
+  white-space: nowrap;
+}
+
+/* The dotless ı carries the mark: a teal diamond in place of the dot. */
+.dot {
+  position: relative;
+}
+
+.diamond {
+  position: absolute;
+  left: 50%;
+  top: -0.02em;
+  width: 0.26em;
+  height: 0.26em;
+  background: var(--acc);
+  transform: translateX(-50%) rotate(45deg);
+}

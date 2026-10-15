@@ -1,0 +1,121 @@
+/*
+ * Design tokens from the Claude Design handoff (docs/design/handoff/design_handoff_nitpilot_web/README.md).
+ * Light is the default. Dark follows the system unless the theme toggle chose light, or applies when it chose dark.
+ */
+:root {
+  --font-sans: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --font-mono: 'Fragment Mono', ui-monospace, monospace;
+
+  --bg: #eef2ee;
+  --side: #f7f9f6;
+  --surface: #ffffff;
+  --muted: #e8ede7;
+  --hover: #eef2ed;
+  --sel: #e6ece6;
+  --fg1: #16201b;
+  --fg2: #44514a;
+  --fg3: #5f6c65;
+  --fg4: #9aa59f;
+  --b1: #dfe6df;
+  --b2: #edf1ec;
+  --acc: #16707f;
+  --on-acc: #ffffff;
+  --acc-tint: #e0f0f2;
+  --acc-text: #0f6170;
+  --acc-line: #b7dbe0;
+  --bubble: #dcefef;
+  --hl: #e0f0f2;
+  --code: #f7f9f6;
+  --ok: #2f9e5b;
+  --ok-fg: #1f7444;
+  --ok-tint: #e3f3e8;
+  --warn: #e09a1a;
+  --warn-fg: #93600a;
+  --warn-tint: #fbf0d9;
+  --red: #d6453a;
+  --red-fg: #b3322a;
+  --red-tint: #fbe9e6;
+  --red-line: #f1c6c0;
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-input: 18px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(16, 32, 24, 0.05), 0 6px 20px rgba(16, 32, 24, 0.06);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-toast: 0 6px 20px rgba(0, 0, 0, 0.18);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0f1412;
+    --side: #121815;
+    --surface: #18201c;
+    --muted: #222b26;
+    --hover: #1c2420;
+    --sel: #202925;
+    --fg1: #e8efea;
+    --fg2: #bfcac3;
+    --fg3: #93a198;
+    --fg4: #5f6c65;
+    --b1: #2b3630;
+    --b2: #1f2823;
+    --acc: #5cc3d1;
+    --on-acc: #06191c;
+    --acc-tint: #13292c;
+    --acc-text: #86d6e1;
+    --acc-line: #245055;
+    --bubble: #13292c;
+    --hl: #13292c;
+    --code: #121815;
+    --ok: #3fbf74;
+    --ok-fg: #62d293;
+    --ok-tint: #13261b;
+    --warn: #efaa34;
+    --warn-fg: #f3bf62;
+    --warn-tint: #2a2213;
+    --red: #ef5e52;
+    --red-fg: #ff8579;
+    --red-tint: #2b1715;
+    --red-line: #5a2a25;
+    --shadow-card: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1412;
+  --side: #121815;
+  --surface: #18201c;
+  --muted: #222b26;
+  --hover: #1c2420;
+  --sel: #202925;
+  --fg1: #e8efea;
+  --fg2: #bfcac3;
+  --fg3: #93a198;
+  --fg4: #5f6c65;
+  --b1: #2b3630;
+  --b2: #1f2823;
+  --acc: #5cc3d1;
+  --on-acc: #06191c;
+  --acc-tint: #13292c;
+  --acc-text: #86d6e1;
+  --acc-line: #245055;
+  --bubble: #13292c;
+  --hl: #13292c;
+  --code: #121815;
+  --ok: #3fbf74;
+  --ok-fg: #62d293;
+  --ok-tint: #13261b;
+  --warn: #efaa34;
+  --warn-fg: #f3bf62;
+  --warn-tint: #2a2213;
+  --red: #ef5e52;
+  --red-fg: #ff8579;
+  --red-tint: #2b1715;
+  --red-line: #5a2a25;
+  --shadow-card: none;
+  color-scheme: dark;
+}
