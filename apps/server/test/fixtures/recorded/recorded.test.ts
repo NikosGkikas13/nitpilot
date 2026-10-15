@@ -126,6 +126,10 @@ const EXPECTED: Record<string, unknown[]> = {
   'pull_request_review_comment.created.reply-by-agent': [
     { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: expect.stringContaining('nitpilot:v1') } } },
   ],
+  // The same reply again, wrapped by GitHub in a review with no body (`null` in the payload). The router takes a review that holds only our own comments as our own write.
+  'pull_request_review.submitted.reply-by-agent': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_review_submitted', review: { id: anyId, author: A, state: 'commented', body: '', comments: [{ threadRootId: anyId, author: A, body: expect.stringContaining('nitpilot:v1') }] } } },
+  ],
   'pull_request_review_comment.created.by-agent-line5': [
     { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 5, body: expect.stringContaining('nitpilot:v1') } } },
   ],

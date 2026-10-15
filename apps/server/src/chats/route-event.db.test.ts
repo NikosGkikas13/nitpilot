@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, resetDb } from '../../test/db';
 import { issueCommentEvent, people, prEvent, pull, repository, repositoryEvent, reviewComment, reviewCommentEvent, reviewEvent } from '../../test/fixtures/github';
@@ -119,6 +120,17 @@ describe('our own writes coming back (Review Focus #1)', () => {
     expect(await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7701, user: people.maya, body: '' }))).toMatchObject({ status: 'ignored', note: expect.stringMatching(/our own/) });
     expect(await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7702, user: people.maya, body: '' }))).toMatchObject({ status: 'ignored', note: expect.stringMatching(/our own/) });
     expect(await prisma.message.count({ where: { chatId: c.id, body: { startsWith: 'Fixed:' } } })).toBe(0);
+  });
+
+  it('ignores the real wrapped reply recorded on the acceptance run', async () => {
+    const recorded = (name: string) => JSON.parse(readFileSync(new URL(`../../test/fixtures/recorded/${name}.json`, import.meta.url), 'utf8')).payload;
+    const review = recorded('pull_request_review.submitted.reply-by-agent');
+    const reply = recorded('pull_request_review_comment.created.reply-by-agent').comment;
+    await syncFromEvent({ scope: 'installation', action: 'created', installationId: String(review.installation.id), accountLogin: 'NikosGkikas13', repos: [{ id: String(review.repository.id), fullName: review.repository.full_name, private: false, defaultBranch: 'main' }] });
+    const platform = new FakePlatform();
+    platform.reviewComments.set(String(review.review.id), [reply]);
+    const handle = createDeliveryHandler({ platform, dispatch: new Dispatcher().dispatch });
+    expect(await handle({ deliveryId: 'recorded-1', event: 'pull_request_review', body: JSON.stringify(review) })).toMatchObject({ status: 'ignored', note: expect.stringMatching(/our own/) });
   });
 
   it('marks a push we announced as ours', async () => {
