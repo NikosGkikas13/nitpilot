@@ -3,7 +3,7 @@ import { makeChat, resetDb } from '../../test/db';
 import { issueCommentEvent, people, prEvent, pull, repository, repositoryEvent, reviewComment, reviewCommentEvent, reviewEvent } from '../../test/fixtures/github';
 import { createDeliveryHandler } from '../ingest/handle';
 import { syncFromEvent } from '../ingest/installations';
-import { summaryMarker } from '../lib/markers';
+import { summaryMarker, writeMarker } from '../lib/markers';
 import { prisma } from '../lib/prisma';
 import { FakePlatform } from '../platform/fake/fake-platform';
 import { snapshotFromPull } from '../platform/github/mapping';
@@ -103,6 +103,22 @@ describe('our own writes coming back (Review Focus #1)', () => {
     await prisma.githubWrite.createMany({ data: [{ chatId: c.id, kind: 'reply', githubId: '9400' }, { chatId: c.id, kind: 'review', githubId: '7400' }] });
     expect(await deliver('pull_request_review_comment', reviewCommentEvent('created', reviewComment({ id: 9400 })))).toMatchObject({ status: 'ignored' });
     expect(await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7400, body: 'from our agent' }))).toMatchObject({ status: 'ignored' });
+  });
+
+  // Seen live (acceptance run, PR 4): GitHub wraps each reply our agent posts in a review of its own, with no body,
+  // and that review often arrives before the reply's own delivery.
+  it('ignores a review that only wraps our own reply, marked or recorded', async () => {
+    const { platform, deliver } = await setup();
+    await deliver('pull_request', prEvent('opened'));
+    const c = await chat();
+    await prisma.githubWrite.create({ data: { chatId: c.id, kind: 'reply', githubId: '9702' } });
+    const marked = reviewComment({ id: 9701, user: people.maya, in_reply_to_id: 9001, body: `Fixed: page 1 starts at 0.\n\n${writeMarker(c.id, 'task-1', 1)}` });
+    const recorded = reviewComment({ id: 9702, user: people.maya, in_reply_to_id: 9001, body: 'Fixed: an unknown id is handled.' });
+    platform.reviewComments.set('7701', [marked]);
+    platform.reviewComments.set('7702', [recorded]);
+    expect(await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7701, user: people.maya, body: '' }))).toMatchObject({ status: 'ignored', note: expect.stringMatching(/our own/) });
+    expect(await deliver('pull_request_review', reviewEvent('COMMENTED', { id: 7702, user: people.maya, body: '' }))).toMatchObject({ status: 'ignored', note: expect.stringMatching(/our own/) });
+    expect(await prisma.message.count({ where: { chatId: c.id, body: { startsWith: 'Fixed:' } } })).toBe(0);
   });
 
   it('marks a push we announced as ours', async () => {

@@ -82,18 +82,25 @@ async function createChat(repoId: string, s: PrSnapshot, rules: TeamRules): Prom
 
 /** Our writes come back as webhooks; recognize them by marker or by the ids we stored (spec §15). */
 async function isOwnWrite(event: DomainEvent): Promise<boolean> {
-  if (event.type === 'external_comment') {
-    if (containsMarker(event.comment.body)) return true;
-    return (await prisma.githubWrite.count({ where: { githubId: event.comment.id } })) > 0;
-  }
+  if (event.type === 'external_comment') return isOwnComment(event.comment);
   if (event.type === 'external_comment_deleted') {
     return (await prisma.githubWrite.count({ where: { githubId: event.commentId } })) > 0;
   }
   if (event.type === 'external_review_submitted') {
-    if (containsMarker(event.review.body)) return true;
-    return (await prisma.githubWrite.count({ where: { kind: 'review', githubId: event.review.id } })) > 0;
+    const { review } = event;
+    if (containsMarker(review.body)) return true;
+    if ((await prisma.githubWrite.count({ where: { kind: 'review', githubId: review.id } })) > 0) return true;
+    // GitHub wraps each reply our agent posts in a review of its own, with no body: it's ours when all it holds is ours.
+    if (review.body.trim() || review.comments.length === 0) return false;
+    for (const c of review.comments) if (!(await isOwnComment(c))) return false;
+    return true;
   }
   return false;
+}
+
+async function isOwnComment(comment: { id: string; body: string }): Promise<boolean> {
+  if (containsMarker(comment.body)) return true;
+  return (await prisma.githubWrite.count({ where: { githubId: comment.id } })) > 0;
 }
 
 /**
