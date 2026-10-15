@@ -555,10 +555,11 @@ max_points_per_review: 20
 - **Ignoring our own writes:**
   - Every body we write carries a hidden marker, `<!-- nitpilot:v1 chat=… -->`, and every id we create is stored in `GithubWrite`. Webhook events for those are ignored.
   - Our own pushes are announced in advance with `job.pushing` and matched by sha.
+  - GitHub wraps each thread reply we post in a review of its own, with no body. A review that holds nothing but our own comments is our own write too (seen on the Plan 1 acceptance run).
 - **Event order:** on `pull_request_review.submitted`, fetch that review's comments through the API instead of trusting the order webhooks arrive in.
-- **Debounce:** loose comments wait for `debounce_seconds` of quiet. A submitted review is processed immediately.
+- **Debounce:** loose comments wait for `debounce_seconds` of quiet. A submitted review is processed immediately, unless it is a `commented` review with no body of its own: GitHub's *Add single comment* looks exactly like that, so it waits like a loose comment (a reviewer's inline-only review waits the same 30 seconds).
 - **Re-requested reviews:**
-  - GitHub doesn't document whether re-requesting a review fires `review_requested` again. So in single-player reviewer mode, a re-review also starts on `synchronize` (debounced) while that reviewer has open points, and when the author replies in one of their threads.
+  - Re-requesting a review fires `review_requested` again (checked in the sandbox). Even so, in single-player reviewer mode, a re-review also starts on `synchronize` (debounced) while that reviewer has open points, and when the author replies in one of their threads.
   - Team review requests are ignored in v1.
 - **Catching up when a CLI connects** (once per person per server start, not polling): three searches with the person's own token, `is:pr is:open author:<login>`, `is:pr is:open review-requested:<login>` and `is:pr is:open reviewed-by:<login>`, one page of 100 each. Search allows 30 requests per minute per person. Each open PR in a repo the app is on and without a chat starts as if it had just been opened. A failed search is tried again at that person's next connect.
 - **A retargeted PR** (`pull_request.edited` with a new base): the author's trust is checked again (`pr_retargeted`). The chat's `baseRef` and `baseSha` are refreshed from every `pull_request` event, so a missed retarget is fixed by the next one. Nothing restarts: a running job finishes on the base it began with. Any other edit is ignored.
@@ -749,7 +750,10 @@ In Plan 1, the CLI prints these and shows an OS notification. In Plan 2 they bec
 - **Name squatting.** `nitpilot` was free on npm and nitpilot.dev looked unregistered on 2026-10-07. Claim both early.
 - **Agent CLI flags change quickly.** The conformance suite and the version checks in `nitpilot doctor` catch drift. If an adapter can't pass the suite for a mode, it doesn't declare that mode.
 - **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
-- **Re-requested reviews.** Whether `review_requested` fires again is undocumented. Verify it in the sandbox repo; the design doesn't depend on it.
+- **Re-requested reviews (checked in the sandbox, 2026-10).** Re-requesting a review from someone who had already reviewed fires `pull_request.review_requested` again, with that reviewer in `requested_reviewer`. So it starts a new review as a first request does. The `synchronize` and thread-reply triggers for single-player reviewers (§15) stay, for the reviewers who never get re-requested.
+- **A submitted review doesn't remove the request.** Submitting a review, even as a requested reviewer, sends no `review_request_removed`, so `requested` stays true after a review and the re-review rules (§9.3) keep working.
+- **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created` and also as a `pull_request_review.submitted` carrying the same comment, whether sent from the Conversation tab or from Files changed. `SeenComment` makes the comment count once (§8). Our own agent's thread replies come back the same way, wrapped in a review with no body: the router treats a review that holds nothing but our own comments as our own write (§15).
+- **A base retarget** arrives as `pull_request.edited` with `changes.base.ref.from` and `changes.base.sha.from`, which is what `pr_retargeted` (§9) reads.
 - **Rate limits.** GitHub's secondary limit is about 80 content-creating requests per minute, which could matter on busy PRs.
 - **Claude subscription policy** could change.
 - **Scrubbing has a cost.** Agents can't edit `CLAUDE.md`, `AGENTS.md` or `.env` in address jobs. This will be documented.

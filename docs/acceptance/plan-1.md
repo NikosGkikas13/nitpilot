@@ -24,11 +24,11 @@ The sandbox is `NikosGkikas13/nitpilot-sandbox`. The spec has account A owning i
 
 ## 0. Before you start
 
-- [ ] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
-- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
-- [ ] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
-- [ ] The dev server isn't running (stop it with Ctrl-C if it is). Nothing else uses port 8787.
-- [ ] The CLI is built: `npm run build -w apps/cli`, then `node apps/cli/dist/index.js --version` prints a version.
+- [x] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
+- [x] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [x] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
+- [x] The dev server isn't running (stop it with Ctrl-C if it is). Nothing else uses port 8787.
+- [x] The CLI is built: `npm run build -w apps/cli`, then `node apps/cli/dist/index.js --version` prints a version.
 
 ## 1. One-time setup: SSH aliases and clones (about 15 minutes)
 
@@ -83,8 +83,8 @@ Two SSH aliases let one laptop push as two GitHub accounts: `github-a` uses a ne
    git -C "$CLONE_A" push origin origin/main:refs/heads/acc/base2
    ```
 
-- [ ] Both `ssh -T` greetings are right.
-- [ ] Both clones exist and have the right `user.email`.
+- [x] Both `ssh -T` greetings are right.
+- [x] Both clones exist and have the right `user.email`.
 
 ## 2. A clean database, the tunnel and the server (about 5 minutes)
 
@@ -106,7 +106,7 @@ A fresh database `nitpilot_acceptance` keeps your dev data untouched, and means 
    ```
    Expect `Nitpilot server listening on http://localhost:8787` and a `[boot]` line. Leave it running.
 
-- [ ] Tunnel and server are up.
+- [x] Tunnel and server are up.
 
 `dbq` (from `env.sh`) runs `psql` inside the Postgres container against this database, so you don't need `psql` installed.
 
@@ -152,8 +152,8 @@ Now do these in order. After each, wait a couple of seconds so deliveries arrive
 
    (Hints from earlier deliveries in the dev database, not proof: a UI reply did arrive with a `pull_request_review.submitted`, and a review by the requested reviewer did not bring a `review_request_removed`.)
 
-- [ ] P1 to P12 done, the list read, Q1 to Q4 answered in section 9.
-- [ ] The probe PR is closed.
+- [x] P1 to P12 done, the list read, Q1 to Q4 answered in section 9.
+- [x] The probe PR is closed.
 
 ## 4. Single-player: the author (A only; B has never joined)
 
@@ -171,16 +171,16 @@ A is on Nitpilot, B is a person with a GitHub account only. When B comments on A
 4. **T5:** `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" sp-author && cd "$REPO"`
 5. **Window A:** open the link, title `Single-player: author`, Reviewers → `NikosGkikas13`, **Create pull request**. Expect nothing to start (B isn't on Nitpilot): T3 stays quiet.
 6. **Window B:** open the PR → **Files changed**. Line 5 of `orders.js`: **+**, `Pages start at 1, but page 1 skips the first page. Please fix.`, **Start a review**. Line 18: **+**, `This throws for an id that does not exist. Please handle it.`, **Add review comment**. **Finish your review** → *Comment* → **Submit review**.
-7. **T3:** within about 5 seconds expect `→ address of …#<PR> (attempt 1)`. Claude works for one to four minutes. Then `✓ address of …: done`.
+7. **T3:** about 30 seconds later expect `→ address of …#<PR> (attempt 1)`. (A review with no text of its own arrives looking just like GitHub's *Add single comment*, so Nitpilot waits `debounce_seconds`, 30 by default, for more comments before it acts: spec §15.) Claude works for one to four minutes. Then `✓ address of …: done`.
 8. **Window B**, on the PR: a new commit `Address review feedback (round 1)`; both threads have a reply from `ngkdev93-jpg` with the app badge; no Nitpilot summary comment.
 9. **T5:** `PR=<the PR number>` then `dbq -v pr=$PR -f - < docs/acceptance/check.sql`, and `gh api repos/$SANDBOX/pulls/$PR/commits | jq '[.[] | {sha: .sha[0:7], author: .author.login, trailer: (.commit.message | contains("Nitpilot-Job"))}]'`
 10. **Window A:** close the PR (**Close pull request**), so later sections' catch-up and chats don't touch it.
 
-- [ ] The address job started within about 5 seconds of B's review (T3 stamp against `check.sql` section 4).
-- [ ] The commit is authored by `ngkdev93-jpg` and its message has a `Nitpilot-Job` trailer.
-- [ ] Both of B's threads got a reply from A, as A.
-- [ ] No comment from `nitpilot-dev[bot]`.
-- [ ] `check.sql` shows no duplicate jobs, and no webhook left `received`, `retrying` or `failed`.
+- [x] The address job started about 30 seconds after B's review (`debounce_seconds`), and no later than a few seconds after that (T3 stamp against `check.sql` section 4).
+- [x] The commit is authored by `ngkdev93-jpg` and its message has a `Nitpilot-Job` trailer.
+- [x] Both of B's threads got a reply from A, as A.
+- [x] No comment from `nitpilot-dev[bot]`.
+- [x] `check.sql` shows no duplicate jobs, and no webhook left `received`, `retrying` or `failed`.
 
 ## 5. Single-player: the reviewer (B only; A leaves)
 
@@ -203,9 +203,9 @@ Now the other side. B is on Nitpilot, A is a plain GitHub user. When A asks B fo
 9. **T5:** `PR=<number>`, then `gh api repos/$SANDBOX/pulls/$PR/reviews --jq length` (expect `1`), `gh api repos/$SANDBOX/pulls/$PR/comments --jq '.[].user.login'` (expect three `NikosGkikas13`), and `check.sql`.
 10. **Window A:** close the PR.
 
-- [ ] The review job started within about 5 seconds of the request.
-- [ ] Exactly one review, with three inline comments, written as B.
-- [ ] No `nitpilot-dev[bot]` comment.
+- [x] The review job started within about 5 seconds of the request.
+- [x] Exactly one review, with three inline comments, written as B.
+- [x] No `nitpilot-dev[bot]` comment.
 
 ## 6. Agent to agent: the pass criteria
 
@@ -230,13 +230,13 @@ Both on Nitpilot. A's agent is Claude Code, B's is the scripted reviewer.
 6. Open the transcript link from the summary comment (in **Window B**, sign in with GitHub if the page asks). It shows the whole conversation and the chat as ready.
 
 **Pass criteria** (spec §20):
-- [ ] B's review job starts within 5 seconds of the review request (T4's `→ review of …` stamp minus the first row of `check.sql` section 4).
-- [ ] The chat reaches `ready` within `max_rounds` (3): `check.sql` section 1 shows `ready` and a round of 3 or less.
-- [ ] Exactly one `nitpilot-dev[bot]` comment (`bot_comments: 1`), edited across rounds (`edited: true`), with the collapsed log and the transcript link (`has_log` and `has_transcript_link` true).
-- [ ] No agent comments in the PR's review threads (the `pulls/$PR/comments` count is `0`).
-- [ ] The fix commits are authored by A (`author: "ngkdev93-jpg"` on every commit with a trailer).
-- [ ] Only B is notified: T4 shows one `🔔` line saying the PR is ready, T3 shows none. (T2 shows no `[notify]` line either: the server only logs a notification for someone whose CLI is offline.)
-- [ ] No job is duplicated (`check.sql` section 3 prints no rows), and every `RawEvent` is processed (section 5 shows only `processed` and `ignored`).
+- [x] B's review job starts within 5 seconds of the review request (T4's `→ review of …` stamp minus the first row of `check.sql` section 4).
+- [x] The chat reaches `ready` within `max_rounds` (3): `check.sql` section 1 shows `ready` and a round of 3 or less.
+- [x] Exactly one `nitpilot-dev[bot]` comment (`bot_comments: 1`), edited across rounds (`edited: true`), with the collapsed log and the transcript link (`has_log` and `has_transcript_link` true).
+- [x] No agent comments in the PR's review threads (the `pulls/$PR/comments` count is `0`).
+- [x] The fix commits are authored by A (`author: "ngkdev93-jpg"` on every commit with a trailer).
+- [x] Only B is notified: T4 shows one `🔔` line saying the PR is ready, T3 shows none. (T2 shows no `[notify]` line either: the server only logs a notification for someone whose CLI is offline.)
+- [x] No job is duplicated (`check.sql` section 3 prints no rows), and every `RawEvent` is processed (section 5 shows only `processed` and `ignored`).
 
 ## 7. Variants
 
@@ -253,8 +253,8 @@ Close each variant's PR when you're done with it, so it can't affect the next.
 3. Expect: **T4** `→ review of …`, `✓ review of …: done` (one point); a `🔔` line about an escalation in **both** T3 and T4 (each person is notified once); T3 never prints `→ address of …`.
 4. **T5:** `check.sql`.
 
-- [ ] Section 1 shows the chat as `escalated`; section 6 shows P1 as `escalated` with reason `category`.
-- [ ] Both people were notified (one `🔔` line each in T3 and T4), and no address job ran.
+- [x] Section 1 shows the chat as `escalated`; section 6 shows P1 as `escalated` with reason `category`.
+- [x] Both people were notified (one `🔔` line each in T3 and T4), and no address job ran.
 
 Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, step 4.
 
@@ -265,8 +265,8 @@ Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, ste
 3. Nothing runs. Open `http://localhost:8787/c/NikosGkikas13/nitpilot-sandbox/$PR` in **Window B** (sign in with GitHub if asked). It says `NikosGkikas13's agent is waiting: offline since …` with about the time you stopped CLI B.
 4. Wait a full minute, then **T4:** `nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Within about 5 seconds `→ review of …#<PR> (attempt 1)`. The run carries on to ready, with A's agent fixing as in section 6.
 
-- [ ] The page showed "offline since …" while B was stopped.
-- [ ] The review ran once, after the restart (`check.sql` section 3 prints no rows), and the chat reached `ready`.
+- [x] The page showed "offline since …" while B was stopped.
+- [x] The review ran once, after the restart (`check.sql` section 3 prints no rows), and the chat reached `ready`.
 
 ### 7.3 A manual push during an address job triggers `branch_moved` and a new plan
 
@@ -279,8 +279,8 @@ Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, ste
 4. If Claude had already pushed before you, your push was an ordinary one and nothing was cancelled. That isn't a failure of Nitpilot: repeat on a new PR and push faster.
 5. **T5:** `check.sql`.
 
-- [ ] An address job shows `cancelled` with `branch_moved` (section 2), followed by a later address job on the new head, and the timeline has the "New commits pushed" line.
-- [ ] Nothing was force-pushed: the branch's history on GitHub keeps your commit.
+- [x] An address job shows `cancelled` with `branch_moved` (section 2), followed by a later address job on the new head, and the timeline has the "New commits pushed" line.
+- [x] Nothing was force-pushed: the branch's history on GitHub keeps your commit.
 
 ### 7.4 Closing the PR mid-job cancels and cleans up
 
@@ -294,7 +294,7 @@ Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, ste
    dbq -v pr=$PR -f - < docs/acceptance/check.sql
    ```
 
-- [ ] The address job is `cancelled` with `pr_closed`, the chat is `closed`, the worktree folder is gone, and no agent process is left.
+- [x] The address job is `cancelled` with `pr_closed`, the chat is `closed`, the worktree folder is gone, and no agent process is left.
 
 ## 8. Wrap up
 
@@ -305,21 +305,28 @@ Then **T4:** stop CLI B, `unset B_SCENARIO`, start it again as in section 5, ste
 
 ## 9. Results
 
-Run on: ____ with Nitpilot at commit ____.
+Run on: 2026-10-14 (sections 0 to 3) and 2026-10-15 (sections 4 to 7), with Nitpilot at commit `b771749`, plus the fix `c67e15a` from section 4 on. Agent A: Claude Code 2.1.277 through the built CLI; agent B: the fake agent from source.
 
 **Answers to the spec's open questions** (section 3):
 
 | | Answer |
 |---|---|
-| Q1: re-request fires `review_requested` again? | |
-| Q2: a submitted review fires `review_request_removed`? | |
-| Q3: UI replies also arrive as `pull_request_review.submitted`? | |
-| Q4: a base retarget arrives as `edited` with `changes.base`? | |
+| Q1: re-request fires `review_requested` again? | **Yes.** P5 (Re-request review) sent a second `pull_request.review_requested` for NikosGkikas13 (14:23:01Z), after B had reviewed. |
+| Q2: a submitted review fires `review_request_removed`? | **No.** Nothing followed P2's `pull_request_review.submitted` (14:18:58Z) in the next 5 minutes; the only removal came from unticking the reviewer (P6). |
+| Q3: UI replies also arrive as `pull_request_review.submitted`? | **Yes, from both tabs.** The Conversation-tab reply (P3) and the Files-changed *Add single comment* reply (P4) each came as a `pull_request_review.submitted` (`commented`) plus a `pull_request_review_comment.created`, in the same second. |
+| Q4: a base retarget arrives as `edited` with `changes.base`? | **Yes.** The second `pull_request.edited` (14:30:40Z) has `changes.base.ref.from: "main"` and `changes.base.sha.from`, and `pull_request.base.ref` is `acc/base2`; it normalizes to `pr_retargeted`. |
 
 **What was found and fixed during the run** (each with its commit):
 
--
+- **Our agent's own thread replies came back as human messages** (section 4, PR 4). GitHub wraps each reply the agent posts in a `pull_request_review.submitted` with no body; the router only checked a review's own body and id, so the reply reached the chat twice (once as the agent's reply, once as a "human" line). Fixed in `c67e15a` (a review that holds only our own comments is our own write), with a failing test first; sections 6 and 7 ran on the fix and showed no duplicates.
+- **The runbook expected the address job within 5 seconds of B's review** (section 4). B's review had no text of its own, which Nitpilot rightly treats like *Add single comment* and waits `debounce_seconds` (30 s) for (spec §15). Section 4's step 7 and its first box now say so; no code change.
+- **`check.sql` section 3 counted a cancelled job and its replacement as a duplicate** (7.3, which makes exactly that on purpose). It now leaves cancelled jobs out.
 
 **Ticks:** every box in sections 1 to 7 above is ticked, or has a note here saying why not:
 
--
+- All 32 boxes are ticked.
+- Differences from the clicks written above: after the probe's P10, the remaining GitHub actions were done with `gh` instead of the browser. PRs were opened, closed and asked for review as `ngkdev93-jpg` with a second `gh` account (`gh auth login`, then `GH_TOKEN=$(gh auth token --user ngkdev93-jpg)`); P11 and P12 (title edit, base retarget, close and reopen) were done as the repo owner `NikosGkikas13`; B's review in section 4 was posted with `gh api …/pulls/<n>/reviews` (event `COMMENT`, two inline comments, no body); the pushes in 7.3 and the close in 7.4 were scripted to fire the moment the address job showed `running` in the database. The person approved each `nitpilot login` in the browser.
+- `nit-a login` opens your default browser; when that is B's, the approve page there approves the wrong account. Paste the link into A's window, or block the automatic open (we put a no-op `open` first on `PATH`).
+- In 7.1 GitHub failed the reviewer request that `gh pr create` makes after creating the PR (a GraphQL error on GitHub's side); the review was requested again through the REST API and the run went on.
+- In 7.2 B's re-review needed a second attempt: it was handed out the moment A's push was announced, before GitHub had moved the PR's ref, so B's CLI fetched the old head and answered `stale_head`; the engine re-ran it at once without counting the attempt, and it passed 2.5 s later.
+- Timings: B's review job started 0.35 to 0.7 s after the review request (sections 5 and 6); Claude Code's address passes took 41 to 64 s.

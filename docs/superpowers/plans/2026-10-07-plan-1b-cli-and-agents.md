@@ -16356,7 +16356,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 From here the steps need a person. Everything in `docs/acceptance/plan-1.md` is checked off as it is done, and its section 9 (Results) is filled in.
 
-- [ ] **Step 14: Live: be ready (the person and the controller)**
+- [x] **Step 14: Live: be ready (the person and the controller)**
 
 Everything from here writes to the sandbox repo on GitHub, and Steps 18, 20 and 21 start Claude Code. Tell the person what is coming (about 3 hours; about 6 Claude runs; every GitHub write goes to `NikosGkikas13/nitpilot-sandbox`) and get a clear yes before starting.
 
@@ -16372,7 +16372,7 @@ Expected: no changes; `nitpilot-postgres-1`; `"loggedIn": true`; six paths; a ve
 
 The built CLI is what account A will run: this is the first time the bundle (not the source) meets a real agent.
 
-- [ ] **Step 15: Live: SSH aliases, clones, a clean database, the tunnel and the server**
+- [x] **Step 15: Live: SSH aliases, clones, a clean database, the tunnel and the server**
 
 Follow `docs/acceptance/plan-1.md` sections **1 and 2**.
 
@@ -16381,7 +16381,7 @@ Follow `docs/acceptance/plan-1.md` sections **1 and 2**.
 
 Expected: both `ssh -T` greetings name the right account; `1 | 19 | 0` (installations, repos, users: the repo count is whatever the app can see); T1 `✓ nitpilot-dev now sends webhooks to …`; T2 `Nitpilot server listening on http://localhost:8787`. Tick the boxes in sections 1 and 2.
 
-- [ ] **Step 16: Live: the probe PR, and the three questions**
+- [x] **Step 16: Live: the probe PR, and the three questions**
 
 Follow section **3**. No CLI runs and nobody has joined Nitpilot, so nothing reacts: the server just stores every webhook. The person does the clicks P1 to P12 (two browser windows); after each group the controller runs the `list` command from section 3, step 2, to confirm the deliveries arrived and to read the answers:
 
@@ -16392,7 +16392,7 @@ Follow section **3**. No CLI runs and nobody has joined Nitpilot, so nothing rea
 
 Write the four answers in the table in section 9. Tick P1 to P12. The probe PR ends closed.
 
-- [ ] **Step 17: Record the probe's deliveries as fixtures**
+- [x] **Step 17: Record the probe's deliveries as fixtures**
 
 Docker must be running. Use the `list` output from Step 16 (the delivery ids are in its first column). Each of these is a delivery of a kind the unit tests only know from hand-made payloads:
 
@@ -16532,7 +16532,7 @@ Expected: PASS, with every fixture's three tests and the three set-level tests (
 
 **If a row fails, that is a finding.** A real delivery that normalizes differently from what was written means either the row or the normalizer is wrong. Decide which from what GitHub actually sent; if it is the normalizer, write the failing test in its own test file first (a `normalize/*.test.ts` with the real payload's shape), then fix it, in its own commit, before going on.
 
-- [ ] **Step 18: Live: single-player, the author (Claude Code fixes B's comments)**
+- [x] **Step 18: Live: single-player, the author (Claude Code fixes B's comments)**
 
 Follow section **4**. Ask before starting CLI A: this is the first run of the real agent through the built bundle. The person signs A in (`nit-a login`), the controller starts CLI A in **T3** with timestamps; the person opens a PR as A and reviews it as B in the browser; Claude Code fixes and replies.
 
@@ -16540,25 +16540,25 @@ Capture: the T3 output (with its timestamps) and `check.sql`'s output for the PR
 
 If the address job fails (`auth`, `quota`, `max_turns`, `crash`), read T3 and what it says; a `quota` failure means wait for the plan's window and run the section again on a new PR. Anything else is a bug to write a test for.
 
-- [ ] **Step 19: Live: single-player, the reviewer (B's fake agent reviews A's PR)**
+- [x] **Step 19: Live: single-player, the reviewer (B's fake agent reviews A's PR)**
 
 Follow section **5**. No Claude run. The controller stops CLI A, removes A from the database (`delete from "User"`), the person signs B in (`nit-b login`), the controller starts CLI B in **T4**, and the person opens a PR as A, requesting B.
 
 Capture: T4's output, the three `gh api` outputs of section 5, step 9, and `check.sql`. Tick the three boxes in section 5. The PR ends closed.
 
-- [ ] **Step 20: Live: agent to agent, the pass criteria (spec §20)**
+- [x] **Step 20: Live: agent to agent, the pass criteria (spec §20)**
 
 Follow section **6**. Ask before the Claude run. A rejoins, the person opens the happy-path PR requesting B, and both CLIs work it to READY: B's fake agent raises the three planted problems, Claude Code fixes them, B's fake agent resolves them.
 
 Capture: T3 and T4 (timestamped), the output of every command in section 6, step 5, and the transcript page. Tick the seven pass criteria. This is the run Plan 1b exists for. If any criterion fails: stop, keep the evidence, and treat it as a bug: a failing test first, a fix in its own commit, then run section 6 again on a new PR.
 
-- [ ] **Step 21: Live: the variants**
+- [x] **Step 21: Live: the variants**
 
 Follow section **7**, one variant at a time: a security point escalates (7.1), stopping B's CLI shows "offline since…" and the job completes after a restart (7.2), a manual push during an address job (7.3), closing the PR mid-job (7.4). 7.2, 7.3 and 7.4 each start Claude Code on the address job: ask before each. 7.3 and 7.4 need quick hands: the person acts the moment T3 prints `→ address of …`, so the controller should say "now" as soon as it shows up in T3 (`read_terminal`).
 
 Capture: for each, the T3 and T4 lines and `check.sql`. Tick the boxes in section 7. Each variant's PR ends closed.
 
-- [ ] **Step 22: Record the deliveries Nitpilot caused itself**
+- [x] **Step 22: Record the deliveries Nitpilot caused itself**
 
 These six are what Nitpilot wrote to GitHub in sections 4 and 5, coming back as webhooks. They show the hidden `<!-- nitpilot:v1 … -->` marker surviving the trip through GitHub, which is how the server recognizes (and ignores) its own writes. Use `list --since <time>` with the time you started section 4:
 
@@ -16623,7 +16623,7 @@ with:
 Run: `npm test -w apps/server -- test/fixtures`
 Expected: PASS (25 in `scrub.test.ts`, 3 + 3 per fixture in `recorded.test.ts`: with all 6 of these and all 18 of Step 17 that is 133 tests in all). Do this before the acceptance database is dropped.
 
-- [ ] **Step 23: Write down what the run showed**
+- [x] **Step 23: Write down what the run showed**
 
 1. **The runbook.** Fill in section 9: the date, the commit, the answers to Q1 to Q4, anything that was found and fixed (each with its commit), and a note for every box that isn't ticked. Tick the boxes in sections 0 to 7 that Steps 15 to 21 did.
 2. **The spec's open question** (§22) gets its answer. In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, replace the bullet and keep the sentence that matches Q1's answer:
@@ -16687,7 +16687,7 @@ Q4, when the shape matched (if it differed, you fixed the normalizer in Step 17:
 - **A base retarget** arrives as `pull_request.edited` with `changes.base.ref.from` and `changes.base.sha.from`, which is what `pr_retargeted` (§9) reads.
 ```
 
-- [ ] **Step 24: Run the full suite, stop everything, and commit the results**
+- [x] **Step 24: Run the full suite, stop everything, and commit the results**
 
 Stop T1 to T4 (Ctrl-C). Drop the acceptance database only now, after the fixtures are saved: `docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "drop database nitpilot_acceptance"`. Your dev database was never touched.
 

@@ -23,6 +23,10 @@ const SANDBOX = { installationId: '169557306', repoId: '1411793061', repoFullNam
 const A = { githubId: '340081894', login: 'ngkdev93-jpg', isBot: false }; // the author
 const B = { githubId: '69345580', login: 'NikosGkikas13', isBot: false }; // the reviewer, who owns the repo
 const pr = (number: number) => ({ ...SANDBOX, number });
+/** For the fixtures recorded in the live run, where the PR number, comment ids and shas are the sandbox's own and not worth pinning. */
+const anyPr = { ...SANDBOX, number: expect.any(Number) };
+const anyId = expect.any(String);
+const aSha = expect.stringMatching(/^[0-9a-f]{40}$/);
 
 /** What each fixture must turn into. `[]` means Nitpilot ignores it. A fixture without a row here fails the test below. */
 const EXPECTED: Record<string, unknown[]> = {
@@ -75,18 +79,74 @@ const EXPECTED: Record<string, unknown[]> = {
     { scope: 'pr', pr: pr(2), event: { type: 'external_comment', comment: { id: 'issue:6094600445', author: { login: 'nitpilot-dev[bot]', isBot: true }, trusted: false, path: null } } },
   ],
   'issue_comment.edited': [],
+  // The probe PR (docs/acceptance/plan-1.md section 3): one delivery of every kind a PR's life sends.
+  'pull_request.review_requested.again': [{ scope: 'pr', pr: anyPr, event: { type: 'review_requested', reviewer: B } }],
+  'pull_request.review_request_removed': [{ scope: 'pr', pr: anyPr, event: { type: 'review_request_removed', reviewer: B } }],
+  'pull_request.converted_to_draft': [{ scope: 'pr', pr: anyPr, snapshot: { isDraft: true }, event: { type: 'pr_to_draft' } }],
+  'pull_request.ready_for_review': [{ scope: 'pr', pr: anyPr, snapshot: { isDraft: false }, event: { type: 'pr_ready' } }],
+  'pull_request.synchronize': [{ scope: 'pr', pr: anyPr, event: { type: 'head_updated', before: aSha, after: aSha, ours: false } }],
+  'pull_request.edited': [], // a new title is nothing to us
+  'pull_request.edited.retarget': [{ scope: 'pr', pr: anyPr, snapshot: { baseRef: 'acc/base2' }, event: { type: 'pr_retargeted', baseRef: 'acc/base2', trusted: true } }],
+  'pull_request.reopened': [{ scope: 'pr', pr: anyPr, snapshot: { state: 'open' }, event: { type: 'pr_reopened' } }],
+  'pull_request_review_comment.created.probe-first': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: null, author: B, trusted: true, body: 'probe: first comment', path: 'orders-demo/src/orders.js', line: 5, side: 'RIGHT' } } },
+  ],
+  'pull_request_review_comment.created.probe-second': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: null, author: B, trusted: true, body: 'probe: second comment', path: 'orders-demo/src/orders.js', line: 12, side: 'RIGHT' } } },
+  ],
+  'pull_request_review.submitted.probe': [
+    {
+      scope: 'pr',
+      pr: anyPr,
+      event: {
+        type: 'external_review_submitted',
+        review: { id: anyId, author: B, trusted: true, state: 'commented', comments: [{ body: 'probe: first comment', line: 5 }, { body: 'probe: second comment', line: 12 }] },
+      },
+    },
+  ],
+  'pull_request_review_comment.created.reply-conversation': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: 'probe: reply from the Conversation tab' } } },
+  ],
+  'pull_request_review_comment.created.reply-files': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: 'probe: reply from Files changed' } } },
+  ],
+  'pull_request_review.submitted.reply-conversation': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_review_submitted', review: { id: anyId, author: A, trusted: true, state: 'commented', comments: [{ threadRootId: anyId, body: 'probe: reply from the Conversation tab' }] } } },
+  ],
+  'pull_request_review.submitted.reply-files': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_review_submitted', review: { id: anyId, author: A, trusted: true, state: 'commented', comments: [{ threadRootId: anyId, body: 'probe: reply from Files changed' }] } } },
+  ],
+  'pull_request_review_thread.resolved': [{ scope: 'pr', pr: anyPr, event: { type: 'thread_resolved', threadRootId: anyId } }],
+  'pull_request_review_thread.unresolved': [{ scope: 'pr', pr: anyPr, event: { type: 'thread_unresolved', threadRootId: anyId } }],
+  'issue_comment.created.human': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: expect.stringMatching(/^issue:\d+$/), author: B, trusted: true, body: 'probe: a plain comment', path: null } } },
+  ],
+  // Written by Nitpilot itself in the live run (single-player author and reviewer): the hidden marker must survive the trip through GitHub, because it is how our own writes are recognized.
+  'pull_request.synchronize.by-agent': [{ scope: 'pr', pr: anyPr, event: { type: 'head_updated', before: aSha, after: aSha, ours: false } }],
+  'pull_request_review_comment.created.reply-by-agent': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, threadRootId: anyId, author: A, trusted: true, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line5': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 5, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line12': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 12, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review_comment.created.by-agent-line18': [
+    { scope: 'pr', pr: anyPr, event: { type: 'external_comment', comment: { id: anyId, author: B, path: 'orders-demo/src/orders.js', line: 18, body: expect.stringContaining('nitpilot:v1') } } },
+  ],
+  'pull_request_review.submitted.by-agent': [
+    {
+      scope: 'pr',
+      pr: anyPr,
+      event: { type: 'external_review_submitted', review: { id: anyId, author: B, state: 'commented', body: expect.stringContaining('nitpilot:v1'), comments: [{ line: 5 }, { line: 12 }, { line: 18 }] } },
+    },
+  ],
 };
 
 /** The `pull_request` actions the normalizer maps. Each has a fixture, or says here why it doesn't yet. */
 const PULL_REQUEST_ACTIONS = ['opened', 'reopened', 'ready_for_review', 'converted_to_draft', 'closed', 'review_requested', 'review_request_removed', 'synchronize', 'edited'];
-const NOT_RECORDED: Record<string, string> = {
-  reopened: 'to record in the live run',
-  ready_for_review: 'to record in the live run',
-  converted_to_draft: 'to record in the live run',
-  review_request_removed: 'to record in the live run',
-  synchronize: 'to record in the live run',
-  edited: 'to record in the live run',
-};
+const NOT_RECORDED: Record<string, string> = {};
 
 /** Only these repositories may appear in a committed fixture: the public sandbox and this project. */
 const PUBLISHABLE_REPOS = ['NikosGkikas13/nitpilot-sandbox', 'NikosGkikas13/nitpilot'];
