@@ -29,6 +29,7 @@ export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/w
 /**
  * What the browser may load, for every page and file the web app is served with. `frame-ancestors 'none'`
  * keeps other sites from framing it (spec §10). Styles allow inline `style` attributes, which React uses.
+ * See docs/why/content-security-policy.md.
  */
 export function contentSecurityPolicy(publicUrl: string): string {
   const url = new URL(publicUrl);
