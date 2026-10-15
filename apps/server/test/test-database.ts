@@ -10,3 +10,14 @@ export function testDatabaseUrl(devUrl: string): string {
   if (!name.endsWith('_test')) url.pathname = `/${name}_test`;
   return url.toString();
 }
+
+/**
+ * `resetDb` deletes every row in every table. Tests point at nitpilot_test, but if some import connects before
+ * the test URL is set (as test/e2e/web-server.ts has to be careful about), it would be the dev database that
+ * gets emptied. So resetDb asks the database its name and calls this first: anything not ending in _test is refused.
+ */
+export function assertTestDatabase(name: string): void {
+  if (!name.endsWith('_test')) {
+    throw new Error(`resetDb refused to empty "${name}": tests only ever empty a database whose name ends in _test (test/test-database.ts).`);
+  }
+}

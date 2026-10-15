@@ -2,6 +2,7 @@ import type { Person } from '../src/engine/types';
 import type { Prisma } from '../src/generated/prisma/client';
 import { prisma } from '../src/lib/prisma';
 import { generateToken } from '../src/lib/tokens';
+import { assertTestDatabase } from './test-database';
 
 // Tests share one database, so every row they create uses values no other test uses.
 
@@ -79,8 +80,10 @@ export async function makeChat(repoId: string, over: { number?: number; authorGi
   });
 }
 
-/** Empty every table. Only for tests of sweeps over all rows (task runner, replay, purge). */
+/** Empty every table. Only for tests of sweeps over all rows (task runner, replay, purge). Refuses any database not named *_test. */
 export async function resetDb(): Promise<void> {
+  const [{ name }] = await prisma.$queryRaw<{ name: string }[]>`SELECT current_database() AS name`;
+  assertTestDatabase(name!);
   await prisma.$executeRawUnsafe(
     'TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "Message", "Point", "Job", "Participant", "PrChat", "Repo", "Installation", "CliLoginRequest", "CliToken", "WebSession", "GithubAuth", "User" CASCADE',
   );
