@@ -45,6 +45,17 @@ export function systemPrefersDark(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+/**
+ * Calls `onChange` whenever the operating system switches between light and dark, and returns the
+ * function that stops listening. While the choice is "system", the toggle's label must follow the OS.
+ */
+export function subscribeSystemDark(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== 'function') return () => {};
+  const query = window.matchMedia('(prefers-color-scheme: dark)');
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
 /** The theme on screen right now. */
 export function shownTheme(choice: ThemeChoice, systemDark: boolean): 'light' | 'dark' {
   if (choice === 'system') return systemDark ? 'dark' : 'light';

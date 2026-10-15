@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { applyTheme, readTheme, shownTheme, systemPrefersDark, writeTheme, type ThemeChoice } from '../../theme';
+import { useState, useSyncExternalStore } from 'react';
+import { applyTheme, readTheme, shownTheme, subscribeSystemDark, systemPrefersDark, writeTheme, type ThemeChoice } from '../../theme';
 import styles from './ThemeToggle.module.css';
 
 /** Switches between light and dark, starting from whatever is on screen, and remembers the choice. */
 export function ThemeToggle() {
   const [choice, setChoice] = useState<ThemeChoice>(() => readTheme());
-  const shown = shownTheme(choice, systemPrefersDark());
+  const systemDark = useSyncExternalStore(subscribeSystemDark, systemPrefersDark);
+  const shown = shownTheme(choice, systemDark);
   const next = shown === 'dark' ? 'light' : 'dark';
 
   function toggle() {
