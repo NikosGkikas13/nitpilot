@@ -47,6 +47,12 @@ describe('serving the web app', () => {
     expect(sw.headers.get('cache-control')).toBe('no-cache');
   });
 
+  it('answers a missing build file with a 404, not the app', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/assets/index-gone123.js');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'no such route' } });
+  });
+
   it('keeps unknown server paths as JSON 404s', async () => {
     const app = testApp({ webDistDir: dist });
     for (const url of ['/api/nope', '/auth/nope', '/webhooks/nope']) {

@@ -90,6 +90,9 @@ export function spaRoutes(opts: { distDir: string; publicUrl: string }): Hono {
       return c.body(await readFile(file));
     }
 
+    // A missing build file is not an app URL, and HTML under a .js name breaks in a confusing way: let it 404.
+    if (c.req.path.startsWith('/assets/')) return next();
+
     const index = await readFile(path.join(root, 'index.html')).catch(() => null);
     if (!index) return c.text(BUILD_HINT, 503);
     c.header('Cache-Control', 'no-cache');
