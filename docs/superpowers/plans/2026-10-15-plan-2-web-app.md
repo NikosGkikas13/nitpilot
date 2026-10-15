@@ -3880,7 +3880,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `InboxRow`, `InboxStatus`, `InboxResponse`, `WebMe` (protocol, Task 5), `useMe`, `api`, `makeQueryClient` (W1), `Wordmark`, `ThemeToggle`, `ErrorState` (W1).
 - Produces: `useInbox()` (query key `['inbox']`, data = rows). `Tab = 'review' | 'mine'`, `STATUS_FILTERS`, `StatusFilter`, `statusFilterOf(status)`, `sortRows(rows)` (needs you first, then `updatedAt` desc), `filterRows(rows, { tab, query, repos, statuses })`, `tabCounts(rows) → { review, mine }`, `defaultTab(rows)`, `chatPath(row) → '/c/<repo>/<number>'` (`lib/inbox.ts`). `rowTime(iso, now?)` (`lib/time.ts`). `useInboxKeys({ rows, cursor, setCursor, open, focusSearch, escape })`, `useEscapeBack(active, back)`, `isTyping(target)` (`lib/keys.ts`). `useIsDesktop()` (`lib/viewport.ts`, 760 px). `<StatusPill status viewerLogin />`, `<Avatar login src size={32|38}>{badge}</Avatar>`, `<AgentBadge login />`, `<Kbd boxed? />`, `<Ping />`. `<Shell me />` renders the inbox and an `<Outlet>`; `<Pane>` and `<EmptyPane title body />` (`routes/Shell/Pane.tsx`) are the right-hand pages. `AppRoutes` (`app.tsx`). Test helpers `fakeApi(routes)`, `renderApp(path)`, `fakeViewport(desktop)` (`src/test/render.tsx`). Playwright: `openPr({ number, title, author, reviewer })` (`e2e/control.ts`).
 
-- [ ] **Step 1: Write the failing tests for the list logic**
+- [x] **Step 1: Write the failing tests for the list logic**
 
 Create `apps/web/src/lib/inbox.test.ts`:
 
@@ -4004,12 +4004,12 @@ describe('rowTime (the time on an inbox row)', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/lib`
 Expected: FAIL, `Failed to resolve import "./inbox"` and `"./time"`.
 
-- [ ] **Step 3: Sort, filter, count, and say when**
+- [x] **Step 3: Sort, filter, count, and say when**
 
 Create `apps/web/src/lib/inbox.ts`:
 
@@ -4122,7 +4122,7 @@ function pad(n: number): string {
 Run: `npm test -w apps/web -- src/lib`
 Expected: PASS, 11 tests.
 
-- [ ] **Step 4: Write the failing test for the keyboard**
+- [x] **Step 4: Write the failing test for the keyboard**
 
 Create `apps/web/src/lib/keys.test.tsx`:
 
@@ -4201,7 +4201,7 @@ describe('useInboxKeys (handoff "Keyboard")', () => {
 Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
 Expected: FAIL, `Failed to resolve import "./keys"`.
 
-- [ ] **Step 5: The keyboard**
+- [x] **Step 5: The keyboard**
 
 Create `apps/web/src/lib/keys.ts`:
 
@@ -4286,7 +4286,7 @@ export function useEscapeBack(active: boolean, back: () => void): void {
 Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Write the failing test for the pill**
+- [x] **Step 6: Write the failing test for the pill**
 
 Create `apps/web/src/components/StatusPill/StatusPill.test.tsx`:
 
@@ -4344,7 +4344,7 @@ describe('StatusPill (handoff §1 "Status pills")', () => {
 Run: `npm test -w apps/web -- src/components/StatusPill`
 Expected: FAIL, `Failed to resolve import "./StatusPill"`.
 
-- [ ] **Step 7: The pill and the small parts of a row**
+- [x] **Step 7: The pill and the small parts of a row**
 
 Create `apps/web/src/components/Ping/Ping.tsx`:
 
@@ -4670,7 +4670,7 @@ Create `apps/web/src/components/Kbd/Kbd.module.css`:
 Run: `npm test -w apps/web -- src/components/StatusPill`
 Expected: PASS, 12 tests.
 
-- [ ] **Step 8: The data, the viewport, and test helpers for whole screens**
+- [x] **Step 8: The data, the viewport, and test helpers for whole screens**
 
 Create `apps/web/src/api/inbox.ts`:
 
@@ -4761,7 +4761,7 @@ export function fakeViewport(desktop: boolean) {
 }
 ```
 
-- [ ] **Step 9: Write the failing screen tests**
+- [x] **Step 9: Write the failing screen tests**
 
 Create `apps/web/src/routes/Inbox/Inbox.test.tsx`:
 
@@ -4995,7 +4995,7 @@ describe('Home', () => {
 Run: `npm test -w apps/web -- src/routes`
 Expected: FAIL: `app.tsx` has no `AppRoutes` yet, and there is no Shell or Inbox.
 
-- [ ] **Step 10: The inbox**
+- [x] **Step 10: The inbox**
 
 Create `apps/web/src/routes/Inbox/InboxHeader.tsx`:
 
@@ -5912,7 +5912,7 @@ Create `apps/web/src/routes/Inbox/Inbox.module.css`:
 }
 ```
 
-- [ ] **Step 11: The shell, the pages beside it, and the routes**
+- [x] **Step 11: The shell, the pages beside it, and the routes**
 
 Create `apps/web/src/routes/Shell/Shell.tsx`:
 
@@ -6289,12 +6289,12 @@ Replace `apps/web/src/routes/Home/Home.module.css` with (the signed-in placehold
 }
 ```
 
-- [ ] **Step 12: Run the web tests to see them pass**
+- [x] **Step 12: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web`
 Expected: PASS, 69 tests.
 
-- [ ] **Step 13: The landing page's sample rows use the real pill (Task 3's deferred minor)**
+- [x] **Step 13: The landing page's sample rows use the real pill (Task 3's deferred minor)**
 
 In `apps/web/src/routes/Landing/Landing.tsx`: the imports become
 
@@ -6320,7 +6320,7 @@ and the row's pill `<span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pi
 Run: `npm test -w apps/web && npm run typecheck && npm run lint`
 Expected: PASS, 69 tests; typecheck and lint clean.
 
-- [ ] **Step 14: The inbox in a real browser (Playwright)**
+- [x] **Step 14: The inbox in a real browser (Playwright)**
 
 The Playwright server learns to open a PR the way GitHub does, with a webhook. In `apps/server/test/e2e/web-server.ts`, after `const { sessionCookieFor } = await import('../http');` add
 
@@ -6421,7 +6421,7 @@ Then give the rows every kind of status, in the test database (`docker exec -i n
 
 Check at 1280 px and 375 px, light and dark: the red escalated pill with its diamond, the accent Needs you, the ring for Waiting and Their turn, the ping and the agent badge on #147, Merged muted with a line through; the unread dots; the offline banner and the expired strip (the test users have no GitHub sign-in); the filter popover (repos, then statuses) and Esc closing it; `j` drawing one inset ring on the first row; a click opening the PR beside the inbox (desktop) or on its own with ‹ and Esc going back (phone); the `/` hint and the footer hidden on the phone; GitHub avatars loading (the CSP allows them); no console errors after sign-in. Screenshots in the task report.
 
-- [ ] **Step 16: Run everything, then commit**
+- [x] **Step 16: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run test:e2e -w apps/web`
 Expected: protocol 45, CLI 293 passed + 14 skipped, server 655, web 69; end to end 5; Playwright 4; typecheck and lint clean.

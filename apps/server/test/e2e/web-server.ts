@@ -27,8 +27,22 @@ Object.assign(process.env, TEST_ENV, { PUBLIC_URL: `http://127.0.0.1:${webPort}`
 // Only now load the server's modules: the database client reads DATABASE_URL when it's first imported.
 const { startE2e } = await import('./harness');
 const { sessionCookieFor } = await import('../http');
+const { people, prEvent, pull } = await import('../fixtures/github');
+const { fakeFetch } = await import('../fake-fetch');
+const { encrypt } = await import('../../src/lib/crypto');
+const { prisma } = await import('../../src/lib/prisma');
+const { GithubClient } = await import('../../src/platform/github/client');
 
-const e2e = await startE2e({ port: webPort, webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)) });
+const e2e = await startE2e({
+  port: webPort,
+  webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
+  github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
+});
+// The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
+const later = new Date(Date.now() + 365 * 86_400_000);
+for (const user of Object.values(e2e.users)) {
+  await prisma.githubAuth.create({ data: { userId: user.id, accessTokenEnc: encrypt(`ghu_${user.id}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status: 'ok' } });
+}
 
 const control = new Hono();
 /** Sign someone in: answers the session cookie for the browser to use. */
@@ -38,6 +52,26 @@ control.post('/signin', async (c) => {
   if (!user) return c.json({ error: `no test user "${login}"` }, 400);
   const [name, value] = (await sessionCookieFor(user.id)).split('=') as [string, string];
   return c.json({ name, value });
+});
+/** Open a PR on octo/sandbox, as GitHub's webhook would: `author`'s PR, with `reviewer` requested. */
+control.post('/pr', async (c) => {
+  const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
+  const base = pull();
+  await e2e.deliver(
+    'pull_request',
+    prEvent('opened', {
+      pull: {
+        number,
+        title,
+        html_url: `https://github.com/${base.base.repo.full_name}/pull/${number}`,
+        user: people[author],
+        requested_reviewers: [people[reviewer]],
+        head: { ...base.head, ref: `feature-${number}`, sha: e2e.github.headSha },
+        base: { ...base.base, sha: e2e.github.baseSha },
+      },
+    }),
+  );
+  return c.body(null, 204);
 });
 serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
 

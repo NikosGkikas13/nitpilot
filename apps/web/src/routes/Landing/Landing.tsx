@@ -1,18 +1,16 @@
-import { BRAND } from '@nitpilot/protocol';
+import { BRAND, type InboxStatus } from '@nitpilot/protocol';
+import { StatusPill } from '../../components/StatusPill/StatusPill';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
 import styles from './Landing.module.css';
 
 /** Where GitHub sign-in starts; afterwards the server sends you back to `next` (apps/server/src/http/routes/auth.ts). */
 export const SIGN_IN_URL = `/auth/github/login?next=${encodeURIComponent('/')}`;
 
-type Tone = 'red' | 'muted' | 'ok';
-const TONE: Record<Tone, string> = { red: styles.pillRed!, muted: styles.pillMuted!, ok: styles.pillOk! };
-
-// The illustration's rows: the design brief's sample data (handoff §4), not real PRs.
-const SAMPLE_ROWS: { ref: string; time: string; title: string; initials: string; pill: string; tone: Tone; last: string }[] = [
-  { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', pill: 'Needs you', tone: 'red', last: 'A security point needs you' },
-  { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', pill: "Leo's agent working", tone: 'muted', last: 'reading src/db/client.ts' },
-  { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', pill: 'Ready', tone: 'ok', last: '2 rounds, 3 points resolved' },
+// The pills are the inbox's own (components/StatusPill), so the picture matches the product.
+const SAMPLE_ROWS: { ref: string; time: string; title: string; initials: string; status: InboxStatus; last: string }[] = [
+  { ref: 'acme/shop-api #139', time: '16:40', title: 'Fix race in session refresh', initials: 'SO', status: { kind: 'escalated', who: null, reason: 'decision' }, last: 'A security point needs you' },
+  { ref: 'acme/shop-api #147', time: 'now', title: 'Bump Prisma to 7.2', initials: 'LP', status: { kind: 'working', who: 'Leo', reason: null }, last: 'reading src/db/client.ts' },
+  { ref: 'acme/shop-api #142', time: '14:13', title: 'Add cursor pagination to /orders', initials: 'LP', status: { kind: 'ready', who: null, reason: null }, last: '2 rounds, 3 points resolved' },
 ];
 
 const STEPS = [
@@ -67,7 +65,7 @@ export function Landing() {
                   </span>
                   <span className={styles.rowTitle}>{row.title}</span>
                   <span className={styles.status}>
-                    <span className={`${styles.pill} ${TONE[row.tone]}`}>{row.pill}</span>
+                    <StatusPill status={row.status} viewerLogin="" />
                     <span className={styles.last}>{row.last}</span>
                   </span>
                 </span>

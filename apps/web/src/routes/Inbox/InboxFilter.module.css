@@ -1,0 +1,79 @@
+.box {
+  position: relative;
+  flex: none;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.active {
+  border-color: var(--acc);
+}
+
+.menu {
+  position: absolute;
+  z-index: 5;
+  top: 40px;
+  right: 0;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+  display: flex;
+  flex-direction: column;
+}
+
+.group {
+  padding: 6px 8px 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--b2);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--hover);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.mark {
+  width: 14px;
+  color: var(--acc-text);
+}

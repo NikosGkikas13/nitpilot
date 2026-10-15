@@ -16,8 +16,8 @@ test('a link deep into the app opens the app', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });
 
-test('someone signed in is greeted by name', async ({ page, context }) => {
+test('someone signed in lands in their inbox', async ({ page, context }) => {
   await signIn(context, 'maya');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Signed in as @maya' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Inbox' })).toBeVisible();
 });

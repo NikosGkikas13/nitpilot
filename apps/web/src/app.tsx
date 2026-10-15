@@ -2,7 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { retryUnlessClientError } from './api/client';
+import { ChatPlaceholder } from './routes/Chat/ChatPlaceholder';
 import { Home } from './routes/Home/Home';
+import { SettingsPlaceholder } from './routes/Settings/SettingsPlaceholder';
+import { EmptyPane } from './routes/Shell/Pane';
 
 /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
 export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
@@ -16,10 +19,25 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
   return (
     <QueryClientProvider client={client}>
       <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<Home />} />
-        </Routes>
+        <AppRoutes />
       </BrowserRouter>
     </QueryClientProvider>
+  );
+}
+
+/**
+ * Every page. Home decides between the landing page (signed out) and the app; signed in, the pages below
+ * open beside the inbox (routes/Shell/Shell.tsx).
+ */
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<Home />}>
+        <Route index element={<EmptyPane title="Pick a pull request" body="Its chat opens here." />} />
+        <Route path="c/:owner/:repo/:number" element={<ChatPlaceholder />} />
+        <Route path="settings" element={<SettingsPlaceholder />} />
+        <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
+      </Route>
+    </Routes>
   );
 }

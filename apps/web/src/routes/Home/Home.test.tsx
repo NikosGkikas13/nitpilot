@@ -1,52 +1,41 @@
-import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { makeQueryClient } from '../../app';
-import { Home } from './Home';
+import { fakeApi, renderApp, type Answer } from '../../test/render';
 
-function renderHome() {
-  return render(
-    <QueryClientProvider client={makeQueryClient({ retryDelay: 0 })}>
-      <Home />
-    </QueryClientProvider>,
-  );
-}
-
-function answers(...responses: [number, unknown][]) {
-  const fetch = vi.fn();
-  for (const [status, body] of responses) fetch.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const noRows = (): Answer => [200, { rows: [] }];
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Home', () => {
   it('tells a screen reader it is loading while /api/me has not answered', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-    renderHome();
+    renderApp('/');
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
   });
 
   it('shows the landing page to someone who is not signed in', async () => {
-    answers([401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }]);
-    renderHome();
+    fakeApi({ 'GET /api/me': (): Answer => [401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }] });
+    renderApp('/');
     expect(await screen.findByRole('link', { name: /Sign in with GitHub/ })).toBeInTheDocument();
   });
 
-  it('greets someone who is signed in', async () => {
-    answers([200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true }]);
-    renderHome();
-    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+  it('opens the inbox for someone who is signed in', async () => {
+    fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': noRows });
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
   });
 
   it('shows the error with a way to try again, instead of a blank page', async () => {
-    const fail: [number, unknown] = [500, { error: { code: 'server_error', message: 'internal server error' } }];
+    let calls = 0;
     // The first try and the client's two retries (no waiting between them in tests) fail; "Try again" then succeeds.
-    answers(fail, fail, fail, [200, { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true }]);
-    renderHome();
+    fakeApi({
+      'GET /api/me': (): Answer => (++calls <= 3 ? [500, { error: { code: 'server_error', message: 'internal server error' } }] : [200, me]),
+      'GET /api/inbox': noRows,
+    });
+    renderApp('/');
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
   });
 });

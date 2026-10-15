@@ -12,6 +12,7 @@ import { createDeliveryHandler } from '../../src/ingest/handle';
 import { createIngest } from '../../src/ingest/process';
 import { prisma } from '../../src/lib/prisma';
 import { FakePlatform } from '../../src/platform/fake/fake-platform';
+import type { GithubClient } from '../../src/platform/github/client';
 import { CliNotifier } from '../../src/tasks/cli-notifier';
 import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
 import { createTaskHandlers } from '../../src/tasks/handlers/index';
@@ -35,9 +36,9 @@ export type RunningCli = { lines: string[]; configDir: string; agentStarted: boo
  * Plan 1 end to end (spec §19): the server, wired exactly like main.ts with GitHub replaced by
  * FakePlatform and local git folders, on a random port; and one `nitpilot start` per person, each with
  * its own config folder, clone and git identity, running the fake agent. The Playwright tests' server
- * (web-server.ts) passes a fixed port and the built web app.
+ * (web-server.ts) passes a fixed port, the built web app, and a GithubClient that lets people read the test repo.
  */
-export async function startE2e(opts: { port?: number; webDistDir?: string } = {}) {
+export async function startE2e(opts: { port?: number; webDistDir?: string; github?: GithubClient } = {}) {
   await resetDb();
   const github = localGithub();
   const platform = new FakePlatform();
@@ -60,7 +61,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string } = {}
   hub.onMessage(async (conn, msg) => intercept?.(conn, msg));
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}), ...(opts.github ? { github: opts.github } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */

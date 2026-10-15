@@ -9,6 +9,12 @@ export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Pr
   await context.addCookies([{ ...cookie, url: BASE_URL }]);
 }
 
+/** Open a pull request on the test repo (octo/sandbox), as GitHub's webhook would. */
+export async function openPr(pr: { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' }): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/pr`, { method: 'POST', body: JSON.stringify(pr) });
+  if (!res.ok) throw new Error(`opening PR #${pr.number} failed: ${res.status} ${await res.text()}`);
+}
+
 /**
  * What went wrong on the page: a script error, or something the Content-Security-Policy blocked. (A request
  * that answers 401 is logged by the browser too, but signed out that's expected, so it isn't collected.)
