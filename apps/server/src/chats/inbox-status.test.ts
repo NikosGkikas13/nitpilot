@@ -55,6 +55,14 @@ describe('inboxStatus (spec §16 "Inbox", handoff §1 status pills)', () => {
     expect(inboxStatus(facts({ phase: 'addressing', activity: { kind: 'human_turn', who: 'maya' } }))).toEqual(status('needs_you'));
   });
 
+  it("tells you from them whatever the case of the login (GitHub logins ignore case)", () => {
+    expect(inboxStatus(facts({ phase: 'addressing', activity: { kind: 'human_turn', who: 'Maya' }, you: 'maya' }))).toEqual(status('needs_you'));
+  });
+
+  it("is quiet in an escalated chat when the decision isn't yours (spec §16: with nothing pending the row shows no pill)", () => {
+    expect(inboxStatus(facts({ phase: 'escalated', attention: 'none' }))).toEqual(status('quiet'));
+  });
+
   it('is quiet when nothing is pending', () => {
     expect(inboxStatus(facts())).toEqual(status('quiet'));
     expect(inboxStatus(facts({ phase: 'idle' }))).toEqual(status('quiet'));

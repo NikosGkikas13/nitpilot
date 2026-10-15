@@ -31,10 +31,15 @@ export function inboxStatus(f: InboxStatusFacts): InboxStatus {
   const a = f.activity;
   if (a.kind === 'agent_waiting') return pill('waiting', a.who, a.why);
   if (a.kind === 'agent_working') return pill('working', a.who);
-  if (a.kind === 'human_turn') return a.who === f.you ? pill('needs_you') : pill('their_turn', a.who);
+  if (a.kind === 'human_turn') return sameLogin(a.who, f.you) ? pill('needs_you') : pill('their_turn', a.who);
   return pill('quiet');
 }
 
 function pill(kind: InboxStatus['kind'], who: string | null = null, reason: InboxStatus['reason'] = null): InboxStatus {
   return { kind, who, reason };
+}
+
+/** GitHub logins ignore case: a participant row may say "Maya" while the signed-in user is "maya". */
+function sameLogin(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
 }

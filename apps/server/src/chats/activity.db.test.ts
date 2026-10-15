@@ -72,6 +72,14 @@ describe('loadActivities (many chats at once, for the inbox)', () => {
     expect(three).toBe(one);
   });
 
+  it('leaves out an id that is not a chat and answers the others', async () => {
+    const a = await chatWithJob('running', new Date('2026-10-15T09:30:00.000Z'));
+    const c = await chatWithAddressedPoint('github');
+    const all = await loadActivities([a.chat.id, 'no-such-chat', c.id], noClis);
+    expect([...all.keys()].sort()).toEqual([a.chat.id, c.id].sort());
+    expect(all.has('no-such-chat')).toBe(false);
+  });
+
   it('asks the database nothing for no chats', async () => {
     expect(await countQueries(() => loadActivities([], noClis))).toBe(0);
   });
