@@ -28,7 +28,7 @@ export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }
 
   // Every message from a CLI goes through these listeners, in this order.
   hub.onMessage(leases.handle); // hello and ping: renew leases, cancel what's no longer theirs
-  hub.onMessage(jobMessageHandler({ dispatch: dispatcher.dispatch })); // pushes, results, failures, refusals
+  hub.onMessage(jobMessageHandler({ dispatch: dispatcher.dispatch, platform })); // pushes, results, failures, refusals
   hub.onMessage(async (conn, msg) => {
     if (msg.t !== 'hello') return;
     // A CLI that just said hello may be able to take queued jobs.

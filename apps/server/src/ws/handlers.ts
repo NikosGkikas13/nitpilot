@@ -1,8 +1,10 @@
 import type { RunningJob } from '@nitpilot/protocol';
 import type { Dispatch } from '../chats/dispatch';
+import { refreshHead } from '../chats/refresh-head';
 import type { DecideOutput, DomainEvent } from '../engine/types';
 import { currentAttempt } from '../jobs/leases';
 import { prisma } from '../lib/prisma';
+import type { PlatformReads } from '../platform/types';
 import type { CliConnection, MessageListener } from './cli-hub';
 
 type AckStatus = 'applied' | 'stale';
@@ -13,7 +15,7 @@ type JobEvent = Extract<DomainEvent, { type: 'job_completed' | 'job_failed' }>;
  * a refusal. Each is answered with an ack: `applied`, or `stale` when it's about an attempt that is
  * no longer current (see docs/why/leases-and-fencing.md).
  */
-export function jobMessageHandler(deps: { dispatch: Dispatch }): MessageListener {
+export function jobMessageHandler(deps: { dispatch: Dispatch; platform: PlatformReads }): MessageListener {
   return async (conn, msg) => {
     switch (msg.t) {
       case 'job.pushing':
@@ -28,7 +30,10 @@ export function jobMessageHandler(deps: { dispatch: Dispatch }): MessageListener
         // Logged after the fencing check, so the line says whether the server took it. The detail comes
         // from the CLI and may span lines; JSON.stringify keeps it on one log line.
         console.warn(`[cli] ${conn.login}/${conn.device}: job ${jobId} attempt ${attempt} failed (${reason}, ack ${status}): ${JSON.stringify(detail)}`);
-        return ack(conn, msg.id, status);
+        ack(conn, msg.id, status);
+        // The PR is somewhere else than the job thought: make sure the chat knows where, or every retry fails alike.
+        if (reason === 'stale_head' && status === 'applied') await refreshHeadOf(jobId, deps);
+        return;
       }
       case 'job.reject': {
         // The CLI turned the job down (daily cap, repo not linked there, …). The engine decides how long to wait.
@@ -41,6 +46,16 @@ export function jobMessageHandler(deps: { dispatch: Dispatch }): MessageListener
         return;
     }
   };
+}
+
+async function refreshHeadOf(jobId: string, deps: { dispatch: Dispatch; platform: PlatformReads }): Promise<void> {
+  try {
+    const { chatId } = await prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { chatId: true } });
+    await refreshHead(chatId, deps);
+  } catch (err) {
+    // The retry still happens; it just may find the same old head once more.
+    console.error(`[stale_head] couldn't check job ${jobId}'s PR head on GitHub:`, err);
+  }
 }
 
 /**

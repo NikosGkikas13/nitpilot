@@ -127,6 +127,6 @@ function commentIdsOf(event: DomainEvent): string[] {
 }
 
 /** Our CLI announces each push with job.pushing before it happens (spec §10). */
-async function isOurPush(chat: PrChat, sha: string): Promise<boolean> {
+export async function isOurPush(chat: PrChat, sha: string): Promise<boolean> {
   return (await prisma.job.count({ where: { chatId: chat.id, expectedPushSha: sha } })) > 0;
 }

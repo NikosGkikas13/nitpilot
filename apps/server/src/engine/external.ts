@@ -74,6 +74,8 @@ export function onThreadUnresolved(ctx: Ctx, e: Ev<'thread_unresolved'>): void {
 
 export function onHeadUpdated(ctx: Ctx, e: Ev<'head_updated'>): void {
   const chat = ctx.chat;
+  // Already on this head (the webhook and a stale_head check can both report one push): nothing moved.
+  if (e.after === chat.headSha) return;
   chat.headSha = e.after;
   // Our own push was announced with job.pushing; the address result handles it.
   if (e.ours || chat.phase === 'closed' || chat.isDraft) return;

@@ -170,6 +170,14 @@ describe('pushes', () => {
     expect(commandsOf(out, 'enqueue_job')[0]).toMatchObject({ jobType: 'address' });
   });
 
+  it('ignores news of the head the chat already has: nothing moved, so nothing restarts', () => {
+    const chat = agentToAgent({ phase: 'addressing', points: [pointOf(1, leo)], jobs: [jobOf('job-a1', maya, 'author', 'address')] });
+    const out = run(chat, { type: 'head_updated', before: 'head0', after: 'head1', ours: false });
+    expect(out.chat.headSha).toBe('head1');
+    expect(out.commands).toEqual([]);
+    expect(out.timeline).toEqual([]);
+  });
+
   it('re-reviews from the last reviewed commit when a human pushes to a ready PR', () => {
     const chat = agentToAgent({ phase: 'ready', participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })] });
     const out = run(chat, { type: 'head_updated', before: 'head1', after: 'head2', ours: false });

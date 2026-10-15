@@ -3,7 +3,11 @@ import * as samples from '@nitpilot/protocol/test-samples';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { startCliServer, TestCli, type CliServer } from '../../test/ws';
+import { pull } from '../../test/fixtures/github';
+import { prRefOf } from '../chats/refs';
 import { prisma } from '../lib/prisma';
+import { snapshotFromPull } from '../platform/github/mapping';
+import type { PrSnapshot } from '../platform/types';
 
 let s: CliServer;
 let clock: Date;
@@ -24,6 +28,12 @@ afterEach(async () => {
 
 const complete = (job: RunningJob, result: JobResult, id = 'c1') => ({ v: 1, t: 'job.complete', id, d: { ...job, result } });
 const pointsIn = (chatId: string) => prisma.point.count({ where: { chatId } });
+
+/** What GitHub would say about this chat's PR, as it is in the database. */
+async function snapshotOf(chatId: string): Promise<PrSnapshot> {
+  const chat = await prisma.prChat.findUniqueOrThrow({ where: { id: chatId }, include: { repo: true } });
+  return { ...snapshotFromPull(prRefOf(chat), pull({ number: chat.number })), headSha: chat.headSha };
+}
 
 /** maya's PR; both are online with the repo linked; leo's review job is running on leo's CLI. */
 async function reviewing() {
@@ -121,6 +131,45 @@ describe('job.fail and job.reject', () => {
     expect(await row()).toMatchObject({ status: 'failed', failure: 'auth' });
     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'reviewer' } })).toMatchObject({ attention: 'failed' });
     expect(await prisma.task.count({ where: { chatId: chat.id, kind: 'notify' } })).toBe(1);
+  });
+
+  it("after stale_head, moves the chat to the head GitHub really has, so the next try fetches that one", async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { chat, leoCli, job, row } = await reviewing();
+    // A late, older push webhook left the chat on an old head; GitHub's PR is on 'e…'.
+    s.platform.addPr({ ...(await snapshotOf(chat.id)), headSha: 'e'.repeat(40) });
+    leoCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...job, reason: 'stale_head', retryable: true, detail: "The PR's head is eeeeeee now, not aaaaaaa." } });
+    expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
+    await s.settle();
+    expect((await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id } })).headSha).toBe('e'.repeat(40));
+
+    clock = later(5_000);
+    await s.settle();
+    expect((await leoCli.next('job.assign')).d.bundle).toMatchObject({ jobId: job.jobId, pr: { headSha: 'e'.repeat(40) } });
+    expect(await row()).toMatchObject({ status: 'running', headSha: 'e'.repeat(40) });
+  });
+
+  it('after stale_head, leaves the chat alone when GitHub agrees with it (its pull ref only lagged)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { chat, leoCli, job } = await reviewing();
+    s.platform.addPr(await snapshotOf(chat.id));
+    const before = await prisma.message.count({ where: { chatId: chat.id } });
+    leoCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...job, reason: 'stale_head', retryable: true, detail: 'lagging' } });
+    expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
+    await s.settle();
+    expect((await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id } })).headSha).toBe(chat.headSha);
+    expect(await prisma.message.count({ where: { chatId: chat.id } })).toBe(before);
+  });
+
+  it("still acks stale_head when GitHub can't be asked, and logs why", async () => {
+    const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { leoCli, job, row } = await reviewing(); // no PR in the fake platform: getPr throws
+    leoCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...job, reason: 'stale_head', retryable: true, detail: 'moved' } });
+    expect((await leoCli.next('ack')).d).toEqual({ status: 'applied' });
+    await s.settle();
+    expect(await row()).toMatchObject({ status: 'queued', refundedAttempts: 1 });
+    expect(failed).toHaveBeenCalledWith(expect.stringContaining('[stale_head]'), expect.anything());
   });
 
   it('wait an hour after a daily-cap rejection, without using up an attempt', async () => {

@@ -13,7 +13,7 @@ You might be halfway through your own work, with uncommitted changes. A job must
 ## A job's checkout, step by step
 
 1. **Fetch** the PR's head (`refs/pull/<n>/head`, which GitHub keeps on the base repo, even for PRs from forks) and the base branch, into the job's own refs (`refs/nitpilot/<job>/head` and `/base`). It uses your clone's remote for the repo when there is one, so your credentials and SSH setup apply.
-2. **Check the head.** If the PR moved since the server handed out the job, the job fails with `stale_head`, and the server hands it out again on the new head.
+2. **Check the head.** If the PR moved since the server handed out the job, the job fails with `stale_head`, and the server hands it out again on the new head. It also asks GitHub where the PR really is, in case a late webhook left the chat on an old head (`apps/server/src/chats/refresh-head.ts`); otherwise every retry would hit the same wall.
 3. **Add the worktree** at that commit, through `safeGit()` (docs/why/safe-git.md).
 4. **Scrub** the files agents load on their own (`CLAUDE.md`, `.claude/`, `.mcp.json`, `.env`, …), at any depth: each is marked `skip-worktree` ("git, stop looking at this file"), then deleted. Without the mark, git would see the deletions as changes, and the next commit would delete those files from the PR.
 5. **Read the conventions** (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) from the *base* branch with `git show`, never from the PR. Otherwise a PR could write its own reviewer's instructions ("approve this").
