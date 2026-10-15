@@ -1,0 +1,813 @@
+# Plan 2: Web App (W1–W8) Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+> **Status: task level only (2026-10-15).** Written against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. Each milestone is written at step level (full TDD steps: test and implementation code, exact commands, expected output) just before it is built, checked against the code at the head at that point, and gets a "Checked against the code (Wn)" section listing where it differs from the task-level text below. No app code exists for Plan 2 yet.
+
+**Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
+
+**Architecture:**
+- **Web app** (`apps/web`): React + Vite + TypeScript, React Router (library mode), TanStack Query, CSS Modules over one `tokens.css`. Reads go through REST into the query cache; `/ws/web` pushes are written into the same cache (`setQueryData`); every change is a REST call that becomes an engine event. No optimistic updates.
+- **Server** (`apps/server`): serves the built app from the same origin with an SPA fallback, adds the web REST endpoints, a second WebSocket hub (`/ws/web`) beside `/ws/cli` behind one upgrade router, chat access rules, five new engine events, publish jobs, server-owned settings, and Web Push as a second notifier with the CLI as fallback.
+- **CLI** (`apps/cli`): protocol v2: publish jobs (push an author's draft commit), draft results with a capped diff, settings from the server, `usedToday` in `ping`, and stage changes that skip the progress throttle.
+
+**Tech Stack:** everything from Plans 1a and 1b, plus `react`, `react-dom`, `react-router`, `@tanstack/react-query`, `vite`, `@vitejs/plugin-react`, `@fontsource-variable/bricolage-grotesque`, `@fontsource/fragment-mono`, `jsdom`, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `eslint-plugin-react-hooks`, `@playwright/test` (Chromium only), and `web-push` on the server. Exact versions are pinned when each milestone is written at step level, checked against npm that day.
+
+**Spec:** `docs/superpowers/specs/2026-10-07-nitpilot-design.md`. Read §6.1, §7, §8, §9 (Auto, Drafts, §9.2, §9.3, §9.4), §10 (protocol v2, `/ws/web`, REST in Plan 2), §11 (draft mode, publish jobs), §13, §14, §16 and §20 (W table, Plan 2 acceptance) before starting. **UI:** `docs/design/handoff/design_handoff_nitpilot_web/README.md` (Turn 3 of the canvas is the spec; §16's two "Fixes for Plan 2" override the mockups). **Builds on:** Plans 1a and 1b, and `docs/superpowers/plans/2026-10-07-plan-1b-rulings-and-minors.md`.
+
+## Global Constraints
+
+Plans 1a and 1b's Global Constraints apply. In addition (values copied from the spec and the handoff):
+
+- **One Node process + Postgres.** The server serves the built web app; no second server, no Redis, no queue. Anything that seems to need more infrastructure: stop and ask (CLAUDE.md).
+- **The engine stays pure.** The five new events and `set_apply_state` live in `apps/server/src/engine/` with no database, platform or WebSocket imports, and are table-tested.
+- **Shared contract.** Every REST body and every `/ws/web` message is a zod schema in `packages/protocol` (`web-api.ts`, `web-messages.ts`); the web app parses every response and socket message with them.
+- **Same origin.** Production: the server serves `apps/web/dist` and answers any GET that isn't `/api`, `/auth`, `/github`, `/webhooks`, `/healthz` or `/ws/*` with `index.html`. Development: Vite on port 5173 proxies `/api`, `/auth`, `/github` and `/ws` (WebSockets included) to port 8787, and `PUBLIC_URL` is `http://localhost:5173`.
+- **Every page** is sent with `Content-Security-Policy: frame-ancestors 'none'` (spec §10).
+- **Auth.** The session cookie for the web app, the `Bearer nit_…` token for the CLI, on the same `/api` routes where both apply. Every cookie-authenticated write and the `/ws/web` upgrade get the Origin check (`lib/csrf.ts`, §14).
+- **Access** (§16): reading or subscribing needs read access to the repo (`RepoAccess`, 5 minutes); a chat that doesn't exist and one you can't see are the same 404; an expired GitHub sign-in is a 401 that says so. Writes also pass `can(viewer, chat, action)`: notes = author and reviewers on Nitpilot; Resolve = only the reviewer who raised the point (GitHub points are resolved on GitHub); Continue = the author or that reviewer; Review = a requested reviewer; Auto, drafts, Retry = only your own.
+- **CLI protocol version 2** (§10): `welcome.settings`, the `settings` message, `ping.usedToday`, publish bundles, `JobResult.draft`; `hello.defaults` is gone. Old `auto` / `dailyJobCap` keys in `config.json` are accepted and ignored.
+- **Settings** (§8 `User`): `autoReview` true, `autoAddress` true, `dailyJobCap` 40 by default; the Settings stepper moves in steps of 5 between 5 and 200 (handoff §7).
+- **Auto off** means the job runs and its result waits as a draft (§6.1). Discard never loops (§9 "Drafts"). Continue at the round limit adds 1 to `PrChat.extraRounds`; the limit is `max_rounds + extraRounds` (§9.3).
+- **Draft diff** is capped at 200 KB; over that, `diff` is null and the web app shows the file list and `git show` (§11).
+- **Notifications** (§16): Web Push to every subscription first; the CLI's OS notification only when no subscription worked for that notification; the terminal line always. Push sending runs inside the notify task. 404/410 deletes a subscription.
+- **Design tokens and rules** (handoff): the exact colors, radii, type scale and spacing of the handoff's tables; red only for escalations, blocker points, − diff and Revoke; failures are amber; every status is a glyph plus a word; `--fg4` never carries essential text; WCAG AA in both themes; `prefers-reduced-motion: reduce` turns off the ping, the spinner and transitions; desktop at ≥760 px (sidebar 360 px, details panel 300 px, auto-hidden below 1180 px), phone below 760 px.
+- **Fonts are bundled** (`@fontsource`), never loaded from Google, so the installed PWA calls no third party.
+- **Names** come from `BRAND` (CLI command, cookie names, ref namespace), never hard-coded.
+- **Copy** comes from the handoff verbatim where it gives copy, and from §16's fixes where they override it: the disabled Auto-switch tooltip names one reason per case; a `Closed` pill sits next to `Merged`.
+- **Explainers** (CLAUDE.md): each new backend concept gets a `docs/why/<topic>.md` in the task that first uses it, in React terms, naming the file that uses it.
+
+## Review Focus
+
+Spec-implied conditions no single test naturally covers, most likely first. Each gets a test in the task named.
+
+1. **The browser's socket drops while the agents are writing, then reconnects.** The chat must show every timeline item exactly once, in order: items committed while the server reads the catch-up from the database are neither lost nor doubled, and the client re-subscribes from its own `lastSeq`. → Task 7 (hub: an item committed between subscribe and catch-up arrives once), Task 10 (client: a duplicate and an out-of-order batch merge to one ordered list).
+2. **Someone loses access while a tab is open:** removed from the repo, or their GitHub sign-in expired. Within the 5-minute window reads and writes are refused (404, or 401 "sign in again"); an open subscription is re-checked when its cached answer expires and gets `chat.error`; the screen shows the reconnect or not-found state, never a blank page or a stale chat that still accepts clicks. → Task 7 (re-check on expiry), Task 8 (401 vs 404), Task 12 (writes), Task 10 (UI states).
+3. **Double clicks and races on actions:** Send pressed twice, two people pressing Resolve, Discard while a publish job is queued, Send on a draft that is no longer waiting, Continue on a point someone just resolved. Exactly one effect; the other request gets a 409 with a plain message, and the button shows it as a toast. → Task 15 (engine ignores the second), Task 12 and Task 16 (routes answer 409).
+4. **The laptop that holds an author's draft is offline, re-cloned or gone.** The publish job shows "waiting: offline since…" for that device only (another device of the same person being online doesn't count); a draft ref that is missing or moved fails it `setup_failed`, not retryable; the draft is marked out of date and the chat carries on. → Task 16 (activity and assigner pin the device), Task 17 (CLI refuses a moved ref).
+5. **A push subscription goes stale** (site data cleared, permission revoked, the push service answers 410): the row is deleted, and that same notification still reaches the person through the CLI fallback: never zero pings for a person with a CLI online, never two. → Task 19.
+
+## Carry-forwards
+
+From Plan 1b (its rulings and deferred minors) and from Plan 1a's deferred minors (memory "plan-1b-carry-forwards"). Each has a home:
+
+| Item | Where it lands |
+|---|---|
+| `job.progress` reaches the server and nothing shows it (Plan 2's live status line; ruling 186) | Task 9 (forwarded on `/ws/web`), Task 10 (progress line) |
+| Deferred minor (Tasks 7 and 17): the CLI's 2-second progress throttle drops stage changes, so the status line can show a stale stage | Task 9 (a stage change is sent at once) |
+| The Retry button (`nitpilot retry` exists; the engine has `retry_requested`; ruling 186) | Task 12 (the route takes the cookie), Task 13 (the button) |
+| Deferred minors (Task 6): `status`/Retry treat a write-failed flag like a failed job; two concurrent retries answer `waiting` | Task 12 (`failureKind` decides: a write failure gets "Reconnect GitHub", never Retry; a second retry while one is pending gets 409), Task 13 (the banner) |
+| Drafts: `applyState: draft` exists on `Job`, Auto is always on in Plan 1, nothing sends or discards a draft | Tasks 14–18 |
+| Human "continue" / Resolve on escalated points | Task 11 (engine), Task 12 (routes), Task 13 (banner) |
+| Web Push replacing the CLI's OS notifications | Task 19 (server, CLI fallback), Task 20 (service worker and subscribe) |
+| Deferred minors (Task 23): `loadActivity` reads the chat a second time; `ActiveJob.failure` is a loose string; untested route-level 403 and "running beats an earlier queued job" | Task 4 (the inbox reuses the activity for many chats at once) |
+| Plan 1a M2: `save.ts` writes every point field, so it can null a thread link | Task 11 (new events change points: save only the fields that changed) |
+| Plan 1a M4: no timeout on GitHub calls | Task 8 (web requests now wait on GitHub for access and files; `GithubClient` gets a timeout) |
+| Plan 1a M5: user-token refresh race (refresh tokens are single-use) | Task 8 (the web app calls GitHub with the viewer's token while the task runner may refresh it: refreshes run one at a time per user) |
+| Plan 1a M6: installation sync reads only 100 repos | Plan 3 (hosting with many repos); not touched here |
+| Plan 1a M11: the advisory-lock connection has no error listener | Plan 3 (deploy hardening); not touched here |
+| Plan 1a M1 (summary reschedule resets attempts), M3 (a human deleting an agent point's comment counts as our own write), `reuseIfContains` (any author, first 100 items) | Still deferred: no Plan 2 code touches them |
+| Final minor: stopping `nitpilot start` mid-job counts a timeout attempt | Still deferred (CLI-only; the web app shows the "waiting" it causes correctly) |
+| Plan 1b ruling 185 / Task 5 minors: the rate limiter behind a proxy, a server URL with a path prefix, http for non-local hosts | Plan 3 (deployment) |
+| Task 20 (Gemini CLI adapter) | Still on hold. The UI shows whichever agent the CLI reports in `hello` |
+
+## Code facts this plan is built on
+
+Read from `main` at `97268c9`; the step-level text re-checks each one.
+
+- **`CliHub.attach(server)` owns every upgrade** and refuses any path but `/ws/cli` with a 404 (`ws/cli-hub.ts:57,109`). A second hub needs one upgrade router in front of both (Task 7).
+- **`CliHub` has no presence events**: connections come and go inside `upgrade`/close handlers with no listener. Task 9 adds `onPresence`.
+- **`/api/me` and `/api/chats/:id/retry` accept only the CLI token** (`requireCliToken`, `http/routes/cli.ts`). Task 3 adds `requireUser` (cookie or token).
+- **`Dispatcher.onCommit(listener(chatId, effects))`** exists; `DispatchEffects` has `jobsChanged`, `tasksCreated`, `cancelledJobs` and nothing about the timeline. Task 9 adds the new items' seq range.
+- **Drafts are half built:** `enqueueJob` sets `applyState: draft` when `autoFor` is false (`engine/jobs.ts:18`), `onJobCompleted` stores a draft, flags `drafts` and notifies (`engine/results.ts:18`), and the CLI keeps an author's draft commit at `refs/nitpilot/drafts/<job>` and reports `push: null` (`apps/cli/src/runner/push.ts:70`). Nothing sends or discards, the result doesn't name the commit, and `advance` only holds *reviewers* with `drafts` (`engine/advance.ts:49`): an author with a waiting draft would get a second address job on the next event (Task 15 fixes it).
+- **`Participant.auto` exists, always true; `hello.defaults` is sent and never read** (`apps/cli/src/daemon.ts:298`). The CLI enforces `dailyJobCap` from `config.json` and counts in `state.json` (`daemon.ts:223`).
+- **The engine already has `human_note` and `manual_review`** (`engine/lifecycle.ts`), and `withPeople` fills their `userId` (`chats/people.ts`); no route calls them yet.
+- **`RepoAccess`** (5-minute cache, bounded map, 401 → `reauth`) and **`loadActivity`/`deriveActivity`** exist for the transcript page (`auth/repo-access.ts`, `chats/activity.ts`).
+- **`Notifier`** is one interface with `CliNotifier` behind it (`tasks/notifier.ts`, `tasks/cli-notifier.ts`), called from the notify task (`tasks/handlers/notify.ts`), whose titles already follow the handoff's push copy.
+- **Server pages:** `http/pages/{home,approve,transcript,layout}.tsx` with `renderPage` (which adds `frame-ancestors`), served by `/`, `/cli/approve` and `/c/:owner/:repo/:number`.
+- **The end-to-end harness** is `apps/server/test/e2e/harness.ts` (`startE2e`, `waitFor`): the real server with `FakePlatform`, Postgres, and real `nitpilot start` daemons on the fake agent.
+- **`packages/protocol` exports TypeScript source** (`"exports": { ".": "./src/index.ts" }`) and imports only `zod`, so Vite can consume it as is.
+- **CI** (`.github/workflows/ci.yml`) runs typecheck, lint, `npm test` and `npm run test:e2e` against a Postgres service.
+
+## How to work in this repo
+
+- Plans 1a and 1b's "How to work in this repo" apply: Postgres in Docker on port 5433 (`open -a Docker`, then `docker start nitpilot-postgres-1`), `apps/server/.env`, tests use the `nitpilot_test` database.
+- Baseline at `97268c9`: `npm test` = protocol 41, CLI 293 passed + 14 skipped, server 599; `npm run test:e2e` = 5; typecheck and lint clean. Each task's step-level text names the counts it ends with.
+- Web app: `npm run dev -w apps/web` (Vite on 5173) next to `npm run dev -w apps/server` (8787). Web unit tests run inside `npm test`; Playwright runs with `npm run test:web-e2e` (from Task 3).
+- UI tasks are also checked in the in-app browser: both themes, desktop and phone widths, with screenshots in the task report.
+- One task per turn, then stop for review. Strict TDD: watch each new test fail, then pass, then run the full suite with `npm test && npm run typecheck && npm run lint` (plus `npm run test:e2e` and `npm run test:web-e2e` when a task touches them).
+- Live checks use the dev GitHub App `nitpilot-dev` (credentials in `apps/server/.env`; never print them) and the sandbox `NikosGkikas13/nitpilot-sandbox` (author `ngkdev93-jpg`, reviewer `NikosGkikas13`). Ask before anything writes to GitHub or runs Claude Code. Click-steps name the GitHub account and spell out every move.
+- Commit after every task, with a message ending in `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+---
+
+## Milestone W1: Skeleton
+
+W1 makes `apps/web` exist and reach the browser two ways: through Vite in development and served by the Nitpilot server in production. It ends with the landing page and GitHub sign-in working, and Playwright running one smoke test against a real server.
+
+**Files at the end of W1:**
+```
+apps/web/
+  package.json, tsconfig.json, vite.config.ts, index.html, eslint (react-hooks) in the root config
+  src/main.tsx, src/app.tsx              router + QueryClientProvider
+  src/styles/tokens.css, src/styles/global.css
+  src/theme.ts                           system | light | dark, remembered in localStorage
+  src/api/client.ts                      api.get / api.send with zod parsing, ApiError
+  src/api/me.ts                          useMe
+  src/components/{Wordmark,ThemeToggle,Button}/…
+  src/routes/{Landing,Home}/…            Home = Landing when signed out, a placeholder inbox when signed in
+  playwright.config.ts, e2e/landing.spec.ts
+apps/server/src/
+  http/spa.ts                            static files + SPA fallback + CSP
+  auth/request-user.ts                   requireUser (cookie or CLI token), requireSameOrigin
+  http/routes/me.ts                      GET /api/me for both (moved out of routes/cli.ts)
+apps/server/test/e2e/web-server.ts       the harness on a port, serving apps/web/dist, plus a test-only control API
+packages/protocol/src/web-api.ts         WebMe
+docs/why/serving-a-spa.md
+```
+
+### Task 1: `apps/web` skeleton: Vite, React, router, tokens, theme
+
+**Files:**
+- Create: `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/vite.config.ts` (React plugin, dev proxy for `/api`, `/auth`, `/github`, `/ws` with `ws: true`, Vitest `environment: 'jsdom'` and a setup file for `@testing-library/jest-dom`), `apps/web/index.html`, `apps/web/src/main.tsx`, `apps/web/src/app.tsx`, `apps/web/src/styles/tokens.css`, `apps/web/src/styles/global.css`, `apps/web/src/theme.ts`, `apps/web/src/components/Wordmark/{Wordmark.tsx,Wordmark.module.css}`, `apps/web/src/components/ThemeToggle/…`, `apps/web/src/test/setup.ts`.
+- Modify: root `package.json` (workspace scripts include web: `test`, `typecheck`; a root `build` that runs `npm run build -w apps/web`), `eslint.config.mjs` (browser globals and `react-hooks` rules for `apps/web/**`), `.gitignore` (`apps/web/dist`).
+
+**Interfaces:**
+- Produces: `type ThemeChoice = 'system' | 'light' | 'dark'`; `readTheme(): ThemeChoice` and `writeTheme(choice)` (localStorage wrapped in try/catch: storage can be missing or throw); `applyTheme(choice)` sets `document.documentElement.dataset.theme` (`light`/`dark`) or removes it for `system`. `tokens.css` defines every handoff token on `:root` (light), under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`, and under `:root[data-theme="dark"]`. `<Wordmark size={19 | 22 | 26} />` renders `nıtpilot` in Fragment Mono with the teal diamond over the ı. `<App />` wraps `RouterProvider`-free `BrowserRouter` routes in a `QueryClientProvider` (retry off for 4xx).
+
+**Behavior:**
+- Fonts from `@fontsource-variable/bricolage-grotesque` (opsz, 400–700) and `@fontsource/fragment-mono` (400), imported in `main.tsx`.
+- `global.css`: body background `--bg`, text `--fg1`, `:focus-visible` 2 px accent outline with 2 px offset, and a `prefers-reduced-motion: reduce` block that disables animations and transitions everywhere.
+- The theme toggle cycles light ↔ dark from whatever is showing now and remembers the choice; with nothing remembered the system decides.
+
+**Tests this task must include:**
+- `theme.test.ts`: `readTheme` falls back to `system` when localStorage throws or holds junk; `applyTheme` sets and clears `data-theme`.
+- `Wordmark.test.tsx`: renders accessible text "nitpilot" (an `aria-label`, since the dotless ı is decorative).
+- `ThemeToggle.test.tsx`: a click switches to the opposite of the current theme and stores it.
+- `npm run build -w apps/web` produces `dist/index.html`; `npm run typecheck` and `npm run lint` cover `apps/web`.
+
+### Task 2: The server serves the web app (SPA fallback, CSP, dev setup)
+
+**Files:**
+- Create: `apps/server/src/http/spa.ts`, `apps/server/src/http/spa.test.ts`, `docs/why/serving-a-spa.md`.
+- Modify: `apps/server/src/http/app.ts` (mount the SPA last; remove the `/` home route), `apps/server/src/lib/env.ts` (`WEB_DIST_DIR`, default `../web/dist` resolved from the server package), `apps/server/.env.example` (`PUBLIC_URL=http://localhost:5173` for development, with a comment), `.github/workflows/ci.yml` (build the web app before the tests), the spec only if something differs.
+- Delete: `apps/server/src/http/pages/home.tsx` and its tests (the landing page is the SPA's from Task 3).
+
+**Interfaces:**
+- Produces: `spaRoutes(opts: { distDir: string }): Hono`. Mounted after every other route. `GET /assets/*` and the other files in `dist` are served with `Cache-Control: public, max-age=31536000, immutable` for hashed assets and `no-cache` for `index.html`, `sw.js` and `manifest.webmanifest`. Any other GET whose path doesn't start with `/api/`, `/auth/`, `/github/`, `/webhooks/`, `/ws/` or equal `/healthz` gets `index.html` with status 200. Every response from it carries `Content-Security-Policy: frame-ancestors 'none'` (plus `default-src 'self'`, `connect-src 'self'`, `img-src 'self' https://avatars.githubusercontent.com data:`, `style-src 'self' 'unsafe-inline'` for CSS Modules in dev builds; the step level checks Vite's production output needs nothing more).
+- A missing `distDir` makes the fallback answer 503 with a one-line text: "The web app isn't built. Run `npm run build -w apps/web`." (so a server started without a build says why).
+
+**Behavior:**
+- Unknown `/api/*` paths stay JSON 404s (`onError`), never `index.html`.
+- Paths are resolved inside `distDir` only: `..`, encoded `%2e%2e` and absolute paths never leave it.
+- Development: `PUBLIC_URL=http://localhost:5173`, so GitHub's OAuth callback lands on Vite and is proxied to the server. **Live step (ask first):** the person adds `http://localhost:5173/auth/github/callback` to the `nitpilot-dev` app's callback URLs (GitHub → Settings → Developer settings → GitHub Apps → nitpilot-dev → Callback URL → Add Callback URL), signed in as NikosGkikas13, with every click spelled out.
+- `docs/why/serving-a-spa.md`: what a single-page app's build is, why one origin (cookies, no CORS), what the fallback does and why `/api` must never fall back, and the dev proxy, in React terms; points to `http/spa.ts` and `apps/web/vite.config.ts`.
+
+**Tests this task must include:**
+- `GET /inbox/whatever` → 200 `index.html` with the CSP header; `GET /assets/<hashed>.js` → the file with the immutable cache header; `GET /api/nope` → JSON 404; `GET /healthz` unchanged; `GET /..%2f..%2fpackage.json` and `GET /assets/..%2f..%2f.env` → never a file outside `distDir`; a missing `distDir` → 503 with the build hint. Tests use a temporary `dist` folder.
+
+### Task 3: Sign-in, `/api/me` for the browser, landing page, Playwright
+
+**Files:**
+- Create: `apps/server/src/auth/request-user.ts` (+ test), `apps/server/src/http/routes/me.ts` (+ db test), `packages/protocol/src/web-api.ts` (+ round-trip tests), `apps/web/src/api/client.ts` (+ test), `apps/web/src/api/me.ts`, `apps/web/src/routes/Landing/…`, `apps/web/src/routes/Home/…`, `apps/web/src/components/Button/…`, `apps/web/playwright.config.ts`, `apps/web/e2e/landing.spec.ts`, `apps/server/test/e2e/web-server.ts`.
+- Modify: `apps/server/src/http/routes/cli.ts` (`/api/me` moves to `me.ts`; the CLI keeps its answer shape), `apps/server/src/http/app.ts`, `packages/protocol/src/index.ts`, root `package.json` (`test:web-e2e`), `apps/server/package.json` (`e2e:web-server`), `.github/workflows/ci.yml` (install Chromium, run `test:web-e2e`).
+
+**Interfaces:**
+- Consumes: `currentUser(c)` (`auth/session.ts`), `authenticateCliToken` (`auth/cli-token.ts`), `isAllowedOrigin` (`lib/csrf.ts`).
+- Produces (server): `requireUser: MiddlewareHandler<{ Variables: { user: SessionUser; via: 'session' | 'cli' } }>`: a valid session cookie or a valid `Bearer nit_…` token, else 401 `{ code: 'unauthorized' }`. `requireSameOrigin`: for `via === 'session'` and a non-GET method, `isAllowedOrigin` must pass, else 403. Every later write route uses both.
+- Produces (protocol): `WebMe = MeResponse.extend({ id: z.string(), githubId: z.string() })`. Later tasks extend it (`settings`, `usedToday`, `onboarding`, `push`, `agentOnline`). The CLI's `MeResponse` parse keeps working because zod strips unknown keys.
+- Produces (web): `api.get<T>(path, schema): Promise<T>`, `api.send<T>(method, path, body, schema?): Promise<T>` (sends JSON with `credentials: 'same-origin'`), `class ApiError { status: number; code: string; message: string }` built from the server's `{ code, message }` error body; `useMe()` → `UseQueryResult<WebMe | null>` (a 401 resolves to `null`, which means "signed out").
+- Produces (tests): `apps/server/test/e2e/web-server.ts` starts the end-to-end harness on a fixed port with `WEB_DIST_DIR` pointing at the built app, and mounts a **test-only** control API on a second port (`POST /signin {login}` → a `Set-Cookie` for a seeded user, `POST /webhook {name, payload}` to send a recorded or synthesized webhook, `GET /state`). It is never imported by `src/`.
+
+**Behavior:**
+- Landing (handoff §4): nav (22 px wordmark, Docs, GitHub ↗), the hero with eyebrow pill, H1, sub, **Sign in with GitHub →** linking to `/auth/github/login?next=/`, the mono note, the product card with three sample inbox rows (static sample data from the handoff, clearly the landing's illustration), and the three "How it works" cards. Both themes; wraps at phone width.
+- `/` shows Landing when `useMe()` is `null`, and a placeholder "Inbox" heading with the user's login when signed in (replaced in Task 6).
+- A 5xx or network failure shows one plain error line with Retry, never a blank page.
+
+**Tests this task must include:**
+- `request-user.test.ts`: cookie → `via: session`; bearer → `via: cli`; neither → 401; a session POST from another Origin → 403; a CLI-token POST needs no Origin.
+- `me.db.test.ts`: the browser gets `WebMe` with the cookie; the CLI gets the same `/api/me` with its token (existing `cli.db.test.ts` cases still pass).
+- `client.test.ts`: a `{ code, message }` error body becomes `ApiError`; a body that fails the schema is an error, not silently accepted.
+- `Landing.test.tsx`: the sign-in link points at `/auth/github/login?next=%2F`.
+- Playwright `landing.spec.ts`: signed out → the landing's H1 and sign-in button; signed in through the control API → the placeholder shows the seeded login. `npm run test:web-e2e` runs it; CI runs it after `npm run build`.
+
+---
+
+## Milestone W2: Inbox
+
+W2 shows a person their real inbox: every chat they're part of, with the right status pill, round and unread count, sorted with "Needs you" first, searchable and filterable, keyboard-driven, in both themes and on a phone. It isn't live yet (W3 adds pushes); a refresh shows the latest.
+
+**Files at the end of W2:**
+```
+packages/protocol/src/web-api.ts      InboxStatus, InboxRow, InboxResponse
+apps/server/src/
+  chats/inbox-status.ts               inboxStatus (pure)
+  chats/activity.ts                   loadActivities (many chats, one read each), typed failures
+  chats/inbox.ts                      loadInboxRows, loadInboxRow, unreadCounts
+  http/routes/inbox.ts                GET /api/inbox, POST /api/chats/:id/read
+  prisma: ChatRead
+apps/web/src/
+  routes/Shell/…                      desktop sidebar + main, phone single pane
+  routes/Inbox/…                      header, banners, search, filter, tabs, rows, empty states, footer
+  components/{StatusPill,Avatar,AgentBadge,Kbd,Popover}/…
+  lib/inbox.ts                        sortRows, filterRows, tabCounts, searchRows
+  lib/keys.ts                         useInboxKeys (j/k/↓/↑/Enter/'/'/Esc, ignored while typing)
+```
+
+### Task 4: Inbox status and activity for many chats
+
+**Files:**
+- Create: `apps/server/src/chats/inbox-status.ts` and `inbox-status.test.ts`.
+- Modify: `apps/server/src/chats/activity.ts` and its tests (`loadActivities`, typed `failure`), `packages/protocol/src/web-api.ts` (`InboxStatus`), `apps/server/src/http/routes/transcript.tsx` (uses the chat it already loaded; removed in Task 10 anyway).
+
+**Interfaces:**
+- Consumes: `deriveActivity(facts)`, `Activity` (`chats/activity.ts`).
+- Produces: `InboxStatus = { kind: 'working' | 'waiting' | 'their_turn' | 'needs_you' | 'escalated' | 'ready' | 'merged' | 'closed' | 'quiet'; who: string | null; reason: 'offline' | 'repo_not_linked' | 'cap_reached' | 'decision' | 'manual_review' | 'failed' | 'drafts' | null }`. `inboxStatus(f: { phase: Phase; merged: boolean; closed: boolean; activity: Activity; attention: Attention; role: Role }): InboxStatus`. `loadActivities(chatIds: string[], clis: LiveClis, now?): Promise<Map<string, Activity>>` (three queries total, whatever the number of chats); `loadActivity(chatId, …)` becomes a one-item call of it. `ActiveJob.failure: FailureReason | null`.
+
+**Behavior** (one table, most important first):
+- `merged` → `merged`; closed without merging → `closed` (§16 fix).
+- Your attention `decision` → `escalated` (red pill); `manual_review`, `failed`, `drafts` → `needs_you` with that `reason`.
+- Phase `ready`: a reviewer sees `ready` ("Ready"); the author sees `their_turn` ("Their turn": waiting for approval).
+- Activity `agent_waiting` → `waiting` with `who` and `reason`; `agent_working` → `working` with `who` ("Leo's agent working"); `human_turn` → `their_turn` with `who`, or `needs_you` when `who` is you.
+- Anything else (idle, nothing pending) → `quiet` (no pill; the row shows the last activity only).
+
+**Tests this task must include:**
+- `inbox-status.test.ts`: the table above, one row per case, including "your own human turn is Needs you", "a waiting agent beats a working one", and "merged beats escalated".
+- `activity` tests: `loadActivities` for three chats makes one read per table (counted with a Prisma query listener) and gives each chat the same answer `loadActivity` gives; **carry-forwards:** a running job beats an earlier queued one in `deriveActivity`; the transcript route's 403-from-GitHub path renders "Nothing here" (route-level test).
+
+### Task 5: `GET /api/inbox`, `ChatRead` and unread counts
+
+**Files:**
+- Create: `apps/server/src/chats/inbox.ts`, `apps/server/src/chats/inbox.db.test.ts`, `apps/server/src/http/routes/inbox.ts`, `apps/server/src/http/routes/inbox.db.test.ts`, a migration (`ChatRead`).
+- Modify: `apps/server/prisma/schema.prisma`, `packages/protocol/src/web-api.ts` (`InboxRow`, `InboxResponse`, `MarkReadRequest`, `WebMe.agentOnline`), `apps/server/src/http/routes/me.ts`, `apps/server/src/http/app.ts`, `apps/server/test/db.ts` (`makeParticipant`, `makeMessage` helpers if missing).
+
+**Interfaces:**
+- Consumes: `loadActivities`, `inboxStatus` (Task 4), `requireUser`, `requireSameOrigin` (Task 3).
+- Produces: model `ChatRead { id, userId, chatId, lastReadSeq Int, createdAt, updatedAt; @@unique([userId, chatId]) }` with cascading deletes. `InboxRow = { chatId, repo, number, title, url, role: Role, other: { login: string; avatarUrl: string | null; agentActive: boolean } | null, status: InboxStatus, round: number, maxRounds: number, lastActivity: string, updatedAt: string, unread: number, needsYou: boolean }`. `loadInboxRows(user: SessionUser, clis: LiveClis): Promise<InboxRow[]>`; `loadInboxRow(chatId, userId, clis): Promise<InboxRow[]>` (one per role the person has in that chat, for Task 9's `inbox.upsert`). `GET /api/inbox` → `InboxResponse { rows }`. `POST /api/chats/:id/read { seq }` → 204: `lastReadSeq = max(current, seq)`, only for a participant.
+
+**Behavior:**
+- Rows: every chat where a participant row has your GitHub id, one row per role (an author who is also a reviewer gets two rows, one per tab); open chats plus chats closed in the last 14 days; at most 200, newest first.
+- `other`: for the author's row, the first requested reviewer (else the first reviewer); for a reviewer's row, the author. `agentActive` = that person has a queued or running job in the chat. `avatarUrl` from `User` when they're on Nitpilot, else `https://avatars.githubusercontent.com/u/<githubId>` (GitHub's public avatar URL).
+- `unread` = timeline items after your `lastReadSeq` whose author isn't you; system items count. No `ChatRead` row = everything is unread.
+- `lastActivity` = the newest timeline item's body, one line, cut at 120 characters. `maxRounds` = the repo's `max_rounds`; Task 11 adds the chat's `extraRounds` to it when that column exists.
+- `WebMe.agentOnline` (this task adds it to `/api/me`, which now takes `clis`): true when any CLI of yours is connected. The inbox's offline banner reads it.
+- `needsYou` = `status.kind` is `needs_you` or `escalated`, or `ready` for a reviewer (the handoff's tab count).
+
+**Tests this task must include:**
+- Rows for author and reviewer roles, a person in both roles getting two rows, a chat closed 15 days ago left out, another person's chat never listed.
+- Unread: no row → all others' items; after `read {seq: 5}` only later items count; your own items never count; a lower `seq` never moves the cursor back.
+- `read` on a chat you're not part of → 404; from another Origin → 403.
+- The number of queries for 30 chats stays constant (no N+1), measured like Task 4.
+
+### Task 6: The inbox screen
+
+**Files:**
+- Create: `apps/web/src/routes/Shell/…`, `apps/web/src/routes/Inbox/{Inbox.tsx,InboxHeader.tsx,InboxRow.tsx,InboxFilter.tsx,InboxTabs.tsx,EmptyState.tsx,*.module.css,*.test.tsx}`, `apps/web/src/components/{StatusPill,Avatar,AgentBadge,Kbd,Popover,Banner}/…`, `apps/web/src/lib/inbox.ts` and `inbox.test.ts`, `apps/web/src/lib/keys.ts` and `keys.test.ts`, `apps/web/src/api/inbox.ts`.
+- Modify: `apps/web/src/app.tsx` (routes: `/` = Shell with the inbox; `/c/:owner/:repo/:number` placeholder for Task 10), `apps/web/e2e/` (an inbox smoke).
+
+**Interfaces:**
+- Consumes: `InboxRow`, `InboxStatus`, `WebMe` (protocol), `useMe`, `api`.
+- Produces: `useInbox()`; `sortRows(rows)` ("Needs you" first, then by `updatedAt` desc); `filterRows(rows, { tab: 'review' | 'mine'; query: string; repos: Set<string>; statuses: Set<StatusFilter> })`; `tabCounts(rows) → { review: number; mine: number }` (needsYou only); `<StatusPill status={InboxStatus} viewerLogin={string} />`; `useInboxKeys({ rows, cursor, setCursor, open, focusSearch })`. `<Shell>` renders the 360 px sidebar + `<Outlet>` at ≥760 px, and one pane on a phone (the inbox, or the chat when a chat route is open).
+
+**Behavior** (handoff §1, both themes):
+- Header row: wordmark, theme toggle, the avatar linking to `/settings` (Task 21 adds the page; until then it is a plain link).
+- Banners: "Your agent is offline" with the copyable `nitpilot start` chip (Copy → "Copied" for 1.6 s) when `me.agentOnline` is false (Task 5); the amber "GitHub sign-in expired" strip with **Reconnect** (`/auth/github/login?next=<here>`) when `me.githubAuth === 'needs_reauth'`.
+- Search (34 px, `/` hint on desktop), Filter (popover: repos from the rows, statuses Needs you / Agent working / Waiting / Their turn / Ready / Closed; "Filter · N" with an accent border when active).
+- Tabs "To review" / "Mine" with the needs-you count badge (hidden at 0, `aria-label` "2 need you").
+- Rows: 38 px avatar with the agent badge when `other.agentActive`; mono `repo #n` and the relative time; the title (600 when unread) with the unread dot; the pill, last activity and mono `2/3`. Merged/Closed rows: muted, Merged with line-through, Closed without.
+- Empty states: "All quiet." / "Nitpilot will ping you when you're needed."; search: "No matches" / "No pull requests match "…"."
+- Keys: j/k and ↓/↑ move the cursor, Enter opens, `/` focuses search, Esc closes the filter (and on a phone goes back to the inbox); all ignored while typing in an input. Footer hint on desktop.
+- Accessibility: tabs `role=tab` + `aria-selected`, rows `role=option` in a `role=listbox`, every pill a glyph plus a word.
+
+**Tests this task must include:**
+- `inbox.test.ts`: `sortRows`, `filterRows` (tab, query on repo/number/title, repo and status filters), `tabCounts` (ready counts only for reviewer rows).
+- `keys.test.ts`: keys move and open; typing "j" in the search box doesn't move the cursor.
+- `StatusPill.test.tsx`: each `kind` renders its glyph and words ("Leo's agent working", "Needs you", "Closed"), escalation uses the red variant.
+- `Inbox.test.tsx`: with a fake API, rows render in sorted order, the badge counts, the offline banner and the expired strip appear from `me`.
+- Playwright: signed in with two seeded chats, the inbox shows both under the right tabs.
+- Browser check: desktop and 375 px, light and dark, screenshots in the report.
+
+---
+
+## Milestone W3: Live chat (read-only)
+
+W3 opens a chat: header, timeline, point cards, banners and the details panel, kept live over `/ws/web` while agents work, with the progress line. It replaces the server's transcript page at the same URL. Nothing can be clicked to change the chat yet (W4).
+
+**Files at the end of W3:**
+```
+packages/protocol/src/web-messages.ts  WEB_WS_PATH, WebToServer, ServerToWeb
+packages/protocol/src/web-api.ts       ChatView, TimelineItem, PointView, ParticipantView, Permissions, PrFile
+apps/server/src/
+  ws/upgrade-router.ts                 one 'upgrade' listener, by path
+  ws/cli-hub.ts                        handleUpgrade, onPresence
+  ws/web-hub.ts                        WebHub: session + Origin before upgrade, subscriptions, resume without gaps
+  ws/web-wire.ts                       dispatcher commits, CLI presence and job.progress → WebHub
+  chats/access.ts                      readAccess (RepoAccess + chat lookup, one 404 for both)
+  chats/permissions.ts                 can, permissionsFor (reads now; writes in W4)
+  chats/views.ts                       loadChatView, loadTimeline, toTimelineItem
+  http/routes/chats.ts                 GET chat view, messages, files
+  platform/{types,github/reads,fake/fake-platform}.ts   listPrFiles
+  platform/github/client.ts            request timeout (M4)
+  auth/user-tokens.ts                  one refresh at a time per user (M5)
+apps/cli/src/daemon.ts                 a stage change skips the progress throttle
+apps/web/src/
+  live/socket.ts, live/apply.ts, live/progress.ts
+  routes/Chat/…                        header, banners, timeline, point card, snippet, progress line, details panel, untrusted card
+  lib/banner.ts, lib/snippet.ts
+docs/why/web-socket-and-origin.md, docs/why/chat-access-rules.md
+```
+
+### Task 7: `/ws/web`: upgrade router, `WebHub`, resuming without gaps
+
+**Files:**
+- Create: `packages/protocol/src/web-messages.ts` (+ round-trip tests), `apps/server/src/ws/upgrade-router.ts` (+ test), `apps/server/src/ws/web-hub.ts`, `apps/server/src/ws/web-hub.db.test.ts`, `apps/server/src/chats/access.ts` (+ db test), `apps/server/test/web-ws.ts` (a test client: connect with a cookie and an Origin, collect messages), `docs/why/web-socket-and-origin.md`.
+- Modify: `apps/server/src/ws/cli-hub.ts` (`attach` → `handleUpgrade(req, socket, head)`; the path check moves to the router), `apps/server/src/main.ts`, `apps/server/test/ws.ts` and the e2e harness (attach through the router), `packages/protocol/src/index.ts`.
+
+**Interfaces:**
+- Consumes: `currentUser` (needs a variant that reads the cookie from a Node `IncomingMessage`: `sessionUserFromCookieHeader(header: string | undefined)` in `auth/session.ts`), `isAllowedOrigin`, `RepoAccess`.
+- Produces (protocol): `WEB_WS_PATH = '/ws/web'`. `WebToServer = { t: 'chat.subscribe', d: { chatId, afterSeq: number } } | { t: 'chat.unsubscribe', d: { chatId } }`. `ServerToWeb = chat.items { chatId, items: TimelineItem[], lastSeq } | chat.state { chatId, view: ChatView } | inbox.upsert { rows: InboxRow[] } | job.progress { chatId, who: string, stage, text } | me.update { me: WebMe } | chat.error { chatId, code: 'not_found' | 'reauth' }`, all in the `{ v: 1, t, d }` envelope. `TimelineItem = { seq, kind: MessageKind, author: { githubId, login } | null, pointNumber: number | null, jobId: string | null, body: string, data: Record<string, unknown> | null, at: string }`.
+- Produces (server): `routeUpgrades(server: Server, routes: Record<string, (req, socket, head) => void>)` (an unknown path → 404 and the socket is destroyed). `readAccess(user: SessionUser, chat: { repoFullName: string }, access: RepoAccess): Promise<'read' | 'none' | 'reauth'>`. `class WebHub { constructor(deps: { access: RepoAccess; loadItems(chatId, afterSeq): Promise<TimelineItem[]>; chatRepo(chatId): Promise<string | null>; now?: () => number }); handleUpgrade(req, socket, head); publishItems(chatId, items: TimelineItem[], lastSeq: number); publishState(chatId, view: ChatView); sendToUser(userId, msg: ServerToWeb); subscribersOf(chatId): SessionUser[]; closeAll(code) }`.
+
+**Behavior:**
+- Before the upgrade: no valid session → 401; an Origin that isn't ours (or none) → 403; then the socket opens. A session that expires or signs out is closed with 4401 the next time it is checked (on each subscribe and each access re-check).
+- `chat.subscribe`: the hub checks read access (404 and "can't see it" are the same `chat.error not_found`; `reauth` → `chat.error reauth`), registers the subscription **first** so live items are buffered, reads items with `seq > afterSeq` (at most 500; the client pages older ones over REST), sends them as one `chat.items`, then flushes the buffer skipping any `seq` already sent. One socket may subscribe to many chats.
+- Access is re-checked for a subscription whenever its cached answer is older than `ACCESS_TTL_MS` and something is about to be sent to it; a refusal sends `chat.error` and drops the subscription.
+- Messages over 64 KB from a browser, or that don't parse, close the socket 1008. A socket silent for 60 s gets a ping frame; no pong → terminated.
+- `docs/why/web-socket-and-origin.md`: why the browser socket uses the cookie, why SameSite doesn't protect a WebSocket and the Origin check does (cross-site WebSocket hijacking), and how subscribe → catch-up → flush avoids gaps, with a timeline diagram in words; points to `ws/web-hub.ts`.
+
+**Tests this task must include:**
+- The router sends `/ws/cli` and `/ws/web` to the right hub and 404s anything else; the existing CLI hub tests still pass through it.
+- Upgrade refused without a cookie (401), with a foreign Origin (403), with no Origin (403).
+- **Review Focus 1:** an item committed after the subscription is registered but before the catch-up read finishes arrives exactly once (a `loadItems` stub that publishes mid-read); `afterSeq` equal to `lastSeq` sends an empty catch-up and then live items.
+- Subscribe to a chat the viewer can't read → `chat.error not_found`, and nothing for that chat is ever sent to the socket; `reauth` → `chat.error reauth`.
+- **Review Focus 2:** an access answer that changes to `none` after the TTL (clock injected) stops delivery with `chat.error` on the next publish.
+- Unsubscribe stops delivery; closing the socket removes every subscription (no leak in `subscribersOf`).
+
+### Task 8: Chat view, messages and files over REST (+ GitHub timeouts, one token refresh at a time)
+
+**Files:**
+- Create: `apps/server/src/chats/views.ts` (+ db test), `apps/server/src/chats/permissions.ts` (+ test; read side only), `apps/server/src/http/routes/chats.ts` (+ db test), `docs/why/chat-access-rules.md`.
+- Modify: `packages/protocol/src/web-api.ts` (`ChatView`, `PointView`, `ParticipantView`, `DraftView` (empty list until W5), `Permissions`, `PrFile`, `MessagesResponse`, `FilesResponse`), `apps/server/src/platform/types.ts` and `platform/github/reads.ts` and `platform/fake/fake-platform.ts` (`listPrFiles`), `apps/server/src/platform/github/client.ts` (timeout, **M4**), `apps/server/src/auth/user-tokens.ts` (refresh serialized per user, **M5**), their tests.
+
+**Interfaces:**
+- Consumes: `readAccess` (Task 7), `loadActivities` (Task 4), `failureKind` (`chats/failed-flags.ts`), `rulesFromJson`.
+- Produces: `ChatView = { id, repo, number, title, url, author: string, headRef, baseRef, phase: Phase, round, maxRounds, merged, closed, trusted, isDraft, viewer: { role: Role | null; attention: Attention; failure: 'job' | 'github_post' | null }, participants: ParticipantView[], activity: ActivityView, points: PointView[], drafts: DraftView[], rules: { maxRounds: number; alwaysEscalate: Category[]; autoReview: boolean; autoAddress: boolean; error: string | null }, permissions: Permissions, summaryUrl: string | null, items: TimelineItem[], lastSeq: number, hasOlder: boolean }`. `ParticipantView = { githubId, login, avatarUrl, role, onNitpilot, auto, requested, agent: { online: boolean; offlineSince: string | null; working: boolean } | null }`. `PointView` mirrors `PointState` plus `raisedByLogin`. `Permissions = { note: boolean; review: boolean; retry: boolean; auto: Role[]; resolve: number[]; continue: number[]; drafts: string[] }` (all false or empty in W3; W4 and W5 fill them). `PrFile = { path, oldPath: string | null, status: 'added' | 'modified' | 'removed' | 'renamed', adds: number, dels: number }`. `loadChatView(chatId, viewer: SessionUser, clis: LiveClis): Promise<ChatView>`; `toTimelineItem(m: Message): TimelineItem`. `PlatformReads.listPrFiles(pr: PrRef): Promise<PrFile[]>` (GitHub: `GET /repos/{o}/{r}/pulls/{n}/files`, up to 300 files across pages, with the installation token). `GithubClient` options gain `timeoutMs` (default 15 000; an aborted call is a `GithubError` with `status: null` and "GitHub didn't answer in 15 s"). `getUserToken(userId, github)` runs refreshes through a `KeyedLock` per user.
+- Routes: `GET /api/chats/:owner/:repo/:number` → `ChatView` (latest 200 items); `GET /api/chats/:id/messages?before=<seq>` → `{ items, hasOlder }` (200 older items); `GET /api/chats/:id/files` → `{ files: PrFile[], adds, dels }`, kept in memory per `(chatId, headSha)` for 10 minutes, at most 500 entries.
+
+**Behavior:**
+- Every route: `requireUser`, then `readAccess`; `none` and a missing chat → the same 404 `{ code: 'not_found' }`; `reauth` → 401 `{ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' }`. Owner and repo must look like GitHub names before GitHub is asked (the transcript route's rule).
+- `viewer.failure` uses `failureKind` so the UI can tell a failed job (Retry) from a failed GitHub post (Reconnect).
+- `docs/why/chat-access-rules.md`: who can see and who can do what (spec §16), why GitHub is asked with the viewer's own token, the 5-minute cache and what it costs, why 404 for both; points to `chats/access.ts`, `chats/permissions.ts`.
+
+**Tests this task must include:**
+- `views.db.test.ts`: a chat with agent and GitHub points, a summary, system lines and a human note gives the expected `ChatView`; `items` are the newest 200 in ascending order with `hasOlder`; presence comes from the injected `clis`.
+- `chats.db.test.ts`: 404 for a missing chat and for no access (same body); **Review Focus 2:** 401 `reauth` when the viewer's GitHub sign-in needs renewing; owner/repo that aren't GitHub names → 404 without a GitHub call; `messages?before` pages backwards; `files` is asked once per head and again after a push.
+- `client.test.ts` (**M4**): a GitHub call that never answers rejects after the timeout with the "didn't answer" error (fake fetch honoring the abort signal).
+- `user-tokens` (**M5**): two concurrent `getUserToken` calls for a user whose token is expired make one refresh request, and both get the new token.
+- `fake-platform` and `reads` tests for `listPrFiles` (pagination, renamed files).
+
+### Task 9: Live publishing: commits, presence and progress reach the browser
+
+**Files:**
+- Create: `apps/server/src/ws/web-wire.ts` and `web-wire.db.test.ts`.
+- Modify: `apps/server/src/chats/apply-commands.ts` / `chats/dispatch.ts` (`DispatchEffects.timeline: { fromSeq: number; toSeq: number } | null`), `apps/server/src/ws/cli-hub.ts` (`onPresence`), `apps/server/src/main.ts`, `apps/server/test/e2e/harness.ts`, `apps/cli/src/daemon.ts` and `daemon.test.ts` (stage changes skip the throttle).
+
+**Interfaces:**
+- Consumes: `WebHub` (Task 7), `loadChatView`, `toTimelineItem` (Task 8), `loadInboxRow` (Task 5), `Dispatcher.onCommit`, `CliHub.onMessage`.
+- Produces: `CliHub.onPresence(listener: (e: { userId: string; tokenId: string; change: 'connected' | 'disconnected' }) => void)`. `wireWebHub({ webHub, dispatcher, cliHub, clis }): { stop(): void }`, which:
+  - after each commit with a timeline range, loads those items and calls `publishItems`; then, for every subscriber, publishes `chat.state` with that subscriber's own `ChatView` (permissions differ per viewer); then sends `inbox.upsert` to every participant's user with their rows;
+  - on presence change, sends `me.update` to that user, and re-publishes state and inbox rows for the chats where that user has a queued or running job;
+  - on `job.progress` from a CLI, looks up the job's chat (a small in-memory map from job id to chat id and login, filled from the database on a miss) and sends `job.progress` to that chat's subscribers.
+
+**Behavior:**
+- Publishing never runs inside the chat's lock and never throws into the dispatcher (errors are logged).
+- Bursts: several commits for one chat within 100 ms produce one `chat.state` per subscriber (debounced per chat), but every item is sent.
+- CLI: `progress(stage, text)` sends at once when `stage` differs from the last stage sent for that job; otherwise at most every 2 s, as before (spec §10).
+
+**Tests this task must include:**
+- A dispatch that appends two items: subscribers get one `chat.items` with both, then `chat.state`; participants get `inbox.upsert`; a viewer subscribed without being a participant gets items and state but no inbox row.
+- A CLI connecting and disconnecting sends `me.update` with `agentOnline` true then false, and re-publishes the chat where that person's job is queued (its status turns from "Waiting" to "working").
+- `job.progress` from a CLI reaches only that chat's subscribers, with the participant's login as `who`.
+- `daemon.test.ts`: `preparing` then `running_agent` 100 ms later sends both; two texts in the same stage within 2 s send one.
+
+### Task 10: The chat screen (read-only), and the transcript page retired
+
+**Files:**
+- Create: `apps/web/src/live/{socket.ts,apply.ts,progress.ts}` (+ tests), `apps/web/src/routes/Chat/{Chat.tsx,ChatHeader.tsx,RoundPips.tsx,Presence.tsx,Timeline.tsx,SystemItem.tsx,SummaryItem.tsx,HumanItem.tsx,PointCard.tsx,Snippet.tsx,ProgressLine.tsx,Banners.tsx,DetailsPanel.tsx,UntrustedCard.tsx,NotFound.tsx,*.module.css,*.test.tsx}`, `apps/web/src/components/{SeverityBadge,PointStatus,Toast}/…`, `apps/web/src/lib/{banner.ts,snippet.ts}` (+ tests), `apps/web/src/api/chat.ts`, `apps/web/e2e/chat-live.spec.ts`.
+- Modify: `apps/web/src/app.tsx`, `apps/web/src/routes/Shell/…` (the socket lives in the shell, one per tab).
+- Delete: `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx` and their tests (the SPA serves `/c/:owner/:repo/:number`; the access and 404 cases they covered now live in Task 8's tests).
+
+**Interfaces:**
+- Consumes: `ChatView`, `TimelineItem`, `ServerToWeb` (protocol), `useMe`.
+- Produces: `class LiveSocket { constructor(opts: { url: string; onMessage(msg: ServerToWeb): void; backoff?: Backoff }); start(); stop(); subscribe(chatId: string, afterSeq: number); unsubscribe(chatId) }` (reconnects with 1 s doubling to 30 s plus jitter, reset on open; re-subscribes every open chat with its current `lastSeq`). `applyServerMessage(queryClient, msg)` writes into `['chat', id]`, `['inbox']`, `['me']`. `mergeItems(existing: TimelineItem[], incoming: TimelineItem[]): TimelineItem[]` (dedupe by `seq`, sorted). `useProgress(chatId) → { who, stage, text } | null` (cleared on the next `chat.state` where nobody is working). `chatBanner(view: ChatView, me: WebMe): Banner` with `Banner = { kind: 'ready_author' | 'ready_reviewer' | 'escalated' | 'waiting' | 'failed_job' | 'failed_post' | 'github_expired' | 'cap' | 'repo_not_linked' | 'none'; … }`. `snippetLines(point: PointView): { n: number; text: string; highlighted: boolean }[]`.
+
+**Behavior** (handoff §2, §3, §10, both themes):
+- Header: title, role chip, the Auto switch **shown read-only** (its state; toggling arrives in Task 18), "Open on GitHub ↗", details toggle; row 2 with repo #n, branches, round pips (amber on the last round) and "Round 2 of 3", presence per agent (online dot, "offline since 18:04" ring, ping while working). Phone: back arrow (44×44) and the header collapsing to one line after 48 px of scroll, keeping the Auto switch.
+- Banners from `chatBanner` (one at a time, priority: github_expired, escalated, failed, cap, repo_not_linked, waiting, ready), with their text only: in W3 the action buttons (Resolve, Continue, Retry, Review) aren't rendered; Task 13 adds them. Links that change nothing ("Approve on GitHub ↗", "Reconnect", the copyable command chips) are there from W3. Escalation banner `role=alert`, the others `role=status`.
+- Timeline (max 780 px): system lines with glyphs, agent summaries with severity counts, human messages (own in `--bubble`), point cards (expanded; resolved collapsed by default, click to expand), the live progress line (`role=status aria-live=polite`). "Load earlier" pages with `messages?before`.
+- Point card: severity badge (bars), category chip, `P1`, status glyph + word, `path:line` link to GitHub, title, body, the snippet with highlighted lines (accent line numbers, diamond in the gutter), the thread (replies, decisions, outcome tags, commit links).
+- Details panel (desktop ≥1180 px by default, toggled): files (`/files`), participants, team rules (including the rules error chip "! `.nitpilot.yml` has an error, using defaults"), the summary comment link.
+- Untrusted card (first-time contributor): eyebrow, title, body, file stats from `/files`; the **Review** button arrives in Task 13.
+- Read access errors: 404 → "Nothing here" with a link to the inbox; 401 reauth → the GitHub-expired banner with Reconnect; `chat.error` while open does the same.
+- Opening a chat marks it read up to `lastSeq` (`POST read`, debounced 1 s; again as new items arrive while the tab is visible).
+
+**Tests this task must include:**
+- `apply.test.ts` / **Review Focus 1:** `mergeItems` with an overlapping and an out-of-order batch gives one ordered list; `applyServerMessage` updates the chat and inbox caches.
+- `socket.test.ts`: a dropped socket reconnects with backoff and re-subscribes with the latest `lastSeq` (fake WebSocket class).
+- `banner.test.ts`: one case per banner kind, and the priority order.
+- `snippet.test.ts`: highlighted lines for a point on line 48 in a snippet starting at 43; `LEFT` points; a null snippet.
+- `PointCard.test.tsx`: expanded and collapsed, the four statuses, outcome tags; `Chat.test.tsx`: renders a fixture `ChatView`, shows "Nothing here" on 404 and the reconnect banner on 401 (**Review Focus 2**).
+- Playwright `chat-live.spec.ts`: open a chat, trigger a review through the control API, and see the summary and point cards appear and the progress line show without reloading.
+- The server's old transcript tests are deleted with their files; `npm run test:e2e` still passes (the summary comment's link is unchanged).
+
+---
+
+## Milestone W4: Actions
+
+W4 lets people drive a chat from the browser: notes to the agents, Resolve and Continue on escalated points (with the extra round), Retry, and Review on an outside contributor's PR.
+
+**Files at the end of W4:**
+```
+apps/server/src/
+  engine/{types,decide,points,advance,state}.ts   point_resolve, point_continue, extraRounds, roundLimit
+  chats/{load,save}.ts                            extraRounds; save writes only changed point fields (M2)
+  chats/permissions.ts                            write rules
+  http/routes/chat-actions.ts                     notes, resolve, continue, review, retry (cookie)
+  prisma: PrChat.extraRounds
+apps/web/src/
+  routes/Chat/{Composer,EscalatedBanner,FailedBanner,…}.tsx
+  api/actions.ts                                  useNote, useResolve, useContinue, useReview, useRetry
+  components/Toast/…                              useToast
+```
+
+### Task 11: Engine: Resolve, Continue and the extra round
+
+**Files:**
+- Create: `apps/server/src/engine/human.ts` and `human.test.ts`, a migration (`PrChat.extraRounds Int @default(0)`).
+- Modify: `apps/server/src/engine/{types.ts,decide.ts,advance.ts,state.ts,summary.ts}`, `apps/server/src/engine/test-builders.ts`, `apps/server/src/chats/load.ts`, `apps/server/src/chats/save.ts` (**M2**), `apps/server/src/chats/{inbox.ts,views.ts}` (`maxRounds` now adds `extraRounds`) and their tests, `apps/server/prisma/schema.prisma`.
+
+**Interfaces:**
+- Produces: `DomainEvent` gains `{ type: 'point_resolve'; who: Person; point: number }` and `{ type: 'point_continue'; who: Person; point: number }`. `ChatState.extraRounds: number`. `roundLimit(ctx): number` = `ctx.rules.max_rounds + ctx.chat.extraRounds` (`engine/state.ts`), used by `advance` and wherever `max_rounds` was read for the limit.
+
+**Behavior:**
+- `point_resolve`: only an `escalated` point raised by `who` with origin `agent` changes: → `resolved`, escalation reason cleared, system line "maya resolved P1"; then `advance` (which can reach Ready, notifying reviewers as today). Anything else changes nothing (no line, no commands): the route turns "nothing changed" into a 409 (Task 12).
+- `point_continue`: an `escalated` point, by the author or its raiser: → `open`, reason cleared, system line "maya let the agents continue on P1"; if `chat.addressPasses >= roundLimit` before the change, `extraRounds += 1` and the line says "· one more round"; then `advance` (which queues the address job, as auto or draft per the author's switch). A reopened `always_escalate` point stays open (the category check only runs when a point is raised).
+- Attention: `refreshAttention` already clears `decision` when no escalated points remain.
+- The summary comment shows the limit with extra rounds ("round 4 of 4").
+- **M2:** `saveChatState` updates a point row only with the fields that changed between the loaded and the new state, so a field nothing touched (a thread link written by another path) is never overwritten with a stale value.
+
+**Tests this task must include:**
+- Resolve: by the raiser → resolved and Ready when nothing else is open; by the author, by another reviewer, on an open point, on a GitHub point → no change.
+- Continue: below the limit → open, an address job queued, no extra round; at the limit (`addressPasses == max_rounds`) → `extraRounds` 1 and the address job queued instead of re-escalating at once; a security point continued is not re-escalated by the next address pass; the author's Auto off → the queued job is a draft.
+- A disagreement continued and declined again escalates again (`disagreement`), and a second Continue grants another round only if the limit is reached again.
+- `save.db.test.ts` (**M2**): a point whose `githubThreadRootId` was set by another write between load and save keeps it after an unrelated event.
+
+### Task 12: Write routes and the access rules for actions
+
+**Files:**
+- Create: `apps/server/src/http/routes/chat-actions.ts` and `chat-actions.db.test.ts`.
+- Modify: `apps/server/src/chats/permissions.ts` and `permissions.test.ts` (write rules), `apps/server/src/chats/people.ts` (people in the new events), `apps/server/src/http/routes/cli.ts` (the retry route moves to `chat-actions.ts` behind `requireUser`, keeping the CLI's answers), `apps/server/src/http/app.ts`, `packages/protocol/src/web-api.ts` (`NoteRequest`, `ActionResponse`), `apps/server/src/chats/views.ts` (`permissionsFor` fills `Permissions`).
+
+**Interfaces:**
+- Consumes: `requireUser`, `requireSameOrigin` (Task 3), `readAccess` (Task 7), `failureKind`, the engine events (Task 11).
+- Produces: `type ChatAction = { kind: 'note' } | { kind: 'resolve'; point: number } | { kind: 'continue'; point: number } | { kind: 'review' } | { kind: 'retry' } | { kind: 'auto'; role: Role } | { kind: 'draft'; jobId: string }`. `can(viewer: { githubId: string; userId: string }, facts: PermissionFacts, action: ChatAction): boolean` where `PermissionFacts = { participants: { githubId; role; userId: string | null; requested: boolean; attention: Attention }[]; points: { number; raisedBy; origin; status }[]; drafts: { jobId; participantGithubId }[]; closed: boolean }`. `permissionsFor(viewer, facts): Permissions`. Routes (all `requireUser` + `requireSameOrigin` + `readAccess` + `can`, then `withPeople` and `dispatch`): `POST /api/chats/:id/notes { body }` (1–4 000 characters) → `human_note`; `POST /api/chats/:id/points/:n/resolve`; `POST /api/chats/:id/points/:n/continue`; `POST /api/chats/:id/review` → `manual_review`; `POST /api/chats/:id/retry` (cookie or CLI token). Each answers 200 `{ ok: true }`, 403 `{ code: 'forbidden', message }` when `can` says no, and 409 `{ code: 'conflict', message }` when the engine changed nothing (the message says why in plain words: "P1 isn't escalated any more.", "Someone already resolved P1.").
+
+**Behavior:**
+- `can` is the spec §16 list, nothing more; a closed chat allows nothing.
+- Retry: a `github_post` failure → 409 with "Reconnect GitHub" wording (the CLI text stays as Plan 1b had it for the CLI); a retry while that person's job is already queued → 409 "Your agent is already on it." (the deferred concurrent-retries minor).
+- `docs/why/chat-access-rules.md` gains the write table.
+
+**Tests this task must include:**
+- `permissions.test.ts`: the §16 table as rows (note by author / reviewer / reviewer not on Nitpilot / non-participant; resolve by raiser / author / other reviewer / on a GitHub point; continue by author / raiser / other; review by requested / unrequested reviewer; retry/auto/draft only your own; anything on a closed chat).
+- `chat-actions.db.test.ts`: each route's happy path dispatches the right event and the item appears in the timeline; a non-participant with read access → 403; no read access → 404; another Origin → 403; **Review Focus 3:** two Resolve requests for the same point → one 200 and one 409; Continue on a point resolved meanwhile → 409; a note of 4 001 characters → 400.
+- The CLI's `retry` tests keep passing against the moved route.
+
+### Task 13: Composer, actions and toasts in the chat
+
+**Files:**
+- Create: `apps/web/src/routes/Chat/{Composer.tsx,EscalatedBanner.tsx,FailedBanner.tsx,ReadyBanner.tsx,WaitingBanner.tsx,EdgeBanners.tsx,*.module.css,*.test.tsx}`, `apps/web/src/api/actions.ts`, `apps/web/src/components/Toast/{Toast.tsx,useToast.ts}`, `apps/web/e2e/escalation.spec.ts`.
+- Modify: `apps/web/src/routes/Chat/{Banners.tsx,UntrustedCard.tsx,Chat.tsx}`.
+
+**Interfaces:**
+- Consumes: `Permissions`, `ChatView`, `chatBanner` (Task 10), the routes (Task 12).
+- Produces: `useNote(chatId)`, `useResolve(chatId)`, `useContinue(chatId)`, `useReview(chatId)`, `useRetry(chatId)`: TanStack mutations that resolve when the server answers; a 409/403 becomes an error toast with the server's message. `useToast() → { show(text, opts?: { action?: { label; onClick }; error?: boolean }) }`.
+
+**Behavior** (handoff §2 banners and composer, toasts):
+- Composer: placeholder "Message the agents…", Send muted when empty and accent with text, ↵ sends and ⇧↵ adds a line, the hint "Notes are included in the agents' next round", toast "Sent. Included in the agents' next round." Read-only (centered `--fg3` text) when `permissions.note` is false: merged/closed PR, not a participant, or GitHub expired ("Reconnect GitHub to send notes as yourself.").
+- Escalated banner: one row per escalated point with **Resolve** (only if in `permissions.resolve`) and **Continue** (only if in `permissions.continue`); buttons show pending, then the chat updates through the socket.
+- Failed banner: `viewer.failure === 'job'` → "Your agent couldn't finish" with the reason and **Retry**; `'github_post'` → "Posting to GitHub failed" with **Reconnect GitHub**, never Retry.
+- Ready banners: author "Waiting for Leo's approval" with "View on GitHub ↗"; reviewer "Ready for your approval" with the primary "Approve on GitHub ↗" (links to the PR's files view). Waiting banner with the copyable `nitpilot start` chip; cap and repo-not-linked banners from the handoff's edge states.
+- Untrusted card: **Review** when `permissions.review`; when the viewer's agent is offline it still queues (the system line plus a "Waiting" pill come back through the socket).
+- No optimistic updates: what changes on screen comes from the server.
+
+**Tests this task must include:**
+- `Composer.test.tsx`: Enter sends, Shift+Enter makes a new line, empty can't send, read-only states show their text.
+- `EscalatedBanner.test.tsx`: Resolve only for points in `permissions.resolve`; a 409 shows the server's message as an error toast (**Review Focus 3**).
+- `FailedBanner.test.tsx`: Retry for a job failure, Reconnect for a GitHub post failure.
+- Playwright `escalation.spec.ts`: the fake agent's security scenario escalates P1; Continue → a round starts; on the next escalation Resolve → the "Ready for your approval" banner.
+
+---
+
+## Milestone W5: Auto and drafts
+
+W5 makes Auto real: settings move to the server (CLI protocol v2), people switch Auto per chat, and with Auto off the agent's work waits as a draft that can be sent (a reviewer's points, or an author's commit pushed by a publish job) or discarded.
+
+**Files at the end of W5:**
+```
+packages/protocol/src/{enums,cli-messages,job-bundle,job-result,web-api}.ts   protocol v2
+apps/server/src/
+  engine/{types,jobs,advance,results,drafts,decide,state}.ts   auto_changed, draft_send, draft_discard, publish, byHand
+  chats/{load,save,apply-commands,people,views,activity}.ts
+  jobs/{assign,bundle}.ts                     publish jobs go to their device only
+  ws/{cli-hub,handlers}.ts                    welcome.settings, settings, usedToday
+  http/routes/{settings,chat-drafts}.ts       PUT /api/me/settings, PUT auto, drafts send/discard
+  prisma: User.{autoReview,autoAddress,dailyJobCap}, Participant.byHand, Job.draftOfId
+apps/cli/src/
+  runner/{publish,draft}.ts                   publish a draft; describe a draft; prune old draft refs
+  runner/{execute,push}.ts, daemon.ts, config/config.ts, commands/doctor.ts
+apps/web/src/routes/Chat/{AutoSwitch,DraftCard,DiffView}.tsx
+docs/why/drafts-and-publish-jobs.md
+```
+
+### Task 14: CLI protocol v2 and settings on the server
+
+**Files:**
+- Create: a migration (`User.autoReview Boolean @default(true)`, `User.autoAddress Boolean @default(true)`, `User.dailyJobCap Int @default(40)`), `apps/server/src/http/routes/settings.ts` and `settings.db.test.ts`.
+- Modify: `packages/protocol/src/{envelope.ts (PROTOCOL_VERSION = 2), enums.ts (JobType adds 'publish'), cli-messages.ts (Hello without defaults; Welcome.settings; Ping.usedToday; new Settings message in ServerToCli), job-bundle.ts (a publish variant), job-result.ts (JobResult.draft), web-api.ts (Settings, WebMe.settings, WebMe.usedToday)}` and their tests; `apps/server/src/ws/cli-hub.ts` (welcome carries the user's settings; `CliConnection.usedToday`; `sendSettings(userId, settings)`), `apps/server/src/ws/handlers.ts` and `jobs/leases.ts` (read `usedToday` from ping), `apps/server/src/http/routes/me.ts`; `apps/cli/src/{daemon.ts,config/config.ts,state.ts,commands/doctor.ts}` and their tests; `apps/server/scripts/fake-cli.ts`; the e2e harness if it builds hellos.
+
+**Interfaces:**
+- Produces (protocol): `Settings = z.object({ autoReview: z.boolean(), autoAddress: z.boolean(), dailyJobCap: z.number().int().min(5).max(200) })`. `Welcome.d.settings: Settings`. `Ping.d.usedToday: number`. `SettingsMessage = message('settings', Settings)` in `ServerToCli`. `JobBundle` becomes `z.discriminatedUnion('type', [AgentJobBundle /* review | re_review | address, as today */, PublishBundle])` with `PublishBundle = { jobId, attempt, type: 'publish', pr: { repoFullName, number, headRef, url }, git: { baseCloneUrl, fetchRef, headRepoPath, headBranch }, draft: { jobId: string; sha: string; from: string } }`. `JobResult.draft: { sha: string; from: string; files: { path; adds; dels }[]; diff: string | null } | null` (optional for old rows: `.nullable().default(null)`). `MAX_DRAFT_DIFF_BYTES = 200 * 1024`.
+- Produces (server): `PUT /api/me/settings { Settings }` → 200 `Settings`; it saves and calls `cliHub.sendSettings(userId, settings)`; `WebMe.settings`, `WebMe.usedToday` (sum of `usedToday` over the person's connected CLIs).
+- Produces (CLI): the daemon keeps `settings` from `welcome` and each `settings` message, takes the daily cap from it (`counter.take(settings.dailyJobCap)`), and sends `usedToday` (the counter's value) in every ping. `PersonalConfigSchema` accepts `auto` and `dailyJobCap` as deprecated keys and drops them; `doctor` prints "auto and dailyJobCap in config.json are ignored: set them in the web app's Settings page." when they're present.
+
+**Behavior:**
+- A CLI speaking protocol 1 is closed with 4426 and the "upgrade" reason (existing check); the e2e harness and the stand-in CLI script speak 2.
+- `JobType` gains `publish` here, but nothing queues one until Task 16: the assigner's `MODE_FOR` table maps it to `null` (no agent needed) and skips such jobs until Task 16 routes them, so the type change compiles everywhere without new behavior.
+- `usedToday` resets at the CLI's own midnight (the existing `state.json` counter).
+- Nothing in the engine changes in this task: Auto defaults reach the engine in Task 15.
+
+**Tests this task must include:**
+- Protocol round trips for every changed schema; a v1 hello is refused; a publish bundle and an agent bundle both parse; `JobResult` without `draft` still parses (old rows).
+- `settings.db.test.ts`: PUT validates (cap 4 and 201 → 400), saves, and a connected CLI receives `settings`; another Origin → 403.
+- `cli-hub.db.test.ts`: welcome carries the user's settings; a ping's `usedToday` shows up in `/api/me`.
+- CLI: the cap comes from `welcome` (a cap of 5 turns the sixth job down), a `settings` message changes it while running, pings carry `usedToday`; an old `config.json` with `auto` and `dailyJobCap` loads, and `doctor` says where they moved.
+
+### Task 15: Engine: Auto, drafts, publish and Discard
+
+**Files:**
+- Create: `apps/server/src/engine/drafts.ts` and `drafts.test.ts`, `apps/server/src/engine/auto.test.ts`, a migration (`Participant.byHand Boolean @default(false)`, `Job.draftOfId String?`).
+- Modify: `apps/server/src/engine/{types.ts,decide.ts,jobs.ts,advance.ts,results.ts,state.ts,lifecycle.ts,external.ts,test-builders.ts}` and their tests; `apps/server/src/chats/people.ts` (fills `Person.autoDefaults` from `User`), `apps/server/prisma/schema.prisma`.
+
+**Interfaces:**
+- Produces: `DomainEvent` gains `{ type: 'auto_changed'; who: Person; role: Role; on: boolean }`, `{ type: 'draft_send'; who: Person; jobId: string }`, `{ type: 'draft_discard'; who: Person; jobId: string }`. `Person.autoDefaults?: { review: boolean; address: boolean }`. `Command` gains `{ type: 'set_apply_state'; jobId: string; applyState: 'pending' | 'draft' | 'discarded' }`, and `enqueue_job` gains `draftOfId: string | null` and `jobType: 'publish'`. `ChatState.drafts: DraftState[]` with `DraftState = { jobId; participantGithubId; role: Role; jobType: JobType; headSha: string; result: JobResult }`. `ParticipantState.byHand: boolean`. `JobView` gains `draftOfId: string | null`.
+
+**Behavior** (spec §9 "Auto" and "Drafts"):
+- New participants on Nitpilot get `auto` from `autoDefaults` (reviewer → `review`, author → `address`); without defaults (not on Nitpilot) `auto` stays true, as the column default.
+- `auto_changed`: only for that person's own role; sets `auto`, a system line ("maya turned Auto-fix off"); their queued (not running) job gets `set_apply_state` to match `autoFor`; turning Auto **on** clears `byHand`, then `advance`.
+- A person with a waiting draft gets no other job in that chat: `startReview` and the author's branch of `advance` both hold while `attention === 'drafts'` (the author case is the fix found in the code).
+- `draft_send` (only the owner, only a waiting draft):
+  - reviewer draft → `set_apply_state applied` and the stored result goes through the same path as `onJobCompleted`'s applied branch (points raised, decisions applied, `lastReviewedSha`, single-player `post_review`), attention cleared, `advance`;
+  - author draft → `enqueue_job { jobType: 'publish', draftOfId }` for the author; attention stays `drafts` until the publish job ends; system line "maya is sending the drafted fixes".
+- Publish job completed with `push` → the draft's stored address result is applied exactly like `applyAddress`, with the push's commit; the draft becomes `applied`; attention cleared.
+- Publish job failed with `branch_moved` or `setup_failed` → not retried: the draft becomes `discarded`, system line "The drafted fixes are out of date: the branch moved" (or "…the draft commit is gone from that computer"), attention cleared, and the chat carries on (`advance`). Other publish failures follow the usual retry rules (`RUN_AGAIN_NOW` doesn't apply to publish jobs).
+- `draft_discard` (only the owner, only a waiting draft; also allowed while its publish job is queued, which cancels that job): `set_apply_state discarded`, attention cleared; reviewer → `lastReviewedSha = draft.headSha`, nothing raised; author → `byHand = true`. `advance` doesn't queue an address job while the author is `byHand`; `byHand` clears on a new trusted GitHub comment, a push that isn't ours, `point_continue`, or Auto turned on.
+
+**Tests this task must include** (table tests, one per row):
+- Defaults: a reviewer whose `review` default is false gets a draft job on their first review.
+- `auto_changed` flips a queued job's apply state; a running job is left alone; someone else's role can't be switched (no change).
+- The author with a waiting draft gets no second address job when a new trusted comment arrives.
+- Reviewer Send → points in the chat (agent-to-agent) / one `post_review` (single-player) and then the author's address job.
+- Author Send → a publish job; its completion applies the replies with the pushed commit and starts the re-review; `branch_moved` → draft discarded, out-of-date line, `advance`.
+- **Review Focus 3:** a second `draft_send` for the same draft, a `draft_send` after Discard, and a Discard after the publish job completed change nothing; Discard while the publish job is queued cancels it.
+- Discard (reviewer) → counts as reviewed, Ready reachable without new points; Discard (author) → no new address job on the next unrelated event, but a new trusted comment, Continue, or Auto on starts one: **Auto off + Discard never loops.**
+
+### Task 16: Server plumbing for drafts: publish jobs, routes and activity
+
+**Files:**
+- Create: `apps/server/src/http/routes/chat-drafts.ts` and `chat-drafts.db.test.ts`, `docs/why/drafts-and-publish-jobs.md`.
+- Modify: `apps/server/src/chats/{load.ts,save.ts,apply-commands.ts,views.ts,activity.ts}`, `apps/server/src/jobs/{assign.ts,bundle.ts}`, `apps/server/src/ws/handlers.ts`, `apps/server/src/chats/permissions.ts` (`draft` and `auto` actions), their tests.
+
+**Interfaces:**
+- Consumes: the engine changes (Task 15), the publish bundle (Task 14).
+- Produces: `loadChat` fills `ChatState.drafts` (jobs with `applyState: 'draft'` and `status: 'done'`, with their results) and `byHand`; `applyCommands` handles `set_apply_state` and `enqueue_job` with `draftOfId`. No new column pins the device: the assigner reads the draft job's `cliTokenId` through `draftOfId`. The assigner gives a `publish` job only to the connection whose `tokenId` equals the draft job's `cliTokenId`, with the repo linked, ignoring agent modes. `buildJobBundle` builds a `PublishBundle` for publish jobs. `deriveActivity` gets, per job, `onlyTokenId: string | null`: a publish job waits as "offline" when *that* device isn't connected, even if another of the person's devices is. Routes: `PUT /api/chats/:id/auto { role, on }` → `auto_changed`; `POST /api/chats/:id/drafts/:jobId/send` → `draft_send`; `POST /api/chats/:id/drafts/:jobId/discard` → `draft_discard` (same checks and answers as Task 12). `ChatView.drafts: DraftView[]` with `DraftView = { jobId; owner: string; role: Role; jobType: JobType; headSha; createdAt; result: JobResult; sending: boolean }`; `Permissions.auto` and `Permissions.drafts` filled.
+
+**Behavior:**
+- A job result arriving for a draft address job stores `result.draft` as sent by the CLI (the engine doesn't read it; the web app shows it).
+- The drafts explainer: what a draft is, why the author's commit stays on the laptop (the server never touches code, §7), how a publish job reuses leases, fencing and acks, what "out of date" means, and why Discard doesn't loop; points to `engine/drafts.ts`, `jobs/assign.ts`, `apps/cli/src/runner/publish.ts`.
+
+**Tests this task must include:**
+- The assigner gives a publish job to the draft's device only; with only the person's *other* device online it stays queued; **Review Focus 4:** the activity says "waiting, offline since …" for that device even though another device is online.
+- `chat-drafts.db.test.ts`: send and discard by the owner; by someone else → 403; **Review Focus 3:** Send twice → 200 then 409 "That draft is already being sent."; Send after Discard → 409; Auto switch for a role you don't have → 403; another Origin → 403.
+- A publish job's `job.complete` with a push applies the stored replies (handlers + engine through the real dispatcher); `job.fail branch_moved` marks the draft out of date.
+- `ChatView` lists waiting drafts with their results for the owner and for other viewers (others see them as "Leo's agent has drafts waiting" without the actions).
+
+### Task 17: The CLI publishes drafts and describes them
+
+**Files:**
+- Create: `apps/cli/src/runner/publish.ts` and `publish.test.ts`, `apps/cli/src/runner/draft.ts` and `draft.test.ts`.
+- Modify: `apps/cli/src/runner/{execute.ts,push.ts}`, `apps/cli/src/commands/start.ts` (prune old draft refs at start), `apps/cli/src/daemon.ts` (a publish bundle runs no agent and doesn't count toward the daily cap), their tests; `apps/server/test/e2e/scenarios.e2e.test.ts` (a draft scenario).
+
+**Interfaces:**
+- Consumes: `PublishBundle`, `JobResult.draft`, `MAX_DRAFT_DIFF_BYTES` (Task 14), `safeGit`, `pushTarget`, `JobFailure` (Plan 1b).
+- Produces: `publishDraft(bundle: PublishBundle, ctx: { clonePath: string; hooksDir: string; pushing(from, to): Promise<'applied' | 'stale'>; signal: AbortSignal; env }): Promise<{ push: PushInfo }>`. `describeDraft(place: GitPlace, from: string, to: string): Promise<NonNullable<JobResult['draft']>>` (`git diff --numstat -z from to` for files, `git diff --no-ext-diff --no-textconv --no-color from to` for the patch, null when over the cap). `pruneOldDraftRefs(repoPaths: string[], hooksDir, now: Date): Promise<number>` (draft refs whose commit's committer date is older than 14 days).
+
+**Behavior** (spec §11 draft mode and publish jobs):
+- Draft address job: after the commit, `update-ref refs/nitpilot/drafts/<job>` as today, then `describeDraft(head, draftSha)`; the result carries `draft` and `push: null`.
+- Publish job: no worktree and no agent. `rev-parse refs/nitpilot/drafts/<draft job>` in the linked clone must equal `draft.sha`, else `JobFailure('setup_failed', false, 'The drafted commit isn't on this computer any more…')`; `pushing(draft.from, draft.sha)` (`stale` → `stale_head`, retryable); `git push --porcelain --no-verify -- <remote> refs/nitpilot/drafts/<job>:refs/heads/<headBranch>`, never forced, non-fast-forward → `branch_moved`; then `update-ref -d` the draft ref; complete with `{ summary: '', points: [], decisions: [], replies: [], push: { from, to }, draft: null }`.
+- At `nitpilot start`, after `cleanUpWorktrees`, `pruneOldDraftRefs` runs on every linked clone; failures are logged, never fatal.
+
+**Tests this task must include** (real git in the sandbox fixtures):
+- A draft address job's result names the commit, lists files with counts, and carries the patch; a commit with a 300 KB change has `diff: null` and the file list.
+- Publish: pushes the draft to the branch (the bare repo's branch tip is the draft sha), deletes the ref, reports the push; **Review Focus 4:** a missing ref and a ref that moved → `setup_failed`, not retryable, nothing pushed; someone pushed meanwhile → `branch_moved`, nothing forced; a `stale` ack → nothing pushed.
+- Pruning removes only draft refs older than 14 days and leaves other refs alone.
+- e2e: Auto off for the author → the address result waits as a draft; Send (route) → the publish job runs on the author's CLI and the re-review follows.
+
+### Task 18: Auto switch and draft cards in the chat
+
+**Files:**
+- Create: `apps/web/src/routes/Chat/{AutoSwitch.tsx,DraftCard.tsx,DiffView.tsx,*.module.css,*.test.tsx}`, `apps/web/src/api/drafts.ts`, `apps/web/e2e/drafts.spec.ts`.
+- Modify: `apps/web/src/routes/Chat/{ChatHeader.tsx,Timeline.tsx}`.
+
+**Interfaces:**
+- Consumes: `ChatView.drafts`, `Permissions.auto`, `Permissions.drafts`, the routes (Task 16).
+- Produces: `useAutoSwitch(chatId)`, `useSendDraft(chatId)`, `useDiscardDraft(chatId)`; `<AutoSwitch role on disabledReason={'outside_contributor' | 'team_review' | 'team_address' | null} onToggle />`; `<DraftCard draft={DraftView} canAct={boolean} />`; `<DiffView diff={string} files={...} />` (unified diff split by file, +/- lines colored with `--ok`/`--red`, each file collapsible, long files collapsed by default).
+
+**Behavior:**
+- Auto switch (handoff §2): "Auto-review" for reviewers, "Auto-fix" for the author, `role=switch` + `aria-checked`, 30 px pill with the 30×18 track. **§16 fix:** disabled with **one tooltip per reason**: "Off for PRs from outside contributors." when the PR isn't trusted (reviewer side), "Your team turned off auto-review in .nitpilot.yml." / "…auto-fix…" when the team forbids it. Toggling shows a toast ("Auto-fix is off. Your agent's work will wait as drafts.").
+- Draft cards in the timeline where the draft's job finished: a reviewer draft shows its points as point cards marked **Draft**, with the summary; an author draft shows each reply (fixed / answered / declined with its comment) and the diff (or the file list and a copyable `git show <sha>` command when `diff` is null). **Send** (primary) and **Discard** (outlined) for the owner; "Sending…" while the publish job runs; others see the card without buttons.
+- An out-of-date draft disappears with the system line from the server; nothing on the client decides that.
+
+**Tests this task must include:**
+- `AutoSwitch.test.tsx`: label per role, `aria-checked`, each disabled reason shows its own tooltip text (and never both).
+- `DraftCard.test.tsx`: reviewer and author variants, a null diff shows the file list and the command, buttons only with `canAct`, "Sending…" state.
+- `DiffView.test.tsx`: two files, additions and deletions marked, collapse toggles.
+- Playwright `drafts.spec.ts`: turn Auto-fix off, a review comes in, the author's draft card appears with its diff, Send → the pushed commit's system line and the re-review start.
+
+---
+
+## Milestone W6: Web Push and PWA
+
+W6 sends notifications as Web Push to every browser and device a person subscribed, with the CLI as fallback, and makes the web app installable.
+
+**Files at the end of W6:**
+```
+apps/server/src/
+  tasks/push-notifier.ts         PushNotifier (web-push), FallbackNotifier
+  http/routes/push.ts            POST/DELETE /api/push/subscriptions
+  lib/env.ts                     VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+  scripts/vapid-keys.ts          npm run vapid:keys
+  prisma: PushSubscription
+apps/web/
+  public/sw.js, public/manifest.webmanifest, public/icons/*
+  scripts/render-icons.ts        Playwright renders the SVG icon to PNGs (run by hand, output committed)
+  src/push/{register.ts,subscribe.ts}, src/components/{InstallCard,IosHomeScreenSheet}/…
+docs/why/web-push.md, docs/why/service-workers-and-pwa.md
+```
+
+### Task 19: Web Push on the server, with the CLI as fallback
+
+**Files:**
+- Create: `apps/server/src/tasks/push-notifier.ts` and `push-notifier.db.test.ts`, `apps/server/src/http/routes/push.ts` and `push.db.test.ts`, `apps/server/scripts/vapid-keys.ts`, a migration (`PushSubscription`), `docs/why/web-push.md`.
+- Modify: `apps/server/package.json` (`web-push`, `@types/web-push`, `vapid:keys` script), `apps/server/src/lib/env.ts` and `.env.example` (VAPID variables, optional: push is off without them), `apps/server/src/tasks/notifier.ts` (`Notifier.notify` returns who was reached), `apps/server/src/tasks/cli-notifier.ts`, `apps/server/src/main.ts`, `apps/server/src/http/routes/me.ts` (`WebMe.push`), `packages/protocol/src/web-api.ts` (`PushSubscriptionRequest`, `WebMe.push`).
+
+**Interfaces:**
+- Produces: model `PushSubscription { id, userId, endpoint String @unique, p256dh, auth, label, failCount Int @default(0), createdAt, updatedAt }`. `type PushSend = (sub: { endpoint; keys: { p256dh; auth } }, payload: string) => Promise<{ ok: true } | { ok: false; gone: boolean; error: string }>` (production: `web-push`'s `sendNotification` with the VAPID details, a 404/410 status → `gone`); `class PushNotifier implements Notifier { constructor(send: PushSend) }`; `class FallbackNotifier implements Notifier { constructor(primary: Notifier, fallback: Notifier) }` (the fallback gets only the user ids the primary didn't reach). `Notifier.notify(n): Promise<{ reached: string[] }>`. Payload: `{ title, body, url, tag: chatId }`, from the notify task's existing titles split into title and body per the handoff's §8 copy. `POST /api/push/subscriptions { endpoint, keys: { p256dh, auth }, label }` (upsert by endpoint; an endpoint owned by another user moves to this one), `DELETE /api/push/subscriptions { endpoint }`. `WebMe.push = { vapidPublicKey: string | null; subscribed: boolean }` (`subscribed`: this user has any subscription).
+
+**Behavior:**
+- Each subscription is sent separately; one success reaches the user. `gone` → the row is deleted; another error adds 1 to `failCount`, and a row at 5 failures in a row is deleted (a success resets it).
+- A send error never fails the notify task for the others; the task fails (and retries) only if the database fails.
+- No VAPID keys configured → `PushNotifier` reaches nobody, so every notification goes to the CLI as in Plan 1.
+- `docs/why/web-push.md`: what a push service is, what VAPID keys prove, why the payload is encrypted, what 410 means, and the push-first-CLI-fallback rule; points to `tasks/push-notifier.ts`.
+
+**Tests this task must include:**
+- **Review Focus 5:** a user whose only subscription answers 410 → the row is deleted and the CLI gets that same notification; a user with one working and one gone subscription → push reaches them, the CLI gets nothing; a user with no subscription → CLI only; never both for one user.
+- `failCount` grows on errors, resets on success, deletes at 5.
+- Routes: subscribe, re-subscribe the same endpoint (no duplicate), move an endpoint to another user, unsubscribe; another Origin → 403; `WebMe.push.vapidPublicKey` is null without keys.
+
+### Task 20: Service worker, manifest, icons, subscribing and installing
+
+**Files:**
+- Create: `apps/web/public/sw.js`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/{icon.svg,icon-192.png,icon-512.png,maskable-512.png,apple-touch-icon.png}`, `apps/web/scripts/render-icons.ts`, `apps/web/src/push/{register.ts,subscribe.ts}` (+ tests), `apps/web/src/sw.test.ts` (loads `public/sw.js` with a fake `self`), `apps/web/src/components/{InstallCard,IosHomeScreenSheet}/…`, `docs/why/service-workers-and-pwa.md`.
+- Modify: `apps/web/index.html` (manifest link, `theme-color` #16707f, apple-touch-icon, `apple-mobile-web-app-capable`), `apps/web/src/main.tsx` (register the service worker), `apps/web/src/routes/Shell/…` (install card and iOS sheet).
+
+**Interfaces:**
+- Consumes: `WebMe.push.vapidPublicKey`, the push routes (Task 19).
+- Produces: `registerServiceWorker(): Promise<ServiceWorkerRegistration | null>`; `pushState(): Promise<'unsupported' | 'needs_home_screen' | 'denied' | 'off' | 'on'>`; `turnPushOn(vapidKey): Promise<void>` (asks permission, `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`, posts it with a label from the user agent); `turnPushOff(): Promise<void>`. `sw.js` handles `push` (shows `title`/`body`, `tag` = chat id so a chat's notifications replace each other, `data.url`) and `notificationclick` (focuses a tab already on that URL, else opens it).
+
+**Behavior** (handoff §8, §9):
+- Manifest: name and short name from `BRAND`, `start_url: '/'`, `display: 'standalone'`, `theme_color` and `background_color` #16707f, icons (maskable with the safe zone; the diamond dropped below 32 px).
+- Install card (Chromium's `beforeinstallprompt`): bottom-left 380 px card, "Install Nitpilot" copy, Install / Not now (remembered). iOS Safari not standalone: the "Add Nitpilot to your Home Screen" sheet with its three steps and "Got it", shown once after sign-in and from Settings.
+- No offline cache: `sw.js` has no `fetch` handler.
+- `docs/why/service-workers-and-pwa.md`: a service worker as a tiny program the browser keeps for your site, why it's the only thing that can receive a push with the tab closed, what makes an app installable, and the iOS Home Screen rule; points to `public/sw.js`, `src/push/`.
+- **Live step (ask first):** in desktop Chrome on `localhost`, turn push on from a temporary button in the shell (Settings arrives in Task 21) and trigger a notification through the stand-in path; the phone check waits for the acceptance run (Task 25).
+
+**Tests this task must include:**
+- `sw.test.ts`: a push event shows a notification with the payload's title, body, tag and url; a click focuses an existing client on the URL or opens a new window.
+- `subscribe.test.ts` (fake `Notification`, `navigator.serviceWorker`, `PushManager`): `pushState` for each case, including iOS not standalone → `needs_home_screen`; `turnPushOn` posts the subscription; denied permission doesn't post.
+- `npm run build` copies `sw.js` and the manifest to the root of `dist`; the server serves them with `no-cache` (Task 2's rule).
+- Browser check (by hand, no audit tool): Chrome offers "Install", and the installed window opens on the inbox.
+
+---
+
+## Milestone W7: Settings, onboarding and device approval
+
+W7 finishes the screens: Settings, the onboarding checklist that ticks itself off, and CLI device approval in the web app. The last server-rendered pages are removed.
+
+**Files at the end of W7:**
+```
+apps/server/src/
+  http/routes/{devices,onboarding,cli-requests}.ts
+  platform/github/reads.ts       userInstallations (with the user's token)
+  (deleted) http/pages/*, http/routes/cli-approve.tsx, the JSX settings in tsconfig
+apps/web/src/routes/{Settings,Setup,Approve}/…
+```
+
+### Task 21: Settings page
+
+**Files:**
+- Create: `apps/server/src/http/routes/devices.ts` and `devices.db.test.ts`, `apps/web/src/routes/Settings/{Settings.tsx,Devices.tsx,Agent.tsx,Notifications.tsx,Defaults.tsx,Account.tsx,*.module.css,*.test.tsx}`, `apps/web/src/api/settings.ts`.
+- Modify: `packages/protocol/src/web-api.ts` (`DeviceView`, `DevicesResponse`, `WebMe.agents`), `apps/server/src/ws/cli-hub.ts` (`closeToken(tokenId, code)`), `apps/server/src/http/app.ts`, `apps/web/src/app.tsx`.
+
+**Interfaces:**
+- Consumes: `PUT /api/me/settings` (Task 14), `pushState`/`turnPushOn`/`turnPushOff` (Task 20), `POST /auth/logout`.
+- Produces: `GET /api/devices` → `{ devices: DeviceView[] }` with `DeviceView = { id; name; prefix; lastSeenAt: string | null; online: boolean; agent: { id: AgentId; version: string | null } | null; repos: string[] }` (agent and repos from the live connection; revoked tokens left out). `DELETE /api/devices/:id` → 204: sets `revokedAt` and closes that CLI's socket with 4401 (log in again). `WebMe.agents: { id: AgentId; version: string | null; online: boolean }[]` (distinct agents across your CLIs).
+
+**Behavior** (handoff §7):
+- Desktop 180 px section nav (Devices, Agent, Notifications, Defaults, Account); phone: stacked cards; "‹ Inbox" top bar.
+- Devices: name, "Last seen …" or "Online", **Revoke** (red text, outlined), then the toast "Revoked. That computer has to log in again." (no Undo: the token is gone). The handoff's "This device" chip is about the browser's own computer, which the server can't know: it is dropped, and online devices get an "Online" chip instead (recorded as a deviation in the step-level notes).
+- Agent: each reported agent with its version and a `✓ Online` / "Not connected" chip; with none: "Install Claude Code, then run `nitpilot start`."
+- Notifications: the Push switch (46×28) from `pushState`; the iOS tip when `needs_home_screen`; "Blocked in your browser's settings" when denied.
+- Defaults: Auto-review and Auto-fix switches, the daily cap stepper (−/+ by 5, 5–200) with "Max 40 agent runs per day · 12 used today" and the usage bar; saved at once.
+- Account: avatar, name/login, mono `github.com/<login>`, **Sign out** (POST `/auth/logout`, then the landing).
+
+**Tests this task must include:**
+- `devices.db.test.ts`: lists only your own unrevoked devices with live agent info; revoking another user's device → 404; revoking closes the socket with 4401; another Origin → 403.
+- `Defaults.test.tsx`: the stepper stops at 5 and 200, steps by 5, saves; switches save.
+- `Notifications.test.tsx`: each `pushState` shows its control or message.
+- `Devices.test.tsx`: Revoke calls the route and the device disappears after refetch.
+
+### Task 22: Onboarding that ticks itself off
+
+**Files:**
+- Create: `apps/server/src/http/routes/onboarding.ts` (or inside `me.ts`) and its db test, `apps/web/src/routes/Setup/{Setup.tsx,ChecklistRow.tsx,CommandBlock.tsx,*.module.css,*.test.tsx}`.
+- Modify: `apps/server/src/platform/github/reads.ts` and `platform/types.ts` (`userInstallations`), `apps/server/src/http/routes/setup.ts` (`/github/setup` redirects to `/setup`), `apps/server/src/http/routes/auth.ts` (a first sign-in with onboarding incomplete goes to `/setup` unless `next` says otherwise), `apps/server/src/ws/web-wire.ts` (`me.update` carries onboarding), `packages/protocol/src/web-api.ts` (`Onboarding`, `WebMe.onboarding`).
+
+**Interfaces:**
+- Produces: `WebMe.appSlug: string` (for the install link) and `Onboarding = { signedIn: true; appInstalled: boolean; cliConnected: boolean; repoLinked: boolean; agentStarted: boolean; done: boolean }`. `appInstalled` = the user's own token sees at least one installation of this app (`GET /user/installations`, kept 5 minutes like `RepoAccess`); `cliConnected` = any unrevoked CLI token; `repoLinked` = a connected CLI reports at least one repo (or one did since the server started); `agentStarted` = a connected CLI reports an agent with at least one mode. `PlatformReads.userInstallations(userId): Promise<{ id: string; accountLogin: string }[]>`.
+
+**Behavior** (handoff §5):
+- Title, progress bar "N of 5", the five rows with done / waiting (spinner) / pending (number) icons and the command blocks with Copy: `npx nitpilot login` (from `BRAND`), `nitpilot repos add`, `nitpilot start` with the "detected automatically" agent chips (Claude Code; Gemini CLI shown as "coming later" while Task 20 is on hold). Install row links to the app's install page (`https://github.com/apps/<GITHUB_APP_SLUG>/installations/new`, slug from `WebMe`). The note "nitpilot.dev covers public repos only" only when the server runs with `PUBLIC_REPOS_ONLY`.
+- **Ticks itself off:** `me.update` on `/ws/web` refreshes `me` when a CLI connects or reports repos; the app-installed step re-checks when the window regains focus (GitHub's install page is another tab).
+- "Skip for now" goes to the inbox; the checklist stays reachable from Settings until `done`.
+
+**Tests this task must include:**
+- Onboarding facts: each flag from its source (a seeded installation answer from the fake GitHub fetch, a CLI token, a connected CLI with and without repos and modes); `/github/setup` redirects to `/setup`; a first sign-in lands on `/setup`.
+- `Setup.test.tsx`: the rows reflect the facts, and a `me.update` that sets `cliConnected` advances the list without a reload.
+
+### Task 23: Device approval in the web app; the server pages go
+
+**Files:**
+- Create: `apps/server/src/http/routes/cli-requests.ts` and `cli-requests.db.test.ts`, `apps/web/src/routes/Approve/{Approve.tsx,*.module.css,Approve.test.tsx}`.
+- Modify: `packages/protocol/src/web-api.ts` (`CliRequestView`, `CliRequestDecision`), `apps/server/src/http/app.ts`, `apps/server/src/http/errors.ts` (no HTML), `apps/server/tsconfig.json` (no JSX left), `apps/cli` texts only if they name the page differently (they shouldn't: the URL stays `/cli/approve?code=`).
+- Delete: `apps/server/src/http/routes/cli-approve.tsx`, `apps/server/src/http/pages/{approve,layout}.tsx` and their tests (the transcript and home pages went in Tasks 2 and 10).
+
+**Interfaces:**
+- Consumes: `findCliLogin`, `decideCliLogin` (`auth/cli-login.ts`).
+- Produces: `GET /api/cli/requests/:userCode` → `CliRequestView = { userCode; deviceName; requestedAt: string; expiresAt: string; status: 'pending' | 'approved' | 'denied' | 'expired' }` (an unknown code → 404); `POST /api/cli/requests/:userCode { decision: 'approve' | 'deny' }` → the new `CliRequestView` (requireUser + requireSameOrigin). The SPA route `/cli/approve?code=` signs you in first (`/auth/github/login?next=…`) when `useMe()` is null.
+
+**Behavior** (handoff §6): the centered 440 px card in four states: Pending (the code large in mono, device row, Approve / Deny, "The code expires in 9:41." counting down from `expiresAt`), Approved, Denied, Expired (with the `npx nitpilot login` command block). A countdown that reaches zero switches to Expired without a request.
+
+**Tests this task must include:**
+- `cli-requests.db.test.ts`: view a pending code; approve → the CLI's next poll gets a token (existing `pollCliLogin`); deny; an expired code can't be approved; another Origin → 403; not signed in → 401.
+- `Approve.test.tsx`: the four states, the countdown flipping to Expired (fake timers).
+- Nothing under `apps/server/src/http/pages/` remains, and `grep -r renderPage apps/server/src` is empty; every server answer that is HTML now comes from `spa.ts` with the CSP header.
+
+---
+
+## Milestone W8: Proof
+
+W8 makes the browser suite part of CI, then proves Plan 2 live on the sandbox repo, on desktop and on the person's phone.
+
+### Task 24: Playwright suite in CI
+
+**Files:**
+- Modify: `apps/web/e2e/*.spec.ts` (gathered from Tasks 3, 6, 10, 13 and 18), `apps/web/playwright.config.ts` (one worker, retries 0, trace on failure), `apps/server/test/e2e/web-server.ts`, `.github/workflows/ci.yml` (cache Playwright's Chromium, upload traces on failure).
+
+**Behavior:**
+- The suite covers the four flows of spec §19: the inbox opens; a chat updates live while agents work; Resolve on an escalation; Send on a draft. Each test seeds its own chat and user through the control API, so tests don't depend on each other's order.
+- Flakes: no fixed sleeps; every wait is on something visible (`expect(locator).toBeVisible()`), or on the control API's `GET /state`.
+- `npm run test:web-e2e` runs three times in a row green locally before the task is done.
+
+**Tests this task must include:** the four flows above, plus the read-only view: a second seeded user with read access but no role sees the chat without the composer or action buttons.
+
+### Task 25: Acceptance runbook, the live run and docs
+
+**Files:**
+- Create: `docs/acceptance/plan-2.md` (the runbook: numbered click-steps per account, spelled out), any helper SQL beside it.
+- Modify: `README.md` (web app section), `docs/why/` index if one exists, the spec (§20 and §22 notes from the run), this plan's "Checked against the code (W8)".
+
+**Behavior:**
+- The runbook follows spec §20's Plan 2 acceptance test: setup (fresh database as in Plan 1, the web app built and served, both accounts signed in to the web app in their own browsers, A on Claude Code with the built CLI, B on the fake agent), then each criterion with what to click and what you should see, and the phone section: the tunnel's HTTPS URL as `PUBLIC_URL`, adding its `/auth/github/callback` to `nitpilot-dev` for the run, Add to Home Screen on iPhone, turning push on, and removing the callback URL afterwards.
+- **Live steps (ask before each):** starting the tunnel and server, every GitHub write, and each Claude Code run. Results are recorded in a second commit, as in Plan 1b Task 24.
+
+**Tests this task must include:** every criterion of spec §20's Plan 2 acceptance test checked off live, with the evidence (screenshots, the database checks, the CLI terminal lines) recorded in the runbook's results section.
