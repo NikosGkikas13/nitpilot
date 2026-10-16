@@ -32,28 +32,32 @@ export type WebWiring = {
  * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
  * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
  * gets `me.update`, and the chats where their agent has work or shows its presence are sent again. A CLI's progress
- * lines go to the chat's followers. A failure is logged and never reaches the dispatcher; if a chat's new items
- * can't be read, its open tabs are told to resume. main.ts and the tests call this, so the tests run what production runs.
+ * lines go to the chat's followers. A chat's items and views go out in order; its inbox rows go out in order among
+ * themselves, but apart, so a slow GitHub check for a row never holds back an item. A failure is logged and never
+ * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
+ * tests call this, so the tests run what production runs.
  */
 export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
-  // Everything about one chat goes out in order: its items before the state that follows them.
+  // Work under one key goes out in order: a chat's items before the state that follows them (and its inbox rows apart, under `inbox:<chatId>`).
   const perChat = new KeyedLock();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const jobs = new TtlCache<JobInfo>(60 * 60_000, 10_000);
 
-  /** Run `work` for this chat after what's already queued for it. Never throws: publishing must not break a commit. */
-  function inOrder(chatId: string, what: string, work: () => Promise<void>): void {
-    perChat.run(chatId, work).catch((err) => console.error(`[web-wire] ${what} for chat ${chatId} failed:`, err));
+  /** Run `work` after what's already queued under this key. Never throws: publishing must not break a commit. */
+  function inOrder(key: string, what: string, work: () => Promise<void>): void {
+    perChat.run(key, work).catch((err) => console.error(`[web-wire] ${what} failed:`, err));
   }
 
-  /** Send the chat's state soon, once for all the commits in the next `debounceMs`. */
+  /** Send the chat's state and the inbox rows soon, once for all the commits in the next `debounceMs`. */
   function stateSoon(chatId: string): void {
     if (timers.has(chatId)) return;
     timers.set(
       chatId,
       setTimeout(() => {
         timers.delete(chatId);
-        inOrder(chatId, 'state', () => publishState(chatId));
+        inOrder(chatId, `the state of chat ${chatId}`, () => publishState(chatId));
+        // Their own key: checking each person's access can take GitHub a while, and the chat's items must not wait for it.
+        inOrder(`inbox:${chatId}`, `the inbox rows of chat ${chatId}`, () => publishInboxRows(chatId));
       }, debounceMs),
     );
   }
@@ -76,27 +80,37 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
     webHub.publishItems(chatId, items);
   }
 
-  /** Each follower's own view (your role and attention are yours), then each participant's inbox rows. */
+  /** Each follower's own view (your role and attention are yours). */
   async function publishState(chatId: string): Promise<void> {
     for (const viewer of webHub.subscribers(chatId)) {
       const view = await loadChatView(chatId, viewer, cliHub);
       webHub.sendToChatViewer(chatId, viewer.id, { v: 1, t: 'chat.state', d: { chatId, view } });
     }
-    for (const userId of await participantsOnNitpilot(chatId)) {
-      if (!webHub.connected(userId)) continue;
-      const rows = await readableRows(userId, await loadInboxRow(chatId, userId, cliHub));
-      if (rows) webHub.sendToUser(userId, { v: 1, t: 'inbox.upsert', d: { chatId, rows } });
-    }
+  }
+
+  /** Each participant's inbox rows (people with a tab open only). Their access checks run together. */
+  async function publishInboxRows(chatId: string): Promise<void> {
+    const connected = (await participantsOnNitpilot(chatId)).filter((userId) => webHub.connected(userId));
+    await Promise.all(
+      connected.map(async (userId) => {
+        const rows = await readableRows(userId, await loadInboxRow(chatId, userId, cliHub));
+        if (rows) webHub.sendToUser(userId, { v: 1, t: 'inbox.upsert', d: { chatId, rows } });
+      }),
+    );
   }
 
   /**
    * A row shows the PR's title and newest message, so it goes only to someone who can still read the repo, the
-   * same check the inbox makes (http/routes/inbox.ts). Null when GitHub didn't answer: nothing is sent this time.
+   * same check the inbox makes (http/routes/inbox.ts): without access, an empty list (the row goes). Null, and
+   * nothing is sent this time, when the check couldn't be made: GitHub didn't answer, or the person's GitHub
+   * sign-in has expired (the inbox answers them 401).
    */
   async function readableRows(userId: string, rows: InboxRow[]): Promise<InboxRow[] | null> {
     if (rows.length === 0) return rows;
     try {
-      return (await access.check(userId, rows[0]!.repo)) === 'read' ? rows : [];
+      const answer = await access.check(userId, rows[0]!.repo);
+      if (answer === 'reauth') return null;
+      return answer === 'read' ? rows : [];
     } catch (err) {
       console.error('[web-wire] could not check repo access for an inbox row:', err);
       return null;
@@ -115,7 +129,7 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
 
   dispatcher.onCommit((chatId, effects) => {
     const range = effects.timeline;
-    if (range) inOrder(chatId, 'items', () => publishItems(chatId, range));
+    if (range) inOrder(chatId, `the items of chat ${chatId}`, () => publishItems(chatId, range));
     stateSoon(chatId);
   });
 

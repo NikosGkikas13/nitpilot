@@ -104,6 +104,10 @@ export class WebHub {
     for (const client of this.clients) {
       const sub = client.subs.get(chatId);
       if (!sub) continue;
+      // Still catching up? The drop below would throw away what waits in its buffer anyway. Clearing it now means
+      // the catch-up sends only what the database read (no gap), and items published from now on queue behind
+      // the drop, which then stops them.
+      sub.buffer = null;
       client.queue.push(async () => {
         if (client.subs.get(chatId) !== sub) return;
         this.dropSubscription(client, sub);

@@ -1,7 +1,7 @@
 import type { TimelineItem } from '@nitpilot/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../test/db';
-import { fakeFetch } from '../../test/fake-fetch';
+import { fakeFetch, json } from '../../test/fake-fetch';
 import { sessionCookieFor } from '../../test/http';
 import { startWebHub, TestTab } from '../../test/web-ws';
 import { listen, sleep, TestCli } from '../../test/ws';
@@ -21,14 +21,22 @@ afterEach(async () => {
 });
 
 /** The server's live side, wired as main.ts wires it: a dispatcher, a CLI hub and a web hub. maya's PR, leo asked to review. */
-async function setup(wiring: { loadItems?: (chatId: string, afterSeq: number) => Promise<TimelineItem[]> } = {}) {
+type LoadItems = (chatId: string, afterSeq: number) => Promise<TimelineItem[]>;
+
+/**
+ * `loadItems`: how the wiring reads new items. `catchUp`: how the web hub reads a subscriber's catch-up.
+ * `github`: what GitHub answers about the repo for this person (their id is in the token the fake receives); by default, "you can read it".
+ */
+async function setup(opts: { loadItems?: LoadItems; catchUp?: LoadItems; github?: (userId: string) => unknown } = {}) {
   const repo = await makeRepo();
-  const access = new RepoAccess(new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: () => ({ id: 1 }) })));
+  const github = opts.github ?? (() => ({ id: 1 }));
+  const asked = ({ headers }: { headers: Headers }) => github(headers.get('authorization')?.split('ghu_')[1] ?? '');
+  const access = new RepoAccess(new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: asked })));
   const dispatcher = new Dispatcher();
   const cliHub = new CliHub();
   const cliServer = await listen(cliHub);
-  const web = await startWebHub({ access, loadItems: loadItemsAfter });
-  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS, ...wiring });
+  const web = await startWebHub({ access, loadItems: opts.catchUp ?? loadItemsAfter });
+  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS, ...(opts.loadItems ? { loadItems: opts.loadItems } : {}) });
   stops.push(() => cliServer.close(), () => web.close(), () => live.stop());
 
   const [maya, leo, reader] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' }), await makeUser({ login: 'rae' })];
@@ -56,7 +64,9 @@ describe('wireWebHub: after a commit (spec §10)', () => {
     expect(items.d.items.map((i) => i.seq)).toEqual([1, 2]);
     expect((await mayaTab.next('chat.state')).d.view).toMatchObject({ id: chat.id, viewer: { role: 'author' } });
     expect((await mayaTab.next('inbox.upsert')).d.rows.map((r) => r.role)).toEqual(['author']);
-    expect(mayaTab.log).toEqual(['chat.items', 'chat.items', 'chat.state', 'inbox.upsert']);
+    // The items come before the view that follows them. The inbox rows go their own way (not held up by, or holding up, the items).
+    expect(mayaTab.log.slice(0, 2)).toEqual(['chat.items', 'chat.items']);
+    expect(mayaTab.log.filter((t) => t !== 'inbox.upsert')).toEqual(['chat.items', 'chat.items', 'chat.state']);
 
     // Someone who reads along: the items and their view, but no inbox row.
     expect((await readerTab.next('chat.items')).d.items).toHaveLength(2);
@@ -80,6 +90,65 @@ describe('wireWebHub: after a commit (spec §10)', () => {
   });
 });
 
+describe('wireWebHub: inbox rows only for people who can read the repo', () => {
+  const noAccessFor = (names: Record<string, 'none' | 'broken'>) => (userId: string) => {
+    const answer = names[userId];
+    if (!answer) return { id: 1 };
+    return json({ message: answer === 'none' ? 'Not Found' : 'Server Error' }, answer === 'none' ? 404 : 500);
+  };
+
+  it('sends someone GitHub says cannot read the repo an empty list (their row goes), and the others their rows', async () => {
+    const leoId = { value: '' };
+    const { maya, leo, tab, open } = await setup({ github: (userId) => noAccessFor({ [leoId.value]: 'none' })(userId) });
+    leoId.value = leo.id;
+    const [mayaTab, leoTab] = [await tab(maya, false), await tab(leo, false)];
+    await open();
+    expect((await mayaTab.next('inbox.upsert')).d.rows.map((r) => r.role)).toEqual(['author']);
+    expect((await leoTab.next('inbox.upsert')).d.rows).toEqual([]);
+  });
+
+  it('sends nothing to someone whose access check fails on GitHub, and logs it', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const leoId = { value: '' };
+    const { maya, leo, tab, open } = await setup({ github: (userId) => noAccessFor({ [leoId.value]: 'broken' })(userId) });
+    leoId.value = leo.id;
+    const [mayaTab, leoTab] = [await tab(maya, false), await tab(leo, false)];
+    await open();
+    expect((await mayaTab.next('inbox.upsert')).d.rows.map((r) => r.role)).toEqual(['author']);
+    await leoTab.nothing('inbox.upsert');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('repo access'), expect.anything());
+  });
+
+  it('sends nothing to someone whose GitHub sign-in has expired (the inbox answers them 401 too)', async () => {
+    const { maya, leo, tab, open } = await setup();
+    await prisma.githubAuth.update({ where: { userId: leo.id }, data: { status: 'needs_reauth' } });
+    const [mayaTab, leoTab] = [await tab(maya, false), await tab(leo, false)];
+    await open();
+    expect((await mayaTab.next('inbox.upsert')).d.rows.map((r) => r.role)).toEqual(['author']);
+    await leoTab.nothing('inbox.upsert');
+  });
+
+  it("does not hold back a chat's new items while GitHub is slow to answer for someone's inbox row", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const leoId = { value: '' };
+    const { maya, leo, chat, tab, open, dispatcher } = await setup({ github: async (userId) => (userId === leoId.value ? gate.then(() => ({ id: 1 })) : { id: 1 }) });
+    leoId.value = leo.id;
+    try {
+      const [mayaTab, leoTab] = [await tab(maya), await tab(leo, false)];
+      await open();
+      await mayaTab.next('chat.state');
+      await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'Keep the old endpoint' });
+      await expect.poll(() => mayaTab.seqs(chat.id)).toEqual([1, 2, 3]);
+      await leoTab.nothing('inbox.upsert', 50);
+      release();
+      expect((await leoTab.next('inbox.upsert')).d.rows).toMatchObject([{ chatId: chat.id, role: 'reviewer' }]);
+    } finally {
+      release();
+    }
+  });
+});
+
 describe('wireWebHub: when the new items cannot be read', () => {
   it('asks the open tabs to resume instead of skipping the items, and the next try gets them', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -100,6 +169,55 @@ describe('wireWebHub: when the new items cannot be read', () => {
     broken = false;
     mayaTab.subscribe(chat.id, 0);
     await expect.poll(() => mayaTab.seqs(chat.id)).toEqual([1, 2]);
+  });
+
+  it("does not let a later commit's items through while the tab is still catching up, so it resumes from before the gap", async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let failOnce = false;
+    let hold = false;
+    let reached!: () => void;
+    const reading = new Promise<void>((resolve) => (reached = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { chat, maya, tab, open, dispatcher } = await setup({
+      loadItems: async (chatId, afterSeq) => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error('database went away');
+        }
+        return loadItemsAfter(chatId, afterSeq);
+      },
+      // The catch-up is read at once, then held back: a commit lands while the tab is still waiting for it.
+      catchUp: async (chatId, afterSeq) => {
+        const items = await loadItemsAfter(chatId, afterSeq);
+        if (hold) {
+          reached();
+          await gate;
+        }
+        return items;
+      },
+    });
+    try {
+      await open();
+      const mayaTab = await tab(maya, false);
+      hold = true;
+      mayaTab.subscribe(chat.id, 0);
+      await reading;
+
+      failOnce = true;
+      await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'Keep the old endpoint' });
+      await vi.waitFor(() => expect(log).toHaveBeenCalled());
+      await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'And the old tests' });
+      await sleep(DEBOUNCE_MS * 3);
+      release();
+
+      expect((await mayaTab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'unavailable' });
+      expect(mayaTab.seqs(chat.id)).toEqual([1, 2]);
+      mayaTab.subscribe(chat.id, 2);
+      await expect.poll(() => mayaTab.seqs(chat.id)).toEqual([1, 2, 3, 4]);
+    } finally {
+      release();
+    }
   });
 });
 
