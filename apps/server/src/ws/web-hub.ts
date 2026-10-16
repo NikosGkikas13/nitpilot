@@ -85,6 +85,8 @@ export class WebHub {
         continue;
       }
       client.queue.push(async () => {
+        // An unsubscribe (or a new subscribe) queued ahead of this task has replaced the subscription: it's not ours to send to.
+        if (client.subs.get(chatId) !== sub) return;
         if (await this.stillAllowed(client, sub)) this.sendItems(client, sub, items);
       });
     }
@@ -158,28 +160,31 @@ export class WebHub {
   /**
    * Resuming without gaps (spec §10): register the subscription first, so items saved from now on wait in its
    * buffer; then send everything after `afterSeq` from the database; then the buffer, skipping what the
-   * database already had. An item saved during the read is in both, and goes once.
+   * database already had. An item saved during the read is in both, and goes once. If anything fails on the
+   * way (GitHub, the session lookup, the database), the subscription is dropped and the tab is told
+   * `unavailable`: it asks again a few seconds later, from its newest seq.
    */
   private async subscribe(client: Client, chatId: string, afterSeq: number): Promise<void> {
-    if (!(await this.sessionStillValid(client))) return;
-    let allowed: Awaited<ReturnType<typeof chatAccess>>;
+    let sub: Subscription | null = null;
     try {
-      allowed = await chatAccess(client.user, chatId, this.deps.access);
-    } catch (err) {
-      console.error(`[web-hub] could not check access to chat ${chatId}:`, err);
-      return send(client.ws, chatError(chatId, 'unavailable'));
-    }
-    if (allowed.kind !== 'read') return send(client.ws, chatError(chatId, allowed.kind === 'reauth' ? 'reauth' : 'not_found'));
+      if (!(await this.sessionStillValid(client))) return;
+      const allowed = await chatAccess(client.user, chatId, this.deps.access);
+      if (allowed.kind !== 'read') return send(client.ws, chatError(chatId, allowed.kind === 'reauth' ? 'reauth' : 'not_found'));
 
-    const sub: Subscription = { chatId, repoFullName: allowed.chat.repoFullName, checkedAt: this.now(), sentUpTo: afterSeq, buffer: [] };
-    client.subs.set(chatId, sub);
-    const missed = await this.deps.loadItems(chatId, afterSeq);
-    // Even with nothing missed, one chat.items says "you're caught up".
-    if (missed.length === 0) send(client.ws, { v: 1, t: 'chat.items', d: { chatId, items: [], lastSeq: afterSeq } });
-    for (let i = 0; i < missed.length; i += ITEMS_PER_PAGE) this.sendItems(client, sub, missed.slice(i, i + ITEMS_PER_PAGE));
-    const live = sub.buffer ?? [];
-    sub.buffer = null;
-    this.sendItems(client, sub, live);
+      sub = { chatId, repoFullName: allowed.chat.repoFullName, checkedAt: this.now(), sentUpTo: afterSeq, buffer: [] };
+      client.subs.set(chatId, sub);
+      const missed = await this.deps.loadItems(chatId, afterSeq);
+      // Even with nothing missed, one chat.items says "you're caught up".
+      if (missed.length === 0) send(client.ws, { v: 1, t: 'chat.items', d: { chatId, items: [], lastSeq: afterSeq } });
+      for (let i = 0; i < missed.length; i += ITEMS_PER_PAGE) this.sendItems(client, sub, missed.slice(i, i + ITEMS_PER_PAGE));
+      const live = sub.buffer ?? [];
+      sub.buffer = null;
+      this.sendItems(client, sub, live);
+    } catch (err) {
+      console.error(`[web-hub] could not subscribe to chat ${chatId}:`, err);
+      if (sub) this.dropSubscription(client, sub);
+      send(client.ws, chatError(chatId, 'unavailable'));
+    }
   }
 
   /** Send the items this socket doesn't have yet, oldest first. */
@@ -200,26 +205,34 @@ export class WebHub {
 
   /**
    * Access is kept 5 minutes, like everywhere else (spec §16). Past that, the next thing sent for this chat
-   * asks again: a person removed from the repo gets `chat.error` and nothing more. If GitHub doesn't answer,
-   * the subscription stays and is asked about again next time: a GitHub hiccup isn't a reason to cut people off.
+   * asks again: a person removed from the repo gets `chat.error` and nothing more. If the check itself fails
+   * (GitHub doesn't answer, the session lookup fails), the subscription is dropped too, with `unavailable`,
+   * as spec §10 says: the tab asks again a few seconds later and resumes from its newest seq, so nothing is lost.
    */
   private async stillAllowed(client: Client, sub: Subscription): Promise<boolean> {
     if (this.now() - sub.checkedAt < ACCESS_TTL_MS) return true;
-    if (!(await this.sessionStillValid(client))) return false;
     let answer: Awaited<ReturnType<RepoAccess['check']>>;
     try {
+      if (!(await this.sessionStillValid(client))) return false;
       answer = await this.deps.access.check(client.user.id, sub.repoFullName);
     } catch (err) {
       console.error(`[web-hub] could not check access to ${sub.repoFullName} again:`, err);
-      return true;
+      this.dropSubscription(client, sub);
+      send(client.ws, chatError(sub.chatId, 'unavailable'));
+      return false;
     }
     if (answer === 'read') {
       sub.checkedAt = this.now();
       return true;
     }
-    client.subs.delete(sub.chatId);
+    this.dropSubscription(client, sub);
     send(client.ws, chatError(sub.chatId, answer === 'reauth' ? 'reauth' : 'not_found'));
     return false;
+  }
+
+  /** Forget a subscription, unless the tab has already replaced it with a newer one for the same chat. */
+  private dropSubscription(client: Client, sub: Subscription): void {
+    if (client.subs.get(sub.chatId) === sub) client.subs.delete(sub.chatId);
   }
 
   /** A socket whose session ended (signed out, expired) is closed with 4401: the tab shows the landing page. */

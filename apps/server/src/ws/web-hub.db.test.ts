@@ -1,5 +1,5 @@
 import { WEB_WS_PATH, type TimelineItem } from '@nitpilot/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeGithubSignIn, makeMessage, makeRepo, makeUser } from '../../test/db';
 import { fakeFetch, json } from '../../test/fake-fetch';
 import { sessionCookieFor } from '../../test/http';
@@ -10,14 +10,14 @@ import { loadItemsAfter } from '../chats/timeline';
 import { prisma } from '../lib/prisma';
 import { GithubClient } from '../platform/github/client';
 
-/** What GitHub answers about each repo, by full name: read access (200), none (404), or a revoked token (401). */
-const github: Record<string, 200 | 401 | 404> = {};
+/** What GitHub answers about each repo, by full name: read access (200), none (404), a revoked token (401), or a failure (500). */
+const github: Record<string, 200 | 401 | 404 | 500> = {};
 const githubRoutes = new Proxy({} as Parameters<typeof fakeFetch>[0], {
   get: (_routes, key: string) => {
     const repo = key.replace('GET /repos/', '');
     const status = github[repo];
     if (!status) return undefined;
-    return () => (status === 200 ? { id: 1 } : json({ message: status === 404 ? 'Not Found' : 'Bad credentials' }, status));
+    return () => (status === 200 ? { id: 1 } : json({ message: status === 404 ? 'Not Found' : status === 401 ? 'Bad credentials' : 'Server Error' }, status));
   },
 });
 
@@ -42,7 +42,7 @@ async function person(status: 'ok' | 'needs_reauth' = 'ok') {
 }
 
 /** A chat in a repo GitHub says `access` about, with `items` system items already in it. */
-async function chatWith(items: number, access: 200 | 401 | 404 = 200) {
+async function chatWith(items: number, access: 200 | 401 | 404 | 500 = 200) {
   const repo = await makeRepo();
   github[repo.fullName] = access;
   const chat = await makeChat(repo.id);
@@ -107,13 +107,30 @@ describe('WebHub: resuming without gaps (spec §10, Review Focus 1)', () => {
     expect((await tab.next('chat.items')).d.items.map((i) => i.seq)).toEqual([3]);
   });
 
-  it('sends an item saved while the catch-up is being read exactly once', async () => {
+  it('sends an item saved during the catch-up read exactly once', async () => {
     const { chat } = await chatWith(2);
     const { url, origin } = await start(async (chatId, afterSeq) => {
       // The dispatcher saves item 3 and publishes it in the middle of the hub's read…
       await commitItem(chatId);
       // …so the read sees it too.
       return loadItemsAfter(chatId, afterSeq);
+    });
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 0);
+    await expect.poll(() => tab.seqs(chat.id)).toEqual([1, 2, 3]);
+    await server!.hub.idle();
+    await sleep(100);
+    expect(tab.seqs(chat.id)).toEqual([1, 2, 3]);
+  });
+
+  it('sends an item saved after the catch-up read, before the handover, exactly once and in order', async () => {
+    const { chat } = await chatWith(2);
+    const { url, origin } = await start(async (chatId, afterSeq) => {
+      // The hub reads items 1 and 2…
+      const read = await loadItemsAfter(chatId, afterSeq);
+      // …then the dispatcher saves item 3 and publishes it, before the hub has sent anything. Item 3 is only in the buffer.
+      await commitItem(chatId);
+      return read;
     });
     const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
     tab.subscribe(chat.id, 0);
@@ -174,6 +191,81 @@ describe('WebHub: reading needs access (spec §16, Review Focus 2)', () => {
     expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'not_found' });
     await tab.nothing('chat.items');
     expect(server!.hub.subscribers(chat.id)).toEqual([]);
+  });
+});
+
+describe('WebHub: when it cannot check or read', () => {
+  it('drops the chat with "unavailable" when GitHub fails the 5-minute re-check, and sends nothing more for it', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { url, origin } = await start();
+    const { repo, chat } = await chatWith(1);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 1);
+    await tab.next('chat.items');
+    github[repo.fullName] = 500;
+    clock += ACCESS_TTL_MS;
+    await commitItem(chat.id);
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'unavailable' });
+    expect(server!.hub.subscribers(chat.id)).toEqual([]);
+    await commitItem(chat.id);
+    await tab.nothing('chat.items');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it('answers "unavailable" when the catch-up cannot be read, leaves no subscription, and catches up on the next try', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let broken = true;
+    const { url, origin } = await start(async (chatId, afterSeq) => {
+      if (broken) throw new Error('database went away');
+      return loadItemsAfter(chatId, afterSeq);
+    });
+    const { chat } = await chatWith(2);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 0);
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'unavailable' });
+    expect(server!.hub.subscribers(chat.id)).toEqual([]);
+    await commitItem(chat.id);
+    await tab.nothing('chat.items');
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+
+    broken = false;
+    tab.subscribe(chat.id, 0);
+    await expect.poll(() => tab.seqs(chat.id)).toEqual([1, 2, 3]);
+  });
+
+  it('sends nothing after an unsubscribe, even for an item published while the socket was busy with another chat', async () => {
+    let reachedB!: () => void;
+    const loadingB = new Promise<void>((resolve) => (reachedB = resolve));
+    let releaseB!: () => void;
+    const gateB = new Promise<void>((resolve) => (releaseB = resolve));
+    let chatB = '';
+    const { url, origin } = await start(async (chatId, afterSeq) => {
+      if (chatId === chatB) {
+        reachedB();
+        await gateB;
+      }
+      return loadItemsAfter(chatId, afterSeq);
+    });
+    const [a, b] = [await chatWith(0), await chatWith(0)];
+    chatB = b.chat.id;
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(a.chat.id);
+    await tab.next('chat.items');
+    // The socket's queue is now busy reading chat B's catch-up. The unsubscribe from A waits behind it…
+    tab.subscribe(b.chat.id);
+    await loadingB;
+    tab.send({ v: 1, t: 'chat.unsubscribe', d: { chatId: a.chat.id } });
+    await sleep(100);
+    // …and an item for A is published before it runs.
+    await commitItem(a.chat.id);
+    releaseB();
+    await server!.hub.idle();
+    expect((await tab.next('chat.items')).d.chatId).toBe(b.chat.id);
+    await sleep(100);
+    expect(tab.seqs(a.chat.id)).toEqual([]);
+    expect(server!.hub.subscribers(a.chat.id)).toEqual([]);
   });
 });
 
