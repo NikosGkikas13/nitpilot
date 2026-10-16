@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1 and W2 at step level; W3–W8 at task level.** W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1, W2 and W3 at step level; W4–W8 at task level.** W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -127,6 +127,35 @@ W2 was written at step level on 2026-10-15, against branch `plan-2-web-app` at `
 - **Pill words:** "leo's agent working" uses the login as GitHub spells it ("Your agent working" for yours). Merged and Closed have no glyph (handoff); the glyph-plus-word rule is for live statuses.
 - **The landing page's sample pills are `StatusPill`s** (Task 3's deferred minor).
 - **Playwright:** the control API gains `POST /pr` (a real `pull_request.opened` webhook), and the signed-in landing test now expects the inbox.
+
+## Checked against the code (W3)
+
+W3 was written at step level on 2026-10-16, against branch `plan-2-web-app` at `16ca658` (W2 done, with its fix rounds). Its code was built and run in a scratch worktree first, on a database of its own (protocol 45 → 48 → 49, server 665 → 686 → 708 → 716 → 700, CLI 293 → 294 passed + 14 skipped, web 73 → 115, end to end 5, Playwright 4 → 5; typecheck and lint clean), and every code block below was generated from those tested files by a script. The chat was looked at in a real browser at 1280 px and 375 px, light and dark, with three seeded chats (waiting, two points; escalated security blocker; one to review), and leo's CLI started and stopped while a chat was open. Where W3 differs from the task-level text, and why:
+
+- **Each task defines the messages it can use.** Task 7's `ServerToWeb` has no `chat.state`: the view it carries is Task 8's `ChatView`, so `chat.state` arrives with it.
+- **The catch-up sends every missed item, in `chat.items` messages of at most 200**, not "at most 500, then REST": the client would otherwise need to notice the gap and page forward, and a reconnecting tab rarely misses more than a few items. `chat.error` also has `unavailable` (GitHub didn't answer the access check): the subscription is dropped and the client asks again after 5 s, so a GitHub hiccup doesn't lock anyone out.
+- **The REST answer is `{ view, items, hasOlder }`, and `ChatView` carries no items.** `chat.state` resends the view after every change; carrying 200 items in it each time would be wasteful, and the items already arrive in `chat.items`.
+- **No `drafts` and no `permissions` in `ChatView` yet, and no `chats/permissions.ts`.** Nothing in W3 can be clicked, so both would be always-empty fields; W4 (Task 12, `can()` and `permissions`) and W5 (drafts) add them with the code that uses them.
+- **The server fills `pointNumber` for a person's reply in a point's GitHub thread** (`toTimelineItem`, from `data.threadRootId` and the points' comment ids), so the web app puts the reply in that point's card without knowing GitHub's thread ids.
+- **`job.progress` reaches a chat only for the sending CLI owner's own job**, and carries `action` (`reviewing` or `fixing`) so the line can say "leo's agent is reviewing…". Nobody's CLI can put words in someone else's chat.
+- **A GitHub call that times out (15 s, M4) is a `GithubError` with status 504**, not "status null": every caller already treats a 5xx as "GitHub is down" (the inbox's and the chat's 502, for one), so none of them needed a new case.
+- **M5 was half done:** Plan 1 already shared one in-flight refresh per user, but a call that read the row just before another's refresh committed could still refresh again with the spent token. Refreshes now run under a per-user `KeyedLock`, and whoever gets it reads the row again first. There's no test that fails first: the gap is a race between a read and another request's commit, which no test can make happen on demand.
+- **`TtlCache`** (`lib/ttl-cache.ts`) is `RepoAccess`'s bounded, expiring map pulled out, because the file lists need the same thing. `RepoAccess`'s behaviour and tests are unchanged.
+- **A new `ErrorCode` `reauth` (401)** for an expired GitHub sign-in, and the inbox uses it too: the web app tells "sign in with GitHub again" from "signed out" by code, not by message text.
+- **`AppDeps` gains `platform`** (`PlatformReads`, for `listPrFiles` with the installation token); `testDeps` passes a `FakePlatform`. The file list stops at 300 files and says `truncated`.
+- **`makeGithubSignIn`** (`test/db.ts`) is added in Task 7, where the hub's tests first need people with a GitHub sign-in; Tasks 8 and 9 reuse it.
+- **No Auto switch in W3**, not even read-only: `ChatView` doesn't carry the viewer's Auto yet, and a switch that can't be used reads as broken. Task 18 adds it with `viewer.auto`.
+- **No `Toast` in W3:** nothing can fail on a click yet. Task 13 adds it with the buttons.
+- **Fewer files than the task-level list:** the header's round pips and presence, and the timeline's system lines, summaries, messages, progress line and untrusted card are small components inside `ChatHeader.tsx` and `Timeline.tsx`; the severity badge and status glyph are inside `PointCard.tsx`; "Nothing here" is W2's `EmptyPane`. `useCopy` (`lib/clipboard.ts`) is shared by the inbox's offline banner and the chat's command chips. `Avatar` gains the chat's sizes (22, 28, 30), `AgentBadge` a `size` and `decorative` (beside an agent's name it only decorates). `useIsWide` (1180 px) decides whether the details panel fits. `Shell` passes `me` to the pages as the outlet's context, so `Chat` doesn't fetch it again.
+- **A message over 64 KB from a browser closes the socket with 1009** (the `ws` library's `maxPayload`), not 1008; one that doesn't parse closes with 1008. A ping every 30 s, so a dead socket goes within 60 s.
+- **The look found a stale presence dot.** The task-level text re-sent, on a CLI's connect or disconnect, only the chats where that person's agent had work; a reviewer whose review was done went offline and the open chat still said "online". Task 9 now also re-sends every chat someone has open in which that person takes part (`WebHub.followedChats`, one test), and the spec says so.
+- **The first Playwright run found two test-setup gaps.** The pretend GitHub only kept `refs/pull/42/head`, so a CLI couldn't fetch any other PR (`localGithub().addPull`); and the Playwright tests share one database, so the chat test's PR showed up in the inbox test (control `POST /reset`, called before each test that opens PRs).
+- **A point card without a snippet** (a GitHub comment on the whole PR) ended right on its last line of text; the handoff only draws cards with one. It keeps the 14 px the snippet's margin gives.
+- **Two W2 carry-forwards are in Task 10:** ↑/↓ leave the page beside the inbox alone (the feed's scroll area is focusable, so clicking into it puts focus there; j/k still move the cursor), and the inbox rows' times move on every minute (`useNow`).
+- **Deferred to W4 (Task 13): the phone inbox keeping its tab, search and filters when a chat opens.** On a phone the inbox unmounts, and its state lives in `useState`. Keeping it means URL parameters or a context above `Shell`, a choice that fits with the composer's own state; nothing in W3 makes it worse.
+- **The spec catches up in each task** (CLAUDE.md: if the code differs, update the spec in the same change): §10's socket messages (`job.progress` with `action`, `inbox.upsert {chatId, rows}`, `chat.error`, the 200-item catch-up) and §16's re-check in Task 7; the chat read's answer, the 300-file list and the 15 s timeout in Task 8; which chats a presence change re-sends, and inbox rows only for readers, in Task 9.
+- **Noticed, not changed:** the engine's system line "maya's agent is working on 2 points" is written when the address job is queued, so it says "working" while maya's CLI is offline and the banner says "Waiting for your agent" (Plan 1's text; Task 11 is the next task to touch the engine). `useMarkRead` skips a hidden tab and tries again only when a new item arrives, so a chat opened in a background tab stays unread until then.
+- **Launching the look:** the Playwright server (`nitpilot-e2e-web`) uses the same test database as `npm test`, so it must be stopped before the suites run; with it running, the task runner's and the end-to-end tests fail.
 
 ## How to work in this repo
 
@@ -6441,130 +6470,7552 @@ W3 opens a chat: header, timeline, point cards, banners and the details panel, k
 
 **Files at the end of W3:**
 ```
-packages/protocol/src/web-messages.ts  WEB_WS_PATH, WebToServer, ServerToWeb
-packages/protocol/src/web-api.ts       ChatView, TimelineItem, PointView, ParticipantView, Permissions, PrFile
+packages/protocol/src/web-api.ts       TimelineItem, MessagesResponse, ActivityView, ParticipantView, PointView, ChatView, ChatResponse, PrFile, FilesResponse
+packages/protocol/src/web-messages.ts  WEB_WS_PATH, MAX_WEB_MESSAGE_BYTES, WebToServer, ServerToWeb
 apps/server/src/
-  ws/upgrade-router.ts                 one 'upgrade' listener, by path
-  ws/cli-hub.ts                        handleUpgrade, onPresence
-  ws/web-hub.ts                        WebHub: session + Origin before upgrade, subscriptions, resume without gaps
-  ws/web-wire.ts                       dispatcher commits, CLI presence and job.progress → WebHub
-  chats/access.ts                      readAccess (RepoAccess + chat lookup, one 404 for both)
-  chats/permissions.ts                 can, permissionsFor (reads now; writes in W4)
-  chats/views.ts                       loadChatView, loadTimeline, toTimelineItem
-  http/routes/chats.ts                 GET chat view, messages, files
-  platform/{types,github/reads,fake/fake-platform}.ts   listPrFiles
-  platform/github/client.ts            request timeout (M4)
-  auth/user-tokens.ts                  one refresh at a time per user (M5)
+  ws/upgrade-router.ts                 one 'upgrade' listener, by path; refuse()
+  ws/cli-hub.ts                        handleUpgrade (was attach), onPresence
+  ws/web-hub.ts                        WebHub: Origin + session before upgrade, subscriptions, resume without gaps, access re-checks
+  ws/web-wire.ts                       commits, CLI presence and job.progress → WebHub
+  chats/timeline.ts                    toTimelineItem, loadItemsAfter, loadItemsBefore (pages of 200)
+  chats/access.ts                      chatAccess, chatAccessByPath (one 404 for "missing" and "hidden")
+  chats/views.ts                       loadChatView, loadChatPage
+  chats/save.ts, apply-commands.ts, dispatch.ts   DispatchEffects.timeline (the seqs a commit added)
+  http/routes/chats.ts                 GET chat, messages?before=, files
+  http/errors.ts                       ErrorCode 'reauth' (401)
+  lib/ttl-cache.ts                     TtlCache (RepoAccess and the file lists)
+  lib/csrf.ts                          isAllowedUpgradeOrigin
+  auth/session.ts                      sessionUserFromCookieHeader
+  auth/users.ts                        loadWebMe (GET /api/me and me.update)
+  auth/user-tokens.ts                  one refresh at a time per user, re-reading the row (M5)
+  platform/{types,github/reads,github/payloads,fake/fake-platform}.ts   listPrFiles (up to 300)
+  platform/github/client.ts            15 s timeout, a GithubError 504 (M4)
+  http/routes/transcript.tsx, http/pages/transcript.tsx                  deleted
+apps/server/test/web-ws.ts             startWebHub, TestTab (a browser tab's socket)
+apps/server/test/e2e/                  harness serves /ws/web; github.ts addPull; web-server.ts control /reset, /cli
 apps/cli/src/daemon.ts                 a stage change skips the progress throttle
+apps/cli/src/agents/fake/scenarios/paced.json   a review slow enough to watch
 apps/web/src/
-  live/socket.ts, live/apply.ts, live/progress.ts
-  routes/Chat/…                        header, banners, timeline, point card, snippet, progress line, details panel, untrusted card
-  lib/banner.ts, lib/snippet.ts
-docs/why/web-socket-and-origin.md, docs/why/chat-access-rules.md
+  live/socket.ts, live/apply.ts, live/progress.ts, live/LiveProvider.tsx
+  api/chat.ts                          useChat, fetchOlderItems, useFiles, useMarkRead
+  lib/banner.ts, lib/timeline.ts, lib/snippet.ts, lib/names.ts, lib/clipboard.ts
+  lib/time.ts                          + itemTime, useNow; lib/viewport.ts + useIsWide; lib/keys.ts ↑/↓ inside <main>
+  routes/Chat/{Chat,ChatHeader,ChatBanner,Timeline,PointCard,DetailsPanel}.tsx (+ .module.css)
+  routes/Shell/Shell.tsx               LiveProvider; the outlet passes `me`
+  test/chat.ts, test/socket.ts
+apps/web/e2e/chat-live.spec.ts
+docs/why/web-socket-and-origin.md, docs/why/chat-access-rules.md, docs/why/chat-page.md (was transcript-page.md)
 ```
+
+No new packages: W3 uses what W1 installed (`ws` was already the server's).
 
 ### Task 7: `/ws/web`: upgrade router, `WebHub`, resuming without gaps
 
 **Files:**
-- Create: `packages/protocol/src/web-messages.ts` (+ round-trip tests), `apps/server/src/ws/upgrade-router.ts` (+ test), `apps/server/src/ws/web-hub.ts`, `apps/server/src/ws/web-hub.db.test.ts`, `apps/server/src/chats/access.ts` (+ db test), `apps/server/test/web-ws.ts` (a test client: connect with a cookie and an Origin, collect messages), `docs/why/web-socket-and-origin.md`.
-- Modify: `apps/server/src/ws/cli-hub.ts` (`attach` → `handleUpgrade(req, socket, head)`; the path check moves to the router), `apps/server/src/main.ts`, `apps/server/test/ws.ts` and the e2e harness (attach through the router), `packages/protocol/src/index.ts`.
+- Create: `packages/protocol/src/web-messages.ts`, `packages/protocol/src/web-messages.test.ts`, `apps/server/src/ws/upgrade-router.ts`, `apps/server/src/ws/upgrade-router.test.ts`, `apps/server/src/chats/timeline.ts`, `apps/server/src/chats/timeline.db.test.ts`, `apps/server/src/chats/access.ts`, `apps/server/src/chats/access.db.test.ts`, `apps/server/src/ws/web-hub.ts`, `apps/server/src/ws/web-hub.db.test.ts`, `apps/server/test/web-ws.ts`, `docs/why/web-socket-and-origin.md`.
+- Modify: `packages/protocol/src/web-api.ts` (`TimelineItem`), `packages/protocol/src/index.ts`, `apps/server/src/ws/cli-hub.ts` (`attach` → `handleUpgrade`; the path check and `refuse` move to the router), `apps/server/src/ws/cli-hub.db.test.ts`, `apps/server/test/ws.ts`, `apps/server/src/lib/csrf.ts` and `csrf.test.ts`, `apps/server/src/auth/session.ts`, `apps/server/test/db.ts` (`makeGithubSignIn`), `apps/server/src/main.ts`, `apps/server/test/e2e/harness.ts`, `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§10: the socket's messages; §16: an open subscription is checked again).
 
 **Interfaces:**
-- Consumes: `currentUser` (needs a variant that reads the cookie from a Node `IncomingMessage`: `sessionUserFromCookieHeader(header: string | undefined)` in `auth/session.ts`), `isAllowedOrigin`, `RepoAccess`.
-- Produces (protocol): `WEB_WS_PATH = '/ws/web'`. `WebToServer = { t: 'chat.subscribe', d: { chatId, afterSeq: number } } | { t: 'chat.unsubscribe', d: { chatId } }`. `ServerToWeb = chat.items { chatId, items: TimelineItem[], lastSeq } | chat.state { chatId, view: ChatView } | inbox.upsert { rows: InboxRow[] } | job.progress { chatId, who: string, stage, text } | me.update { me: WebMe } | chat.error { chatId, code: 'not_found' | 'reauth' }`, all in the `{ v: 1, t, d }` envelope. `TimelineItem = { seq, kind: MessageKind, author: { githubId, login } | null, pointNumber: number | null, jobId: string | null, body: string, data: Record<string, unknown> | null, at: string }`.
-- Produces (server): `routeUpgrades(server: Server, routes: Record<string, (req, socket, head) => void>)` (an unknown path → 404 and the socket is destroyed). `readAccess(user: SessionUser, chat: { repoFullName: string }, access: RepoAccess): Promise<'read' | 'none' | 'reauth'>`. `class WebHub { constructor(deps: { access: RepoAccess; loadItems(chatId, afterSeq): Promise<TimelineItem[]>; chatRepo(chatId): Promise<string | null>; now?: () => number }); handleUpgrade(req, socket, head); publishItems(chatId, items: TimelineItem[], lastSeq: number); publishState(chatId, view: ChatView); sendToUser(userId, msg: ServerToWeb); subscribersOf(chatId): SessionUser[]; closeAll(code) }`.
+- Consumes: `RepoAccess` and `ACCESS_TTL_MS` (`auth/repo-access.ts`), the session lookup inside `currentUser` (`auth/session.ts`), `SerialQueue` (`lib/serial-queue.ts`), `CLOSE_CODES` and `message()` (protocol), `InboxRow` and `WebMe` (Task 5), test helpers `makeRepo`, `makeChat`, `makeUser`, `makeMessage`, `sessionCookieFor`, `upgradeStatus`, `fakeFetch`, `json`.
+- Produces (protocol): `TimelineItem = { seq, kind: MessageKind, author: { githubId, login } | null, pointNumber: number | null, jobId: string | null, body, data: Record<string, unknown> | null, at: string }` (`web-api.ts`). `WEB_WS_PATH = '/ws/web'`, `MAX_WEB_MESSAGE_BYTES = 64 KB`. `WebToServer = chat.subscribe { chatId, afterSeq } | chat.unsubscribe { chatId }`. `ServerToWeb = chat.items { chatId, items: TimelineItem[], lastSeq } | chat.error { chatId, code: 'not_found' | 'reauth' | 'unavailable' } | job.progress { chatId, who, action: 'reviewing' | 'fixing', stage, text } | inbox.upsert { chatId, rows: InboxRow[] } | me.update { me: WebMe }`, all in the `{ v: 1, t, d }` envelope. Task 8 adds `chat.state`.
+- Produces (server): `routeUpgrades(server: Server, routes: Record<string, UpgradeHandler>): void` and `refuse(socket, status: 401 | 403 | 404 | 500)` (`ws/upgrade-router.ts`); `CliHub.handleUpgrade(req, socket, head)` replaces `attach(server)`. `isAllowedUpgradeOrigin(headers: { origin?: string; host?: string }, publicUrl: string): boolean` (`lib/csrf.ts`). `sessionUserFromCookieHeader(header: string | undefined, now?): Promise<SessionUser | null>` (`auth/session.ts`). `ITEMS_PER_PAGE = 200`, `ThreadPoints`, `toTimelineItem(m: Message, threads: ThreadPoints): TimelineItem`, `threadPointsOf(chatId)`, `loadItemsAfter(chatId, afterSeq): Promise<TimelineItem[]>` (`chats/timeline.ts`). `ChatAccess = { kind: 'read'; chat: { id; repoFullName } } | { kind: 'none' } | { kind: 'reauth' }`, `chatAccess(user: { id }, chatId, access: RepoAccess): Promise<ChatAccess>` (`chats/access.ts`; GitHub not answering is thrown). `WebHubDeps = { access: RepoAccess; loadItems(chatId, afterSeq): Promise<TimelineItem[]>; now?: () => number; heartbeatMs?: number }`; `class WebHub { handleUpgrade; publishItems(chatId, items); sendToChat(chatId, msg); sendToChatViewer(chatId, userId, msg); sendToUser(userId, msg); subscribers(chatId): SessionUser[]; idle(): Promise<void>; close(code, reason?) }`. Test helpers: `makeGithubSignIn(userId, status?: 'ok' | 'needs_reauth')` (`test/db.ts`); `startWebHub(deps)` and `TestTab` (`open`, `send`, `subscribe`, `next(t)`, `seqs(chatId)`, `nothing(t)`, `closed`) in `test/web-ws.ts`.
 
-**Behavior:**
-- Before the upgrade: no valid session → 401; an Origin that isn't ours (or none) → 403; then the socket opens. A session that expires or signs out is closed with 4401 the next time it is checked (on each subscribe and each access re-check).
-- `chat.subscribe`: the hub checks read access (404 and "can't see it" are the same `chat.error not_found`; `reauth` → `chat.error reauth`), registers the subscription **first** so live items are buffered, reads items with `seq > afterSeq` (at most 500; the client pages older ones over REST), sends them as one `chat.items`, then flushes the buffer skipping any `seq` already sent. One socket may subscribe to many chats.
-- Access is re-checked for a subscription whenever its cached answer is older than `ACCESS_TTL_MS` and something is about to be sent to it; a refusal sends `chat.error` and drops the subscription.
-- Messages over 64 KB from a browser, or that don't parse, close the socket 1008. A socket silent for 60 s gets a ping frame; no pong → terminated.
-- `docs/why/web-socket-and-origin.md`: why the browser socket uses the cookie, why SameSite doesn't protect a WebSocket and the Origin check does (cross-site WebSocket hijacking), and how subscribe → catch-up → flush avoids gaps, with a timeline diagram in words; points to `ws/web-hub.ts`.
+- [ ] **Step 1: Write the failing test for the socket's messages**
 
-**Tests this task must include:**
-- The router sends `/ws/cli` and `/ws/web` to the right hub and 404s anything else; the existing CLI hub tests still pass through it.
-- Upgrade refused without a cookie (401), with a foreign Origin (403), with no Origin (403).
-- **Review Focus 1:** an item committed after the subscription is registered but before the catch-up read finishes arrives exactly once (a `loadItems` stub that publishes mid-read); `afterSeq` equal to `lastSeq` sends an empty catch-up and then live items.
-- Subscribe to a chat the viewer can't read → `chat.error not_found`, and nothing for that chat is ever sent to the socket; `reauth` → `chat.error reauth`.
-- **Review Focus 2:** an access answer that changes to `none` after the TTL (clock injected) stops delivery with `chat.error` on the next publish.
-- Unsubscribe stops delivery; closing the socket removes every subscription (no leak in `subscribersOf`).
+Create `packages/protocol/src/web-messages.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import type { TimelineItem } from './web-api';
+import { ServerToWeb, WebToServer } from './web-messages';
+
+const item: TimelineItem = {
+  seq: 3,
+  kind: 'point_raised',
+  author: { githubId: '1002', login: 'leo' },
+  pointNumber: 1,
+  jobId: 'job_1',
+  body: 'Cursor pagination skips rows',
+  data: { severity: 'major', category: 'bug', path: 'src/orders.ts', line: 48 },
+  at: '2026-10-16T09:00:00.000Z',
+};
+
+describe('/ws/web messages', () => {
+  it('round-trips what a browser sends', () => {
+    const subscribe: WebToServer = { v: 1, t: 'chat.subscribe', d: { chatId: 'chat_1', afterSeq: 0 } };
+    expect(WebToServer.parse(JSON.parse(JSON.stringify(subscribe)))).toEqual(subscribe);
+    expect(WebToServer.parse({ v: 1, t: 'chat.unsubscribe', d: { chatId: 'chat_1' } }).t).toBe('chat.unsubscribe');
+  });
+
+  it('refuses a negative cursor and anything a browser may not send', () => {
+    expect(() => WebToServer.parse({ v: 1, t: 'chat.subscribe', d: { chatId: 'chat_1', afterSeq: -1 } })).toThrow();
+    expect(() => WebToServer.parse({ v: 1, t: 'chat.items', d: { chatId: 'chat_1', items: [], lastSeq: 0 } })).toThrow();
+  });
+
+  it('round-trips what the server sends', () => {
+    const sent: ServerToWeb[] = [
+      { v: 1, t: 'chat.items', d: { chatId: 'chat_1', items: [item], lastSeq: 3 } },
+      { v: 1, t: 'chat.error', d: { chatId: 'chat_1', code: 'reauth' } },
+      { v: 1, t: 'job.progress', d: { chatId: 'chat_1', who: 'leo', action: 'reviewing', stage: 'running_agent', text: 'reading src/orders.ts' } },
+      { v: 1, t: 'inbox.upsert', d: { chatId: 'chat_1', rows: [] } },
+    ];
+    for (const msg of sent) expect(ServerToWeb.parse(JSON.parse(JSON.stringify(msg)))).toEqual(msg);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm test -w packages/protocol -- src/web-messages.test.ts`
+Expected: FAIL: `./web-messages` doesn't exist yet, so the file doesn't load.
+
+- [ ] **Step 3: The timeline item and the socket's messages**
+
+A timeline item is what the browser reads of a stored `Message`. In `packages/protocol/src/web-api.ts`, import `MessageKind` beside `Role` (`import { MessageKind, Role } from './enums';`) and add at the end:
+
+```ts
+/**
+ * One item of a chat's timeline (spec §8 `Message`), as the web app reads it over REST and `/ws/web`. `seq` is the
+ * chat's resume cursor: 1, 2, 3… with no gaps. `pointNumber` also names the point for a person's reply in its
+ * GitHub thread, so the web app can show the reply in that point's card. `author` is null for a system event.
+ */
+export const TimelineItem = z.object({
+  seq: z.number().int().positive(),
+  kind: MessageKind,
+  author: z.object({ githubId: z.string(), login: z.string() }).nullable(),
+  pointNumber: z.number().int().positive().nullable(),
+  jobId: z.string().nullable(),
+  body: z.string(),
+  data: z.record(z.string(), z.unknown()).nullable(),
+  at: z.string(),
+});
+export type TimelineItem = z.infer<typeof TimelineItem>;
+```
+
+Create `packages/protocol/src/web-messages.ts` (`chat.state` comes in Task 8, with the view it carries):
+
+```ts
+import { z } from 'zod';
+import { message } from './envelope';
+import { InboxRow, TimelineItem, WebMe } from './web-api';
+
+/** Where the web app opens its WebSocket (spec §10 "Web ↔ server"). */
+export const WEB_WS_PATH = '/ws/web';
+
+/** The biggest message a browser may send. Subscribing is all it does, so anything bigger is a mistake. */
+export const MAX_WEB_MESSAGE_BYTES = 64 * 1024;
+
+// ── browser → server ─────────────────────────────────────────
+
+/** Send me this chat's new items: everything after `afterSeq` first, then each one as it happens. */
+export const ChatSubscribe = message('chat.subscribe', z.object({ chatId: z.string(), afterSeq: z.number().int().nonnegative() }));
+export const ChatUnsubscribe = message('chat.unsubscribe', z.object({ chatId: z.string() }));
+
+export const WebToServer = z.discriminatedUnion('t', [ChatSubscribe, ChatUnsubscribe]);
+export type WebToServer = z.infer<typeof WebToServer>;
+
+// ── server → browser ─────────────────────────────────────────
+
+/** New timeline items for a chat you subscribed to, oldest first. `lastSeq` is the newest one you now have. */
+export const ChatItems = message('chat.items', z.object({ chatId: z.string(), items: z.array(TimelineItem), lastSeq: z.number().int().nonnegative() }));
+
+/**
+ * You can't (or can no longer) follow this chat. `not_found` covers "no such chat" and "you can't see its repo"
+ * alike (spec §16); `reauth` means your GitHub sign-in expired; `unavailable` means GitHub didn't answer when
+ * we asked. The subscription is gone either way.
+ */
+export const ChatError = message('chat.error', z.object({ chatId: z.string(), code: z.enum(['not_found', 'reauth', 'unavailable']) }));
+
+/** A line of what an agent is doing right now (spec §10 `job.progress`, forwarded from its CLI; never stored). */
+export const WebJobProgress = message('job.progress', z.object({
+  chatId: z.string(),
+  /** Whose agent: a GitHub login. */
+  who: z.string(),
+  action: z.enum(['reviewing', 'fixing']),
+  stage: z.enum(['preparing', 'running_agent', 'pushing', 'finishing']),
+  text: z.string(),
+}));
+
+/** Your inbox rows for one chat changed. `rows` replaces every row you had for `chatId`; empty removes them. */
+export const InboxUpsert = message('inbox.upsert', z.object({ chatId: z.string(), rows: z.array(InboxRow) }));
+
+/** What `GET /api/me` would answer now: one of your CLIs connected or disconnected. */
+export const MeUpdate = message('me.update', z.object({ me: WebMe }));
+
+export const ServerToWeb = z.discriminatedUnion('t', [ChatItems, ChatError, WebJobProgress, InboxUpsert, MeUpdate]);
+export type ServerToWeb = z.infer<typeof ServerToWeb>;
+```
+
+In `packages/protocol/src/index.ts`, add `export * from './web-messages';` after `export * from './web-api';`.
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 48 tests (3 new).
+
+- [ ] **Step 5: Write the failing tests for the router and the Origin check**
+
+Node gives an HTTP server one `'upgrade'` event for every WebSocket path, so two hubs can't each listen: one router picks the hub by path. Create `apps/server/src/ws/upgrade-router.test.ts`:
+
+```ts
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
+import { upgradeStatus } from '../../test/ws';
+import { refuse, routeUpgrades } from './upgrade-router';
+
+describe('routeUpgrades', () => {
+  let server: Server;
+  afterEach(() => new Promise((resolve) => server.close(resolve)));
+
+  async function serve(routes: Parameters<typeof routeUpgrades>[1]): Promise<number> {
+    server = createServer();
+    routeUpgrades(server, routes);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    return (server.address() as AddressInfo).port;
+  }
+
+  it('hands each path to its own hub, and a query string does not change the path', async () => {
+    const seen: string[] = [];
+    const port = await serve({
+      '/ws/cli': (req, socket) => (seen.push(`cli ${req.url}`), refuse(socket, 401)),
+      '/ws/web': (req, socket) => (seen.push(`web ${req.url}`), refuse(socket, 403)),
+    });
+    expect(await upgradeStatus(port, '/ws/cli')).toBe(401);
+    expect(await upgradeStatus(port, '/ws/web?tab=2')).toBe(403);
+    expect(seen).toEqual(['cli /ws/cli', 'web /ws/web?tab=2']);
+  });
+
+  it('refuses a path no hub owns with a 404', async () => {
+    const port = await serve({ '/ws/cli': (_req, socket) => refuse(socket, 401) });
+    expect(await upgradeStatus(port, '/ws/other')).toBe(404);
+    expect(await upgradeStatus(port, '/')).toBe(404);
+  });
+});
+```
+
+A browser sends the cookie on a WebSocket to any site, so the upgrade checks `Origin` the way writes do. In `apps/server/src/lib/csrf.test.ts`, import `isAllowedUpgradeOrigin` beside `isAllowedOrigin` and add at the end:
+
+```ts
+describe('isAllowedUpgradeOrigin', () => {
+  it('accepts the public origin, and the host the socket was opened on', () => {
+    expect(isAllowedUpgradeOrigin({ origin: PUBLIC, host: '10.0.0.5:8787' }, PUBLIC)).toBe(true);
+    expect(isAllowedUpgradeOrigin({ origin: 'http://10.0.0.5:8787', host: '10.0.0.5:8787' }, PUBLIC)).toBe(true);
+  });
+  it('rejects another site, even with our host', () => expect(isAllowedUpgradeOrigin({ origin: 'https://evil.example', host: '10.0.0.5:8787' }, PUBLIC)).toBe(false));
+  it('rejects a socket with no Origin', () => expect(isAllowedUpgradeOrigin({ host: '10.0.0.5:8787' }, PUBLIC)).toBe(false));
+});
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/ws/upgrade-router.test.ts src/lib/csrf.test.ts`
+Expected: FAIL: `./upgrade-router` doesn't exist, and the 3 new csrf tests fail with `TypeError: isAllowedUpgradeOrigin is not a function`.
+
+- [ ] **Step 7: One upgrade listener, and the Origin check for sockets**
+
+Create `apps/server/src/ws/upgrade-router.ts` (`refuse` moves here from `cli-hub.ts`, so both hubs answer a refused upgrade the same way):
+
+```ts
+import { STATUS_CODES, type IncomingMessage, type Server } from 'node:http';
+import type { Duplex } from 'node:stream';
+
+/** What handles a WebSocket upgrade for one path: a hub's `handleUpgrade`. */
+export type UpgradeHandler = (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
+
+/**
+ * Send each WebSocket upgrade on this HTTP server to the hub for its path (`/ws/cli`, `/ws/web`). Node gives a
+ * server one 'upgrade' event for every path, so one listener has to pick; two hubs listening would both answer.
+ * A path no hub owns gets a 404.
+ */
+export function routeUpgrades(server: Server, routes: Record<string, UpgradeHandler>): void {
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    const handler = routes[path];
+    if (!handler) return refuse(socket, 404);
+    handler(req, socket, head);
+  });
+}
+
+/** Answer an upgrade request with a plain HTTP error and hang up. */
+export function refuse(socket: Duplex, status: 401 | 403 | 404 | 500): void {
+  socket.once('finish', () => socket.destroy());
+  socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+}
+```
+
+In `apps/server/src/ws/cli-hub.ts`:
+1. The imports: `import type { IncomingMessage } from 'node:http';` (no more `STATUS_CODES` or `Server`), drop `CLI_WS_PATH` from the protocol import, and add `import { refuse } from './upgrade-router';`.
+2. Replace `attach(server)` with the router's handler:
+
+```ts
+  /** An upgrade request for /ws/cli, handed over by the upgrade router (ws/upgrade-router.ts). */
+  handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    void this.upgrade(req, socket, head);
+  };
+```
+
+3. In `upgrade`, delete the path check, `if (new URL(req.url ?? '/', 'http://localhost').pathname !== CLI_WS_PATH) return refuse(socket, 404);` (the router does it).
+4. Delete the `refuse` function at the end of the file (with its doc comment).
+
+In `apps/server/test/ws.ts`, `listen` serves the hub behind the router as `main.ts` does: import `routeUpgrades` from `'../src/ws/upgrade-router'`, change its doc comment to `/** Serve \`hub\` on a random local port, behind the upgrade router as in main.ts. */`, and replace `hub.attach(server);` with `routeUpgrades(server, { [CLI_WS_PATH]: hub.handleUpgrade });`.
+
+In `apps/server/src/ws/cli-hub.db.test.ts`, `/ws/web` is no longer an unknown path: the 404 line becomes `expect(await upgradeStatus(port, '/ws/other', bearer(token.raw))).toBe(404);`.
+
+In `apps/server/src/lib/csrf.ts`, add at the end:
+
+```ts
+/**
+ * The same check for a WebSocket upgrade (spec §10): browsers send the cookie on a socket to any site, and
+ * SameSite doesn't stop it, so the Origin header is what tells our pages from another site's
+ * (docs/why/web-socket-and-origin.md). Browsers always send Origin on a WebSocket, so none is a no.
+ */
+export function isAllowedUpgradeOrigin(headers: { origin?: string; host?: string }, publicUrl: string): boolean {
+  if (!headers.origin) return false;
+  const allowed = new Set([new URL(publicUrl).origin]);
+  if (headers.host) allowed.add(`http://${headers.host}`).add(`https://${headers.host}`);
+  return allowed.has(headers.origin);
+}
+```
+
+(The `host` the socket was opened on counts as ours, as `isAllowedOrigin` counts the request's own origin: a developer reaching the server on `127.0.0.1` or a LAN address still gets a socket.)
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/ws/upgrade-router.test.ts src/lib/csrf.test.ts && npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
+Expected: PASS, 2 and 8 tests; the CLI hub's 10 tests still pass behind the router.
+
+- [ ] **Step 9: Write the failing tests for reading items and who can read a chat**
+
+The tests make people with a GitHub sign-in on file. In `apps/server/test/db.ts`, import `encrypt` from `'../src/lib/crypto'` and add before `resetDb`:
+
+```ts
+/** A GitHub sign-in for `userId` that lasts a day, as signing in stores one (`needs_reauth` once it expired). */
+export async function makeGithubSignIn(userId: string, status: 'ok' | 'needs_reauth' = 'ok') {
+  const later = new Date(Date.now() + 86_400_000);
+  return prisma.githubAuth.create({ data: { userId, accessTokenEnc: encrypt(`ghu_${userId}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status } });
+}
+```
+
+Create `apps/server/src/chats/timeline.db.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeMessage, makeRepo, makeUser } from '../../test/db';
+import { prisma } from '../lib/prisma';
+import { loadItemsAfter } from './timeline';
+
+describe('loadItemsAfter', () => {
+  it('reads every item after a seq, oldest first, as the web app shows them', async () => {
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id);
+    const leo = await makeUser({ login: 'leo' });
+    await makeMessage(chat.id, null, 'Pull request opened by maya');
+    const said = await makeMessage(chat.id, leo, 'Please add a test');
+    const items = await loadItemsAfter(chat.id, 0);
+    expect(items.map((i) => i.seq)).toEqual([1, 2]);
+    expect(items[0]).toMatchObject({ kind: 'system', author: null, body: 'Pull request opened by maya', pointNumber: null, data: null });
+    expect(items[1]).toEqual({ seq: 2, kind: 'human', author: { githubId: leo.githubId, login: 'leo' }, pointNumber: null, jobId: null, body: 'Please add a test', data: null, at: said.createdAt.toISOString() });
+    expect(await loadItemsAfter(chat.id, 2)).toEqual([]);
+  });
+
+  it("gives a person's reply in a point's GitHub thread that point's number", async () => {
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id);
+    const raisedBy = await makeUser();
+    await prisma.point.create({
+      data: { chatId: chat.id, number: 4, raisedByGithubId: raisedBy.githubId, origin: 'github', githubCommentId: '900', githubThreadRootId: '900', severity: 'minor', category: 'style', title: 'Name', body: 'Rename it', status: 'open', trusted: true, round: 1 },
+    });
+    await prisma.message.createMany({
+      data: [
+        { chatId: chat.id, seq: 1, kind: 'human', authorGithubId: raisedBy.githubId, authorLogin: raisedBy.login, body: 'Still not renamed', data: { threadRootId: '900' } },
+        { chatId: chat.id, seq: 2, kind: 'human', authorGithubId: raisedBy.githubId, authorLogin: raisedBy.login, body: 'Elsewhere', data: { threadRootId: '901' } },
+      ],
+    });
+    expect((await loadItemsAfter(chat.id, 0)).map((i) => i.pointNumber)).toEqual([4, null]);
+  });
+});
+```
+
+Create `apps/server/src/chats/access.db.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeGithubSignIn, makeRepo, makeUser } from '../../test/db';
+import { fakeFetch, json } from '../../test/fake-fetch';
+import { RepoAccess } from '../auth/repo-access';
+import { GithubClient } from '../platform/github/client';
+import { chatAccess } from './access';
+
+async function viewer(status: 'ok' | 'needs_reauth' = 'ok') {
+  const user = await makeUser();
+  await makeGithubSignIn(user.id, status);
+  return user;
+}
+
+describe('chatAccess (spec §16 "Who can see a chat")', () => {
+  it("lets in anyone GitHub shows the repo to, and says none for a hidden repo or a chat that doesn't exist", async () => {
+    const [open, hidden] = [await makeRepo(), await makeRepo()];
+    const [a, b] = [await makeChat(open.id), await makeChat(hidden.id)];
+    const fetch = fakeFetch({ [`GET /repos/${open.fullName}`]: () => ({ id: 1 }), [`GET /repos/${hidden.fullName}`]: () => json({ message: 'Not Found' }, 404) });
+    const access = new RepoAccess(new GithubClient(fetch));
+    const user = await viewer();
+    expect(await chatAccess(user, a.id, access)).toEqual({ kind: 'read', chat: { id: a.id, repoFullName: open.fullName } });
+    expect(await chatAccess(user, b.id, access)).toEqual({ kind: 'none' });
+    const calls = fetch.calls.length;
+    expect(await chatAccess(user, 'no-such-chat', access)).toEqual({ kind: 'none' });
+    expect(fetch.calls).toHaveLength(calls);
+  });
+
+  it('says reauth when your GitHub sign-in expired', async () => {
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id);
+    const access = new RepoAccess(new GithubClient(fakeFetch({})));
+    expect(await chatAccess(await viewer('needs_reauth'), chat.id, access)).toEqual({ kind: 'reauth' });
+  });
+});
+```
+
+- [ ] **Step 10: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/timeline.db.test.ts src/chats/access.db.test.ts`
+Expected: FAIL: `./timeline` and `./access` don't exist.
+
+- [ ] **Step 11: Items after a seq, and who can read a chat**
+
+Create `apps/server/src/chats/timeline.ts` (a person's reply in a point's GitHub thread is stored with `data.threadRootId` and no point number; the server fills the number in, so the web app can put the reply in that point's card):
+
+```ts
+import type { MessageKind, TimelineItem } from '@nitpilot/protocol';
+import type { Message } from '../generated/prisma/client';
+import { prisma } from '../lib/prisma';
+
+/** Timeline items go to the browser in pages of at most this many, over REST and over `/ws/web`. */
+export const ITEMS_PER_PAGE = 200;
+
+/** Which point each GitHub thread belongs to: a thread's root comment id → the point's number. */
+export type ThreadPoints = ReadonlyMap<string, number>;
+
+/** A stored timeline item, as the web app reads it. A person's reply in a point's GitHub thread is given that point's number. */
+export function toTimelineItem(m: Message, threads: ThreadPoints): TimelineItem {
+  const data = (m.data as Record<string, unknown> | null) ?? null;
+  const threadRootId = typeof data?.threadRootId === 'string' ? data.threadRootId : null;
+  return {
+    seq: m.seq,
+    kind: m.kind as MessageKind,
+    author: m.authorGithubId && m.authorLogin ? { githubId: m.authorGithubId, login: m.authorLogin } : null,
+    pointNumber: m.pointNumber ?? (threadRootId ? (threads.get(threadRootId) ?? null) : null),
+    jobId: m.jobId,
+    body: m.body,
+    data,
+    at: m.createdAt.toISOString(),
+  };
+}
+
+/** The chat's points by their GitHub thread: by the thread's root comment, and by the point's own comment. */
+export async function threadPointsOf(chatId: string): Promise<ThreadPoints> {
+  const points = await prisma.point.findMany({ where: { chatId }, select: { number: true, githubCommentId: true, githubThreadRootId: true } });
+  const threads = new Map<string, number>();
+  for (const p of points) {
+    if (p.githubCommentId) threads.set(p.githubCommentId, p.number);
+    if (p.githubThreadRootId) threads.set(p.githubThreadRootId, p.number);
+  }
+  return threads;
+}
+
+/** Every item after `afterSeq`, oldest first: what a browser that reconnects missed (spec §10 "Resuming without gaps"). */
+export async function loadItemsAfter(chatId: string, afterSeq: number): Promise<TimelineItem[]> {
+  const [messages, threads] = await Promise.all([
+    prisma.message.findMany({ where: { chatId, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' } }),
+    threadPointsOf(chatId),
+  ]);
+  return messages.map((m) => toTimelineItem(m, threads));
+}
+```
+
+Create `apps/server/src/chats/access.ts`:
+
+```ts
+import type { RepoAccess } from '../auth/repo-access';
+import { prisma } from '../lib/prisma';
+
+/** The chat you may read, with its repo; or why not. */
+export type ChatAccess = { kind: 'read'; chat: { id: string; repoFullName: string } } | { kind: 'none' } | { kind: 'reauth' };
+
+/**
+ * Can this person read the chat (spec §16 "Who can see a chat")? Anyone whose GitHub account can read the repo,
+ * asked with their own token and kept 5 minutes (auth/repo-access.ts). A chat that doesn't exist and one you
+ * can't see are the same `none`, so nobody learns which chats exist (docs/why/chat-access-rules.md).
+ * GitHub not answering is thrown, for the caller to say so.
+ */
+export async function chatAccess(user: { id: string }, chatId: string, access: RepoAccess): Promise<ChatAccess> {
+  const chat = await prisma.prChat.findUnique({ where: { id: chatId }, select: { id: true, repo: { select: { fullName: true } } } });
+  if (!chat) return { kind: 'none' };
+  const answer = await access.check(user.id, chat.repo.fullName);
+  return answer === 'read' ? { kind: 'read', chat: { id: chat.id, repoFullName: chat.repo.fullName } } : { kind: answer };
+}
+```
+
+- [ ] **Step 12: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/chats/timeline.db.test.ts src/chats/access.db.test.ts`
+Expected: PASS, 2 and 2 tests.
+
+- [ ] **Step 13: Write the failing hub tests**
+
+A test client that opens a socket the way a browser tab does: Node's built-in `WebSocket` with a cookie and an `Origin`. Create `apps/server/test/web-ws.ts`:
+
+```ts
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { WEB_WS_PATH, type ServerToWeb, type WebToServer } from '@nitpilot/protocol';
+import { routeUpgrades } from '../src/ws/upgrade-router';
+import { WebHub, type WebHubDeps } from '../src/ws/web-hub';
+import { sleep } from './ws';
+
+// Helpers for testing /ws/web over real WebSockets: a hub on a random port, and a pretend browser tab.
+
+type FromServer<T extends ServerToWeb['t']> = Extract<ServerToWeb, { t: T }>;
+
+/** A WebHub behind the upgrade router, as main.ts serves it, on a random local port. */
+export async function startWebHub(deps: WebHubDeps) {
+  const hub = new WebHub(deps);
+  const server = createServer();
+  routeUpgrades(server, { [WEB_WS_PATH]: hub.handleUpgrade });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    hub,
+    port,
+    url: `ws://127.0.0.1:${port}${WEB_WS_PATH}`,
+    /** The Origin our own pages would send: the address the socket is opened on. */
+    origin: `http://127.0.0.1:${port}`,
+    async close(): Promise<void> {
+      hub.close(1001, 'test over');
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    },
+  };
+}
+
+/** A browser tab's socket: Node's built-in WebSocket with the headers a browser sends, plus an inbox. */
+export class TestTab {
+  private readonly inbox: ServerToWeb[] = [];
+  private readonly waiting = new Set<() => void>();
+  /** Resolves when the socket closes, with the code the server gave. */
+  readonly closed: Promise<{ code: number; reason: string }>;
+
+  private constructor(private readonly ws: WebSocket) {
+    ws.addEventListener('message', (event) => {
+      this.inbox.push(JSON.parse(String(event.data)) as ServerToWeb);
+      for (const wake of this.waiting) wake();
+    });
+    this.closed = new Promise((resolve) => ws.addEventListener('close', (event) => resolve({ code: event.code, reason: event.reason })));
+  }
+
+  /** Open a socket with this cookie and Origin. Rejects when the server refuses the upgrade. */
+  static open(url: string, headers: { cookie: string; origin: string }): Promise<TestTab> {
+    const ws = new WebSocket(url, { headers });
+    const tab = new TestTab(ws);
+    return new Promise((resolve, reject) => {
+      ws.addEventListener('open', () => resolve(tab));
+      ws.addEventListener('error', () => reject(new Error('the server refused the WebSocket')));
+    });
+  }
+
+  send(msg: WebToServer): void {
+    this.ws.send(JSON.stringify(msg));
+  }
+
+  sendRaw(text: string): void {
+    this.ws.send(text);
+  }
+
+  subscribe(chatId: string, afterSeq = 0): void {
+    this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+  }
+
+  close(): void {
+    this.ws.close();
+  }
+
+  /** Take the next message of type `t` out of the inbox, waiting up to `ms` for it. Other messages stay. */
+  async next<T extends ServerToWeb['t']>(t: T, ms = 2_000): Promise<FromServer<T>> {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const i = this.inbox.findIndex((m) => m.t === t);
+      if (i >= 0) return this.inbox.splice(i, 1)[0] as FromServer<T>;
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error(`no ${t} within ${ms} ms; the inbox has: ${this.inbox.map((m) => m.t).join(', ') || 'nothing'}`);
+      await this.anyMessage(left);
+    }
+  }
+
+  /** Every item seq received so far in chat.items, in arrival order (the messages stay in the inbox). */
+  seqs(chatId: string): number[] {
+    return this.inbox.flatMap((m) => (m.t === 'chat.items' && m.d.chatId === chatId ? m.d.items.map((i) => i.seq) : []));
+  }
+
+  /** Fail if a message of type `t` is in the inbox after waiting `ms`. */
+  async nothing(t: ServerToWeb['t'], ms = 300): Promise<void> {
+    await sleep(ms);
+    const got = this.inbox.find((m) => m.t === t);
+    if (got) throw new Error(`expected no ${t}, got ${JSON.stringify(got)}`);
+  }
+
+  private anyMessage(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.waiting.delete(done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      this.waiting.add(done);
+    });
+  }
+}
+```
+
+Create `apps/server/src/ws/web-hub.db.test.ts` (Review Focus 1: the item saved while the catch-up is read arrives once; Review Focus 2: a refused re-check after 5 minutes stops delivery):
+
+```ts
+import { WEB_WS_PATH, type TimelineItem } from '@nitpilot/protocol';
+import { afterEach, describe, expect, it } from 'vitest';
+import { makeChat, makeGithubSignIn, makeMessage, makeRepo, makeUser } from '../../test/db';
+import { fakeFetch, json } from '../../test/fake-fetch';
+import { sessionCookieFor } from '../../test/http';
+import { startWebHub, TestTab } from '../../test/web-ws';
+import { sleep, upgradeStatus } from '../../test/ws';
+import { ACCESS_TTL_MS, RepoAccess } from '../auth/repo-access';
+import { loadItemsAfter } from '../chats/timeline';
+import { prisma } from '../lib/prisma';
+import { GithubClient } from '../platform/github/client';
+
+/** What GitHub answers about each repo, by full name: read access (200), none (404), or a revoked token (401). */
+const github: Record<string, 200 | 401 | 404> = {};
+const githubRoutes = new Proxy({} as Parameters<typeof fakeFetch>[0], {
+  get: (_routes, key: string) => {
+    const repo = key.replace('GET /repos/', '');
+    const status = github[repo];
+    if (!status) return undefined;
+    return () => (status === 200 ? { id: 1 } : json({ message: status === 404 ? 'Not Found' : 'Bad credentials' }, status));
+  },
+});
+
+let clock = Date.now();
+const now = () => clock;
+let server: Awaited<ReturnType<typeof startWebHub>> | null = null;
+afterEach(async () => {
+  await server?.close();
+  server = null;
+});
+
+async function start(loadItems: (chatId: string, afterSeq: number) => Promise<TimelineItem[]> = loadItemsAfter) {
+  server = await startWebHub({ access: new RepoAccess(new GithubClient(fakeFetch(githubRoutes)), now), loadItems, now });
+  return server;
+}
+
+/** A signed-in person whose GitHub sign-in is `status`, with the cookie their browser sends. */
+async function person(status: 'ok' | 'needs_reauth' = 'ok') {
+  const user = await makeUser();
+  await makeGithubSignIn(user.id, status);
+  return { user, cookie: await sessionCookieFor(user.id) };
+}
+
+/** A chat in a repo GitHub says `access` about, with `items` system items already in it. */
+async function chatWith(items: number, access: 200 | 401 | 404 = 200) {
+  const repo = await makeRepo();
+  github[repo.fullName] = access;
+  const chat = await makeChat(repo.id);
+  for (let i = 0; i < items; i++) await makeMessage(chat.id, null, `item ${i + 1}`);
+  return { repo, chat };
+}
+
+/** Save one more item, as the dispatcher would, and tell the hub. */
+async function commitItem(chatId: string): Promise<TimelineItem> {
+  const m = await makeMessage(chatId, null, 'live');
+  const [item] = await loadItemsAfter(chatId, m.seq - 1);
+  server!.hub.publishItems(chatId, [item!]);
+  return item!;
+}
+
+describe('WebHub: who may open a socket (spec §10)', () => {
+  it('refuses an upgrade without a session (401), from another site (403) or with no Origin (403)', async () => {
+    const { port, origin } = await start();
+    const { cookie } = await person();
+    expect(await upgradeStatus(port, WEB_WS_PATH, { origin })).toBe(401);
+    expect(await upgradeStatus(port, WEB_WS_PATH, { origin: 'https://evil.example', cookie })).toBe(403);
+    expect(await upgradeStatus(port, WEB_WS_PATH, { cookie })).toBe(403);
+    expect(await upgradeStatus(port, WEB_WS_PATH, { origin, cookie })).toBe(101);
+  });
+
+  it('closes a socket that sends something that is not a message (1008)', async () => {
+    const { url, origin } = await start();
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.sendRaw('{"t":"chat.items"}');
+    expect((await tab.closed).code).toBe(1008);
+  });
+
+  it('closes the socket with 4401 when its session has ended', async () => {
+    const { url, origin } = await start();
+    const { user, cookie } = await person();
+    const { chat } = await chatWith(0);
+    const tab = await TestTab.open(url, { cookie, origin });
+    await prisma.webSession.deleteMany({ where: { userId: user.id } });
+    tab.subscribe(chat.id);
+    expect((await tab.closed).code).toBe(4401);
+  });
+});
+
+describe('WebHub: resuming without gaps (spec §10, Review Focus 1)', () => {
+  it('sends what came after afterSeq, then each new item as it is saved', async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(3);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 1);
+    expect((await tab.next('chat.items')).d).toMatchObject({ chatId: chat.id, lastSeq: 3, items: [{ seq: 2, body: 'item 2' }, { seq: 3 }] });
+    await commitItem(chat.id);
+    expect((await tab.next('chat.items')).d).toMatchObject({ lastSeq: 4, items: [{ seq: 4, body: 'live' }] });
+  });
+
+  it('says "caught up" with no items when afterSeq is the newest, then sends live items', async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(2);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 2);
+    expect((await tab.next('chat.items')).d).toEqual({ chatId: chat.id, items: [], lastSeq: 2 });
+    await commitItem(chat.id);
+    expect((await tab.next('chat.items')).d.items.map((i) => i.seq)).toEqual([3]);
+  });
+
+  it('sends an item saved while the catch-up is being read exactly once', async () => {
+    const { chat } = await chatWith(2);
+    const { url, origin } = await start(async (chatId, afterSeq) => {
+      // The dispatcher saves item 3 and publishes it in the middle of the hub's read…
+      await commitItem(chatId);
+      // …so the read sees it too.
+      return loadItemsAfter(chatId, afterSeq);
+    });
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 0);
+    await expect.poll(() => tab.seqs(chat.id)).toEqual([1, 2, 3]);
+    await server!.hub.idle();
+    await sleep(100);
+    expect(tab.seqs(chat.id)).toEqual([1, 2, 3]);
+  });
+
+  it('sends a long catch-up in pages of 200, in order', async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(0);
+    const many = Array.from({ length: 450 }, (_, i) => ({ chatId: chat.id, seq: i + 1, kind: 'system', body: `item ${i + 1}` }));
+    await prisma.message.createMany({ data: many });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { lastSeq: 450 } });
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 0);
+    const pages = [await tab.next('chat.items'), await tab.next('chat.items'), await tab.next('chat.items')];
+    expect(pages.map((p) => p.d.items.length)).toEqual([200, 200, 50]);
+    expect(pages.map((p) => p.d.lastSeq)).toEqual([200, 400, 450]);
+  });
+});
+
+describe('WebHub: reading needs access (spec §16, Review Focus 2)', () => {
+  it("answers not_found for a chat you can't see or that doesn't exist, and never sends its items", async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(1, 404);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id);
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'not_found' });
+    tab.subscribe('no-such-chat');
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: 'no-such-chat', code: 'not_found' });
+    await commitItem(chat.id);
+    await tab.nothing('chat.items');
+  });
+
+  it('answers reauth when your GitHub sign-in expired', async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(1);
+    const tab = await TestTab.open(url, { cookie: (await person('needs_reauth')).cookie, origin });
+    tab.subscribe(chat.id);
+    expect((await tab.next('chat.error')).d.code).toBe('reauth');
+  });
+
+  it('asks GitHub again once the answer is 5 minutes old, and stops sending to someone who lost access', async () => {
+    const { url, origin } = await start();
+    const { repo, chat } = await chatWith(1);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id, 1);
+    await tab.next('chat.items');
+    // Removed from the repo on GitHub. Within the 5 minutes, items still arrive…
+    github[repo.fullName] = 404;
+    await commitItem(chat.id);
+    expect((await tab.next('chat.items')).d.items.map((i) => i.seq)).toEqual([2]);
+    // …after them, the next item asks GitHub, which now says no.
+    clock += ACCESS_TTL_MS;
+    await commitItem(chat.id);
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'not_found' });
+    await tab.nothing('chat.items');
+    expect(server!.hub.subscribers(chat.id)).toEqual([]);
+  });
+});
+
+describe('WebHub: subscriptions', () => {
+  it('stops sending after an unsubscribe, and forgets a closed socket', async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(0);
+    const { user, cookie } = await person();
+    const tab = await TestTab.open(url, { cookie, origin });
+    tab.subscribe(chat.id);
+    await tab.next('chat.items');
+    expect(server!.hub.subscribers(chat.id).map((u) => u.id)).toEqual([user.id]);
+    tab.send({ v: 1, t: 'chat.unsubscribe', d: { chatId: chat.id } });
+    await server!.hub.idle();
+    await commitItem(chat.id);
+    await tab.nothing('chat.items');
+
+    const other = await TestTab.open(url, { cookie, origin });
+    other.subscribe(chat.id);
+    await other.next('chat.items');
+    other.close();
+    await other.closed;
+    await expect.poll(() => server!.hub.subscribers(chat.id)).toEqual([]);
+  });
+
+  it('follows several chats on one socket, and sends to a person every socket of theirs', async () => {
+    const { url, origin } = await start();
+    const [a, b] = [await chatWith(0), await chatWith(0)];
+    const { user, cookie } = await person();
+    const tab = await TestTab.open(url, { cookie, origin });
+    const second = await TestTab.open(url, { cookie, origin });
+    tab.subscribe(a.chat.id);
+    tab.subscribe(b.chat.id);
+    await tab.next('chat.items');
+    await tab.next('chat.items');
+    await commitItem(b.chat.id);
+    expect((await tab.next('chat.items')).d.chatId).toBe(b.chat.id);
+    server!.hub.sendToUser(user.id, { v: 1, t: 'inbox.upsert', d: { chatId: a.chat.id, rows: [] } });
+    expect((await tab.next('inbox.upsert')).d.chatId).toBe(a.chat.id);
+    expect((await second.next('inbox.upsert')).d.chatId).toBe(a.chat.id);
+  });
+});
+```
+
+- [ ] **Step 14: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/ws/web-hub.db.test.ts`
+Expected: FAIL: `../src/ws/web-hub` doesn't exist (imported by `test/web-ws.ts`).
+
+- [ ] **Step 15: The hub**
+
+An upgrade arrives as Node's raw request, not a Hono `Context`, so the session is read from the `cookie` header. In `apps/server/src/auth/session.ts`, import `parse` from `'hono/utils/cookie'` and replace `currentUser`'s first line (`const raw = getCookie(c, BRAND.sessionCookie);`) so the lookup is shared:
+
+```ts
+export async function currentUser(c: Context, now = new Date()): Promise<SessionUser | null> {
+  return sessionUser(getCookie(c, BRAND.sessionCookie), now);
+}
+
+/**
+ * The same, for a request Hono doesn't handle: a WebSocket upgrade arrives as Node's raw request, with only
+ * its `cookie` header (ws/web-hub.ts). The hub also calls it again later, to notice a sign-out.
+ */
+export async function sessionUserFromCookieHeader(header: string | undefined, now = new Date()): Promise<SessionUser | null> {
+  return sessionUser(header ? parse(header, BRAND.sessionCookie)[BRAND.sessionCookie] : undefined, now);
+}
+
+async function sessionUser(raw: string | undefined, now: Date): Promise<SessionUser | null> {
+```
+
+(The rest of the old `currentUser` body, from `if (!raw) return null;` on, is now `sessionUser`'s.)
+
+Create `apps/server/src/ws/web-hub.ts`:
+
+```ts
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
+import { CLOSE_CODES, MAX_WEB_MESSAGE_BYTES, WebToServer, type ServerToWeb, type TimelineItem } from '@nitpilot/protocol';
+import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+import { ACCESS_TTL_MS, type RepoAccess } from '../auth/repo-access';
+import { sessionUserFromCookieHeader, type SessionUser } from '../auth/session';
+import { chatAccess } from '../chats/access';
+import { ITEMS_PER_PAGE } from '../chats/timeline';
+import { isAllowedUpgradeOrigin } from '../lib/csrf';
+import { getEnv } from '../lib/env';
+import { SerialQueue } from '../lib/serial-queue';
+import { refuse } from './upgrade-router';
+
+/** WebSocket's "policy violation" close code: the browser sent something it never should. */
+const CLOSE_POLICY = 1008;
+/** A ping every 30 s; a socket that didn't answer the previous one is dead. So a dead socket goes within 60 s. */
+const HEARTBEAT_MS = 30_000;
+
+/** One chat a socket follows. */
+type Subscription = {
+  chatId: string;
+  repoFullName: string;
+  /** When read access was last confirmed. */
+  checkedAt: number;
+  /** The newest item this socket has been sent. */
+  sentUpTo: number;
+  /** While the catch-up is read from the database, live items wait here; null once it was sent. */
+  buffer: TimelineItem[] | null;
+};
+
+/** One browser tab's socket. */
+type Client = {
+  ws: WebSocket;
+  user: SessionUser;
+  /** The cookie it connected with, to notice a sign-out later. */
+  cookie: string | undefined;
+  subs: Map<string, Subscription>;
+  /** Everything for this socket happens in order: subscribes, catch-ups, sends. */
+  queue: SerialQueue;
+  /** Answered the last ping. */
+  alive: boolean;
+};
+
+export type WebHubDeps = {
+  access: RepoAccess;
+  /** Every item of a chat after `afterSeq`, oldest first (chats/timeline.ts). Tests pass their own. */
+  loadItems: (chatId: string, afterSeq: number) => Promise<TimelineItem[]>;
+  now?: () => number;
+  heartbeatMs?: number;
+};
+
+/**
+ * The browser end of `/ws/web` (spec §10 "Web ↔ server"). A tab opens one socket, signed in by its cookie, and
+ * subscribes to the chats it shows; the server pushes their new items, and whatever else changed for that person.
+ * Changes never come in this way: they're REST calls. See docs/why/web-socket-and-origin.md.
+ */
+export class WebHub {
+  private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_WEB_MESSAGE_BYTES });
+  private readonly clients = new Set<Client>();
+  private readonly heartbeat: ReturnType<typeof setInterval>;
+  private readonly now: () => number;
+
+  constructor(private readonly deps: WebHubDeps) {
+    this.now = deps.now ?? Date.now;
+    this.heartbeat = setInterval(() => this.checkAlive(), deps.heartbeatMs ?? HEARTBEAT_MS);
+    // The timer alone never keeps the process running.
+    this.heartbeat.unref();
+  }
+
+  /** An upgrade request for /ws/web, handed over by the upgrade router (ws/upgrade-router.ts). */
+  handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    void this.upgrade(req, socket, head);
+  };
+
+  /**
+   * New items of a chat, after the dispatcher saved them. A socket still catching up keeps them until its
+   * catch-up is sent; any it already has are skipped.
+   */
+  publishItems(chatId: string, items: TimelineItem[]): void {
+    for (const client of this.clients) {
+      const sub = client.subs.get(chatId);
+      if (!sub) continue;
+      if (sub.buffer) {
+        sub.buffer.push(...items);
+        continue;
+      }
+      client.queue.push(async () => {
+        if (await this.stillAllowed(client, sub)) this.sendItems(client, sub, items);
+      });
+    }
+  }
+
+  /** A message for everyone following this chat (the live progress line, say). */
+  sendToChat(chatId: string, msg: ServerToWeb): void {
+    for (const client of this.clients) this.sendIfSubscribed(client, chatId, msg);
+  }
+
+  /** A message for one person's sockets that follow this chat (their own view of it). */
+  sendToChatViewer(chatId: string, userId: string, msg: ServerToWeb): void {
+    for (const client of this.clients) if (client.user.id === userId) this.sendIfSubscribed(client, chatId, msg);
+  }
+
+  /** A message for every socket of one person, whatever they follow (their inbox, their CLIs). */
+  sendToUser(userId: string, msg: ServerToWeb): void {
+    for (const client of this.clients) {
+      if (client.user.id === userId) client.queue.push(async () => send(client.ws, msg));
+    }
+  }
+
+  /** Who follows this chat right now, once each. */
+  subscribers(chatId: string): SessionUser[] {
+    const users = new Map<string, SessionUser>();
+    for (const client of this.clients) if (client.subs.has(chatId)) users.set(client.user.id, client.user);
+    return [...users.values()];
+  }
+
+  /** Resolves once everything queued so far for every socket has run. Tests use it. */
+  async idle(): Promise<void> {
+    await Promise.all([...this.clients].map((c) => c.queue.idle()));
+  }
+
+  /** Close every socket and stop the heartbeat. With 1012 on shutdown, the tabs reconnect. */
+  close(code: number, reason = ''): void {
+    clearInterval(this.heartbeat);
+    for (const ws of this.wss.clients) ws.close(code, reason);
+  }
+
+  private async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
+    const onError = () => socket.destroy();
+    socket.on('error', onError);
+    try {
+      // Both are checked before the upgrade, so another site's page never gets a socket (spec §10).
+      if (!isAllowedUpgradeOrigin(req.headers, getEnv().PUBLIC_URL)) return refuse(socket, 403);
+      const user = await sessionUserFromCookieHeader(req.headers.cookie);
+      if (!user) return refuse(socket, 401);
+      socket.removeListener('error', onError);
+      this.wss.handleUpgrade(req, socket, head, (ws) => this.accept(ws, user, req.headers.cookie));
+    } catch (err) {
+      console.error('[web-hub] upgrade failed:', err);
+      refuse(socket, 500);
+    }
+  }
+
+  private accept(ws: WebSocket, user: SessionUser, cookie: string | undefined): void {
+    const client: Client = { ws, user, cookie, subs: new Map(), queue: new SerialQueue(), alive: true };
+    this.clients.add(client);
+    ws.on('pong', () => (client.alive = true));
+    ws.on('message', (data, isBinary) => {
+      const msg = readMessage(data, isBinary);
+      if (!msg) return ws.close(CLOSE_POLICY, 'not a message this server understands');
+      if (msg.t === 'chat.subscribe') client.queue.push(() => this.subscribe(client, msg.d.chatId, msg.d.afterSeq));
+      else client.queue.push(async () => void client.subs.delete(msg.d.chatId));
+    });
+    ws.on('close', () => this.clients.delete(client));
+    ws.on('error', (err) => console.warn('[web-hub] socket error:', err.message));
+  }
+
+  /**
+   * Resuming without gaps (spec §10): register the subscription first, so items saved from now on wait in its
+   * buffer; then send everything after `afterSeq` from the database; then the buffer, skipping what the
+   * database already had. An item saved during the read is in both, and goes once.
+   */
+  private async subscribe(client: Client, chatId: string, afterSeq: number): Promise<void> {
+    if (!(await this.sessionStillValid(client))) return;
+    let allowed: Awaited<ReturnType<typeof chatAccess>>;
+    try {
+      allowed = await chatAccess(client.user, chatId, this.deps.access);
+    } catch (err) {
+      console.error(`[web-hub] could not check access to chat ${chatId}:`, err);
+      return send(client.ws, chatError(chatId, 'unavailable'));
+    }
+    if (allowed.kind !== 'read') return send(client.ws, chatError(chatId, allowed.kind === 'reauth' ? 'reauth' : 'not_found'));
+
+    const sub: Subscription = { chatId, repoFullName: allowed.chat.repoFullName, checkedAt: this.now(), sentUpTo: afterSeq, buffer: [] };
+    client.subs.set(chatId, sub);
+    const missed = await this.deps.loadItems(chatId, afterSeq);
+    // Even with nothing missed, one chat.items says "you're caught up".
+    if (missed.length === 0) send(client.ws, { v: 1, t: 'chat.items', d: { chatId, items: [], lastSeq: afterSeq } });
+    for (let i = 0; i < missed.length; i += ITEMS_PER_PAGE) this.sendItems(client, sub, missed.slice(i, i + ITEMS_PER_PAGE));
+    const live = sub.buffer ?? [];
+    sub.buffer = null;
+    this.sendItems(client, sub, live);
+  }
+
+  /** Send the items this socket doesn't have yet, oldest first. */
+  private sendItems(client: Client, sub: Subscription, items: TimelineItem[]): void {
+    const fresh = items.filter((item) => item.seq > sub.sentUpTo).sort((a, b) => a.seq - b.seq);
+    if (fresh.length === 0) return;
+    sub.sentUpTo = fresh[fresh.length - 1]!.seq;
+    send(client.ws, { v: 1, t: 'chat.items', d: { chatId: sub.chatId, items: fresh, lastSeq: sub.sentUpTo } });
+  }
+
+  private sendIfSubscribed(client: Client, chatId: string, msg: ServerToWeb): void {
+    if (!client.subs.has(chatId)) return;
+    client.queue.push(async () => {
+      const sub = client.subs.get(chatId);
+      if (sub && (await this.stillAllowed(client, sub))) send(client.ws, msg);
+    });
+  }
+
+  /**
+   * Access is kept 5 minutes, like everywhere else (spec §16). Past that, the next thing sent for this chat
+   * asks again: a person removed from the repo gets `chat.error` and nothing more. If GitHub doesn't answer,
+   * the subscription stays and is asked about again next time: a GitHub hiccup isn't a reason to cut people off.
+   */
+  private async stillAllowed(client: Client, sub: Subscription): Promise<boolean> {
+    if (this.now() - sub.checkedAt < ACCESS_TTL_MS) return true;
+    if (!(await this.sessionStillValid(client))) return false;
+    let answer: Awaited<ReturnType<RepoAccess['check']>>;
+    try {
+      answer = await this.deps.access.check(client.user.id, sub.repoFullName);
+    } catch (err) {
+      console.error(`[web-hub] could not check access to ${sub.repoFullName} again:`, err);
+      return true;
+    }
+    if (answer === 'read') {
+      sub.checkedAt = this.now();
+      return true;
+    }
+    client.subs.delete(sub.chatId);
+    send(client.ws, chatError(sub.chatId, answer === 'reauth' ? 'reauth' : 'not_found'));
+    return false;
+  }
+
+  /** A socket whose session ended (signed out, expired) is closed with 4401: the tab shows the landing page. */
+  private async sessionStillValid(client: Client): Promise<boolean> {
+    if (await sessionUserFromCookieHeader(client.cookie)) return true;
+    client.ws.close(CLOSE_CODES.reauth, 'signed out');
+    return false;
+  }
+
+  /** Terminate sockets that didn't answer the last ping, and ping the rest. */
+  private checkAlive(): void {
+    for (const client of this.clients) {
+      if (!client.alive) {
+        client.ws.terminate();
+        continue;
+      }
+      client.alive = false;
+      client.ws.ping();
+    }
+  }
+}
+
+function chatError(chatId: string, code: 'not_found' | 'reauth' | 'unavailable'): ServerToWeb {
+  return { v: 1, t: 'chat.error', d: { chatId, code } };
+}
+
+function send(ws: WebSocket, msg: ServerToWeb): void {
+  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+}
+
+/** One frame as a browser message, or null when it isn't one. */
+function readMessage(data: RawData, isBinary: boolean): WebToServer | null {
+  if (isBinary) return null;
+  try {
+    const parsed = WebToServer.safeParse(JSON.parse(data.toString()));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+```
+
+- [ ] **Step 16: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/ws/web-hub.db.test.ts`
+Expected: PASS, 12 tests.
+
+- [ ] **Step 17: Serve it**
+
+In `apps/server/src/main.ts`:
+1. Imports: `CLI_WS_PATH` and `WEB_WS_PATH` beside `CLOSE_CODES` from `@nitpilot/protocol`; `RepoAccess` from `'./auth/repo-access'`; `loadItemsAfter` from `'./chats/timeline'`; `routeUpgrades` from `'./ws/upgrade-router'`; `WebHub` from `'./ws/web-hub'`.
+2. After `const notifier = new CliNotifier(hub);`:
+
+```ts
+  // Browsers follow chats live over /ws/web: their new items as they're saved (spec §10, docs/why/web-socket-and-origin.md).
+  const webHub = new WebHub({ access: new RepoAccess(github), loadItems: loadItemsAfter });
+```
+
+3. Replace `hub.attach(server as Server);` and its comment with:
+
+```ts
+  // serve() makes a plain HTTP/1 server. Each WebSocket upgrade on it goes to the hub for its path.
+  routeUpgrades(server as Server, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });
+```
+
+4. In the shutdown handler, after `hub.closeAll(CLOSE_CODES.serverRestart, 'server restarting');`: `webHub.close(CLOSE_CODES.serverRestart, 'server restarting');`.
+
+In `apps/server/test/e2e/harness.ts`, the same wiring:
+1. Imports: `CLI_WS_PATH`, `WEB_WS_PATH` from `@nitpilot/protocol`; `RepoAccess`; `loadItemsAfter`; `routeUpgrades`; `WebHub`; `fakeFetch` from `'../fake-fetch'`; and `GithubClient` as a value (`import { GithubClient } from '../../src/platform/github/client';`, no longer `import type`).
+2. Replace the `const app = testApp(…)` line with:
+
+```ts
+  // GitHub's API for people's own access checks; nothing answers unless the caller passes one that does.
+  const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
+  const webHub = new WebHub({ access: new RepoAccess(githubApi), loadItems: loadItemsAfter });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, github: githubApi, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+```
+
+3. In `close()`, after `hub.closeAll(1001, 'test over');`: `webHub.close(1001, 'test over');`.
+4. Replace `hub.attach(listening);` with `routeUpgrades(listening, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });`.
+5. Return `webHub` beside `hub`.
+
+- [ ] **Step 18: The explainer, and the spec**
+
+Create `docs/why/web-socket-and-origin.md` (CLAUDE.md: the first time a backend concept shows up in the code):
+
+````markdown
+# The browser's WebSocket: cookies, Origin, and resuming without gaps
+
+**In one sentence:** each browser tab opens one WebSocket to `/ws/web`, signed in by the same cookie as every REST call, and the server pushes new chat items down it the moment they're saved, so a chat updates while the agents work without anyone reloading.
+
+## Two hubs, one server (`ws/upgrade-router.ts`)
+
+Node gives an HTTP server a single `'upgrade'` event for every WebSocket request, whatever its path. With two hubs (`/ws/cli` for CLIs, `/ws/web` for browsers) both listening, both would answer the same request. So one small router listens, reads the path, and hands the request to that path's hub; any other path gets a 404. It's a `<Routes>` for sockets.
+
+## Who may open one (`ws/web-hub.ts`)
+
+A CLI proves who it is with a `Bearer` token it sends on purpose. A browser sends the session cookie on its own, to any request for our address, including a WebSocket that another site's page opens. That's the catch:
+
+- **SameSite doesn't help.** `SameSite=Lax` keeps the cookie off cross-site POSTs, but browsers send it on a cross-site WebSocket anyway. A page on `evil.example` could open `wss://nitpilot.dev/ws/web` and receive your chats as you. That attack is called cross-site WebSocket hijacking.
+- **The Origin header does.** Every WebSocket request carries `Origin`: the site whose page opened it. The browser sets it, and a page can't change it. The hub checks it before upgrading (`isAllowedUpgradeOrigin` in `lib/csrf.ts`): our own address, or `PUBLIC_URL`, or no socket (403). No `Origin` at all is a no too: browsers always send one.
+- **Then the cookie.** No valid session: 401, and no socket.
+
+Both checks happen before the upgrade, while it's still an ordinary HTTP request that can be refused with a status code.
+
+In React terms: the REST writes already do this check (`requireSameOrigin`), because a form on another site could post to us with your cookie. A WebSocket is the same risk in a different shape.
+
+## Who may follow which chat
+
+Opening the socket only proves who you are. Each chat a tab wants is a `chat.subscribe`, and the hub asks the same question as the REST routes: can your GitHub account read this repo (`chats/access.ts`, `auth/repo-access.ts`, spec §16)? If not, the tab gets `chat.error not_found`, the same answer as for a chat that doesn't exist, and nothing of that chat is ever sent.
+
+The answer is kept 5 minutes. A socket can stay open for hours, so when an answer is older than that, the next thing about to be sent for that chat asks GitHub again. Someone removed from the repo stops getting items within those 5 minutes, and gets `chat.error`. A session that ended (signed out, expired) closes the socket with `4401`, and the tab shows the landing page.
+
+## Resuming without gaps
+
+A tab that reconnects (the laptop slept, the Wi-Fi dropped) must show every item exactly once, in order. Every item has a `seq`: 1, 2, 3… per chat, with no gaps (spec §8). The tab subscribes with the newest `seq` it has (`afterSeq`). The hard part is the moment between "read what you missed from the database" and "start sending live items": an item saved right then could fall between the two, or arrive twice.
+
+So the hub does it in this order:
+
+```
+1. register the subscription, with an empty buffer   ← from now on, live items wait in the buffer
+2. read every item after afterSeq from the database  ← an item saved during this read is in the DB…
+3. send them                                         ← …and goes out here
+4. send the buffer, skipping any seq already sent    ← …so its copy in the buffer is skipped
+5. from now on, send live items straight away
+```
+
+An item saved before step 1 is in the database: step 2 reads it. An item saved after step 1 lands in the buffer: step 4 sends it, unless step 2 already did. Nothing falls in between, and nothing goes twice. The test "sends an item saved while the catch-up is being read exactly once" in `ws/web-hub.db.test.ts` saves an item in the middle of step 2.
+
+The browser keeps a second guard: it drops any `seq` it already has, and after a reconnect it subscribes again with each open chat's newest `seq`.
+
+## Keeping it honest
+
+- Everything for one socket happens in order (`lib/serial-queue.ts`), so a catch-up and the live items after it can't overtake each other.
+- A browser only ever sends `chat.subscribe` and `chat.unsubscribe`. Anything else, or anything over 64 KB, closes the socket (1008, or 1009 for the size).
+- A ping every 30 s; a socket that didn't answer the last one is closed, so a dead tab is gone within a minute.
+
+## The React analogy
+
+- `chat.subscribe` is a `useEffect` that subscribes to a store and returns an unsubscribe, with the `seq` as a cursor, like a paginated query's `getNextPageParam`.
+- The buffer is what you'd do if a subscription could fire while your initial `fetch` was still loading: hold the updates, then apply them on top of the fetched data, ignoring those the fetch already included.
+````
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "Web ↔ server", make the messages match `web-messages.ts`:
+- `job.progress {chatId, who, stage, text}` becomes `job.progress {chatId, who, action, stage, text}` (`action` is `reviewing` or `fixing`, so the line can say "leo's agent is reviewing…").
+- `inbox.upsert {row}` becomes `inbox.upsert {chatId, rows}`: every row that person has for that chat (an author who also reviews has two), an empty list removing them.
+- After the `me.update` item, add: "`chat.error {chatId, code}` when a subscribe is refused, or an open subscription's access check fails: `not_found` (no such chat, or you can't see its repo), `reauth` (your GitHub sign-in expired), `unavailable` (GitHub didn't answer; the client asks again a little later). The subscription is gone. A socket whose session ended is closed with 4401."
+- In "Resuming without gaps", "then catch up from `afterSeq` out of the database" becomes "then catch up from `afterSeq` out of the database, every missed item, in `chat.items` messages of at most 200".
+
+In §16 "Who can see a chat", after "checked with their own token and cached for 5 minutes.", add: "A chat open on `/ws/web` is checked again once that answer is 5 minutes old, the next time something is sent for it; losing access ends the subscription with `chat.error`."
+
+- [ ] **Step 19: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
+Expected: protocol 48, CLI 293 passed + 14 skipped, server 686, web 73; end to end 5; typecheck and lint clean.
+
+- [ ] **Step 20: Commit**
+
+```bash
+git add packages/protocol/src apps/server/src/ws apps/server/src/chats/timeline.ts apps/server/src/chats/timeline.db.test.ts apps/server/src/chats/access.ts apps/server/src/chats/access.db.test.ts apps/server/src/lib/csrf.ts apps/server/src/lib/csrf.test.ts apps/server/src/auth/session.ts apps/server/src/main.ts apps/server/test/db.ts apps/server/test/ws.ts apps/server/test/web-ws.ts apps/server/test/e2e/harness.ts docs/why/web-socket-and-origin.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): /ws/web, the browser's socket, resuming without gaps
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 8: Chat view, messages and files over REST (+ GitHub timeouts, one token refresh at a time)
 
 **Files:**
-- Create: `apps/server/src/chats/views.ts` (+ db test), `apps/server/src/chats/permissions.ts` (+ test; read side only), `apps/server/src/http/routes/chats.ts` (+ db test), `docs/why/chat-access-rules.md`.
-- Modify: `packages/protocol/src/web-api.ts` (`ChatView`, `PointView`, `ParticipantView`, `DraftView` (empty list until W5), `Permissions`, `PrFile`, `MessagesResponse`, `FilesResponse`), `apps/server/src/platform/types.ts` and `platform/github/reads.ts` and `platform/fake/fake-platform.ts` (`listPrFiles`), `apps/server/src/platform/github/client.ts` (timeout, **M4**), `apps/server/src/auth/user-tokens.ts` (refresh serialized per user, **M5**), their tests.
+- Create: `apps/server/src/lib/ttl-cache.ts`, `apps/server/src/lib/ttl-cache.test.ts`, `apps/server/src/chats/views.ts`, `apps/server/src/chats/views.db.test.ts`, `apps/server/src/http/routes/chats.ts`, `apps/server/src/http/routes/chats.db.test.ts`, `docs/why/chat-access-rules.md`.
+- Modify: `packages/protocol/src/web-api.ts` and its test (the chat's bodies), `packages/protocol/src/web-messages.ts` (`chat.state`), `apps/server/src/auth/repo-access.ts` (on `TtlCache`), `apps/server/src/auth/user-tokens.ts` (**M5**), `apps/server/src/platform/github/client.ts` and its test (**M4**), `apps/server/src/platform/types.ts`, `apps/server/src/platform/github/payloads.ts`, `apps/server/src/platform/github/reads.ts` and its test, `apps/server/src/platform/fake/fake-platform.ts` and its test (`listPrFiles`), `apps/server/src/chats/access.ts` (`chatAccessByPath`), `apps/server/src/chats/timeline.ts` (`loadItemsBefore`), `apps/server/src/chats/inbox.ts` (export `githubAvatar`), `apps/server/src/http/errors.ts` (`reauth`), `apps/server/src/http/routes/inbox.ts` and `inbox.db.test.ts`, `apps/server/src/http/app.ts`, `apps/server/test/app.ts`, `apps/server/src/main.ts`, `apps/server/test/e2e/harness.ts`, `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§10: what the chat read answers).
 
 **Interfaces:**
-- Consumes: `readAccess` (Task 7), `loadActivities` (Task 4), `failureKind` (`chats/failed-flags.ts`), `rulesFromJson`.
-- Produces: `ChatView = { id, repo, number, title, url, author: string, headRef, baseRef, phase: Phase, round, maxRounds, merged, closed, trusted, isDraft, viewer: { role: Role | null; attention: Attention; failure: 'job' | 'github_post' | null }, participants: ParticipantView[], activity: ActivityView, points: PointView[], drafts: DraftView[], rules: { maxRounds: number; alwaysEscalate: Category[]; autoReview: boolean; autoAddress: boolean; error: string | null }, permissions: Permissions, summaryUrl: string | null, items: TimelineItem[], lastSeq: number, hasOlder: boolean }`. `ParticipantView = { githubId, login, avatarUrl, role, onNitpilot, auto, requested, agent: { online: boolean; offlineSince: string | null; working: boolean } | null }`. `PointView` mirrors `PointState` plus `raisedByLogin`. `Permissions = { note: boolean; review: boolean; retry: boolean; auto: Role[]; resolve: number[]; continue: number[]; drafts: string[] }` (all false or empty in W3; W4 and W5 fill them). `PrFile = { path, oldPath: string | null, status: 'added' | 'modified' | 'removed' | 'renamed', adds: number, dels: number }`. `loadChatView(chatId, viewer: SessionUser, clis: LiveClis): Promise<ChatView>`; `toTimelineItem(m: Message): TimelineItem`. `PlatformReads.listPrFiles(pr: PrRef): Promise<PrFile[]>` (GitHub: `GET /repos/{o}/{r}/pulls/{n}/files`, up to 300 files across pages, with the installation token). `GithubClient` options gain `timeoutMs` (default 15 000; an aborted call is a `GithubError` with `status: null` and "GitHub didn't answer in 15 s"). `getUserToken(userId, github)` runs refreshes through a `KeyedLock` per user.
-- Routes: `GET /api/chats/:owner/:repo/:number` → `ChatView` (latest 200 items); `GET /api/chats/:id/messages?before=<seq>` → `{ items, hasOlder }` (200 older items); `GET /api/chats/:id/files` → `{ files: PrFile[], adds, dels }`, kept in memory per `(chatId, headSha)` for 10 minutes, at most 500 entries.
+- Consumes: `chatAccess`, `ChatAccess`, `ITEMS_PER_PAGE`, `threadPointsOf`, `toTimelineItem` (Task 7); `loadActivity`, `LiveClis` (`chats/activity.ts`); `failureKind` (`chats/failed-flags.ts`, `'agent' | 'github_post' | null`); `rulesFromJson`, `repoRef` (`chats/rules.ts`); `requireUser`, `UserVariables` (Task 3); `HttpError`; `KeyedLock` (`lib/key-lock.ts`); `makeParticipant`, `makeMessage`, `makeCliToken`, `makeGithubSignIn`.
+- Produces (protocol): `MessagesResponse = { items: TimelineItem[]; hasOlder }`. `ActivityView = { kind: 'agent_working' | 'agent_waiting' | 'human_turn' | 'none'; who: string | null; why: 'offline' | 'repo_not_linked' | 'cap_reached' | null; offlineSince: string | null }`. `ParticipantView = { githubId, login, avatarUrl, role, isBot, onNitpilot, requested, agent: { online, offlineSince: string | null, working } | null }`. `PointView = { number, raisedBy: { githubId, login }, origin, path, line, side, url: string | null, severity, category, title, body, snippet, status, authorResolution, escalationReason, trusted, round }`. `ChatView = { id, repo, number, title, url, author, headRef, baseRef, phase, round, maxRounds, merged, closed, trusted, isDraft, viewer: { role: Role | null; attention; failure: 'agent' | 'github_post' | null }, participants, activity, points, rules: { maxRounds, alwaysEscalate, autoReview, autoAddress, error: string | null }, summaryUrl: string | null, lastSeq }`. `ChatResponse = { view: ChatView; items: TimelineItem[]; hasOlder }`. `PrFile = { path, oldPath: string | null, status: 'added' | 'modified' | 'removed' | 'renamed', adds, dels }`. `FilesResponse = { files: PrFile[]; adds; dels; truncated }`. `ServerToWeb` gains `chat.state { chatId, view: ChatView }`.
+- Produces (server): `TtlCache<V>(ttlMs, maxEntries, now?)` with `get(key): V | undefined` and `set(key, value)` (`lib/ttl-cache.ts`). `ErrorCode` gains `'reauth'` (401). `isGithubName(s): boolean` and `chatAccessByPath(user, path: { owner; repo; number }, access): Promise<ChatAccess>` (`chats/access.ts`). `loadItemsBefore(chatId, beforeSeq: number | null): Promise<MessagesResponse>` (`chats/timeline.ts`). `ChatViewer = { githubId }`, `loadChatView(chatId, viewer, clis, now?): Promise<ChatView>`, `loadChatPage(chatId, viewer, clis): Promise<ChatResponse>` (`chats/views.ts`). `chatRoutes(deps: { github; platform: PlatformReads; clis })` with `FILES_TTL_MS = 10 min`, `MAX_FILE_LISTS = 500`. `PlatformReads.listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>`, `MAX_PR_FILES = 300` (`platform/types.ts`); `FakePlatform.prFiles` (`Map<"owner/repo#n", PrFile[]>`) and `fileLists` (what was asked). `GITHUB_TIMEOUT_MS = 15_000`; `GithubClient`'s fourth constructor argument is `timeoutMs`. `AppDeps.platform: PlatformReads`. `githubAvatar(githubId)` is exported from `chats/inbox.ts`.
+- Routes: `GET /api/chats/:owner/:repo/:number` → `ChatResponse` (newest 200 items); `GET /api/chats/:id/messages?before=<seq>` → `MessagesResponse`; `GET /api/chats/:id/files` → `FilesResponse`, kept per `(chatId, headSha)` for 10 minutes. Each: `requireUser`, then the access check; "no such chat" and "can't see it" are the same 404 `{ code: 'not_found' }`; an expired GitHub sign-in is a 401 `{ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' }`; GitHub not answering is a 502 `github_unavailable`.
 
-**Behavior:**
-- Every route: `requireUser`, then `readAccess`; `none` and a missing chat → the same 404 `{ code: 'not_found' }`; `reauth` → 401 `{ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' }`. Owner and repo must look like GitHub names before GitHub is asked (the transcript route's rule).
-- `viewer.failure` uses `failureKind` so the UI can tell a failed job (Retry) from a failed GitHub post (Reconnect).
-- `docs/why/chat-access-rules.md`: who can see and who can do what (spec §16), why GitHub is asked with the viewer's own token, the 5-minute cache and what it costs, why 404 for both; points to `chats/access.ts`, `chats/permissions.ts`.
+- [ ] **Step 1: Write the failing test for the chat's bodies**
 
-**Tests this task must include:**
-- `views.db.test.ts`: a chat with agent and GitHub points, a summary, system lines and a human note gives the expected `ChatView`; `items` are the newest 200 in ascending order with `hasOlder`; presence comes from the injected `clis`.
-- `chats.db.test.ts`: 404 for a missing chat and for no access (same body); **Review Focus 2:** 401 `reauth` when the viewer's GitHub sign-in needs renewing; owner/repo that aren't GitHub names → 404 without a GitHub call; `messages?before` pages backwards; `files` is asked once per head and again after a push.
-- `client.test.ts` (**M4**): a GitHub call that never answers rejects after the timeout with the "didn't answer" error (fake fetch honoring the abort signal).
-- `user-tokens` (**M5**): two concurrent `getUserToken` calls for a user whose token is expired make one refresh request, and both get the new token.
-- `fake-platform` and `reads` tests for `listPrFiles` (pagination, renamed files).
+In `packages/protocol/src/web-api.test.ts`, import `ChatResponse`, `FilesResponse` and `type ChatView` beside the others, and add after the last test:
+
+```ts
+  it('round-trips a chat with its points and items, and a files list', () => {
+    const view: ChatView = {
+      id: 'chat_1', repo: 'acme/shop-api', number: 142, title: 'Cursor pagination', url: 'https://github.com/acme/shop-api/pull/142',
+      author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'escalated', round: 2, maxRounds: 3,
+      merged: false, closed: false, trusted: true, isDraft: false,
+      viewer: { role: 'reviewer', attention: 'decision', failure: null },
+      participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
+      activity: { kind: 'none', who: null, why: null, offlineSince: null },
+      points: [{
+        number: 1, raisedBy: { githubId: '1002', login: 'leo' }, origin: 'agent', path: 'src/orders/list.ts', line: 48, side: 'RIGHT',
+        url: 'https://github.com/acme/shop-api/blob/abc1234/src/orders/list.ts#L48', severity: 'blocker', category: 'security',
+        title: 'SQL built from input', body: 'Use a parameter.', snippet: { startLine: 43, lines: ['const q = `…`;'] },
+        status: 'escalated', authorResolution: null, escalationReason: 'category', trusted: true, round: 1,
+      }],
+      rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
+      summaryUrl: null, lastSeq: 7,
+    };
+    const body = { view, items: [], hasOlder: false };
+    expect(ChatResponse.parse(JSON.parse(JSON.stringify(body)))).toEqual(body);
+    expect(() => ChatResponse.parse({ ...body, view: { ...view, phase: 'waiting' } })).toThrow();
+    const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
+    expect(FilesResponse.parse(files)).toEqual(files);
+  });
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm test -w packages/protocol -- src/web-api.test.ts`
+Expected: FAIL: `TypeError: Cannot read properties of undefined (reading 'parse')` (no `ChatResponse` yet).
+
+- [ ] **Step 3: The chat's bodies, and `chat.state`**
+
+In `packages/protocol/src/web-api.ts`, the enums import becomes `import { Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';`, add `import { Snippet } from './job-result';`, and add after `TimelineItem`:
+
+```ts
+/** `GET /api/chats/:id/messages?before=`: older items, oldest first. `hasOlder` says whether there are more before them. */
+export const MessagesResponse = z.object({ items: z.array(TimelineItem), hasOlder: z.boolean() });
+export type MessagesResponse = z.infer<typeof MessagesResponse>;
+
+/**
+ * What a chat is waiting on right now (spec §9.1 "Activity"), worked out when it's read: an agent at work, an
+ * agent that can't start (`why`), a person's turn, or nothing. `who` is a GitHub login.
+ */
+export const ActivityView = z.object({
+  kind: z.enum(['agent_working', 'agent_waiting', 'human_turn', 'none']),
+  who: z.string().nullable(),
+  why: z.enum(['offline', 'repo_not_linked', 'cap_reached']).nullable(),
+  /** For an agent waiting offline: when its CLI was last seen (null if it never connected). */
+  offlineSince: z.string().nullable(),
+});
+export type ActivityView = z.infer<typeof ActivityView>;
+
+/** A person in the chat, and their agent: null for someone who isn't on Nitpilot (or a bot). */
+export const ParticipantView = z.object({
+  githubId: z.string(),
+  login: z.string(),
+  avatarUrl: z.string(),
+  role: Role,
+  isBot: z.boolean(),
+  onNitpilot: z.boolean(),
+  /** A reviewer the author asked for. */
+  requested: z.boolean(),
+  agent: z.object({ online: z.boolean(), offlineSince: z.string().nullable(), working: z.boolean() }).nullable(),
+});
+export type ParticipantView = z.infer<typeof ParticipantView>;
+
+/** A review point (spec §8 `Point`), with who raised it and a link to its line on GitHub. */
+export const PointView = z.object({
+  number: z.number().int().positive(),
+  raisedBy: z.object({ githubId: z.string(), login: z.string() }),
+  origin: PointOrigin,
+  path: z.string().nullable(),
+  line: z.number().int().positive().nullable(),
+  side: Side.nullable(),
+  /** The file at that line on GitHub; null for a point about the whole PR. */
+  url: z.string().nullable(),
+  severity: Severity,
+  category: Category,
+  title: z.string(),
+  body: z.string(),
+  snippet: Snippet.nullable(),
+  status: PointStatus,
+  authorResolution: Resolution.nullable(),
+  escalationReason: EscalationReason.nullable(),
+  trusted: z.boolean(),
+  round: z.number().int().positive(),
+});
+export type PointView = z.infer<typeof PointView>;
+
+/**
+ * A chat as the person reading it sees it (spec §10, handoff §2): the PR, the people and their agents, the
+ * points, the team rules, and the reader's own place in it (`viewer`). `/ws/web` sends it again (`chat.state`)
+ * whenever it changes. The timeline items travel separately: in `ChatResponse`, then in `chat.items`.
+ */
+export const ChatView = z.object({
+  id: z.string(),
+  repo: z.string(),
+  number: z.number().int().positive(),
+  title: z.string(),
+  /** The PR on GitHub. */
+  url: z.string(),
+  /** The PR author's GitHub login. */
+  author: z.string(),
+  headRef: z.string(),
+  baseRef: z.string(),
+  phase: Phase,
+  round: z.number().int().positive(),
+  maxRounds: z.number().int().positive(),
+  merged: z.boolean(),
+  closed: z.boolean(),
+  /** False for a PR from an outside contributor: agents don't start on it by themselves (spec §6.1). */
+  trusted: z.boolean(),
+  isDraft: z.boolean(),
+  viewer: z.object({
+    /** Your role here, or null if you only read along. An author who also reviews is the author. */
+    role: Role.nullable(),
+    attention: Attention,
+    /** Why you're flagged `failed`: your agent's job failed (Retry), or a GitHub post in your name did (Reconnect). */
+    failure: z.enum(['agent', 'github_post']).nullable(),
+  }),
+  participants: z.array(ParticipantView),
+  activity: ActivityView,
+  points: z.array(PointView),
+  rules: z.object({
+    maxRounds: z.number().int().positive(),
+    alwaysEscalate: z.array(Category),
+    autoReview: z.boolean(),
+    autoAddress: z.boolean(),
+    /** Why `.nitpilot.yml` couldn't be used, so the defaults apply; null when it's fine or missing. */
+    error: z.string().nullable(),
+  }),
+  /** Nitpilot's summary comment on GitHub, once it's posted. */
+  summaryUrl: z.string().nullable(),
+  /** The newest timeline item's seq (0 for none). */
+  lastSeq: z.number().int().nonnegative(),
+});
+export type ChatView = z.infer<typeof ChatView>;
+
+/** `GET /api/chats/:owner/:repo/:number`: the chat, and its newest 200 timeline items, oldest first. */
+export const ChatResponse = z.object({ view: ChatView, items: z.array(TimelineItem), hasOlder: z.boolean() });
+export type ChatResponse = z.infer<typeof ChatResponse>;
+
+/** One changed file of the PR (spec §10 `GET /api/chats/:id/files`). */
+export const PrFile = z.object({
+  path: z.string(),
+  /** Its old path, for a renamed file. */
+  oldPath: z.string().nullable(),
+  status: z.enum(['added', 'modified', 'removed', 'renamed']),
+  adds: z.number().int().nonnegative(),
+  dels: z.number().int().nonnegative(),
+});
+export type PrFile = z.infer<typeof PrFile>;
+
+/** The PR's changed files, at most 300; `truncated` when it has more. `adds` and `dels` add up the files listed. */
+export const FilesResponse = z.object({ files: z.array(PrFile), adds: z.number().int(), dels: z.number().int(), truncated: z.boolean() });
+export type FilesResponse = z.infer<typeof FilesResponse>;
+```
+
+The view carries no items: they come once in `ChatResponse`, then only the new ones in `chat.items`. In `packages/protocol/src/web-messages.ts`, import `ChatView` beside `InboxRow`, add after `ChatItems`:
+
+```ts
+/** The chat changed: its view as you see it now (points, phase, people, presence). Items come in chat.items. */
+export const ChatState = message('chat.state', z.object({ chatId: z.string(), view: ChatView }));
+```
+
+and add `ChatState` to `ServerToWeb`'s list, after `ChatItems`.
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 49 tests.
+
+- [ ] **Step 5: Write the failing tests for GitHub's timeout, the file list and the cache**
+
+**M4:** a GitHub call that never answers must not hold a request forever. In `apps/server/src/platform/github/client.test.ts`, add at the end:
+
+```ts
+describe('a GitHub call that never answers', () => {
+  it('gives up after the timeout, as a 504 the callers already treat as GitHub being down', async () => {
+    // A fetch that never answers, but stops when it's told to, as the real one does.
+    const hang = (_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)));
+    const github = new GithubClient(hang, 'https://api.github.com', 'https://github.com', 50);
+    const err = await github.api('GET', '/repos/octo/sandbox').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GithubError);
+    expect(err).toMatchObject({ status: 504, message: "GitHub didn't answer GET /repos/octo/sandbox in 0.05 s" });
+    await expect(github.oauth('/login/oauth/access_token', {})).rejects.toMatchObject({ status: 504 });
+  });
+});
+```
+
+In `apps/server/src/platform/github/reads.test.ts`, add at the end:
+
+```ts
+describe('listPrFiles', () => {
+  const file = (i: number) => ({ filename: `src/f${i}.ts`, status: 'modified', additions: 2, deletions: 1 });
+
+  it('reads the changed files page by page, renamed ones with their old path', async () => {
+    const pages = [Array.from({ length: 100 }, (_, i) => file(i)), [{ filename: 'src/new.ts', previous_filename: 'src/old.ts', status: 'renamed', additions: 0, deletions: 0 }, { filename: 'b.txt', status: 'copied', additions: 3, deletions: 0 }]];
+    const { platform, fetch } = reads({ 'GET /repos/octo/sandbox/pulls/42/files': (req) => pages[Number(req.url.searchParams.get('page')) - 1] ?? [] });
+    const { files, truncated } = await platform.listPrFiles(ref);
+    expect(files).toHaveLength(102);
+    expect(files.slice(100)).toEqual([
+      { path: 'src/new.ts', oldPath: 'src/old.ts', status: 'renamed', adds: 0, dels: 0 },
+      { path: 'b.txt', oldPath: null, status: 'added', adds: 3, dels: 0 },
+    ]);
+    expect(truncated).toBe(false);
+    expect(fetch.calls.filter((c) => c.url.pathname.endsWith('/files')).map((c) => c.headers.get('authorization'))).toEqual(['Bearer ghs_x', 'Bearer ghs_x']);
+  });
+
+  it('stops at 300 files and says the list was cut', async () => {
+    const { platform } = reads({ 'GET /repos/octo/sandbox/pulls/42/files': () => Array.from({ length: 100 }, (_, i) => file(i)) });
+    const { files, truncated } = await platform.listPrFiles(ref);
+    expect(files).toHaveLength(300);
+    expect(truncated).toBe(true);
+  });
+});
+```
+
+In `apps/server/src/platform/fake/fake-platform.test.ts`, add as the last test:
+
+```ts
+  it("lists a PR's changed files it was given, and records each time it's asked", async () => {
+    const fake = new FakePlatform();
+    const file = { path: 'src/a.ts', oldPath: null, status: 'modified' as const, adds: 1, dels: 0 };
+    fake.prFiles.set('octo/sandbox#42', [file]);
+    expect(await fake.listPrFiles(ref)).toEqual({ files: [file], truncated: false });
+    expect(await fake.listPrFiles({ ...ref, number: 43 })).toEqual({ files: [], truncated: false });
+    expect(fake.fileLists).toEqual(['octo/sandbox#42', 'octo/sandbox#43']);
+  });
+```
+
+`RepoAccess`'s bounded, expiring map is needed again for the file lists, so it becomes its own class. Create `apps/server/src/lib/ttl-cache.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { TtlCache } from './ttl-cache';
+
+describe('TtlCache', () => {
+  it('keeps a value for its time to live, then forgets it', () => {
+    let now = 0;
+    const cache = new TtlCache<string>(1_000, 10, () => now);
+    cache.set('a', 'one');
+    now = 999;
+    expect(cache.get('a')).toBe('one');
+    now = 1_000;
+    expect(cache.get('a')).toBeUndefined();
+  });
+
+  it('drops the oldest entry once full, and setting a key again makes it the newest', () => {
+    const cache = new TtlCache<number>(60_000, 2);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('a', 3);
+    cache.set('c', 4);
+    expect([cache.get('a'), cache.get('b'), cache.get('c')]).toEqual([3, undefined, 4]);
+  });
+});
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/platform src/lib/ttl-cache.test.ts`
+Expected: FAIL: the timeout test times out (the fake fetch never answers), `listPrFiles is not a function` (3), and `./ttl-cache` doesn't exist.
+
+- [ ] **Step 7: A timeout on every GitHub call, the file list, and the cache**
+
+Replace `apps/server/src/platform/github/client.ts` with (an abort becomes a `GithubError` with status 504, so every caller that already treats a 5xx as "GitHub is down" handles a timeout too):
+
+```ts
+import { BRAND } from '@nitpilot/protocol';
+
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+export class GithubError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+    message: string,
+    /** How long GitHub asked us to wait before trying again (rate limits), if it said. */
+    readonly retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = 'GithubError';
+  }
+}
+
+/**
+ * How long a rate-limited response asks us to wait: `retry-after` (seconds) for a secondary rate
+ * limit, or until `x-ratelimit-reset` (a Unix time) once the hourly allowance is used up.
+ */
+export function retryAfterMs(headers: Headers, now = Date.now()): number | undefined {
+  const retryAfter = headers.get('retry-after');
+  if (retryAfter && /^\d+$/.test(retryAfter)) return Number(retryAfter) * 1000;
+  const reset = Number(headers.get('x-ratelimit-reset'));
+  if (headers.get('x-ratelimit-remaining') === '0' && reset > 0) return Math.max(reset * 1000 - now, 0);
+  return undefined;
+}
+
+/** How long one GitHub call may take before we give up on it: a request waiting on GitHub never waits forever. */
+export const GITHUB_TIMEOUT_MS = 15_000;
+
+export type GithubRequest = {
+  token?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  accept?: string;
+  /** Return the response body as text, without JSON.parse (e.g. to keep 64-bit ids exact). */
+  raw?: boolean;
+};
+export type GithubResponse<T> = { status: number; data: T; headers: Headers };
+
+/**
+ * A small typed wrapper around fetch for GitHub. Tests pass a fake fetch (test/fake-fetch.ts).
+ * Statuses below 400 (including 304 Not Modified) are returned; 400+ throw GithubError. A call that gets no
+ * answer within `timeoutMs` is a GithubError with status 504, like any other GitHub outage.
+ */
+export class GithubClient {
+  constructor(
+    private readonly fetchImpl: FetchLike = fetch,
+    readonly apiBase = 'https://api.github.com',
+    readonly webBase = 'https://github.com',
+    private readonly timeoutMs = GITHUB_TIMEOUT_MS,
+  ) {}
+
+  async api<T = unknown>(method: string, path: string, opts: GithubRequest = {}): Promise<GithubResponse<T>> {
+    const headers: Record<string, string> = {
+      accept: opts.accept ?? 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+      'user-agent': BRAND.userAgent,
+      ...opts.headers,
+    };
+    if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+    if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    const { res, data } = await this.timed(`${method} ${path}`, async (signal) => {
+      const res = await this.fetchImpl(`${this.apiBase}${path}`, {
+        method,
+        headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal,
+      });
+      return { res, data: opts.raw ? await res.text() : await readBody(res) };
+    });
+    if (res.status >= 400) throw new GithubError(res.status, data, `GitHub ${method} ${path} failed with ${res.status}`, retryAfterMs(res.headers));
+    return { status: res.status, data: data as T, headers: res.headers };
+  }
+
+  /** POST to github.com/login/oauth/*. GitHub reports OAuth errors as 200 + `{ error }`. */
+  async oauth<T>(path: string, params: Record<string, string>): Promise<T> {
+    const { res, data } = await this.timed(`OAuth ${path}`, async (signal) => {
+      const res = await this.fetchImpl(`${this.webBase}${path}`, {
+        method: 'POST',
+        headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': BRAND.userAgent },
+        body: JSON.stringify(params),
+        signal,
+      });
+      return { res, data: (await readBody(res)) as (T & { error?: string }) | null };
+    });
+    if (res.status >= 400 || !data || data.error) {
+      throw new GithubError(res.status, data, `GitHub OAuth ${path} failed: ${data?.error ?? res.status}`);
+    }
+    return data;
+  }
+
+  /** Run one call (the request and reading its answer), giving up after `timeoutMs`. */
+  private async timed<T>(what: string, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    try {
+      return await call(AbortSignal.timeout(this.timeoutMs));
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        throw new GithubError(504, null, `GitHub didn't answer ${what} in ${this.timeoutMs / 1000} s`);
+      }
+      throw err;
+    }
+  }
+}
+
+async function readBody(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  if ((res.headers.get('content-type') ?? '').includes('json')) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return text;
+}
+```
+
+In `apps/server/src/platform/types.ts`, import `type PrFile` from `@nitpilot/protocol`, add to `PlatformReads` after `findOpenPrsFor`:
+
+```ts
+  /** The PR's changed files, at most `MAX_PR_FILES`; `truncated` when there may be more. */
+  listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>;
+```
+
+and after the interface:
+
+```ts
+/** How many changed files a PR's file list shows: three pages of 100. */
+export const MAX_PR_FILES = 300;
+```
+
+In `apps/server/src/platform/github/payloads.ts`, add at the end:
+
+```ts
+/** One changed file of a PR, as `GET /repos/{o}/{r}/pulls/{n}/files` describes it. */
+export type GhPrFile = {
+  filename: string;
+  previous_filename?: string;
+  status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged';
+  additions: number;
+  deletions: number;
+};
+```
+
+In `apps/server/src/platform/github/reads.ts`, the imports become `import type { PrFile } from '@nitpilot/protocol';`, `import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef } from '../types';` and `import type { GhPrFile, GhPull, GhReviewComment } from './payloads';`. Add as the class's last method:
+
+```ts
+  /** Page by page, 100 at a time, with the installation token, up to MAX_PR_FILES. */
+  async listPrFiles(ref: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
+    const token = await this.appAuth.installationToken(ref.installationId);
+    const files: PrFile[] = [];
+    for (let page = 1; files.length < MAX_PR_FILES; page++) {
+      const { data } = await this.github.api<GhPrFile[]>('GET', `/repos/${ref.repoFullName}/pulls/${ref.number}/files?per_page=100&page=${page}`, { token });
+      files.push(...data.map(toPrFile));
+      if (data.length < 100) return { files, truncated: false };
+    }
+    return { files, truncated: true };
+  }
+```
+
+and after the class:
+
+```ts
+/** GitHub's file statuses, as the four the web app shows: a copy is new, a mode change is a change. */
+function toPrFile(f: GhPrFile): PrFile {
+  const status = f.status === 'copied' ? 'added' : f.status === 'changed' || f.status === 'unchanged' ? 'modified' : f.status;
+  return { path: f.filename, oldPath: f.status === 'renamed' ? (f.previous_filename ?? null) : null, status, adds: f.additions, dels: f.deletions };
+}
+```
+
+In `apps/server/src/platform/fake/fake-platform.ts`, import `type PrFile` from `@nitpilot/protocol`, add two fields after `searches`:
+
+```ts
+  /** `${repoFullName}#${number}` → that PR's changed files */
+  readonly prFiles = new Map<string, PrFile[]>();
+  /** Which PRs' files were listed, in order. */
+  readonly fileLists: string[] = [];
+```
+
+and after `findOpenPrsFor`:
+
+```ts
+  async listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
+    this.fileLists.push(prKey(pr));
+    return { files: this.prFiles.get(prKey(pr)) ?? [], truncated: false };
+  }
+```
+
+Create `apps/server/src/lib/ttl-cache.ts`:
+
+```ts
+/**
+ * A Map whose entries expire, and which never holds more than `maxEntries`: past that, the oldest entry goes.
+ * For answers worth keeping a few minutes (who can read a repo, a PR's changed files), when the keys come from
+ * requests and so must not grow without bound.
+ */
+export class TtlCache<V> {
+  private readonly entries = new Map<string, { value: V; at: number }>();
+
+  constructor(
+    private readonly ttlMs: number,
+    private readonly maxEntries: number,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  /** The value, if it was set less than `ttlMs` ago. */
+  get(key: string): V | undefined {
+    const entry = this.entries.get(key);
+    return entry && this.now() - entry.at < this.ttlMs ? entry.value : undefined;
+  }
+
+  /** A Map remembers the order keys were added in: deleting first moves a repeated key to the end, so the first key is always the oldest. */
+  set(key: string, value: V): void {
+    this.entries.delete(key);
+    if (this.entries.size >= this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
+    this.entries.set(key, { value, at: this.now() });
+  }
+}
+```
+
+Replace `apps/server/src/auth/repo-access.ts` with (the same answers, now kept in a `TtlCache`):
+
+```ts
+import { TtlCache } from '../lib/ttl-cache';
+import { GithubError, type GithubClient } from '../platform/github/client';
+import { getUserToken, NeedsReauthError } from './user-tokens';
+
+/** How long an answer is kept: someone removed from a repo can still see its chats for this long. */
+export const ACCESS_TTL_MS = 5 * 60_000;
+
+/** The most answers kept at once. The repo name comes from the URL, so a viewer could otherwise fill the map with made-up names. */
+export const MAX_ANSWERS = 1_000;
+
+/** read: GitHub shows them the repo. none: it doesn't. reauth: their GitHub sign-in has to be renewed first. */
+export type RepoAccessResult = 'read' | 'none' | 'reauth';
+
+/**
+ * Who can see a chat: anyone who can read the repo on GitHub, asked with their own token (spec §16).
+ * Answers are kept for 5 minutes per person and repo, so reading a chat doesn't call GitHub every time.
+ */
+export class RepoAccess {
+  private readonly answers: TtlCache<'read' | 'none'>;
+
+  constructor(
+    private readonly github: GithubClient,
+    now: () => number = () => Date.now(),
+    maxAnswers: number = MAX_ANSWERS,
+  ) {
+    // The repo name comes from the URL, so the cache is bounded: a viewer can't grow it with made-up names.
+    this.answers = new TtlCache(ACCESS_TTL_MS, maxAnswers, now);
+  }
+
+  async check(userId: string, repoFullName: string): Promise<RepoAccessResult> {
+    const key = `${userId} ${repoFullName}`;
+    const kept = this.answers.get(key);
+    if (kept) return kept;
+
+    let token: string;
+    try {
+      token = await getUserToken(userId, this.github);
+    } catch (err) {
+      if (err instanceof NeedsReauthError) return 'reauth';
+      throw err;
+    }
+    let result: 'read' | 'none';
+    try {
+      await this.github.api('GET', `/repos/${repoFullName}`, { token });
+      result = 'read';
+    } catch (err) {
+      // 401: GitHub no longer takes the token (revoked there, say). Only signing in again helps.
+      if (err instanceof GithubError && err.status === 401) return 'reauth';
+      // A 403 that says when to retry is GitHub's rate limit, not a no: pass it on, and don't remember it.
+      if (err instanceof GithubError && err.status === 403 && err.retryAfterMs !== undefined) throw err;
+      // GitHub hides a private repo you can't read behind a 404; a plain 403 is a no too.
+      if (err instanceof GithubError && (err.status === 404 || err.status === 403)) result = 'none';
+      else throw err;
+    }
+    this.answers.set(key, result);
+    return result;
+  }
+}
+```
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/platform src/lib/ttl-cache.test.ts && npm run test:db -w apps/server -- src/auth/repo-access.db.test.ts`
+Expected: PASS: client 4, reads 15, fake platform 5, ttl-cache 2; `RepoAccess`'s 5 tests unchanged.
+
+- [ ] **Step 9: One token refresh at a time (M5)**
+
+Plan 1 already shared one in-flight refresh per user, but a call that read the row just before another call's refresh finished could still start a second refresh with the spent refresh token, which signs the person out (refresh tokens are single-use). Now a refresh runs under a per-user lock, and whoever gets the lock reads the row again first. Replace `apps/server/src/auth/user-tokens.ts` with:
+
+```ts
+import type { GithubAuth } from '../generated/prisma/client';
+import { decrypt, encrypt } from '../lib/crypto';
+import { getEnv } from '../lib/env';
+import { KeyedLock } from '../lib/key-lock';
+import { prisma } from '../lib/prisma';
+import { GithubError, type GithubClient } from '../platform/github/client';
+import { refreshTokens, type OAuthTokens } from './github-oauth';
+
+/** The user must sign in with GitHub again before Nitpilot can act as them. */
+export class NeedsReauthError extends Error {
+  constructor(readonly userId: string) {
+    super(`GitHub sign-in expired for user ${userId}`);
+    this.name = 'NeedsReauthError';
+  }
+}
+
+/** Refresh a little early, so a token never expires halfway through a write. */
+const REFRESH_MARGIN_MS = 5 * 60_000;
+
+/**
+ * One refresh per user at a time: refresh tokens are single-use (spec §8 `GithubAuth`), and a second refresh
+ * with a spent one would sign the person out. Whoever waits re-reads the row once it's their turn, so they find
+ * the token the first refresh saved instead of refreshing again.
+ */
+const refreshes = new KeyedLock();
+
+export async function getUserToken(userId: string, github: GithubClient, now = new Date()): Promise<string> {
+  const auth = await readAuth(userId);
+  if (isFresh(auth, now)) return decrypt(auth.accessTokenEnc);
+  return refreshes.run(userId, async () => {
+    const latest = await readAuth(userId);
+    if (isFresh(latest, now)) return decrypt(latest.accessTokenEnc);
+    return refreshOnce(latest, github, now);
+  });
+}
+
+async function readAuth(userId: string): Promise<GithubAuth> {
+  const auth = await prisma.githubAuth.findUnique({ where: { userId } });
+  if (!auth || auth.status !== 'ok') throw new NeedsReauthError(userId);
+  return auth;
+}
+
+/** Good for more than 5 minutes. */
+function isFresh(auth: GithubAuth, now: Date): boolean {
+  return auth.accessExpiresAt.getTime() - now.getTime() > REFRESH_MARGIN_MS;
+}
+
+async function refreshOnce(auth: GithubAuth, github: GithubClient, now: Date): Promise<string> {
+  if (auth.refreshExpiresAt <= now) {
+    await markNeedsReauth(auth.id);
+    throw new NeedsReauthError(auth.userId);
+  }
+
+  const env = getEnv();
+  let tokens: OAuthTokens;
+  try {
+    tokens = await refreshTokens(github, { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET, refreshToken: decrypt(auth.refreshTokenEnc) }, now);
+  } catch (err) {
+    // GitHub answered and said no (e.g. bad_refresh_token): only a new sign-in fixes that.
+    if (err instanceof GithubError && err.status < 500) {
+      await markNeedsReauth(auth.id);
+      throw new NeedsReauthError(auth.userId);
+    }
+    throw err; // network trouble or a GitHub outage: try again later
+  }
+
+  // Save only if nobody refreshed meanwhile (compare-and-swap on `version`).
+  const { count } = await prisma.githubAuth.updateMany({
+    where: { id: auth.id, version: auth.version },
+    data: {
+      accessTokenEnc: encrypt(tokens.accessToken),
+      accessExpiresAt: tokens.accessExpiresAt,
+      refreshTokenEnc: encrypt(tokens.refreshToken),
+      refreshExpiresAt: tokens.refreshExpiresAt,
+      version: { increment: 1 },
+    },
+  });
+  if (count === 0) {
+    const fresh = await prisma.githubAuth.findUniqueOrThrow({ where: { id: auth.id } });
+    return decrypt(fresh.accessTokenEnc);
+  }
+  return tokens.accessToken;
+}
+
+async function markNeedsReauth(id: string): Promise<void> {
+  await prisma.githubAuth.update({ where: { id }, data: { status: 'needs_reauth' } });
+}
+```
+
+No new test: the gap is a race between a database read and another request's commit, which no test can make happen on demand; the existing tests pin the behaviour around it.
+
+Run: `npm run test:db -w apps/server -- src/auth/user-tokens.db.test.ts`
+Expected: PASS, 6 tests (unchanged, including "runs only one refresh when several writes need the token at once").
+
+- [ ] **Step 10: Write the failing tests for the view and the routes**
+
+Create `apps/server/src/chats/views.db.test.ts`:
+
+```ts
+import { ChatView } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeCliToken, makeMessage, makeParticipant, makeRepo, makeUser } from '../../test/db';
+import { prisma } from '../lib/prisma';
+import type { LiveClis } from './activity';
+import { loadChatPage, loadChatView } from './views';
+
+/** maya's PR, reviewed by leo, with an agent point escalated and a GitHub point answered. maya's CLI is connected. */
+async function scene() {
+  const repo = await makeRepo({ rulesJson: { max_rounds: 4, always_escalate: ['security', 'bug'] } });
+  await prisma.repo.update({ where: { id: repo.id }, data: { rulesError: 'line 3: unknown key max_round' } });
+  const [maya, leo] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' })];
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId, headSha: 'c'.repeat(40) });
+  await prisma.prChat.update({ where: { id: chat.id }, data: { phase: 'escalated', round: 2, summaryCommentId: '555' } });
+  await makeParticipant(chat.id, maya, 'author');
+  const leoP = await makeParticipant(chat.id, leo, 'reviewer', { requested: true, attention: 'decision' });
+  const lastSeen = new Date('2026-10-16T18:04:00Z');
+  const leoToken = await makeCliToken(leo.id);
+  await prisma.cliToken.update({ where: { id: leoToken.id }, data: { lastSeenAt: lastSeen } });
+  await makeCliToken(maya.id);
+  const point = { chatId: chat.id, raisedByGithubId: leo.githubId, severity: 'blocker', category: 'security', body: 'Use a parameter.', trusted: true, round: 1 };
+  await prisma.point.createMany({
+    data: [
+      { ...point, number: 1, origin: 'agent', path: 'src/orders/list.ts', line: 48, side: 'RIGHT', commitSha: 'a'.repeat(40), title: 'SQL built from input', status: 'escalated', escalationReason: 'category', snippet: { startLine: 43, lines: ['const q = 1;'] } },
+      { ...point, number: 2, origin: 'github', path: 'src/old name.ts', line: 7, side: 'LEFT', commitSha: null, severity: 'minor', category: 'style', title: 'Naming', status: 'addressed', authorResolution: 'fixed', githubCommentId: '900' },
+      { ...point, number: 3, origin: 'agent', path: null, line: null, side: null, title: 'Add a test', status: 'open' },
+    ],
+  });
+  const clis: LiveClis = { connectionsFor: (userId) => (userId === maya.id ? [{ repos: new Set([repo.fullName]) }] : []) };
+  return { repo, chat, maya, leo, leoP, lastSeen, clis };
+}
+
+describe('loadChatView (spec §10, handoff §2)', () => {
+  it('shows the PR, the rules and the points, with links to their lines on GitHub', async () => {
+    const { repo, chat, leo, clis } = await scene();
+    const view = ChatView.parse(await loadChatView(chat.id, leo, clis));
+    expect(view).toMatchObject({
+      id: chat.id, repo: repo.fullName, number: chat.number, author: 'maya', headRef: chat.headRef, baseRef: 'main',
+      phase: 'escalated', round: 2, maxRounds: 4, merged: false, closed: false, trusted: true,
+      rules: { maxRounds: 4, alwaysEscalate: ['security', 'bug'], autoReview: true, autoAddress: true, error: 'line 3: unknown key max_round' },
+      summaryUrl: `${chat.url}#issuecomment-555`,
+    });
+    const repoUrl = `https://github.com/${repo.fullName}`;
+    expect(view.points.map((p) => [p.number, p.raisedBy.login, p.url])).toEqual([
+      [1, 'leo', `${repoUrl}/blob/${'a'.repeat(40)}/src/orders/list.ts#L48`],
+      // A comment on the old side of the diff links to the base commit; the space in the path is encoded.
+      [2, 'leo', `${repoUrl}/blob/${'b'.repeat(40)}/src/old%20name.ts#L7`],
+      [3, 'leo', null],
+    ]);
+    expect(view.points[0]).toMatchObject({ severity: 'blocker', status: 'escalated', escalationReason: 'category', snippet: { startLine: 43 } });
+  });
+
+  it("is the viewer's own: your role and why you're needed, or a reader's nothing", async () => {
+    const { chat, leo, maya, clis } = await scene();
+    expect((await loadChatView(chat.id, leo, clis)).viewer).toEqual({ role: 'reviewer', attention: 'decision', failure: null });
+    expect((await loadChatView(chat.id, maya, clis)).viewer).toEqual({ role: 'author', attention: 'none', failure: null });
+    expect((await loadChatView(chat.id, await makeUser(), clis)).viewer).toEqual({ role: null, attention: 'none', failure: null });
+  });
+
+  it("shows each person's agent: online, offline since it was last seen, and working while its job runs", async () => {
+    const { chat, leo, leoP, lastSeen, clis } = await scene();
+    await prisma.job.create({ data: { chatId: chat.id, participantId: leoP.id, userId: leo.id, type: 're_review', status: 'running', round: 2, headSha: chat.headSha, runAfter: new Date() } });
+    const { participants, activity } = await loadChatView(chat.id, leo, clis);
+    expect(participants.map((p) => [p.login, p.role, p.requested, p.agent])).toEqual([
+      ['maya', 'author', false, { online: true, offlineSince: null, working: false }],
+      ['leo', 'reviewer', true, { online: false, offlineSince: lastSeen.toISOString(), working: true }],
+    ]);
+    expect(participants[0]!.avatarUrl).toMatch(/^https:\/\/avatars\.githubusercontent\.com\/u\//);
+    // leo's CLI is offline and his job runs: the job was bound to a CLI that went away, which the leases will notice.
+    expect(activity).toEqual({ kind: 'agent_working', who: 'leo', why: null, offlineSince: null });
+  });
+
+  it("says when an agent waits, and gives no agent to someone who isn't on Nitpilot", async () => {
+    const { chat, leo, leoP, lastSeen, clis } = await scene();
+    await prisma.job.create({ data: { chatId: chat.id, participantId: leoP.id, activeFor: leoP.id, userId: leo.id, type: 're_review', status: 'queued', round: 2, headSha: chat.headSha, runAfter: new Date() } });
+    const outsider = { githubId: '424242', login: 'sam' };
+    await makeParticipant(chat.id, outsider, 'reviewer');
+    const view = await loadChatView(chat.id, leo, clis);
+    expect(view.activity).toEqual({ kind: 'agent_waiting', who: 'leo', why: 'offline', offlineSince: lastSeen.toISOString() });
+    expect(view.participants.find((p) => p.login === 'sam')).toMatchObject({ onNitpilot: false, agent: null, avatarUrl: 'https://avatars.githubusercontent.com/u/424242' });
+  });
+});
+
+describe('loadChatPage', () => {
+  it('gives the newest 200 items, oldest first, and says there are older ones', async () => {
+    const { chat, leo, clis } = await scene();
+    await prisma.message.createMany({ data: Array.from({ length: 250 }, (_, i) => ({ chatId: chat.id, seq: i + 1, kind: 'system', body: `item ${i + 1}` })) });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { lastSeq: 250 } });
+    const page = await loadChatPage(chat.id, leo, clis);
+    expect(page.items.map((i) => i.seq)).toEqual(Array.from({ length: 200 }, (_, i) => i + 51));
+    expect(page.hasOlder).toBe(true);
+    expect(page.view.lastSeq).toBe(250);
+  });
+
+  it('has nothing older when the whole timeline fits', async () => {
+    const { chat, leo, clis } = await scene();
+    await makeMessage(chat.id, null, 'Pull request opened by maya');
+    expect(await loadChatPage(chat.id, leo, clis)).toMatchObject({ items: [{ seq: 1 }], hasOlder: false });
+  });
+});
+```
+
+Create `apps/server/src/http/routes/chats.db.test.ts` (Review Focus 2: a reader whose GitHub sign-in expired gets a 401 that says so):
+
+```ts
+import { ChatResponse, FilesResponse, MessagesResponse } from '@nitpilot/protocol';
+import { describe, expect, it, vi } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeChat, makeGithubSignIn, makeParticipant, makeRepo, makeUser } from '../../../test/db';
+import { fakeFetch, json } from '../../../test/fake-fetch';
+import { sessionCookieFor } from '../../../test/http';
+import { prisma } from '../../lib/prisma';
+import { FakePlatform } from '../../platform/fake/fake-platform';
+import { GithubClient } from '../../platform/github/client';
+
+/**
+ * maya's chat in a repo, a reader signed in with GitHub, and what GitHub says about the reader and the repo:
+ * 200 (can read), 404 (can't), or 500 (GitHub is down).
+ */
+async function scene(opts: { github?: 200 | 404 | 500; signIn?: 'ok' | 'needs_reauth' } = {}) {
+  const repo = await makeRepo();
+  const maya = await makeUser({ login: 'maya' });
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+  await makeParticipant(chat.id, maya, 'author');
+  const reader = await makeUser();
+  await makeGithubSignIn(reader.id, opts.signIn ?? 'ok');
+  const status = opts.github ?? 200;
+  const fetch = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (status === 200 ? { id: 1 } : json({ message: 'no' }, status)) });
+  const platform = new FakePlatform();
+  const app = testApp({ github: new GithubClient(fetch), platform });
+  const cookie = await sessionCookieFor(reader.id);
+  const get = (path: string) => app.request(path, { headers: { cookie } });
+  return { repo, chat, reader, fetch, platform, app, get, path: `/api/chats/${repo.fullName}/${chat.number}` };
+}
+
+const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
+
+describe('GET /api/chats/:owner/:repo/:number', () => {
+  it('answers the chat as the reader sees it, with its newest items', async () => {
+    const { chat, get, path } = await scene();
+    await prisma.message.create({ data: { chatId: chat.id, seq: 1, kind: 'system', body: 'Pull request opened by maya' } });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { lastSeq: 1 } });
+    const res = await get(path);
+    expect(res.status).toBe(200);
+    const body = ChatResponse.parse(await res.json());
+    expect(body.view).toMatchObject({ id: chat.id, author: 'maya', viewer: { role: null } });
+    expect(body.items.map((i) => i.body)).toEqual(['Pull request opened by maya']);
+  });
+
+  it("is the same 404 for a chat that doesn't exist and one whose repo you can't see", async () => {
+    const hidden = await scene({ github: 404 });
+    const missing = await scene();
+    const a = await hidden.get(hidden.path);
+    const b = await missing.get(`/api/chats/${missing.repo.fullName}/9999`);
+    expect([a.status, b.status]).toEqual([404, 404]);
+    expect(await errorOf(a)).toEqual(await errorOf(b));
+  });
+
+  it('is a 401 that says so when your GitHub sign-in expired (Review Focus 2)', async () => {
+    const { get, path } = await scene({ signIn: 'needs_reauth' });
+    const res = await get(path);
+    expect(res.status).toBe(401);
+    expect(await errorOf(res)).toEqual({ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' });
+  });
+
+  it("is a 404 without asking GitHub when the owner or repo isn't a GitHub name", async () => {
+    const { get, fetch, chat } = await scene();
+    expect((await get(`/api/chats/a%20b/repo/${chat.number}`)).status).toBe(404);
+    expect((await get('/api/chats/octo/repo/not-a-number')).status).toBe(404);
+    expect(fetch.calls).toEqual([]);
+  });
+
+  it("is a 502 that says so when GitHub doesn't answer", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { get, path } = await scene({ github: 500 });
+    const res = await get(path);
+    expect(res.status).toBe(502);
+    expect((await errorOf(res)).code).toBe('github_unavailable');
+    vi.restoreAllMocks();
+  });
+
+  it('is a 401 without a session', async () => {
+    const { app, path } = await scene();
+    expect((await app.request(path)).status).toBe(401);
+  });
+});
+
+describe('GET /api/chats/:id/messages?before=', () => {
+  it('pages backwards, 200 at a time', async () => {
+    const { chat, get } = await scene();
+    await prisma.message.createMany({ data: Array.from({ length: 250 }, (_, i) => ({ chatId: chat.id, seq: i + 1, kind: 'system', body: `item ${i + 1}` })) });
+    const first = MessagesResponse.parse(await (await get(`/api/chats/${chat.id}/messages`)).json());
+    expect([first.items[0]!.seq, first.items.at(-1)!.seq, first.hasOlder]).toEqual([51, 250, true]);
+    const older = MessagesResponse.parse(await (await get(`/api/chats/${chat.id}/messages?before=51`)).json());
+    expect([older.items.length, older.items[0]!.seq, older.hasOlder]).toEqual([50, 1, false]);
+    expect((await get(`/api/chats/${chat.id}/messages?before=zero`)).status).toBe(400);
+  });
+
+  it("is a 404 for a chat you can't see", async () => {
+    const { chat, get } = await scene({ github: 404 });
+    expect((await get(`/api/chats/${chat.id}/messages`)).status).toBe(404);
+  });
+});
+
+describe('GET /api/chats/:id/files', () => {
+  it('lists the changed files with their totals, asking GitHub once per head commit', async () => {
+    const { repo, chat, get, platform } = await scene();
+    platform.prFiles.set(`${repo.fullName}#${chat.number}`, [
+      { path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 },
+      { path: 'src/i18n.ts', oldPath: null, status: 'modified', adds: 3, dels: 1 },
+    ]);
+    const body = FilesResponse.parse(await (await get(`/api/chats/${chat.id}/files`)).json());
+    expect(body).toMatchObject({ adds: 415, dels: 1, truncated: false });
+    expect(body.files.map((f) => f.path)).toEqual(['locales/tr.json', 'src/i18n.ts']);
+    await get(`/api/chats/${chat.id}/files`);
+    expect(platform.fileLists).toHaveLength(1);
+    // A push: a new head, a new list.
+    await prisma.prChat.update({ where: { id: chat.id }, data: { headSha: 'd'.repeat(40) } });
+    await get(`/api/chats/${chat.id}/files`);
+    expect(platform.fileLists).toHaveLength(2);
+  });
+
+  it("is a 404 for a chat you can't see, without asking for its files", async () => {
+    const { chat, get, platform } = await scene({ github: 404 });
+    expect((await get(`/api/chats/${chat.id}/files`)).status).toBe(404);
+    expect(platform.fileLists).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 11: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts src/http/routes/chats.db.test.ts`
+Expected: FAIL: `./views` doesn't exist, and every chat route answers the app's JSON 404 (there are none yet), so only its tests that expect a 404 pass.
+
+- [ ] **Step 12: The view, the routes, and a 401 that says "reauth"**
+
+A web app can't tell "sign in again with GitHub" from "you're signed out" by status alone, so it gets its own code. In `apps/server/src/http/errors.ts`, add to `ErrorCode` after `'unauthorized'`:
+
+```ts
+  /** Signed in to Nitpilot, but the GitHub sign-in expired: only signing in again helps (spec §16). */
+  | 'reauth'
+```
+
+and `reauth: 401,` after `unauthorized: 401,` in `STATUS`. The inbox's expired sign-in uses it too: in `apps/server/src/http/routes/inbox.ts`, `throw new HttpError('unauthorized', …)` becomes `throw new HttpError('reauth', …)` (same message), and in `inbox.db.test.ts` the 401 test's last line becomes `expect(await errorOf(res)).toMatchObject({ code: 'reauth', message: expect.stringMatching(/sign in again/i) });`.
+
+Replace `apps/server/src/chats/access.ts` with (`chatAccessByPath` for the chat screen's address; the name check is the transcript route's):
+
+```ts
+import type { RepoAccess } from '../auth/repo-access';
+import { prisma } from '../lib/prisma';
+
+/** The chat you may read, with its repo; or why not. */
+export type ChatAccess = { kind: 'read'; chat: { id: string; repoFullName: string } } | { kind: 'none' } | { kind: 'reauth' };
+
+/** GitHub owner and repo names: letters, digits, `-`, `_` and `.`. They go into a GitHub API path, so nothing else is let through. */
+export const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !== '.' && s !== '..';
+
+/**
+ * Can this person read the chat (spec §16 "Who can see a chat")? Anyone whose GitHub account can read the repo,
+ * asked with their own token and kept 5 minutes (auth/repo-access.ts). A chat that doesn't exist and one you
+ * can't see are the same `none`, so nobody learns which chats exist (docs/why/chat-access-rules.md).
+ * GitHub not answering is thrown, for the caller to say so.
+ */
+export async function chatAccess(user: { id: string }, chatId: string, access: RepoAccess): Promise<ChatAccess> {
+  const chat = await prisma.prChat.findUnique({ where: { id: chatId }, select: { id: true, repo: { select: { fullName: true } } } });
+  if (!chat) return { kind: 'none' };
+  const answer = await access.check(user.id, chat.repo.fullName);
+  return answer === 'read' ? { kind: 'read', chat: { id: chat.id, repoFullName: chat.repo.fullName } } : { kind: answer };
+}
+
+/**
+ * The same, for the chat screen's address, `/c/:owner/:repo/:number`. GitHub is asked about the repo before the
+ * chat is looked up, as the transcript page did: someone whose GitHub sign-in expired is asked to sign in again,
+ * whether or not that chat exists.
+ */
+export async function chatAccessByPath(user: { id: string }, path: { owner: string; repo: string; number: string }, access: RepoAccess): Promise<ChatAccess> {
+  const number = Number(path.number);
+  if (!isGithubName(path.owner) || !isGithubName(path.repo) || !Number.isSafeInteger(number) || number <= 0) return { kind: 'none' };
+  const fullName = `${path.owner}/${path.repo}`;
+  const answer = await access.check(user.id, fullName);
+  if (answer !== 'read') return { kind: answer };
+  const chat = await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, select: { id: true } });
+  return chat ? { kind: 'read', chat: { id: chat.id, repoFullName: fullName } } : { kind: 'none' };
+}
+```
+
+In `apps/server/src/chats/timeline.ts`, import `type MessagesResponse` beside `MessageKind`, and add at the end:
+
+```ts
+/**
+ * The newest page of items before `beforeSeq` (or the newest of all, for null), oldest first: the chat screen's
+ * first page, then "Load earlier". Seqs have no gaps, so there are older items exactly when the first isn't 1.
+ */
+export async function loadItemsBefore(chatId: string, beforeSeq: number | null): Promise<MessagesResponse> {
+  const [newestFirst, threads] = await Promise.all([
+    prisma.message.findMany({ where: { chatId, ...(beforeSeq === null ? {} : { seq: { lt: beforeSeq } }) }, orderBy: { seq: 'desc' }, take: ITEMS_PER_PAGE }),
+    threadPointsOf(chatId),
+  ]);
+  const items = newestFirst.reverse().map((m) => toTimelineItem(m, threads));
+  return { items, hasOlder: (items[0]?.seq ?? 1) > 1 };
+}
+```
+
+In `apps/server/src/chats/inbox.ts`, export `githubAvatar` (`export function githubAvatar(githubId: string): string {`): the chat's people use the same fallback picture.
+
+Create `apps/server/src/chats/views.ts`:
+
+```ts
+import type {
+  ActivityView, Attention, Category, ChatResponse, ChatView, EscalationReason, ParticipantView, Phase, PointOrigin, PointStatus, PointView, Resolution, Role, Severity, Side, Snippet,
+} from '@nitpilot/protocol';
+import type { Point, PrChat } from '../generated/prisma/client';
+import { prisma } from '../lib/prisma';
+import { loadActivity, type Activity, type LiveClis } from './activity';
+import { failureKind } from './failed-flags';
+import { githubAvatar } from './inbox';
+import { rulesFromJson } from './rules';
+import { loadItemsBefore } from './timeline';
+
+/** Who is looking: views differ per person (your role, your attention, your failure). */
+export type ChatViewer = { githubId: string };
+
+/**
+ * One chat as `viewer` sees it (spec §10 `GET /api/chats/:owner/:repo/:number`, handoff §2): the PR, its people
+ * and their agents right now, the points, the team rules. Read fresh each time, like the inbox: presence and
+ * activity change without any event (docs/why/n-plus-one-queries.md keeps the number of queries fixed).
+ */
+export async function loadChatView(chatId: string, viewer: ChatViewer, clis: LiveClis, now = new Date()): Promise<ChatView> {
+  const chat = await prisma.prChat.findUniqueOrThrow({
+    where: { id: chatId },
+    include: {
+      repo: true,
+      participants: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+      points: { orderBy: { number: 'asc' } },
+      jobs: { where: { status: 'running' }, select: { participantId: true } },
+    },
+  });
+  const users = await prisma.user.findMany({ where: { githubId: { in: chat.participants.map((p) => p.githubId) } }, select: { id: true, githubId: true, avatarUrl: true } });
+  const userOf = new Map(users.map((u) => [u.githubId, u]));
+  const [activity, failure, seen] = await Promise.all([
+    loadActivity(chatId, clis, now),
+    failureKind(chatId, viewer.githubId),
+    users.length > 0 ? prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: users.map((u) => u.id) } }, _max: { lastSeenAt: true } }) : [],
+  ]);
+  const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
+  const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? githubId;
+  const rules = rulesFromJson(chat.repo.rulesJson);
+  const yours = chat.participants.filter((p) => p.githubId === viewer.githubId);
+
+  const participants = chat.participants.map((p): ParticipantView => {
+    const user = p.isBot ? undefined : userOf.get(p.githubId);
+    const online = user ? clis.connectionsFor(user.id).length > 0 : false;
+    return {
+      githubId: p.githubId,
+      login: p.login,
+      avatarUrl: user?.avatarUrl ?? githubAvatar(p.githubId),
+      role: p.role as Role,
+      isBot: p.isBot,
+      onNitpilot: user !== undefined,
+      requested: p.requested,
+      agent: user ? { online, offlineSince: online ? null : (lastSeen(user.id)?.toISOString() ?? null), working: chat.jobs.some((j) => j.participantId === p.id) } : null,
+    };
+  });
+
+  return {
+    id: chat.id,
+    repo: chat.repo.fullName,
+    number: chat.number,
+    title: chat.title,
+    url: chat.url,
+    author: loginOf(chat.authorGithubId),
+    headRef: chat.headRef,
+    baseRef: chat.baseRef,
+    phase: chat.phase as Phase,
+    round: chat.round,
+    maxRounds: rules.max_rounds,
+    merged: chat.merged,
+    closed: chat.closedAt !== null,
+    trusted: chat.trusted,
+    isDraft: chat.isDraft,
+    viewer: {
+      role: yours.some((p) => p.role === 'author') ? 'author' : yours.length > 0 ? 'reviewer' : null,
+      attention: (yours.find((p) => p.attention !== 'none')?.attention ?? 'none') as Attention,
+      failure,
+    },
+    participants,
+    activity: activityView(activity),
+    points: chat.points.map((p) => pointView(chat, p, loginOf(p.raisedByGithubId))),
+    rules: { maxRounds: rules.max_rounds, alwaysEscalate: rules.always_escalate, autoReview: rules.auto.review, autoAddress: rules.auto.address, error: chat.repo.rulesError },
+    summaryUrl: chat.summaryCommentId ? `${chat.url}#issuecomment-${chat.summaryCommentId}` : null,
+    lastSeq: chat.lastSeq,
+  };
+}
+
+/** What the chat screen loads first: the view, and the newest page of the timeline. */
+export async function loadChatPage(chatId: string, viewer: ChatViewer, clis: LiveClis): Promise<ChatResponse> {
+  const [view, page] = await Promise.all([loadChatView(chatId, viewer, clis), loadItemsBefore(chatId, null)]);
+  return { view, ...page };
+}
+
+function activityView(a: Activity): ActivityView {
+  switch (a.kind) {
+    case 'agent_working':
+      return { kind: a.kind, who: a.who, why: null, offlineSince: null };
+    case 'agent_waiting':
+      return { kind: a.kind, who: a.who, why: a.why, offlineSince: a.why === 'offline' ? (a.offlineSince?.toISOString() ?? null) : null };
+    case 'human_turn':
+      return { kind: a.kind, who: a.who, why: null, offlineSince: null };
+    case 'none':
+      return { kind: a.kind, who: null, why: null, offlineSince: null };
+  }
+}
+
+function pointView(chat: PrChat, p: Point, raisedByLogin: string): PointView {
+  return {
+    number: p.number,
+    raisedBy: { githubId: p.raisedByGithubId, login: raisedByLogin },
+    origin: p.origin as PointOrigin,
+    path: p.path,
+    line: p.line,
+    side: p.side as Side | null,
+    url: fileUrl(chat, p),
+    severity: p.severity as Severity,
+    category: p.category as Category,
+    title: p.title,
+    body: p.body,
+    snippet: p.snippet as Snippet | null,
+    status: p.status as PointStatus,
+    authorResolution: p.authorResolution as Resolution | null,
+    escalationReason: p.escalationReason as EscalationReason | null,
+    trusted: p.trusted,
+    round: p.round,
+  };
+}
+
+/**
+ * The point's line on GitHub, in the commit it was raised on. A comment on the left side of a diff is about the
+ * old code, so it links to the base commit.
+ */
+function fileUrl(chat: PrChat, p: Point): string | null {
+  if (!p.path) return null;
+  const repoUrl = chat.url.replace(/\/pull\/\d+$/, '');
+  const sha = p.side === 'LEFT' ? chat.baseSha : (p.commitSha ?? chat.headSha);
+  const path = p.path.split('/').map(encodeURIComponent).join('/');
+  return `${repoUrl}/blob/${sha}/${path}${p.line ? `#L${p.line}` : ''}`;
+}
+```
+
+Create `apps/server/src/http/routes/chats.ts`:
+
+```ts
+import type { ChatResponse, FilesResponse, MessagesResponse } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { RepoAccess } from '../../auth/repo-access';
+import { requireUser, type UserVariables } from '../../auth/request-user';
+import { chatAccess, chatAccessByPath, type ChatAccess } from '../../chats/access';
+import type { LiveClis } from '../../chats/activity';
+import { repoRef } from '../../chats/rules';
+import { loadItemsBefore } from '../../chats/timeline';
+import { loadChatPage } from '../../chats/views';
+import { prisma } from '../../lib/prisma';
+import { TtlCache } from '../../lib/ttl-cache';
+import { GithubError, type GithubClient } from '../../platform/github/client';
+import type { PlatformReads } from '../../platform/types';
+import { HttpError } from '../errors';
+
+/** A PR's file list is kept this long per head commit: a push makes a new list. */
+export const FILES_TTL_MS = 10 * 60_000;
+/** The most file lists kept at once. */
+export const MAX_FILE_LISTS = 500;
+
+const BeforeQuery = z.object({ before: z.coerce.number().int().positive().optional() });
+
+/**
+ * The chat screen's reads (spec §10 "REST endpoints in Plan 2"): the chat, older timeline items, and the PR's
+ * changed files. Each one first asks whether you can read the chat (chats/access.ts, docs/why/chat-access-rules.md).
+ */
+export function chatRoutes(deps: { github: GithubClient; platform: PlatformReads; clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+  const access = new RepoAccess(deps.github);
+  const fileLists = new TtlCache<FilesResponse>(FILES_TTL_MS, MAX_FILE_LISTS);
+
+  app.get('/api/chats/:owner/:repo/:number', requireUser, async (c) => {
+    const user = c.get('user');
+    const chat = readable(await askingGithub(() => chatAccessByPath(user, { owner: c.req.param('owner'), repo: c.req.param('repo'), number: c.req.param('number') }, access)));
+    const body: ChatResponse = await loadChatPage(chat.id, user, deps.clis);
+    return c.json(body);
+  });
+
+  app.get('/api/chats/:id/messages', requireUser, async (c) => {
+    const { before } = BeforeQuery.parse(c.req.query());
+    const chat = readable(await askingGithub(() => chatAccess(c.get('user'), c.req.param('id'), access)));
+    const body: MessagesResponse = await loadItemsBefore(chat.id, before ?? null);
+    return c.json(body);
+  });
+
+  app.get('/api/chats/:id/files', requireUser, async (c) => {
+    const { id } = readable(await askingGithub(() => chatAccess(c.get('user'), c.req.param('id'), access)));
+    const chat = await prisma.prChat.findUniqueOrThrow({ where: { id }, include: { repo: true } });
+    const key = `${chat.id} ${chat.headSha}`;
+    let body = fileLists.get(key);
+    if (!body) {
+      const { files, truncated } = await askingGithub(() => deps.platform.listPrFiles({ ...repoRef(chat.repo), number: chat.number }));
+      body = { files, adds: files.reduce((n, f) => n + f.adds, 0), dels: files.reduce((n, f) => n + f.dels, 0), truncated };
+      fileLists.set(key, body);
+    }
+    return c.json(body);
+  });
+
+  return app;
+}
+
+/** The chat you may read, or the answer for one you can't: the same 404 for "no such chat" and "not yours to see". */
+function readable(access: ChatAccess): { id: string; repoFullName: string } {
+  if (access.kind === 'reauth') throw new HttpError('reauth', 'Sign in with GitHub again to see this chat.');
+  if (access.kind === 'none') throw new HttpError('not_found', 'No such chat.');
+  return access.chat;
+}
+
+/** GitHub down, slow or rate limiting us is a 502 that says so, not a bare 500. */
+async function askingGithub<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (!(err instanceof GithubError)) throw err;
+    console.error('[chats] GitHub did not answer:', err.message);
+    throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
+  }
+}
+```
+
+In `apps/server/src/http/app.ts`: `import type { PlatformReads } from '../platform/types';` and `import { chatRoutes } from './routes/chats';`; `AppDeps` gains
+
+```ts
+  /** GitHub reads with the app's installation token (the chat screen's file list). */
+  platform: PlatformReads;
+```
+
+after `clis`; and `app.route('/', chatRoutes(deps));` goes after `app.route('/', inboxRoutes(deps));`.
+
+In `apps/server/test/app.ts`, import `FakePlatform` from `'../src/platform/fake/fake-platform'` and add `platform: new FakePlatform(),` after `clis` in `testDeps`. In `apps/server/src/main.ts`, `createApp({ …, clis: hub })` becomes `createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, platform })`. In `apps/server/test/e2e/harness.ts`, `testApp({ …, github: githubApi, … })` gains `platform,` after `github: githubApi,`.
+
+- [ ] **Step 13: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts src/http/routes/chats.db.test.ts src/http/routes/inbox.db.test.ts`
+Expected: PASS, 6, 10 and 14 tests.
+
+- [ ] **Step 14: The explainer, and the spec**
+
+Create `docs/why/chat-access-rules.md`:
+
+```markdown
+# Who can see a chat
+
+**In one sentence:** anyone signed in to Nitpilot whose GitHub account can read the repo can read its chats; Nitpilot asks GitHub with that person's own token, keeps the answer 5 minutes, and answers "no such chat" and "you can't see it" the same way (spec §16).
+
+## Why GitHub decides
+
+A chat repeats code, file paths and review points from the repo. For a private repo that's private code, so the rule is GitHub's own: if GitHub shows you the repo, you may read its chats. Nitpilot doesn't keep its own list of who may see what. It asks GitHub `GET /repos/<owner>/<repo>` **with your token** (`auth/repo-access.ts`). GitHub answers 404 for a private repo you can't read, so a 404 (or a 403) means no.
+
+Asking with the app's token instead would be wrong: the app can read every repo it's installed on, and that says nothing about you.
+
+## Where it's checked
+
+The same question, everywhere a chat is read:
+
+- `GET /api/chats/:owner/:repo/:number`, `…/:id/messages` and `…/:id/files` (`http/routes/chats.ts`);
+- each `chat.subscribe` on `/ws/web`, and again before sending once the answer is 5 minutes old (`ws/web-hub.ts`);
+- each row of your inbox, once per repo (`http/routes/inbox.ts`).
+
+`chats/access.ts` puts the lookup and the question together: `chatAccess` for a chat id, `chatAccessByPath` for the address in the browser.
+
+## The answers
+
+| Situation | REST | `/ws/web` |
+|---|---|---|
+| You can read the repo | the chat | its items |
+| No such chat, or you can't see its repo | 404 `not_found` | `chat.error not_found` |
+| Your GitHub sign-in expired | 401 `reauth` ("Sign in with GitHub again…") | `chat.error reauth` |
+| GitHub didn't answer | 502 `github_unavailable` | `chat.error unavailable` |
+| Not signed in to Nitpilot | 401 `unauthorized` | no socket (401) |
+
+**Why one 404 for two cases.** If "no such chat" and "you can't see it" looked different, anyone could try addresses and learn which private repos use Nitpilot and how many PRs they have. So both are the same 404, with the same body.
+
+**Why GitHub is asked first, for an address.** `chatAccessByPath` asks about the repo in the address before it looks for the chat. Otherwise someone whose sign-in expired would get "sign in again" for a chat that exists and a 404 for one that doesn't. Owner and repo names that aren't shaped like GitHub's (letters, digits, `-`, `_`, `.`) get the 404 before any call, since they go into a GitHub API path.
+
+**Why 401 `reauth` and not 401 `unauthorized`.** Both are "who are you?", but they mean different things to the web app: `unauthorized` is "you're not signed in to Nitpilot" (show the landing page), `reauth` is "you are, but your GitHub sign-in expired" (show the Reconnect banner).
+
+## What the 5 minutes cost
+
+Asking GitHub on every read would make each chat open wait on GitHub, and spend the person's GitHub rate limit. So the answer is kept 5 minutes per person and repo (`lib/ttl-cache.ts`, at most 1,000 answers). The cost: someone removed from a repo can still read its chats for up to 5 minutes. An open socket asks again when its answer is that old, so it stops too.
+
+## Who can *do* what
+
+Reading is the only thing W3 allows. From W4 every change (a note, Resolve, Continue, Retry, Auto, drafts) also passes one pure function that knows the roles: notes for the author and the reviewers on Nitpilot, Resolve only for the reviewer who raised the point, and so on (spec §16 "Who can act in a chat"). Someone who can read the repo but isn't in the chat reads along, and can't act.
+
+## The React analogy
+
+It's a route guard, like a `<RequireAuth>` wrapper around a page, except the guard asks a second service (GitHub) and caches its answer like a query with a `staleTime` of 5 minutes.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "REST endpoints in Plan 2", the chat read becomes "`GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`, and the newest 200 timeline items)", and `GET /api/chats/:id/files` becomes "(changed files from the platform, at most 300, kept in memory per head commit for 10 minutes)". After the "Personal:" line, add: "A chat read that isn't allowed answers like the inbox: the same 404 for a chat that doesn't exist and one you can't see, a 401 with code `reauth` when your GitHub sign-in expired, a 502 when GitHub doesn't answer. Every GitHub call gives up after 15 seconds."
+
+- [ ] **Step 15: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
+Expected: protocol 49, CLI 293 passed + 14 skipped, server 708, web 73; end to end 5; typecheck and lint clean.
+
+- [ ] **Step 16: Commit**
+
+```bash
+git add packages/protocol/src apps/server/src apps/server/test/app.ts apps/server/test/e2e/harness.ts docs/why/chat-access-rules.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): the chat, its older items and its files over REST; GitHub calls time out, token refreshes wait their turn
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 9: Live publishing: commits, presence and progress reach the browser
 
 **Files:**
-- Create: `apps/server/src/ws/web-wire.ts` and `web-wire.db.test.ts`.
-- Modify: `apps/server/src/chats/apply-commands.ts` / `chats/dispatch.ts` (`DispatchEffects.timeline: { fromSeq: number; toSeq: number } | null`), `apps/server/src/ws/cli-hub.ts` (`onPresence`), `apps/server/src/main.ts`, `apps/server/test/e2e/harness.ts`, `apps/cli/src/daemon.ts` and `daemon.test.ts` (stage changes skip the throttle).
+- Create: `apps/server/src/ws/web-wire.ts`, `apps/server/src/ws/web-wire.db.test.ts`.
+- Modify: `apps/server/src/chats/save.ts` (`SeqRange`; `appendTimeline` returns it), `apps/server/src/chats/apply-commands.ts` (`DispatchEffects.timeline`), `apps/server/src/chats/dispatch.ts`, `apps/server/src/chats/dispatch.db.test.ts`, `apps/server/src/ws/cli-hub.ts` (`onPresence`), `apps/server/src/ws/cli-hub.db.test.ts`, `apps/server/src/ws/web-hub.ts` (`connected`, `followedChats`), `apps/server/test/web-ws.ts` (`TestTab.log`), `apps/server/src/auth/users.ts` (`loadWebMe`), `apps/server/src/http/routes/me.ts`, `apps/server/src/main.ts`, `apps/server/test/e2e/harness.ts`, `apps/cli/src/daemon.ts` and `daemon.test.ts` (a stage change skips the throttle), `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§10: which chats a presence change sends again).
 
 **Interfaces:**
-- Consumes: `WebHub` (Task 7), `loadChatView`, `toTimelineItem` (Task 8), `loadInboxRow` (Task 5), `Dispatcher.onCommit`, `CliHub.onMessage`.
-- Produces: `CliHub.onPresence(listener: (e: { userId: string; tokenId: string; change: 'connected' | 'disconnected' }) => void)`. `wireWebHub({ webHub, dispatcher, cliHub, clis }): { stop(): void }`, which:
-  - after each commit with a timeline range, loads those items and calls `publishItems`; then, for every subscriber, publishes `chat.state` with that subscriber's own `ChatView` (permissions differ per viewer); then sends `inbox.upsert` to every participant's user with their rows;
-  - on presence change, sends `me.update` to that user, and re-publishes state and inbox rows for the chats where that user has a queued or running job;
-  - on `job.progress` from a CLI, looks up the job's chat (a small in-memory map from job id to chat id and login, filled from the database on a miss) and sends `job.progress` to that chat's subscribers.
+- Consumes: `WebHub` (`publishItems`, `sendToChat`, `sendToChatViewer`, `sendToUser`, `subscribers`) and `loadItemsAfter` (Task 7); `loadChatView` (Task 8); `loadInboxRow(chatId, userId, clis)` (Task 5); `RepoAccess`; `KeyedLock`, `TtlCache`; `Dispatcher.onCommit`, `CliHub.onMessage`; test helpers `TestCli`, `listen`, `startWebHub`, `TestTab`, `makeCliToken`, `makeGithubSignIn`, `personOf`.
+- Produces: `SeqRange = { fromSeq: number; toSeq: number }` and `appendTimeline(tx, chatId, items): Promise<SeqRange | null>` (`chats/save.ts`). `DispatchEffects.timeline: SeqRange | null`. `PresenceChange = { userId; tokenId; change: 'connected' | 'disconnected' }` and `CliHub.onPresence(listener: (e: PresenceChange) => void)` (not called when a device's newer connection replaces its older one). `WebHub.connected(userId): boolean` and `WebHub.followedChats(): string[]`. `loadWebMe(userId, clis: LiveClis): Promise<WebMe>` (`auth/users.ts`, for `GET /api/me` and `me.update`). `STATE_DEBOUNCE_MS = 100`; `WebWiring = { webHub; dispatcher; cliHub; access: RepoAccess; debounceMs? }`; `wireWebHub(wiring): { stop(): void }` (`ws/web-wire.ts`). `TestTab.log`: the type of every message received, in order.
 
-**Behavior:**
-- Publishing never runs inside the chat's lock and never throws into the dispatcher (errors are logged).
-- Bursts: several commits for one chat within 100 ms produce one `chat.state` per subscriber (debounced per chat), but every item is sent.
-- CLI: `progress(stage, text)` sends at once when `stage` differs from the last stage sent for that job; otherwise at most every 2 s, as before (spec §10).
+**Behavior** (`wireWebHub`):
+- After a commit that added items, the chat's followers get those items (one `chat.items`); then, debounced 100 ms per chat, each follower gets their own `chat.state` and each participant on Nitpilot with a tab open gets `inbox.upsert` with their rows, but only if `RepoAccess` says they can still read the repo (the carry-forward from Task 5: the socket must not show what `GET /api/inbox` hides). Everything for one chat goes out in order (a `KeyedLock` per chat); a failure is logged and never reaches the dispatcher.
+- When a CLI comes or goes: `me.update` to its owner, then `chat.state` (and inbox rows) for the chats where that person's agent has a queued or running job, and for every chat someone has open in which that person takes part (the presence dot in the header and the details panel).
+- `job.progress` from a CLI goes to that chat's followers only when the job is that CLI owner's own (a small cache from job id to chat, login and kind, filled from the database on a miss), as `{ chatId, who: login, action: 'reviewing' | 'fixing', stage, text }`.
+- CLI: `progress(stage, text)` sends at once when `stage` differs from the last stage sent for that job; otherwise at most every 2 s, as before.
 
-**Tests this task must include:**
-- A dispatch that appends two items: subscribers get one `chat.items` with both, then `chat.state`; participants get `inbox.upsert`; a viewer subscribed without being a participant gets items and state but no inbox row.
-- A CLI connecting and disconnecting sends `me.update` with `agentOnline` true then false, and re-publishes the chat where that person's job is queued (its status turns from "Waiting" to "working").
-- `job.progress` from a CLI reaches only that chat's subscribers, with the participant's login as `who`.
-- `daemon.test.ts`: `preparing` then `running_agent` 100 ms later sends both; two texts in the same stage within 2 s send one.
+- [ ] **Step 1: Write the failing test for the seqs a commit adds**
+
+In `apps/server/src/chats/dispatch.db.test.ts`, the first test's last line becomes `expect(effects[0]).toMatchObject({ jobsChanged: true, timeline: { fromSeq: 1, toSeq: 2 } });`, and a test follows it:
+
+```ts
+  it('tells listeners which timeline items each commit added, and none when it added nothing', async () => {
+    const { chat, maya, person, dispatcher, effects } = await scene();
+    await dispatcher.dispatch(chat.id, { type: 'human_note', author: person(maya), body: 'Please keep the old API' });
+    await dispatcher.dispatch(chat.id, { type: 'timer', key: 'no-such-timer' });
+    expect(effects.map((e) => e.timeline)).toEqual([{ fromSeq: 1, toSeq: 2 }, { fromSeq: 3, toSeq: 3 }, null]);
+  });
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/dispatch.db.test.ts`
+Expected: FAIL, 2 tests: the effects have no `timeline`.
+
+- [ ] **Step 3: A commit says which items it added**
+
+In `apps/server/src/chats/save.ts`, replace `appendTimeline`'s doc comment and first lines (`export async function appendTimeline(…): Promise<void> {` and `if (items.length === 0) return;`) so it ends up as:
+
+```ts
+/** The seqs a commit added to a chat's timeline, first to last. */
+export type SeqRange = { fromSeq: number; toSeq: number };
+
+/** Append timeline items with the next sequence numbers (the chat's resume cursor). Returns their seqs, or null for none. */
+export async function appendTimeline(tx: Tx, chatId: string, items: NewItem[]): Promise<SeqRange | null> {
+  if (items.length === 0) return null;
+  const { lastSeq } = await tx.prChat.update({ where: { id: chatId }, data: { lastSeq: { increment: items.length } }, select: { lastSeq: true } });
+  const first = lastSeq - items.length + 1;
+  await tx.message.createMany({
+    data: items.map((item, i) => ({
+      chatId,
+      seq: first + i,
+      kind: item.kind,
+      authorGithubId: item.author?.githubId ?? null,
+      authorLogin: item.author?.login ?? null,
+      pointNumber: item.pointNumber,
+      jobId: item.jobId,
+      body: item.body,
+      data: (item.data ?? undefined) as Prisma.InputJsonValue | undefined,
+    })),
+  });
+  return { fromSeq: first, toSeq: lastSeq };
+}
+```
+
+In `apps/server/src/chats/apply-commands.ts`, import `type SeqRange` from `'./save'`, add to `DispatchEffects` after `cancelledJobs`:
+
+```ts
+  /** The timeline items this commit added, for the browsers following the chat (ws/web-wire.ts). Null when none. */
+  timeline: SeqRange | null;
+```
+
+and start `applyCommands` with `const effects: DispatchEffects = { jobsChanged: false, tasksCreated: false, cancelledJobs: [], timeline: null };`.
+
+In `apps/server/src/chats/dispatch.ts`, inside the transaction, `await appendTimeline(tx, chatId, out.timeline);` becomes `const timeline = await appendTimeline(tx, chatId, out.timeline);`, and `return applyCommands(tx, chatId, out.commands, now);` becomes `return { ...(await applyCommands(tx, chatId, out.commands, now)), timeline };`.
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm run test:db -w apps/server -- src/chats/dispatch.db.test.ts`
+Expected: PASS, 9 tests.
+
+- [ ] **Step 5: Write the failing test for presence**
+
+In `apps/server/src/ws/cli-hub.db.test.ts`, import `type PresenceChange` beside `CliHub`, and add after the test "lets a newer connection with the same token take over, and tells the older one to stop":
+
+```ts
+  it('says when a device comes online and when it goes, but not when the same device reconnects over itself', async () => {
+    const { hub, url } = await hubOnPort();
+    const changes: PresenceChange[] = [];
+    hub.onPresence((e) => changes.push(e));
+    const { user, token } = await device();
+    const first = await TestCli.online(url, token.raw);
+    const second = await TestCli.online(url, token.raw);
+    await first.closed;
+    second.close();
+    await vi.waitFor(() => expect(changes.map((c) => c.change)).toEqual(['connected', 'disconnected']));
+    expect(changes[0]).toEqual({ userId: user.id, tokenId: token.id, change: 'connected' });
+
+    // A CLI that went silent is dropped, and that's a disconnect too.
+    await TestCli.online(url, token.raw);
+    await vi.waitFor(() => expect(changes).toHaveLength(3));
+    hub.dropSilent(new Date(Date.now() + 1_000));
+    expect(changes.map((c) => c.change)).toEqual(['connected', 'disconnected', 'connected', 'disconnected']);
+  });
+```
+
+- [ ] **Step 6: Run it to see it fail**
+
+Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
+Expected: FAIL: `TypeError: hub.onPresence is not a function`.
+
+- [ ] **Step 7: The CLI hub reports presence**
+
+In `apps/server/src/ws/cli-hub.ts`, add after `MessageListener`:
+
+```ts
+/** A device came online (its hello was welcomed) or went away. The web app shows it (spec §10 `me.update`). */
+export type PresenceChange = { userId: string; tokenId: string; change: 'connected' | 'disconnected' };
+```
+
+a field after `listeners`: `private readonly presenceListeners: ((e: PresenceChange) => void)[] = [];`, a method after `onMessage`:
+
+```ts
+  /** Called when a device comes online or goes away. Not when a newer connection of the same device replaces an older one. */
+  onPresence(listener: (e: PresenceChange) => void): void {
+    this.presenceListeners.push(listener);
+  }
+```
+
+and one before `emit`:
+
+```ts
+  private presenceChanged(conn: CliConnection, change: PresenceChange['change']): void {
+    for (const listener of this.presenceListeners) {
+      try {
+        listener({ userId: conn.userId, tokenId: conn.tokenId, change });
+      } catch (err) {
+        console.error('[cli-hub] presence listener failed:', err);
+      }
+    }
+  }
+```
+
+Then call it where a device comes and goes:
+1. In `dropSilent`, after `c.terminate();`: `this.presenceChanged(c, 'disconnected');`.
+2. In the socket's `'close'` handler, the line that forgets the connection becomes:
+
+```ts
+      if (conn && this.byToken.get(conn.tokenId) === conn) {
+        this.byToken.delete(conn.tokenId);
+        this.presenceChanged(conn, 'disconnected');
+      }
+```
+
+3. Where a welcomed hello registers the connection, replace `this.byToken.get(auth.tokenId)?.close(CLOSE_CODES.replaced, …);` through the `welcome` send with:
+
+```ts
+    const replaced = this.byToken.get(auth.tokenId);
+    replaced?.close(CLOSE_CODES.replaced, `Another ${BRAND.cli} start on this device took over.`);
+    this.byToken.set(auth.tokenId, conn);
+    conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC } });
+    // The same device again (back from sleep) was online all along, as far as anyone watching can tell.
+    if (!replaced) this.presenceChanged(conn, 'connected');
+```
+
+(The replaced connection's own `'close'` later finds a newer connection under its token and reports nothing.)
+
+- [ ] **Step 8: Run it to see it pass**
+
+Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
+Expected: PASS, 11 tests.
+
+- [ ] **Step 9: Write the failing wiring tests**
+
+The tests check the order messages arrive in, so the test tab keeps a log. In `apps/server/test/web-ws.ts`, add a field to `TestTab` after `waiting`:
+
+```ts
+  /** The type of every message received, in order, whether or not a test took it out of the inbox. */
+  readonly log: ServerToWeb['t'][] = [];
+```
+
+and in the constructor's `'message'` listener, parse once and log it:
+
+```ts
+      const msg = JSON.parse(String(event.data)) as ServerToWeb;
+      this.inbox.push(msg);
+      this.log.push(msg.t);
+```
+
+Create `apps/server/src/ws/web-wire.db.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it } from 'vitest';
+import { makeChat, makeCliToken, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../test/db';
+import { fakeFetch } from '../../test/fake-fetch';
+import { sessionCookieFor } from '../../test/http';
+import { startWebHub, TestTab } from '../../test/web-ws';
+import { listen, sleep, TestCli } from '../../test/ws';
+import { RepoAccess } from '../auth/repo-access';
+import { Dispatcher } from '../chats/dispatch';
+import { loadItemsAfter } from '../chats/timeline';
+import { prisma } from '../lib/prisma';
+import { GithubClient } from '../platform/github/client';
+import { CliHub } from './cli-hub';
+import { wireWebHub } from './web-wire';
+
+const DEBOUNCE_MS = 30;
+const stops: (() => Promise<void> | void)[] = [];
+afterEach(async () => {
+  for (const stop of stops.splice(0).reverse()) await stop();
+});
+
+/** The server's live side, wired as main.ts wires it: a dispatcher, a CLI hub and a web hub. maya's PR, leo asked to review. */
+async function setup() {
+  const repo = await makeRepo();
+  const access = new RepoAccess(new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: () => ({ id: 1 }) })));
+  const dispatcher = new Dispatcher();
+  const cliHub = new CliHub();
+  const cliServer = await listen(cliHub);
+  const web = await startWebHub({ access, loadItems: loadItemsAfter });
+  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS });
+  stops.push(() => cliServer.close(), () => web.close(), () => live.stop());
+
+  const [maya, leo, reader] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' }), await makeUser({ login: 'rae' })];
+  for (const u of [maya, leo, reader]) await makeGithubSignIn(u.id);
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+  const tab = async (user: { id: string }, subscribe = true) => {
+    const t = await TestTab.open(web.url, { cookie: await sessionCookieFor(user.id), origin: web.origin });
+    if (subscribe) {
+      t.subscribe(chat.id, 0);
+      await t.next('chat.items');
+    }
+    return t;
+  };
+  const open = () => dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+  return { repo, chat, maya, leo, reader, dispatcher, cliServer, tab, open };
+}
+
+describe('wireWebHub: after a commit (spec §10)', () => {
+  it("sends followers the new items in one message and then their own view, and participants their inbox rows", async () => {
+    const { chat, maya, leo, reader, tab, open } = await setup();
+    const [mayaTab, readerTab, leoTab] = [await tab(maya), await tab(reader), await tab(leo, false)];
+    await open();
+
+    const items = await mayaTab.next('chat.items');
+    expect(items.d.items.map((i) => i.seq)).toEqual([1, 2]);
+    expect((await mayaTab.next('chat.state')).d.view).toMatchObject({ id: chat.id, viewer: { role: 'author' } });
+    expect((await mayaTab.next('inbox.upsert')).d.rows.map((r) => r.role)).toEqual(['author']);
+    expect(mayaTab.log).toEqual(['chat.items', 'chat.items', 'chat.state', 'inbox.upsert']);
+
+    // Someone who reads along: the items and their view, but no inbox row.
+    expect((await readerTab.next('chat.items')).d.items).toHaveLength(2);
+    expect((await readerTab.next('chat.state')).d.view.viewer.role).toBeNull();
+    await readerTab.nothing('inbox.upsert');
+
+    // leo isn't looking at the chat: just his inbox row.
+    expect((await leoTab.next('inbox.upsert')).d.rows).toMatchObject([{ chatId: chat.id, role: 'reviewer' }]);
+    await leoTab.nothing('chat.items');
+  });
+
+  it('sends every item of a burst of commits, and one view for all of them', async () => {
+    const { maya, tab, open, dispatcher, chat } = await setup();
+    const mayaTab = await tab(maya);
+    await open();
+    await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'Keep the old endpoint' });
+    await mayaTab.next('chat.state');
+    await sleep(DEBOUNCE_MS * 3);
+    expect(mayaTab.seqs(chat.id)).toEqual([1, 2, 3]);
+    expect(mayaTab.log.filter((t) => t === 'chat.state')).toHaveLength(1);
+  });
+});
+
+describe('wireWebHub: CLIs coming and going', () => {
+  it("tells the person, and shows their waiting agent as working once its CLI is back", async () => {
+    const { repo, maya, leo, tab, open, cliServer } = await setup();
+    const [mayaTab, leoTab] = [await tab(maya), await tab(leo, false)];
+    await open();
+    expect((await mayaTab.next('chat.state')).d.view.activity).toMatchObject({ kind: 'agent_waiting', who: 'leo', why: 'offline' });
+
+    const { raw } = await makeCliToken(leo.id);
+    const cli = await TestCli.online(cliServer.url, raw, { repos: [repo.fullName] });
+    expect((await leoTab.next('me.update')).d.me).toMatchObject({ login: 'leo', agentOnline: true });
+    expect((await mayaTab.next('chat.state')).d.view.activity).toEqual({ kind: 'agent_working', who: 'leo', why: null, offlineSince: null });
+
+    cli.close();
+    expect((await leoTab.next('me.update')).d.me.agentOnline).toBe(false);
+  });
+
+  it("shows an agent coming and going in a chat someone has open, even with no work queued for it", async () => {
+    const { repo, maya, tab, open, cliServer } = await setup();
+    const mayaTab = await tab(maya);
+    await open();
+    const agentOf = (view: { participants: { login: string; agent: { online: boolean } | null }[] }) => view.participants.find((p) => p.login === 'maya')?.agent?.online;
+    expect(agentOf((await mayaTab.next('chat.state')).d.view)).toBe(false);
+
+    // maya wrote the PR: nothing waits for her agent until leo's review is in.
+    const { raw } = await makeCliToken(maya.id);
+    const cli = await TestCli.online(cliServer.url, raw, { repos: [repo.fullName] });
+    expect(agentOf((await mayaTab.next('chat.state')).d.view)).toBe(true);
+
+    cli.close();
+    expect(agentOf((await mayaTab.next('chat.state')).d.view)).toBe(false);
+  });
+});
+
+describe('wireWebHub: progress lines', () => {
+  it("forwards a CLI's progress to the chat's followers, as whose agent and doing what", async () => {
+    const { repo, chat, maya, leo, tab, open, cliServer } = await setup();
+    const [mayaTab, leoTab] = [await tab(maya), await tab(leo, false)];
+    await open();
+    const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, userId: leo.id } });
+    const cli = await TestCli.online(cliServer.url, (await makeCliToken(leo.id)).raw, { repos: [repo.fullName] });
+    cli.send({ v: 1, t: 'job.progress', d: { jobId: job.id, attempt: 1, stage: 'running_agent', text: 'reading src/orders.ts' } });
+    expect((await mayaTab.next('job.progress')).d).toEqual({ chatId: chat.id, who: 'leo', action: 'reviewing', stage: 'running_agent', text: 'reading src/orders.ts' });
+    await leoTab.nothing('job.progress');
+  });
+
+  it("drops progress a CLI sends for someone else's job", async () => {
+    const { repo, chat, maya, leo, tab, open, cliServer } = await setup();
+    const mayaTab = await tab(maya);
+    await open();
+    const leosJob = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, userId: leo.id } });
+    const mayasCli = await TestCli.online(cliServer.url, (await makeCliToken(maya.id)).raw, { repos: [repo.fullName] });
+    mayasCli.send({ v: 1, t: 'job.progress', d: { jobId: leosJob.id, attempt: 1, stage: 'running_agent', text: 'pretending to be leo' } });
+    await mayaTab.nothing('job.progress');
+  });
+});
+```
+
+- [ ] **Step 10: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
+Expected: FAIL: `./web-wire` doesn't exist.
+
+- [ ] **Step 11: Wire the hubs together**
+
+`me.update` sends what `GET /api/me` answers, so that answer moves where both can use it. In `apps/server/src/auth/users.ts`, import `type WebMe` from `@nitpilot/protocol` and `type LiveClis` from `'../chats/activity'`, and add at the end:
+
+```ts
+/**
+ * Who you are, as the web app reads it (`GET /api/me`, and `me.update` on `/ws/web`): your GitHub account, whether
+ * your GitHub sign-in still works, and whether one of your CLIs is connected right now.
+ */
+export async function loadWebMe(userId: string, clis: LiveClis): Promise<WebMe> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true } });
+  return {
+    id: user.id,
+    githubId: user.githubId,
+    login: user.login,
+    avatarUrl: user.avatarUrl,
+    githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth',
+    agentOnline: clis.connectionsFor(user.id).length > 0,
+  };
+}
+```
+
+Replace `apps/server/src/http/routes/me.ts` with:
+
+```ts
+import type { WebMe } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { requireUser, type UserVariables } from '../../auth/request-user';
+import { loadWebMe } from '../../auth/users';
+import type { LiveClis } from '../../chats/activity';
+
+/**
+ * `GET /api/me` (spec §10): who you are, whether your GitHub sign-in still works, and whether one of your CLIs
+ * is connected. For the web app and the CLI alike.
+ */
+export function meRoutes(deps: { clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  app.get('/api/me', requireUser, async (c) => {
+    const body: WebMe = await loadWebMe(c.get('user').id, deps.clis);
+    return c.json(body);
+  });
+
+  return app;
+}
+```
+
+In `apps/server/src/ws/web-hub.ts`, add after `sendToUser`:
+
+```ts
+  /** Whether this person has a tab open right now. */
+  connected(userId: string): boolean {
+    return [...this.clients].some((c) => c.user.id === userId);
+  }
+```
+
+and after `subscribers`:
+
+```ts
+  /** Every chat someone follows right now, once each. */
+  followedChats(): string[] {
+    const chats = new Set<string>();
+    for (const client of this.clients) for (const chatId of client.subs.keys()) chats.add(chatId);
+    return [...chats];
+  }
+```
+
+Create `apps/server/src/ws/web-wire.ts`:
+
+```ts
+import type { InboxRow, JobType } from '@nitpilot/protocol';
+import type { RepoAccess } from '../auth/repo-access';
+import { loadWebMe } from '../auth/users';
+import type { Dispatcher } from '../chats/dispatch';
+import { loadInboxRow } from '../chats/inbox';
+import type { SeqRange } from '../chats/save';
+import { loadItemsAfter } from '../chats/timeline';
+import { loadChatView } from '../chats/views';
+import { KeyedLock } from '../lib/key-lock';
+import { prisma } from '../lib/prisma';
+import { TtlCache } from '../lib/ttl-cache';
+import type { CliHub } from './cli-hub';
+import type { WebHub } from './web-hub';
+
+/** Commits close together make one `chat.state`: it goes this long after the first of them. Every item still goes. */
+export const STATE_DEBOUNCE_MS = 100;
+
+/** What a progress line needs to know about a job: its chat, whose it is, and what kind of work. */
+type JobInfo = { chatId: string; userId: string; login: string; action: 'reviewing' | 'fixing' };
+
+export type WebWiring = { webHub: WebHub; dispatcher: Dispatcher; cliHub: CliHub; access: RepoAccess; debounceMs?: number };
+
+/**
+ * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
+ * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
+ * gets `me.update`, and the chats where their agent has work or shows its presence are sent again. A CLI's progress
+ * lines go to the chat's followers. main.ts and the tests call this, so the tests run what production runs.
+ */
+export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS }: WebWiring): { stop(): void } {
+  // Everything about one chat goes out in order: its items before the state that follows them.
+  const perChat = new KeyedLock();
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const jobs = new TtlCache<JobInfo>(60 * 60_000, 10_000);
+
+  /** Run `work` for this chat after what's already queued for it. Never throws: publishing must not break a commit. */
+  function inOrder(chatId: string, what: string, work: () => Promise<void>): void {
+    perChat.run(chatId, work).catch((err) => console.error(`[web-wire] ${what} for chat ${chatId} failed:`, err));
+  }
+
+  /** Send the chat's state soon, once for all the commits in the next `debounceMs`. */
+  function stateSoon(chatId: string): void {
+    if (timers.has(chatId)) return;
+    timers.set(
+      chatId,
+      setTimeout(() => {
+        timers.delete(chatId);
+        inOrder(chatId, 'state', () => publishState(chatId));
+      }, debounceMs),
+    );
+  }
+
+  async function publishItems(chatId: string, range: SeqRange): Promise<void> {
+    if (webHub.subscribers(chatId).length === 0) return;
+    const items = (await loadItemsAfter(chatId, range.fromSeq - 1)).filter((item) => item.seq <= range.toSeq);
+    webHub.publishItems(chatId, items);
+  }
+
+  /** Each follower's own view (your role and attention are yours), then each participant's inbox rows. */
+  async function publishState(chatId: string): Promise<void> {
+    for (const viewer of webHub.subscribers(chatId)) {
+      const view = await loadChatView(chatId, viewer, cliHub);
+      webHub.sendToChatViewer(chatId, viewer.id, { v: 1, t: 'chat.state', d: { chatId, view } });
+    }
+    for (const userId of await participantsOnNitpilot(chatId)) {
+      if (!webHub.connected(userId)) continue;
+      const rows = await readableRows(userId, await loadInboxRow(chatId, userId, cliHub));
+      if (rows) webHub.sendToUser(userId, { v: 1, t: 'inbox.upsert', d: { chatId, rows } });
+    }
+  }
+
+  /**
+   * A row shows the PR's title and newest message, so it goes only to someone who can still read the repo, the
+   * same check the inbox makes (http/routes/inbox.ts). Null when GitHub didn't answer: nothing is sent this time.
+   */
+  async function readableRows(userId: string, rows: InboxRow[]): Promise<InboxRow[] | null> {
+    if (rows.length === 0) return rows;
+    try {
+      return (await access.check(userId, rows[0]!.repo)) === 'read' ? rows : [];
+    } catch (err) {
+      console.error('[web-wire] could not check repo access for an inbox row:', err);
+      return null;
+    }
+  }
+
+  async function jobInfo(jobId: string): Promise<JobInfo | null> {
+    const kept = jobs.get(jobId);
+    if (kept) return kept;
+    const job = await prisma.job.findUnique({ where: { id: jobId }, select: { chatId: true, userId: true, type: true, participant: { select: { login: true } } } });
+    if (!job) return null;
+    const info: JobInfo = { chatId: job.chatId, userId: job.userId, login: job.participant.login, action: (job.type as JobType) === 'address' ? 'fixing' : 'reviewing' };
+    jobs.set(jobId, info);
+    return info;
+  }
+
+  dispatcher.onCommit((chatId, effects) => {
+    const range = effects.timeline;
+    if (range) inOrder(chatId, 'items', () => publishItems(chatId, range));
+    stateSoon(chatId);
+  });
+
+  cliHub.onPresence(({ userId }) => {
+    void (async () => {
+      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub) } });
+      for (const chatId of await chatsShowingAgentOf(userId, webHub.followedChats())) stateSoon(chatId);
+    })().catch((err) => console.error('[web-wire] presence update failed:', err));
+  });
+
+  cliHub.onMessage(async (conn, msg) => {
+    if (msg.t !== 'job.progress') return;
+    const job = await jobInfo(msg.d.jobId);
+    // Only for a job of this CLI's owner: nobody's CLI can put words in someone else's chat.
+    if (!job || job.userId !== conn.userId) return;
+    webHub.sendToChat(job.chatId, { v: 1, t: 'job.progress', d: { chatId: job.chatId, who: job.login, action: job.action, stage: msg.d.stage, text: msg.d.text } });
+  });
+
+  return {
+    stop(): void {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    },
+  };
+}
+
+/**
+ * The chats whose view changes when this person's CLI comes or goes: where their agent has work ("waiting" ↔
+ * "working", inbox rows too), and, among the chats someone has open, where they take part (the presence dot).
+ */
+async function chatsShowingAgentOf(userId: string, followed: string[]): Promise<string[]> {
+  const active = await prisma.job.findMany({ where: { userId, status: { in: ['queued', 'running'] } }, select: { chatId: true }, distinct: ['chatId'] });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { githubId: true } });
+  const taking = user && followed.length > 0 ? await prisma.participant.findMany({ where: { githubId: user.githubId, chatId: { in: followed } }, select: { chatId: true } }) : [];
+  return [...new Set([...active, ...taking].map((row) => row.chatId))];
+}
+
+/** The Nitpilot users among the chat's people. */
+async function participantsOnNitpilot(chatId: string): Promise<string[]> {
+  const people = await prisma.participant.findMany({ where: { chatId, isBot: false }, select: { githubId: true } });
+  const users = await prisma.user.findMany({ where: { githubId: { in: people.map((p) => p.githubId) } }, select: { id: true } });
+  return users.map((u) => u.id);
+}
+```
+
+- [ ] **Step 12: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts src/http/routes/me.db.test.ts`
+Expected: PASS, 6 and 4 tests.
+
+- [ ] **Step 13: Wire it in `main.ts` and the end-to-end harness**
+
+In `apps/server/src/main.ts`: import `wireWebHub` from `'./ws/web-wire'`; the hub's line becomes
+
+```ts
+  const access = new RepoAccess(github);
+  const webHub = new WebHub({ access, loadItems: loadItemsAfter });
+```
+
+after `const cliJobs = wireCliHub({ hub, dispatcher, platform });` add
+
+```ts
+  // Commits, CLI presence and progress → the browsers following along (ws/web-wire.ts).
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
+```
+
+and in the shutdown handler, `live.stop();` after `cliJobs.stop();`.
+
+In `apps/server/test/e2e/harness.ts`, the same: import `wireWebHub`; the hub's line becomes `const access = new RepoAccess(githubApi);`, `const webHub = new WebHub({ access, loadItems: loadItemsAfter });`, `const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });`; and `live.stop();` after `cliJobs.stop();` in `close()`.
+
+- [ ] **Step 14: Write the failing CLI test for stage changes**
+
+Plan 1b's deferred minor: the 2-second throttle dropped a stage change, so the line could say "running the agent" while it was pushing. In `apps/cli/src/daemon.test.ts`, add before the test "stops a job the server cancels, and sends nothing for it":
+
+```ts
+  it('sends a change of stage at once, and the same stage at most every 2 s (spec §10)', async () => {
+    const finish = deferred<JobOutcome>();
+    const { hub } = await setup({
+      executor: async (_bundle, io) => {
+        io.progress('preparing', 'Checking out the PR');
+        io.progress('running_agent', 'Running fake');
+        io.progress('running_agent', 'calling add_point');
+        return finish.promise;
+      },
+    });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    expect((await conn.next('job.progress')).d).toMatchObject({ ...JOB, stage: 'preparing', text: 'Checking out the PR' });
+    expect((await conn.next('job.progress')).d).toMatchObject({ stage: 'running_agent', text: 'Running fake' });
+    await conn.nothing('job.progress');
+    finish.resolve(done);
+  });
+```
+
+Run: `npm test -w apps/cli -- src/daemon.test.ts`
+Expected: FAIL: the second `job.progress` never arrives (the throttle drops it).
+
+- [ ] **Step 15: A new stage goes at once**
+
+In `apps/cli/src/daemon.ts`, `PROGRESS_EVERY_MS`'s comment becomes `/** Live status goes out at most this often, except that a new stage goes at once (spec §10). */`, and in `execute`, the start of `io` becomes:
+
+```ts
+    let lastProgress = 0;
+    let lastStage: Stage | null = null;
+    const io: JobIo = {
+      progress(stage, text) {
+        const now = Date.now();
+        if (!welcomed) return;
+        // A new stage ("pushing" after "running_agent") goes at once, so the status line never shows a stale one.
+        if (stage === lastStage && now - lastProgress < PROGRESS_EVERY_MS) return;
+        lastProgress = now;
+        lastStage = stage;
+        socket?.send({ v: 1, t: 'job.progress', d: { jobId: job.jobId, attempt: job.attempt, stage, text: text.slice(0, 200) } });
+      },
+```
+
+Run: `npm test -w apps/cli -- src/daemon.test.ts`
+Expected: PASS, 26 tests.
+
+- [ ] **Step 16: The spec**
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "Web ↔ server", the `me.update` item's second sentence ("The chats where that person's agent has active jobs are sent again too, so "working" and "waiting" stay true for everyone.") becomes: "The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone." In the `inbox.upsert` item, add: "Only to people who can still read the repo (the inbox's own check)."
+
+- [ ] **Step 17: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
+Expected: protocol 49, CLI 294 passed + 14 skipped, server 716, web 73; end to end 5; typecheck and lint clean.
+
+- [ ] **Step 18: Commit**
+
+```bash
+git add apps/server/src apps/server/test/web-ws.ts apps/server/test/e2e/harness.ts apps/cli/src/daemon.ts apps/cli/src/daemon.test.ts docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): commits, CLI presence and progress reach the browser over /ws/web
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 10: The chat screen (read-only), and the transcript page retired
 
 **Files:**
-- Create: `apps/web/src/live/{socket.ts,apply.ts,progress.ts}` (+ tests), `apps/web/src/routes/Chat/{Chat.tsx,ChatHeader.tsx,RoundPips.tsx,Presence.tsx,Timeline.tsx,SystemItem.tsx,SummaryItem.tsx,HumanItem.tsx,PointCard.tsx,Snippet.tsx,ProgressLine.tsx,Banners.tsx,DetailsPanel.tsx,UntrustedCard.tsx,NotFound.tsx,*.module.css,*.test.tsx}`, `apps/web/src/components/{SeverityBadge,PointStatus,Toast}/…`, `apps/web/src/lib/{banner.ts,snippet.ts}` (+ tests), `apps/web/src/api/chat.ts`, `apps/web/e2e/chat-live.spec.ts`.
-- Modify: `apps/web/src/app.tsx`, `apps/web/src/routes/Shell/…` (the socket lives in the shell, one per tab).
-- Delete: `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx` and their tests (the SPA serves `/c/:owner/:repo/:number`; the access and 404 cases they covered now live in Task 8's tests).
+- Create: `apps/web/src/test/chat.ts`, `apps/web/src/test/socket.ts`, `apps/web/src/lib/{timeline,banner,snippet,names,clipboard}.ts` (+ `timeline.test.ts`, `banner.test.ts`, `snippet.test.ts`), `apps/web/src/live/{socket.ts,apply.ts,progress.ts,LiveProvider.tsx}` (+ `socket.test.ts`, `apply.test.ts`), `apps/web/src/api/chat.ts`, `apps/web/src/routes/Chat/{Chat,ChatHeader,ChatBanner,Timeline,PointCard,DetailsPanel}.tsx` with a `.module.css` each, `apps/web/src/routes/Chat/PointCard.test.tsx`, `apps/web/src/routes/Chat/Chat.test.tsx`, `apps/web/e2e/chat-live.spec.ts`, `apps/cli/src/agents/fake/scenarios/paced.json`, `docs/why/chat-page.md`.
+- Modify: `apps/web/src/lib/time.ts` and its test (`itemTime`, `useNow`), `apps/web/src/lib/keys.ts` and its test (↑/↓ inside `<main>`), `apps/web/src/lib/viewport.ts` (`useIsWide`), `apps/web/src/lib/inbox.ts` (a comment), `apps/web/src/components/Avatar/Avatar.tsx`, `apps/web/src/components/AgentBadge/AgentBadge.{tsx,module.css}`, `apps/web/src/routes/Inbox/{Inbox,InboxRow,InboxBanners}.tsx`, `apps/web/src/routes/Inbox/Inbox.test.tsx`, `apps/web/src/routes/Shell/Shell.tsx` and its test, `apps/web/src/test/render.tsx`, `apps/web/src/app.tsx`, `apps/web/vite.config.ts`, `apps/web/e2e/control.ts`, `apps/web/e2e/inbox.spec.ts`, `apps/server/test/e2e/github.ts`, `apps/server/test/e2e/web-server.ts`, `apps/server/src/http/app.ts`, `apps/server/src/chats/access.ts` and `apps/server/src/lib/urls.ts` (comments), `docs/why/content-security-policy.md`.
+- Delete: `apps/web/src/routes/Chat/ChatPlaceholder.tsx`, `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx`, `apps/server/src/http/routes/transcript.db.test.ts`, `docs/why/transcript-page.md` (its content moves to `chat-page.md`). The SPA serves `/c/:owner/:repo/:number`; the access cases the transcript tests covered are Task 8's `chats.db.test.ts`.
 
 **Interfaces:**
-- Consumes: `ChatView`, `TimelineItem`, `ServerToWeb` (protocol), `useMe`.
-- Produces: `class LiveSocket { constructor(opts: { url: string; onMessage(msg: ServerToWeb): void; backoff?: Backoff }); start(); stop(); subscribe(chatId: string, afterSeq: number); unsubscribe(chatId) }` (reconnects with 1 s doubling to 30 s plus jitter, reset on open; re-subscribes every open chat with its current `lastSeq`). `applyServerMessage(queryClient, msg)` writes into `['chat', id]`, `['inbox']`, `['me']`. `mergeItems(existing: TimelineItem[], incoming: TimelineItem[]): TimelineItem[]` (dedupe by `seq`, sorted). `useProgress(chatId) → { who, stage, text } | null` (cleared on the next `chat.state` where nobody is working). `chatBanner(view: ChatView, me: WebMe): Banner` with `Banner = { kind: 'ready_author' | 'ready_reviewer' | 'escalated' | 'waiting' | 'failed_job' | 'failed_post' | 'github_expired' | 'cap' | 'repo_not_linked' | 'none'; … }`. `snippetLines(point: PointView): { n: number; text: string; highlighted: boolean }[]`.
+- Consumes: `ChatResponse`, `ChatView`, `PointView`, `ParticipantView`, `TimelineItem`, `MessagesResponse`, `FilesResponse`, `ServerToWeb`, `WebToServer`, `WEB_WS_PATH` (protocol, Tasks 7–8); the chat routes (Task 8) and `/ws/web` (Tasks 7, 9); `api.get`, `api.send`, `ApiError` (`status`, `code`); the `['me']` and `['inbox']` caches (W2); `Avatar`, `AgentBadge`, `Ping`, `ErrorState`, `Pane`, `EmptyPane`, `useIsDesktop`, `useEscapeBack`; `fakeApi`, `renderApp`, `fakeViewport` (W2's `test/render.tsx`).
+- Produces (live): `SocketLike`; `liveUrl(location?)` (`/ws/web` on the page's host, `wss:` for an `https:` page); `class LiveSocket { constructor(opts: { url; onMessage(msg: ServerToWeb); onSignedOut?(); open?: (url) => SocketLike; backoff?: { startMs; maxMs; random } }); start(); stop(); subscribe(chatId, afterSeq); unsubscribe(chatId) }`: reconnects after 1 s doubling to 30 s, each wait ±20%, reset once open; re-subscribes every open chat from the newest seq it has; 4401 stops it and calls `onSignedOut`; `chat.error` forgets the chat, except `unavailable`, which asks again after 5 s. `mergeItems(existing, incoming): TimelineItem[]` (each seq once, in order); `applyServerMessage(queryClient, msg)` writes into `['chat', …]` (found by the view's id), `progressKey(chatId)`, `['inbox']`, `['me']`. `Progress`, `progressKey(chatId)`, `useProgress(chatId): Progress | null`. `SocketFactory` (a context, so tests pass fake sockets), `LiveProvider`, `useLiveChat(chatId, afterSeq)`.
+- Produces (data): `chatKey(owner, repo, number)`, `useChat(owner, repo, number)`, `fetchOlderItems(chatId, beforeSeq)`, `useFiles(chatId)`, `useMarkRead(chatId, seq, participant)` (`api/chat.ts`).
+- Produces (lib): `Banner` and `chatBanner(view: ChatView, me: WebMe): Banner` (kinds `github_expired`, `escalated` (points, note), `failed_job`, `failed_post`, `cap`, `repo_not_linked`, `waiting` (offlineSince), `ready_reviewer`, `ready_author`, `none`, in that priority; none on a closed PR) and `escalationNote(points, maxRounds)` (`lib/banner.ts`). `Glyph`, `TimelineRow`, `timelineRows(items, points)` (a point's card sits where it was raised and holds its thread), `systemGlyph(body)`, `severityCounts(data)`, `withCommitHashes(text)` (`lib/timeline.ts`). `snippetLines(point): { n; text; highlighted }[]` and `syntaxTokens(line): { text; kind }[]` (`lib/snippet.ts`). `agentName(login, you)`, `personName(login, you)` (`lib/names.ts`). `useCopy(text): { copied; copy() }` (`lib/clipboard.ts`, shared with the inbox's offline banner). `itemTime(iso, now?)` and `useNow(everyMs = 60_000): Date` (`lib/time.ts`). `useIsWide()` (1180 px, `lib/viewport.ts`).
+- Produces (screens): `Avatar` sizes `22 | 28 | 30 | 32 | 38`; `AgentBadge({ login, size?: 'large' | 'small' | 'tiny', decorative? })`. `Chat` (the route's element; reads `me` from `useOutletContext<WebMe>()`), `ChatHeader`, `ChatBanner`, `Timeline`, `PointCard({ point, thread, you, people, repoUrl })`, `DetailsPanel({ view })`. `Shell` wraps everything signed in in `LiveProvider` and passes `me` as the outlet's context.
+- Produces (tests): `test/chat.ts` (`point`, `chatView`, `item`, `chatResponse`, `chatRoutes`), `test/socket.ts` (`FakeSocket`, `fakeSockets`); `renderApp` also returns `sockets`; `fakeViewport(width: boolean | number)`. Playwright: control `POST /reset`, `POST /cli { login, scenario }`, `DELETE /cli { login }`; `resetChats`, `startCli`, `stopCli` (`e2e/control.ts`); `localGithub().addPull(number)`.
 
 **Behavior** (handoff §2, §3, §10, both themes):
-- Header: title, role chip, the Auto switch **shown read-only** (its state; toggling arrives in Task 18), "Open on GitHub ↗", details toggle; row 2 with repo #n, branches, round pips (amber on the last round) and "Round 2 of 3", presence per agent (online dot, "offline since 18:04" ring, ping while working). Phone: back arrow (44×44) and the header collapsing to one line after 48 px of scroll, keeping the Auto switch.
-- Banners from `chatBanner` (one at a time, priority: github_expired, escalated, failed, cap, repo_not_linked, waiting, ready), with their text only: in W3 the action buttons (Resolve, Continue, Retry, Review) aren't rendered; Task 13 adds them. Links that change nothing ("Approve on GitHub ↗", "Reconnect", the copyable command chips) are there from W3. Escalation banner `role=alert`, the others `role=status`.
-- Timeline (max 780 px): system lines with glyphs, agent summaries with severity counts, human messages (own in `--bubble`), point cards (expanded; resolved collapsed by default, click to expand), the live progress line (`role=status aria-live=polite`). "Load earlier" pages with `messages?before`.
-- Point card: severity badge (bars), category chip, `P1`, status glyph + word, `path:line` link to GitHub, title, body, the snippet with highlighted lines (accent line numbers, diamond in the gutter), the thread (replies, decisions, outcome tags, commit links).
-- Details panel (desktop ≥1180 px by default, toggled): files (`/files`), participants, team rules (including the rules error chip "! `.nitpilot.yml` has an error, using defaults"), the summary comment link.
-- Untrusted card (first-time contributor): eyebrow, title, body, file stats from `/files`; the **Review** button arrives in Task 13.
-- Read access errors: 404 → "Nothing here" with a link to the inbox; 401 reauth → the GitHub-expired banner with Reconnect; `chat.error` while open does the same.
-- Opening a chat marks it read up to `lastSeq` (`POST read`, debounced 1 s; again as new items arrive while the tab is visible).
+- Header: title, role chip, "Open on GitHub ↗", the details toggle (only where the panel fits); row 2 with repo #n, branches, round pips (amber on the last round) and "Round 2 of 3", each agent's presence (online dot, "offline since 18:04" ring, ping while working). Phone: the back arrow (44×44) and the header collapsing to one line after 48 px of scroll. No Auto switch in W3: Task 18 adds it with its state.
+- One banner from `chatBanner`, with its text, its links ("Approve on GitHub ↗", "Reconnect GitHub") and copyable commands, but no action buttons (Task 13 adds Resolve, Continue, Retry, Review). Escalation `role=alert`, the others `role=status`. A rules chip ("! `.nitpilot.yml` has an error, using defaults") under it.
+- Timeline (max 780 px): system lines with glyphs, agent summaries with severity counts, people's messages, point cards (resolved ones collapsed, click to open), the progress line (`role=status`, `aria-live=polite`), "Load earlier" while there are older items. The untrusted card ("First-time contributor") when the PR is from outside and you're asked to review it.
+- Details panel at ≥1180 px, open by default, toggled from the header: files (`/files`), participants, team rules, the summary comment link.
+- A 404 shows "Nothing here"; a 401 `reauth` shows "Sign in with GitHub again" with Reconnect; `chat.error` makes the screen ask again over REST, which shows one of those.
+- Opening a chat marks it read up to its newest item a second later, while the tab is visible, for someone in it (the inbox row's unread count goes to 0).
+- The inbox's ↑/↓ leave the page beside it alone (the chat's feed scrolls; j/k still move the cursor), and the inbox's times move on every minute (`useNow`), both W2 carry-forwards.
 
-**Tests this task must include:**
-- `apply.test.ts` / **Review Focus 1:** `mergeItems` with an overlapping and an out-of-order batch gives one ordered list; `applyServerMessage` updates the chat and inbox caches.
-- `socket.test.ts`: a dropped socket reconnects with backoff and re-subscribes with the latest `lastSeq` (fake WebSocket class).
-- `banner.test.ts`: one case per banner kind, and the priority order.
-- `snippet.test.ts`: highlighted lines for a point on line 48 in a snippet starting at 43; `LEFT` points; a null snippet.
-- `PointCard.test.tsx`: expanded and collapsed, the four statuses, outcome tags; `Chat.test.tsx`: renders a fixture `ChatView`, shows "Nothing here" on 404 and the reconnect banner on 401 (**Review Focus 2**).
-- Playwright `chat-live.spec.ts`: open a chat, trigger a review through the control API, and see the summary and point cards appear and the progress line show without reloading.
-- The server's old transcript tests are deleted with their files; `npm run test:e2e` still passes (the summary comment's link is unchanged).
+- [ ] **Step 1: Write the failing tests for the feed's logic**
+
+A fixture for every chat test. Create `apps/web/src/test/chat.ts`:
+
+```ts
+import type { ChatResponse, ChatView, PointView, TimelineItem } from '@nitpilot/protocol';
+import type { Answer } from './render';
+
+// A chat for component tests: maya's PR #142 on acme/shop-api, reviewed by leo. Pass only what a test cares about.
+
+export function point(over: Partial<PointView> = {}): PointView {
+  return {
+    number: 1, raisedBy: { githubId: '1002', login: 'leo' }, origin: 'agent', path: 'src/orders/list.ts', line: 48, side: 'RIGHT',
+    url: 'https://github.com/acme/shop-api/blob/abc1234/src/orders/list.ts#L48', severity: 'major', category: 'bug',
+    title: 'parseCursor throws on an empty cursor', body: 'An empty cursor decodes to "", which is an Invalid Date.',
+    snippet: { startLine: 47, lines: ['export function parseCursor(raw: string) {', '  const [ts, id] = raw.split(":");', '  return { ts: new Date(Number(ts)), id };'] },
+    status: 'open', authorResolution: null, escalationReason: null, trusted: true, round: 1, ...over,
+  };
+}
+
+export function chatView(over: Partial<ChatView> = {}): ChatView {
+  return {
+    id: 'chat_142', repo: 'acme/shop-api', number: 142, title: 'Add cursor pagination to /orders', url: 'https://github.com/acme/shop-api/pull/142',
+    author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'reviewing', round: 1, maxRounds: 3,
+    merged: false, closed: false, trusted: true, isDraft: false,
+    viewer: { role: 'author', attention: 'none', failure: null },
+    participants: [
+      { githubId: '1001', login: 'maya', avatarUrl: 'https://avatars.githubusercontent.com/u/1001', role: 'author', isBot: false, onNitpilot: true, requested: false, agent: { online: true, offlineSince: null, working: false } },
+      { githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, agent: { online: true, offlineSince: null, working: false } },
+    ],
+    activity: { kind: 'none', who: null, why: null, offlineSince: null },
+    points: [],
+    rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
+    summaryUrl: null, lastSeq: 0, ...over,
+  };
+}
+
+let at = Date.parse('2026-10-16T14:00:00Z');
+
+/** A timeline item; `seq` and `at` count up unless given. */
+export function item(seq: number, over: Partial<TimelineItem> = {}): TimelineItem {
+  at += 60_000;
+  return { seq, kind: 'system', author: null, pointNumber: null, jobId: null, body: `item ${seq}`, data: null, at: new Date(at).toISOString(), ...over };
+}
+
+export function chatResponse(over: { view?: Partial<ChatView>; items?: TimelineItem[]; hasOlder?: boolean } = {}): ChatResponse {
+  const items = over.items ?? [];
+  return { view: chatView({ lastSeq: items.at(-1)?.seq ?? 0, ...over.view }), items, hasOlder: over.hasOlder ?? false };
+}
+
+/** fakeApi answers for opening these chats: each one maya's PR with that title. */
+export function chatRoutes(chats: { repo: string; number: number; title: string }[]): Record<string, () => Answer> {
+  return Object.fromEntries(
+    chats.map((c) => [`GET /api/chats/${c.repo}/${c.number}`, (): Answer => [200, chatResponse({ view: { id: `chat_${c.number}`, repo: c.repo, number: c.number, title: c.title } })]]),
+  );
+}
+```
+
+Create `apps/web/src/lib/timeline.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { item, point } from '../test/chat';
+import { severityCounts, systemGlyph, timelineRows, withCommitHashes } from './timeline';
+
+describe('timelineRows', () => {
+  it("puts each point's card where it was raised, with its replies and decisions inside", () => {
+    const items = [
+      item(1, { body: "Round 1: leo's agent is reviewing" }),
+      item(2, { kind: 'job_summary', body: 'Two points.' }),
+      item(3, { kind: 'point_raised', pointNumber: 1 }),
+      item(4, { kind: 'point_raised', pointNumber: 2 }),
+      item(5, { kind: 'human', body: 'Keep the old endpoint' }),
+      item(6, { kind: 'point_reply', pointNumber: 1, body: 'Now 25.' }),
+      item(7, { kind: 'point_decision', pointNumber: 1, body: 'Fixed.' }),
+    ];
+    const rows = timelineRows(items, [point(), point({ number: 2 })]);
+    expect(rows.map((r) => (r.kind === 'point' ? `P${r.point.number}` : r.kind))).toEqual(['system', 'summary', 'P1', 'P2', 'human']);
+    const p1 = rows[2]!;
+    expect(p1.kind === 'point' && p1.thread.map((t) => t.seq)).toEqual([6, 7]);
+  });
+
+  it('puts a card where its thread starts when the item that raised it is on an older page', () => {
+    const rows = timelineRows([item(40, { kind: 'human', body: 'hi' }), item(41, { kind: 'point_reply', pointNumber: 3 })], [point({ number: 3 })]);
+    expect(rows.map((r) => r.kind)).toEqual(['human', 'point']);
+  });
+});
+
+describe('systemGlyph', () => {
+  it('reads the glyph off what the engine says', () => {
+    expect(systemGlyph('Ready for approval')).toBe('check');
+    expect(systemGlyph('Merged')).toBe('check');
+    expect(systemGlyph('leo approved on GitHub')).toBe('check');
+    expect(systemGlyph('P1 needs a human decision: security points always go to a person')).toBe('diamond');
+    expect(systemGlyph("leo's agent is waiting (daily cap) and will try again later")).toBe('ring');
+    expect(systemGlyph('Pull request opened by maya')).toBe('dot');
+  });
+});
+
+describe('severityCounts', () => {
+  it('lists the counts from the worst severity down, and nothing for none', () => {
+    expect(severityCounts({ counts: { nit: 1, major: 1, minor: 2 } })).toBe('1 major · 2 minor · 1 nit');
+    expect(severityCounts({ counts: {} })).toBe('');
+    expect(severityCounts(null)).toBe('');
+  });
+});
+
+describe('withCommitHashes', () => {
+  it('marks the commit hashes in a line', () => {
+    expect(withCommitHashes("maya's agent pushed a1b2c3d")).toEqual([{ text: "maya's agent pushed ", hash: false }, { text: 'a1b2c3d', hash: true }]);
+    expect(withCommitHashes('Ready for approval')).toEqual([{ text: 'Ready for approval', hash: false }]);
+  });
+});
+```
+
+Create `apps/web/src/lib/banner.test.ts`:
+
+```ts
+import type { ChatView, PointView, WebMe } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { chatView, point } from '../test/chat';
+import { chatBanner, escalationNote } from './banner';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const view = (over: Partial<ChatView> = {}) => chatView(over);
+const escalated = (over: Partial<PointView> = {}) => point({ status: 'escalated', escalationReason: 'category', category: 'security', ...over });
+
+describe('chatBanner (handoff §2 "Banners")', () => {
+  it('asks to reconnect GitHub before anything else', () => {
+    expect(chatBanner(view({ points: [escalated()] }), { ...me, githubAuth: 'needs_reauth' }).kind).toBe('github_expired');
+  });
+
+  it('lists the escalated points, with why they went to a person', () => {
+    const banner = chatBanner(view({ phase: 'escalated', points: [escalated(), point({ number: 2 })] }), me);
+    expect(banner).toEqual({ kind: 'escalated', points: [escalated()], note: 'Security points always go to a person.' });
+  });
+
+  it('tells a failed job from a failed post in your name', () => {
+    expect(chatBanner(view({ viewer: { role: 'author', attention: 'failed', failure: 'agent' } }), me).kind).toBe('failed_job');
+    expect(chatBanner(view({ viewer: { role: 'author', attention: 'failed', failure: 'github_post' } }), me).kind).toBe('failed_post');
+  });
+
+  it("says why your agent can't start: the daily cap, a repo not linked, or offline", () => {
+    const waiting = (why: 'offline' | 'repo_not_linked' | 'cap_reached', who = 'maya') => view({ activity: { kind: 'agent_waiting', who, why, offlineSince: why === 'offline' ? '2026-10-16T18:04:00.000Z' : null } });
+    expect(chatBanner(waiting('cap_reached'), me)).toEqual({ kind: 'cap' });
+    expect(chatBanner(waiting('repo_not_linked'), me)).toEqual({ kind: 'repo_not_linked', repo: 'acme/shop-api' });
+    expect(chatBanner(waiting('offline'), me)).toEqual({ kind: 'waiting', offlineSince: '2026-10-16T18:04:00.000Z' });
+    // Someone else's agent waiting is their banner, not yours.
+    expect(chatBanner(waiting('offline', 'leo'), me)).toEqual({ kind: 'none' });
+  });
+
+  it('shows ready to the reviewer as theirs to approve, and to the author as waiting for the reviewer', () => {
+    const ready = { phase: 'ready' as const, round: 2, points: [point({ status: 'resolved' }), point({ number: 2, status: 'resolved' })] };
+    expect(chatBanner(view({ ...ready, viewer: { role: 'reviewer', attention: 'none', failure: null } }), me)).toEqual({ kind: 'ready_reviewer', rounds: 2, resolved: 2 });
+    expect(chatBanner(view({ ...ready, viewer: { role: 'author', attention: 'none', failure: null } }), me)).toEqual({ kind: 'ready_author', reviewer: 'leo', rounds: 2, resolved: 2 });
+    expect(chatBanner(view({ ...ready, viewer: { role: null, attention: 'none', failure: null } }), me)).toEqual({ kind: 'none' });
+  });
+
+  it('puts an escalation before a failure, a failure before waiting, waiting before ready, and shows nothing on a closed PR', () => {
+    const everything = view({
+      phase: 'ready',
+      points: [escalated()],
+      viewer: { role: 'author', attention: 'failed', failure: 'agent' },
+      activity: { kind: 'agent_waiting', who: 'maya', why: 'offline', offlineSince: null },
+    });
+    expect(chatBanner(everything, me).kind).toBe('escalated');
+    expect(chatBanner({ ...everything, points: [] }, me).kind).toBe('failed_job');
+    expect(chatBanner({ ...everything, points: [], viewer: { role: 'author', attention: 'none', failure: null } }, me).kind).toBe('waiting');
+    expect(chatBanner({ ...everything, closed: true }, me).kind).toBe('none');
+  });
+});
+
+describe('escalationNote', () => {
+  it('names the categories, a disagreement, or the round limit', () => {
+    expect(escalationNote([escalated(), escalated({ number: 2, category: 'bug' })], 3)).toBe('Security and bug points always go to a person.');
+    expect(escalationNote([escalated({ escalationReason: 'disagreement' })], 3)).toBe("The agents don't agree.");
+    expect(escalationNote([escalated({ escalationReason: 'round_limit' })], 3)).toBe('The agents used all 3 rounds.');
+    expect(escalationNote([escalated(), escalated({ number: 2, escalationReason: 'disagreement' })], 3)).toBe('These points need a person.');
+  });
+});
+```
+
+Create `apps/web/src/lib/snippet.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { snippetLines, syntaxTokens } from './snippet';
+
+describe('snippetLines', () => {
+  it("numbers the lines from where the snippet starts, and highlights the point's line", () => {
+    const lines = snippetLines({ line: 48, snippet: { startLine: 43, lines: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] } });
+    expect(lines.map((l) => l.n)).toEqual([43, 44, 45, 46, 47, 48, 49]);
+    expect(lines.filter((l) => l.highlighted)).toEqual([{ n: 48, text: 'f', highlighted: true }]);
+  });
+
+  it('highlights nothing for a point about the whole file, and has no lines without a snippet', () => {
+    expect(snippetLines({ line: null, snippet: { startLine: 1, lines: ['a'] } })).toEqual([{ n: 1, text: 'a', highlighted: false }]);
+    expect(snippetLines({ line: 3, snippet: null })).toEqual([]);
+  });
+});
+
+describe('syntaxTokens', () => {
+  it('colours keywords, strings, numbers and comments, and leaves the rest plain', () => {
+    expect(syntaxTokens('const n = "25"; // page size')).toEqual([
+      { text: 'const', kind: 'keyword' },
+      { text: ' n = ', kind: 'plain' },
+      { text: '"25"', kind: 'string' },
+      { text: '; ', kind: 'plain' },
+      { text: '// page size', kind: 'comment' },
+    ]);
+    expect(syntaxTokens('  return 25;')).toEqual([{ text: '  ', kind: 'plain' }, { text: 'return', kind: 'keyword' }, { text: ' ', kind: 'plain' }, { text: '25', kind: 'number' }, { text: ';', kind: 'plain' }]);
+    expect(syntaxTokens('')).toEqual([]);
+  });
+});
+```
+
+Replace `apps/web/src/lib/time.test.ts` with (a timeline item's time, and the clock the inbox rows read):
+
+```ts
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { itemTime, rowTime, useNow } from './time';
+
+// Local times, so the test reads the same in every time zone.
+const now = new Date(2026, 9, 15, 18, 30); // Thursday 15 October 2026, 18:30
+const at = (day: number, hour: number, minute: number, second = 0) => new Date(2026, 9, day, hour, minute, second).toISOString();
+
+describe('rowTime (the time on an inbox row)', () => {
+  it('says "now" for the last minute', () => {
+    expect(rowTime(at(15, 18, 29, 30), now)).toBe('now');
+  });
+
+  it('shows the clock time earlier today', () => {
+    expect(rowTime(at(15, 9, 5), now)).toBe('09:05');
+    expect(rowTime(at(15, 16, 40), now)).toBe('16:40');
+  });
+
+  it('says "Yesterday", then the weekday for the last week, then the date', () => {
+    expect(rowTime(at(14, 23, 59), now)).toBe('Yesterday');
+    expect(rowTime(at(12, 10, 0), now)).toBe('Mon');
+    expect(rowTime(at(3, 10, 0), now)).toBe('Oct 3');
+  });
+});
+
+describe('itemTime (the time beside a timeline item)', () => {
+  it('shows the clock time today, and the day before it for older items', () => {
+    expect(itemTime(at(15, 16, 20), now)).toBe('16:20');
+    expect(itemTime(at(14, 11, 18), now)).toBe('Yesterday 11:18');
+    expect(itemTime(at(12, 9, 2), now)).toBe('Mon 09:02');
+    expect(itemTime(at(3, 9, 2), now)).toBe('Oct 3 09:02');
+  });
+});
+
+describe('useNow (the clock the inbox rows read)', () => {
+  it('moves on every minute, so a row that said "now" says its time a minute later', () => {
+    vi.useFakeTimers({ now });
+    try {
+      const { result } = renderHook(() => useNow());
+      expect(rowTime(now.toISOString(), result.current)).toBe('now');
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(rowTime(now.toISOString(), result.current)).toBe('18:30');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/lib`
+Expected: FAIL: `Failed to resolve import "./timeline"`, `"./banner"` and `"./snippet"`, and `itemTime`/`useNow` aren't functions yet.
+
+- [ ] **Step 3: The feed, the banner, the snippet, and time**
+
+Create `apps/web/src/lib/timeline.ts`:
+
+```ts
+import type { PointView, Severity, TimelineItem } from '@nitpilot/protocol';
+
+/** What a system line starts with (handoff §2 "Timeline"): a dot, ✓ for ready or merged, a ring for waiting, the red diamond for an escalation. */
+export type Glyph = 'dot' | 'check' | 'ring' | 'diamond';
+
+/** One row of the chat's feed. A point's card collects its thread: the replies and decisions about it. */
+export type TimelineRow =
+  | { kind: 'system'; item: TimelineItem; glyph: Glyph }
+  | { kind: 'summary'; item: TimelineItem }
+  | { kind: 'human'; item: TimelineItem }
+  | { kind: 'point'; point: PointView; thread: TimelineItem[] };
+
+/**
+ * The feed, in order (handoff §2): each point's card sits where it was raised, holding every later item about it
+ * (agents' replies and decisions, people's replies in its GitHub thread). When the item that raised it is on an
+ * older page that isn't loaded, the card sits where its thread starts.
+ */
+export function timelineRows(items: TimelineItem[], points: PointView[]): TimelineRow[] {
+  const byNumber = new Map(points.map((p) => [p.number, p]));
+  const threads = new Map<number, TimelineItem[]>();
+  for (const item of items) {
+    if (item.pointNumber === null || item.kind === 'point_raised' || !byNumber.has(item.pointNumber)) continue;
+    threads.set(item.pointNumber, [...(threads.get(item.pointNumber) ?? []), item]);
+  }
+  const placed = new Set<number>();
+  const rows: TimelineRow[] = [];
+  for (const item of items) {
+    const point = item.pointNumber === null ? undefined : byNumber.get(item.pointNumber);
+    if (point) {
+      if (!placed.has(point.number)) rows.push({ kind: 'point', point, thread: threads.get(point.number) ?? [] });
+      placed.add(point.number);
+    } else if (item.kind === 'system') {
+      rows.push({ kind: 'system', item, glyph: systemGlyph(item.body) });
+    } else if (item.kind === 'job_summary') {
+      rows.push({ kind: 'summary', item });
+    } else {
+      rows.push({ kind: 'human', item });
+    }
+  }
+  return rows;
+}
+
+/** The glyph for a system line, from what the engine says (apps/server/src/engine: "Ready for approval", "… a human decision", "… is waiting"). */
+export function systemGlyph(body: string): Glyph {
+  if (/a human decision/.test(body)) return 'diamond';
+  if (/^(Ready for approval|Merged)$|approved on GitHub$|resolved on GitHub$/.test(body)) return 'check';
+  if (/is waiting|^Waiting for|offline/.test(body)) return 'ring';
+  return 'dot';
+}
+
+const SEVERITIES: Severity[] = ['blocker', 'major', 'minor', 'nit'];
+
+/** A review summary's counts, "1 major · 1 minor · 1 nit", from its `data.counts`; empty when it raised nothing. */
+export function severityCounts(data: TimelineItem['data']): string {
+  const counts = (data?.counts ?? {}) as Partial<Record<Severity, number>>;
+  return SEVERITIES.filter((s) => (counts[s] ?? 0) > 0)
+    .map((s) => `${counts[s]} ${s}`)
+    .join(' · ');
+}
+
+/** Text cut where it names a commit (7 to 40 hex characters), so the hash can be set in mono (handoff §2). */
+export function withCommitHashes(text: string): { text: string; hash: boolean }[] {
+  return text
+    .split(/\b([0-9a-f]{7,40})\b/)
+    .map((part, i) => ({ text: part, hash: i % 2 === 1 }))
+    .filter((part) => part.text !== '');
+}
+```
+
+Create `apps/web/src/lib/banner.ts`:
+
+```ts
+import type { ChatView, PointView, WebMe } from '@nitpilot/protocol';
+
+/** The one banner under the chat's header (handoff §2 "Banners", §10 "Edge states"). */
+export type Banner =
+  | { kind: 'github_expired' }
+  | { kind: 'escalated'; points: PointView[]; note: string }
+  | { kind: 'failed_job' }
+  | { kind: 'failed_post' }
+  | { kind: 'cap' }
+  | { kind: 'repo_not_linked'; repo: string }
+  | { kind: 'waiting'; offlineSince: string | null }
+  | { kind: 'ready_reviewer'; rounds: number; resolved: number }
+  | { kind: 'ready_author'; reviewer: string | null; rounds: number; resolved: number }
+  | { kind: 'none' };
+
+/**
+ * Which banner a chat shows the person reading it, most urgent first: a GitHub sign-in that expired (nothing can
+ * be done as you until it's renewed), an escalation, your failed job or post, why your agent can't start, then
+ * ready. A closed PR shows none.
+ */
+export function chatBanner(view: ChatView, me: WebMe): Banner {
+  if (view.closed) return { kind: 'none' };
+  if (me.githubAuth === 'needs_reauth') return { kind: 'github_expired' };
+  const escalated = view.points.filter((p) => p.status === 'escalated');
+  if (escalated.length > 0) return { kind: 'escalated', points: escalated, note: escalationNote(escalated, view.maxRounds) };
+  if (view.viewer.attention === 'failed') return { kind: view.viewer.failure === 'github_post' ? 'failed_post' : 'failed_job' };
+  const a = view.activity;
+  if (a.kind === 'agent_waiting' && a.who === me.login) {
+    if (a.why === 'cap_reached') return { kind: 'cap' };
+    if (a.why === 'repo_not_linked') return { kind: 'repo_not_linked', repo: view.repo };
+    return { kind: 'waiting', offlineSince: a.offlineSince };
+  }
+  if (view.phase === 'ready' && view.viewer.role !== null) {
+    const rounds = view.round;
+    const resolved = view.points.filter((p) => p.status === 'resolved').length;
+    if (view.viewer.role === 'reviewer') return { kind: 'ready_reviewer', rounds, resolved };
+    const reviewers = view.participants.filter((p) => p.role === 'reviewer');
+    const reviewer = (reviewers.find((p) => p.requested) ?? reviewers[0])?.login ?? null;
+    return { kind: 'ready_author', reviewer, rounds, resolved };
+  }
+  return { kind: 'none' };
+}
+
+/** Why the points went to a person, in one line: "Security points always go to a person." */
+export function escalationNote(points: PointView[], maxRounds: number): string {
+  const reasons = new Set(points.map((p) => p.escalationReason));
+  if (reasons.size === 1 && reasons.has('category')) {
+    const categories = [...new Set(points.map((p) => p.category))];
+    const named = categories.map((c, i) => (i === 0 ? c[0]!.toUpperCase() + c.slice(1) : c)).join(' and ');
+    return `${named} points always go to a person.`;
+  }
+  if (reasons.size === 1 && reasons.has('disagreement')) return "The agents don't agree.";
+  if (reasons.size === 1 && reasons.has('round_limit')) return `The agents used all ${maxRounds} rounds.`;
+  return 'These points need a person.';
+}
+```
+
+Create `apps/web/src/lib/snippet.ts`:
+
+```ts
+import type { PointView } from '@nitpilot/protocol';
+
+/** One line of a point's code snippet: its number, its text, and whether the point is about it. */
+export type SnippetLine = { n: number; text: string; highlighted: boolean };
+
+/** The lines of a point's snippet, numbered from where it starts, with the point's own line highlighted (handoff §3). */
+export function snippetLines(point: Pick<PointView, 'snippet' | 'line'>): SnippetLine[] {
+  const snippet = point.snippet;
+  if (!snippet) return [];
+  return snippet.lines.map((text, i) => {
+    const n = snippet.startLine + i;
+    return { n, text, highlighted: n === point.line };
+  });
+}
+
+export type TokenKind = 'plain' | 'comment' | 'string' | 'keyword' | 'number';
+export type Token = { text: string; kind: TokenKind };
+
+/** Comments, strings, a few common keywords, and numbers: enough for the light colouring the handoff asks for. */
+const TOKENS = /(\/\/.*$|#.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(export|function|const|let|var|return|await|async|new|if|else|for|while|import|from|throw|null|undefined|true|false|class|def|fn|type|interface)\b|(\b\d+(?:\.\d+)?\b)/g;
+
+/**
+ * A line of code cut into coloured pieces (handoff §3 "Light syntax colors": keywords acc-text, strings ok-fg,
+ * numbers warn-fg, comments fg3). Any language: it only knows what most of them share.
+ */
+export function syntaxTokens(line: string): Token[] {
+  const tokens: Token[] = [];
+  let last = 0;
+  for (const m of line.matchAll(TOKENS)) {
+    if (m.index > last) tokens.push({ text: line.slice(last, m.index), kind: 'plain' });
+    tokens.push({ text: m[0], kind: m[1] ? 'comment' : m[2] ? 'string' : m[3] ? 'keyword' : 'number' });
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) tokens.push({ text: line.slice(last), kind: 'plain' });
+  return tokens;
+}
+```
+
+Create `apps/web/src/lib/names.ts`:
+
+```ts
+/** How the chat names a person's agent (handoff "Who did what"): "Your agent" for yours, "leo's agent" for theirs. */
+export function agentName(login: string, yourLogin: string): string {
+  return login === yourLogin ? 'Your agent' : `${login}'s agent`;
+}
+
+/** "You", or the person's GitHub login. */
+export function personName(login: string, yourLogin: string): string {
+  return login === yourLogin ? 'You' : login;
+}
+```
+
+Replace `apps/web/src/lib/time.ts` with:
+
+```ts
+import { useEffect, useState } from 'react';
+
+const DAY_MS = 86_400_000;
+
+/**
+ * When a row last changed, the way the handoff writes it: "now", "16:40" today, "Yesterday", "Mon" within the
+ * last week, then "Oct 3". In the reader's own time zone.
+ */
+export function rowTime(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  if (now.getTime() - at.getTime() < 60_000) return 'now';
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
+  if (days === 0) return `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return at.toLocaleDateString('en-US', { weekday: 'short' });
+  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * When a timeline item happened, the way the chat writes it: "16:20" today, "Yesterday 11:18", then
+ * "Mon 09:02" within the last week, then "Oct 3 09:02". In the reader's own time zone.
+ */
+export function itemTime(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
+  if (days <= 0) return clock;
+  if (days === 1) return `Yesterday ${clock}`;
+  if (days < 7) return `${at.toLocaleDateString('en-US', { weekday: 'short' })} ${clock}`;
+  return `${at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${clock}`;
+}
+
+/** The time now, moving on every minute, so times like "now" and "16:40" stay true while the page is open. */
+export function useNow(everyMs = 60_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), everyMs);
+    return () => clearInterval(timer);
+  }, [everyMs]);
+  return now;
+}
+
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm test -w apps/web -- src/lib`
+Expected: PASS: timeline 5, banner 7, snippet 3, time 5, and W2's lib tests unchanged.
+
+- [ ] **Step 5: Write the failing tests for the socket and the cache**
+
+A pretend browser socket. Create `apps/web/src/test/socket.ts`:
+
+```ts
+import type { ServerToWeb, WebToServer } from '@nitpilot/protocol';
+import type { SocketLike } from '../live/socket';
+
+/** A pretend browser WebSocket: the test opens it, sends it server messages, and drops it. */
+export class FakeSocket implements SocketLike {
+  readyState = 0;
+  readonly sent: WebToServer[] = [];
+  onopen: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+
+  constructor(readonly url: string) {}
+
+  send(data: string): void {
+    this.sent.push(JSON.parse(data) as WebToServer);
+  }
+
+  close(): void {
+    this.readyState = 3;
+  }
+
+  /** The server accepted the socket. */
+  open(): void {
+    this.readyState = 1;
+    this.onopen?.(new Event('open'));
+  }
+
+  receive(msg: ServerToWeb): void {
+    this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(msg) }));
+  }
+
+  /** The connection went away (1006 is what a browser reports for a dropped one). */
+  drop(code = 1006): void {
+    this.readyState = 3;
+    this.onclose?.(new CloseEvent('close', { code }));
+  }
+}
+
+/** Every socket a page opened, newest last; pass `open` where a socket factory is wanted. */
+export function fakeSockets() {
+  const all: FakeSocket[] = [];
+  return {
+    all,
+    open: (url: string): FakeSocket => {
+      const socket = new FakeSocket(url);
+      all.push(socket);
+      return socket;
+    },
+    last: (): FakeSocket => {
+      const socket = all.at(-1);
+      if (!socket) throw new Error('no socket was opened');
+      return socket;
+    },
+  };
+}
+```
+
+Create `apps/web/src/live/socket.test.ts`:
+
+```ts
+import type { ServerToWeb } from '@nitpilot/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { item } from '../test/chat';
+import { fakeSockets } from '../test/socket';
+import { LiveSocket, liveUrl } from './socket';
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+function start() {
+  const sockets = fakeSockets();
+  const received: ServerToWeb[] = [];
+  const onSignedOut = vi.fn();
+  // No jitter: random() 0.5 makes each wait exactly the backoff.
+  const live = new LiveSocket({ url: 'ws://app/ws/web', onMessage: (m) => received.push(m), onSignedOut, open: sockets.open, backoff: { startMs: 1_000, maxMs: 30_000, random: () => 0.5 } });
+  live.start();
+  return { live, sockets, received, onSignedOut };
+}
+
+const items = (chatId: string, seqs: number[]): ServerToWeb => ({ v: 1, t: 'chat.items', d: { chatId, items: seqs.map((s) => item(s)), lastSeq: seqs.at(-1)! } });
+
+describe('LiveSocket (spec §10 "Resuming without gaps")', () => {
+  it('subscribes once open, and hands every message on', () => {
+    const { live, sockets, received } = start();
+    live.subscribe('chat_1', 4);
+    sockets.last().open();
+    expect(sockets.last().sent).toEqual([{ v: 1, t: 'chat.subscribe', d: { chatId: 'chat_1', afterSeq: 4 } }]);
+    sockets.last().receive(items('chat_1', [5]));
+    expect(received.map((m) => m.t)).toEqual(['chat.items']);
+  });
+
+  it('reconnects after a drop with a growing wait, and subscribes again from the newest item it has', () => {
+    const { live, sockets } = start();
+    sockets.last().open();
+    live.subscribe('chat_1', 4);
+    sockets.last().receive(items('chat_1', [5, 6]));
+    sockets.last().drop();
+    vi.advanceTimersByTime(999);
+    expect(sockets.all).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sockets.all).toHaveLength(2);
+    // That one never opens: the next wait is twice as long.
+    sockets.last().drop();
+    vi.advanceTimersByTime(2_000);
+    expect(sockets.all).toHaveLength(3);
+    sockets.last().open();
+    expect(sockets.last().sent).toEqual([{ v: 1, t: 'chat.subscribe', d: { chatId: 'chat_1', afterSeq: 6 } }]);
+    // Opening reset the wait to 1 s.
+    sockets.last().drop();
+    vi.advanceTimersByTime(1_000);
+    expect(sockets.all).toHaveLength(4);
+  });
+
+  it('stops for good when the session ended (4401), and when stopped', () => {
+    const { live, sockets, onSignedOut } = start();
+    sockets.last().open();
+    sockets.last().drop(4401);
+    vi.advanceTimersByTime(60_000);
+    expect(onSignedOut).toHaveBeenCalledOnce();
+    expect(sockets.all).toHaveLength(1);
+    live.stop();
+  });
+
+  it('forgets a chat the server refused, and asks again for one GitHub could not check', () => {
+    const { live, sockets } = start();
+    sockets.last().open();
+    live.subscribe('gone', 0);
+    live.subscribe('later', 0);
+    sockets.last().receive({ v: 1, t: 'chat.error', d: { chatId: 'gone', code: 'not_found' } });
+    sockets.last().receive({ v: 1, t: 'chat.error', d: { chatId: 'later', code: 'unavailable' } });
+    sockets.last().sent.length = 0;
+    vi.advanceTimersByTime(5_000);
+    expect(sockets.last().sent).toEqual([{ v: 1, t: 'chat.subscribe', d: { chatId: 'later', afterSeq: 0 } }]);
+    sockets.last().drop();
+    vi.advanceTimersByTime(1_000);
+    sockets.last().open();
+    expect(sockets.last().sent.map((m) => m.d.chatId)).toEqual(['later']);
+  });
+
+  it('unsubscribes', () => {
+    const { live, sockets } = start();
+    sockets.last().open();
+    live.subscribe('chat_1', 0);
+    live.unsubscribe('chat_1');
+    expect(sockets.last().sent.at(-1)).toEqual({ v: 1, t: 'chat.unsubscribe', d: { chatId: 'chat_1' } });
+  });
+});
+
+describe('liveUrl', () => {
+  it('is /ws/web on the same address, over wss: for an https: page', () => {
+    expect(liveUrl({ protocol: 'https:', host: 'nitpilot.dev' })).toBe('wss://nitpilot.dev/ws/web');
+    expect(liveUrl({ protocol: 'http:', host: 'localhost:5173' })).toBe('ws://localhost:5173/ws/web');
+  });
+});
+```
+
+Create `apps/web/src/live/apply.test.ts` (Review Focus 1: an overlapping and an out-of-order batch merge to one ordered list):
+
+```ts
+import type { ChatResponse, InboxRow, WebMe } from '@nitpilot/protocol';
+import { QueryClient } from '@tanstack/react-query';
+import { describe, expect, it } from 'vitest';
+import { chatResponse, chatView, item } from '../test/chat';
+import { applyServerMessage, mergeItems } from './apply';
+import { progressKey } from './progress';
+
+describe('mergeItems (Review Focus 1)', () => {
+  it('keeps each seq once, in order, whatever order the batches come in', () => {
+    const merged = mergeItems([item(1), item(2), item(3)], [item(5), item(3), item(4)]);
+    expect(merged.map((i) => i.seq)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
+
+describe('applyServerMessage', () => {
+  const key = ['chat', 'acme', 'shop-api', '142'];
+  function cache() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData<ChatResponse>(key, chatResponse({ items: [item(1), item(2)] }));
+    return queryClient;
+  }
+
+  it("adds a chat's new items to the chat opened by its address", () => {
+    const queryClient = cache();
+    applyServerMessage(queryClient, { v: 1, t: 'chat.items', d: { chatId: 'chat_142', items: [item(2), item(3)], lastSeq: 3 } });
+    applyServerMessage(queryClient, { v: 1, t: 'chat.items', d: { chatId: 'another_chat', items: [item(9)], lastSeq: 9 } });
+    expect(queryClient.getQueryData<ChatResponse>(key)!.items.map((i) => i.seq)).toEqual([1, 2, 3]);
+  });
+
+  it('replaces the view on chat.state, and clears the progress line once nobody is working', () => {
+    const queryClient = cache();
+    applyServerMessage(queryClient, { v: 1, t: 'job.progress', d: { chatId: 'chat_142', who: 'leo', action: 'reviewing', stage: 'running_agent', text: 'reading' } });
+    expect(queryClient.getQueryData(progressKey('chat_142'))).toMatchObject({ who: 'leo' });
+    applyServerMessage(queryClient, { v: 1, t: 'chat.state', d: { chatId: 'chat_142', view: chatView({ phase: 'ready', lastSeq: 2 }) } });
+    expect(queryClient.getQueryData<ChatResponse>(key)!.view.phase).toBe('ready');
+    expect(queryClient.getQueryData(progressKey('chat_142'))).toBeNull();
+  });
+
+  it("replaces a chat's inbox rows, and who you are", () => {
+    const queryClient = cache();
+    const row = (chatId: string, title: string) => ({ chatId, title }) as InboxRow;
+    queryClient.setQueryData<InboxRow[]>(['inbox'], [row('a', 'old'), row('b', 'other')]);
+    applyServerMessage(queryClient, { v: 1, t: 'inbox.upsert', d: { chatId: 'a', rows: [row('a', 'new')] } });
+    expect(queryClient.getQueryData<InboxRow[]>(['inbox'])!.map((r) => r.title)).toEqual(['other', 'new']);
+    applyServerMessage(queryClient, { v: 1, t: 'inbox.upsert', d: { chatId: 'b', rows: [] } });
+    expect(queryClient.getQueryData<InboxRow[]>(['inbox'])!.map((r) => r.title)).toEqual(['new']);
+    const me = { login: 'maya', agentOnline: true } as WebMe;
+    applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me } });
+    expect(queryClient.getQueryData(['me'])).toBe(me);
+  });
+});
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/live`
+Expected: FAIL: `Failed to resolve import "./socket"` and `"./apply"`.
+
+- [ ] **Step 7: The tab's socket, and what it writes into the cache**
+
+Create `apps/web/src/live/socket.ts`:
+
+```ts
+import { ServerToWeb, WEB_WS_PATH, type WebToServer } from '@nitpilot/protocol';
+
+/** The part of a browser WebSocket this file uses; tests pass a fake. */
+export type SocketLike = {
+  /** 1 once open, as on a browser WebSocket. */
+  readonly readyState: number;
+  send(data: string): void;
+  close(code?: number): void;
+  onopen: ((event: Event) => void) | null;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onclose: ((event: CloseEvent) => void) | null;
+};
+
+export type LiveSocketOptions = {
+  url: string;
+  onMessage(msg: ServerToWeb): void;
+  /** The server closed with 4401: the session ended. */
+  onSignedOut?(): void;
+  open?: (url: string) => SocketLike;
+  /** Reconnect waits: 1 s, doubling up to 30 s, each nudged up to 20% either way (docs/why/websockets.md). */
+  backoff?: { startMs: number; maxMs: number; random: () => number };
+};
+
+/** How long to wait before asking again for a chat the server couldn't check (GitHub didn't answer). */
+const RESUBSCRIBE_MS = 5_000;
+
+/** Where this page's socket goes: `/ws/web` on the same address, `wss:` when the page is `https:`. */
+export function liveUrl(location: { protocol: string; host: string } = window.location): string {
+  return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}${WEB_WS_PATH}`;
+}
+
+/**
+ * The tab's one `/ws/web` socket (spec §10). It remembers which chats are open and the newest item each one has,
+ * and after any drop it reconnects with a growing wait and subscribes to them again from there.
+ */
+export class LiveSocket {
+  private ws: SocketLike | null = null;
+  /** Open chats → the newest seq this tab has. */
+  private readonly chats = new Map<string, number>();
+  private readonly backoff: { startMs: number; maxMs: number; random: () => number };
+  private delayMs: number;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private running = false;
+
+  constructor(private readonly opts: LiveSocketOptions) {
+    this.backoff = opts.backoff ?? { startMs: 1_000, maxMs: 30_000, random: Math.random };
+    this.delayMs = this.backoff.startMs;
+  }
+
+  start(): void {
+    this.running = true;
+    this.connect();
+  }
+
+  stop(): void {
+    this.running = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close(1000);
+  }
+
+  /** Follow a chat from `afterSeq` on. Calling it again for the same chat never goes back. */
+  subscribe(chatId: string, afterSeq: number): void {
+    this.chats.set(chatId, Math.max(afterSeq, this.chats.get(chatId) ?? 0));
+    this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq: this.chats.get(chatId)! } });
+  }
+
+  unsubscribe(chatId: string): void {
+    this.chats.delete(chatId);
+    this.send({ v: 1, t: 'chat.unsubscribe', d: { chatId } });
+  }
+
+  private connect(): void {
+    const ws = (this.opts.open ?? ((url) => new WebSocket(url)))(this.opts.url);
+    this.ws = ws;
+    ws.onopen = () => {
+      this.delayMs = this.backoff.startMs;
+      for (const [chatId, afterSeq] of this.chats) this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+    };
+    ws.onmessage = (event) => this.receive(event.data);
+    ws.onclose = (event) => {
+      if (this.ws !== ws) return;
+      this.ws = null;
+      if (!this.running) return;
+      if (event.code === 4401) return this.opts.onSignedOut?.();
+      this.reconnectLater();
+    };
+  }
+
+  private receive(data: unknown): void {
+    let parsed: ReturnType<typeof ServerToWeb.safeParse>;
+    try {
+      parsed = ServerToWeb.safeParse(JSON.parse(String(data)));
+    } catch {
+      return;
+    }
+    if (!parsed.success) return;
+    const msg = parsed.data;
+    if (msg.t === 'chat.items' && this.chats.has(msg.d.chatId)) this.chats.set(msg.d.chatId, Math.max(this.chats.get(msg.d.chatId)!, msg.d.lastSeq));
+    if (msg.t === 'chat.error') this.dropped(msg.d.chatId, msg.d.code);
+    this.opts.onMessage(msg);
+  }
+
+  /** The server dropped this subscription. A hiccup (GitHub didn't answer) is worth asking again for; a no isn't. */
+  private dropped(chatId: string, code: 'not_found' | 'reauth' | 'unavailable'): void {
+    if (code !== 'unavailable') {
+      this.chats.delete(chatId);
+      return;
+    }
+    setTimeout(() => {
+      const afterSeq = this.chats.get(chatId);
+      if (afterSeq !== undefined) this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+    }, RESUBSCRIBE_MS);
+  }
+
+  private reconnectLater(): void {
+    const jitter = 1 + (this.backoff.random() * 2 - 1) * 0.2;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      if (this.running) this.connect();
+    }, this.delayMs * jitter);
+    this.delayMs = Math.min(this.delayMs * 2, this.backoff.maxMs);
+  }
+
+  private send(msg: WebToServer): void {
+    // Not open yet: onopen subscribes to every open chat, this one included.
+    if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(msg));
+  }
+}
+```
+
+Create `apps/web/src/live/progress.ts`:
+
+```ts
+import type { ServerToWeb } from '@nitpilot/protocol';
+import { useQuery } from '@tanstack/react-query';
+
+/** What an agent is doing right now, from its CLI's `job.progress` (spec §10). Never stored: gone once the work is. */
+export type Progress = Extract<ServerToWeb, { t: 'job.progress' }>['d'];
+
+/** Where a chat's progress line lives in the data cache. Only `/ws/web` writes it (live/apply.ts). */
+export const progressKey = (chatId: string) => ['progress', chatId] as const;
+
+/** The chat's live progress line, or null when no agent is at work. */
+export function useProgress(chatId: string): Progress | null {
+  const { data } = useQuery({ queryKey: progressKey(chatId), queryFn: () => null, enabled: false, staleTime: Infinity });
+  return data ?? null;
+}
+```
+
+Create `apps/web/src/live/apply.ts`:
+
+```ts
+import type { ChatResponse, InboxRow, ServerToWeb, TimelineItem } from '@nitpilot/protocol';
+import type { QueryClient } from '@tanstack/react-query';
+import { progressKey } from './progress';
+
+/**
+ * Two lists of timeline items as one, each `seq` once, in order (spec §10 "Resuming without gaps": after a
+ * reconnect the server may send an item the tab already has).
+ */
+export function mergeItems(existing: TimelineItem[], incoming: TimelineItem[]): TimelineItem[] {
+  const bySeq = new Map<number, TimelineItem>();
+  for (const item of [...existing, ...incoming]) bySeq.set(item.seq, item);
+  return [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+}
+
+/**
+ * Write a message from `/ws/web` into the data cache, where the screens read it: a chat's items and view, the
+ * progress line, the inbox rows, who you are. Nothing else changes the cache but REST answers.
+ */
+export function applyServerMessage(queryClient: QueryClient, msg: ServerToWeb): void {
+  switch (msg.t) {
+    case 'chat.items':
+      updateChat(queryClient, msg.d.chatId, (chat) => ({ ...chat, items: mergeItems(chat.items, msg.d.items) }));
+      return;
+    case 'chat.state':
+      updateChat(queryClient, msg.d.chatId, (chat) => ({ ...chat, view: msg.d.view }));
+      // Nobody's at work any more: the progress line goes.
+      if (msg.d.view.activity.kind !== 'agent_working') queryClient.setQueryData(progressKey(msg.d.chatId), null);
+      return;
+    case 'chat.error':
+      // Ask again over REST, which says what's wrong: a 404 ("Nothing here") or a 401 (sign in with GitHub again).
+      void queryClient.invalidateQueries({ queryKey: ['chat'], predicate: (q) => (q.state.data as ChatResponse | undefined)?.view.id === msg.d.chatId });
+      return;
+    case 'job.progress':
+      queryClient.setQueryData(progressKey(msg.d.chatId), msg.d);
+      return;
+    case 'inbox.upsert':
+      queryClient.setQueryData<InboxRow[]>(['inbox'], (rows) => rows && [...rows.filter((r) => r.chatId !== msg.d.chatId), ...msg.d.rows]);
+      return;
+    case 'me.update':
+      queryClient.setQueryData(['me'], msg.d.me);
+      return;
+  }
+}
+
+/** The cached chat whose view has this id, whatever address it was opened by. */
+function updateChat(queryClient: QueryClient, chatId: string, update: (chat: ChatResponse) => ChatResponse): void {
+  queryClient.setQueriesData<ChatResponse>({ queryKey: ['chat'] }, (chat) => (chat && chat.view.id === chatId ? update(chat) : chat));
+}
+```
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm test -w apps/web -- src/live`
+Expected: PASS, 6 and 4 tests.
+
+- [ ] **Step 9: ↑/↓ belong to the page beside the inbox (W2 carry-forward)**
+
+W2's inbox takes ↑/↓ on the whole window, which would stop the chat's feed from scrolling with the arrow keys. Replace `apps/web/src/lib/keys.test.tsx` with (the harness gains a `<main>` holding a focusable feed, and one test):
+
+```tsx
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useRef, useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { useInboxKeys } from './keys';
+
+const ROWS = [{ chatId: 'a' }, { chatId: 'b' }, { chatId: 'c' }];
+
+/** A search box and the cursor, driven by the inbox keys. */
+function Harness({ open = vi.fn(), escape = vi.fn() }: { open?: (id: string) => void; escape?: () => void }) {
+  const [cursor, setCursor] = useState<string | null>(null);
+  const search = useRef<HTMLInputElement>(null);
+  useInboxKeys({ rows: ROWS, cursor, setCursor, open, focusSearch: () => search.current?.focus(), escape });
+  return (
+    <>
+      <input ref={search} aria-label="Search pull requests" />
+      <output aria-label="cursor">{cursor ?? 'none'}</output>
+      <main>
+        <div tabIndex={0} aria-label="feed" />
+      </main>
+    </>
+  );
+}
+
+const cursor = () => screen.getByLabelText('cursor').textContent;
+
+describe('useInboxKeys (handoff "Keyboard")', () => {
+  it('moves the cursor with j/k and the arrow keys, and stops at the ends', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('a');
+    await userEvent.keyboard('j{ArrowDown}j');
+    expect(cursor()).toBe('c');
+    await userEvent.keyboard('k{ArrowUp}k');
+    expect(cursor()).toBe('a');
+  });
+
+  it('opens the row under the cursor with Enter, and nothing without a cursor', async () => {
+    const open = vi.fn();
+    render(<Harness open={open} />);
+    await userEvent.keyboard('{Enter}');
+    expect(open).not.toHaveBeenCalled();
+    await userEvent.keyboard('jj{Enter}');
+    expect(open).toHaveBeenCalledWith('b');
+  });
+
+  it('focuses the search box with /, and ignores the keys while you type in it', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('/');
+    expect(screen.getByLabelText('Search pull requests')).toHaveFocus();
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('none');
+    expect(screen.getByLabelText('Search pull requests')).toHaveValue('j');
+  });
+
+  it('leaves the search box on Esc, and calls escape when not typing', async () => {
+    const escape = vi.fn();
+    render(<Harness escape={escape} />);
+    await userEvent.keyboard('/');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByLabelText('Search pull requests')).not.toHaveFocus();
+    expect(escape).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(escape).toHaveBeenCalledOnce();
+  });
+
+  it('leaves ↑/↓ to the page beside the inbox, so its feed scrolls, while j/k still move the cursor', async () => {
+    render(<Harness />);
+    const feed = screen.getByLabelText('feed');
+    feed.focus();
+    // fireEvent answers false when the key's default action (scrolling) was cancelled.
+    expect(fireEvent.keyDown(feed, { key: 'ArrowDown' })).toBe(true);
+    expect(cursor()).toBe('none');
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('a');
+  });
+
+  it('leaves shortcuts with a modifier (⌘J, Ctrl+K) to the browser', async () => {
+    render(<Harness />);
+    await userEvent.keyboard('{Meta>}j{/Meta}{Control>}k{/Control}');
+    expect(cursor()).toBe('none');
+  });
+});
+```
+
+Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
+Expected: FAIL, 1 test: `expected false to be true` (the arrow's scrolling was cancelled).
+
+In `apps/web/src/lib/keys.ts`, in `useInboxKeys`'s handler, add before `const at = …`:
+
+```ts
+    // ↑/↓ inside the page beside the inbox scroll that page (the chat's feed); j/k still move the cursor.
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target instanceof Element && e.target.closest('main')) return;
+```
+
+Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
+Expected: PASS, 6 tests.
+
+- [ ] **Step 10: Write the failing screen tests**
+
+Create `apps/web/src/routes/Chat/PointCard.test.tsx`:
+
+```tsx
+import type { PointView, TimelineItem } from '@nitpilot/protocol';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it } from 'vitest';
+import { item, point } from '../../test/chat';
+import { PointCard } from './PointCard';
+
+const people = new Map([
+  ['1001', { avatarUrl: 'https://avatars.githubusercontent.com/u/1001' }],
+  ['1002', { avatarUrl: 'https://avatars.githubusercontent.com/u/1002' }],
+]);
+const maya = { githubId: '1001', login: 'maya' };
+const leo = { githubId: '1002', login: 'leo' };
+
+function card(p: PointView, thread: TimelineItem[] = []) {
+  return render(<PointCard point={p} thread={thread} you="maya" people={people} repoUrl="https://github.com/acme/shop-api" />);
+}
+
+describe('PointCard (handoff §3)', () => {
+  it('shows severity, category, where, what, and the snippet with its line highlighted', () => {
+    card(point());
+    const article = screen.getByRole('article', { name: 'P1, Major bug point, Open: parseCursor throws on an empty cursor' });
+    expect(within(article).getByText('Major')).toBeInTheDocument();
+    expect(within(article).getByText('bug')).toBeInTheDocument();
+    expect(within(article).getByRole('link', { name: 'src/orders/list.ts:48' })).toHaveAttribute('href', 'https://github.com/acme/shop-api/blob/abc1234/src/orders/list.ts#L48');
+    expect(within(article).getByRole('heading', { name: 'parseCursor throws on an empty cursor' })).toBeInTheDocument();
+    expect(within(article).getByText('L47–49')).toBeInTheDocument();
+    const highlighted = article.querySelectorAll('[data-highlighted]');
+    expect([...highlighted].map((l) => l.textContent)).toEqual(['48  const [ts, id] = raw.split(":");']);
+  });
+
+  it('says every status in words, with a glyph', () => {
+    for (const [status, word] of [['open', 'Open'], ['addressed', 'Addressed'], ['escalated', 'Escalated']] as const) {
+      const { unmount } = card(point({ status }));
+      expect(screen.getByRole('article', { name: new RegExp(`${word}:`) })).toHaveTextContent(word);
+      unmount();
+    }
+  });
+
+  it('starts collapsed when resolved, with how it ended, and opens and closes on click', async () => {
+    const thread = [item(6, { kind: 'point_reply', author: maya, pointNumber: 1, body: 'Return null for empty cursors.', data: { resolution: 'fixed', commit: 'a1b2c3d4e5f6' } })];
+    card(point({ status: 'resolved', authorResolution: 'fixed' }), thread);
+    const line = screen.getByRole('button', { name: /P1, Major bug point, Resolved/ });
+    expect(line).toHaveAttribute('aria-expanded', 'false');
+    expect(line).toHaveTextContent('Fixed · a1b2c3d');
+    await userEvent.click(line);
+    expect(screen.getByRole('article')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse point' }));
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+  });
+
+  it('shows the thread: whose agent said what, the outcome, and the commit that fixed it', () => {
+    const thread = [
+      item(6, { kind: 'point_reply', author: maya, pointNumber: 1, body: 'Return null for empty cursors.', data: { resolution: 'fixed', commit: 'a1b2c3d4e5f6' } }),
+      item(7, { kind: 'point_decision', author: leo, pointNumber: 1, body: 'Not yet: the test is missing.', data: { decision: 'keep_open' } }),
+      item(8, { kind: 'human', author: leo, pointNumber: 1, body: 'Please add the test', data: { threadRootId: '900' } }),
+    ];
+    card(point(), thread);
+    const replies = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(replies[0]).toHaveTextContent('Your agentFixed in a1b2c3d');
+    expect(within(replies[0]!).getByRole('link', { name: 'a1b2c3d' })).toHaveAttribute('href', 'https://github.com/acme/shop-api/commit/a1b2c3d4e5f6');
+    expect(replies[1]).toHaveTextContent("leo's agentKept open");
+    expect(replies[2]).toHaveTextContent('leo');
+    expect(replies[2]).toHaveTextContent('Please add the test');
+  });
+
+  it('has no snippet or file link for a point about the whole PR', () => {
+    card(point({ path: null, line: null, url: null, snippet: null }));
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^L\d/)).not.toBeInTheDocument();
+  });
+});
+```
+
+Create `apps/web/src/routes/Chat/Chat.test.tsx` (Review Focus 2: the reconnect state on a 401, "Nothing here" after the socket says access is gone):
+
+```tsx
+import type { ChatResponse, WebMe } from '@nitpilot/protocol';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatResponse, chatView, item, point } from '../../test/chat';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const maya = { githubId: '1001', login: 'maya' };
+const leo = { githubId: '1002', login: 'leo' };
+const PATH = '/c/acme/shop-api/142';
+
+/** maya's PR in round 2: leo's agent reviewed it, raised two points, and one went to a person. */
+const CHAT: ChatResponse = chatResponse({
+  view: {
+    phase: 'escalated',
+    round: 2,
+    points: [point({ status: 'escalated', escalationReason: 'category', category: 'security', severity: 'blocker', title: 'SQL built from input' }), point({ number: 2, severity: 'nit', title: 'Rename cursor' })],
+    summaryUrl: 'https://github.com/acme/shop-api/pull/142#issuecomment-555',
+  },
+  items: [
+    item(1, { body: 'Pull request opened by maya' }),
+    item(2, { kind: 'job_summary', author: leo, body: 'Reviewed 6 files and raised 2 points.', data: { counts: { blocker: 1, nit: 1 } } }),
+    item(3, { kind: 'point_raised', author: leo, pointNumber: 1 }),
+    item(4, { kind: 'point_raised', author: leo, pointNumber: 2 }),
+    item(5, { kind: 'human', author: maya, body: 'Keep the old endpoint working' }),
+  ],
+});
+
+function serve(answer: () => Answer = () => [200, CHAT], extra: Record<string, () => Answer> = {}) {
+  return fakeApi({
+    'GET /api/me': (): Answer => [200, me],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    'GET /api/chats/acme/shop-api/142': answer,
+    'GET /api/chats/chat_142/files': (): Answer => [200, { files: [{ path: 'src/orders/list.ts', oldPath: null, status: 'modified', adds: 12, dels: 3 }], adds: 12, dels: 3, truncated: false }],
+    'POST /api/chats/chat_142/read': (): Answer => [204, null],
+    ...extra,
+  });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Chat (handoff §2)', () => {
+  it('shows the header, the banner, the feed and the details panel', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp(PATH);
+    const chat = await screen.findByRole('region', { name: 'PR chat: Add cursor pagination to /orders' });
+    expect(within(chat).getByRole('heading', { level: 1, name: 'Add cursor pagination to /orders' })).toBeInTheDocument();
+    expect(chat).toHaveTextContent('Author');
+    expect(chat).toHaveTextContent('acme/shop-api #142');
+    expect(chat).toHaveTextContent('feature/cursor-pagination → main');
+    expect(chat).toHaveTextContent('Round 2 of 3');
+    expect(within(chat).getByRole('link', { name: /Open on GitHub/ })).toHaveAttribute('href', 'https://github.com/acme/shop-api/pull/142');
+
+    const alert = within(chat).getByRole('alert');
+    expect(alert).toHaveTextContent('Needs a human decision');
+    expect(alert).toHaveTextContent('Security points always go to a person.');
+    expect(alert).toHaveTextContent('P1SQL built from input');
+
+    expect(chat).toHaveTextContent('Pull request opened by maya');
+    expect(chat).toHaveTextContent("leo's agent");
+    expect(chat).toHaveTextContent('Reviewed 6 files and raised 2 points. 1 blocker · 1 nit');
+    expect(within(chat).getByRole('article', { name: /P1, Blocker security point, Escalated/ })).toBeInTheDocument();
+    expect(within(chat).getByRole('article', { name: /P2, Nit bug point, Open/ })).toBeInTheDocument();
+    expect(chat).toHaveTextContent('Youto the agents');
+
+    const details = screen.getByRole('complementary', { name: 'PR details' });
+    expect(await within(details).findByText('src/orders/list.ts')).toBeInTheDocument();
+    expect(details).toHaveTextContent('1 · +12 −3');
+    expect(details).toHaveTextContent('leoReviewer');
+    expect(details).toHaveTextContent('Always escalatesecurity');
+    expect(within(details).getByRole('link', { name: /Summary comment on GitHub/ })).toHaveAttribute('href', 'https://github.com/acme/shop-api/pull/142#issuecomment-555');
+  });
+
+  it('hides the details panel below 1180 px; above, the header toggles it', async () => {
+    fakeViewport(1000);
+    serve();
+    const { unmount } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    expect(screen.queryByRole('complementary', { name: 'PR details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'PR details' })).not.toBeInTheDocument();
+    unmount();
+
+    fakeViewport(1280);
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'PR details', pressed: true }));
+    expect(screen.queryByRole('complementary', { name: 'PR details' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'PR details', pressed: false }));
+    expect(screen.getByRole('complementary', { name: 'PR details' })).toBeInTheDocument();
+  });
+
+  it('subscribes from its newest item and shows new items, state and progress as they arrive, without reloading', async () => {
+    fakeViewport(true);
+    serve();
+    const { sockets } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    const socket = sockets.last();
+    act(() => socket.open());
+    expect(socket.sent).toEqual([{ v: 1, t: 'chat.subscribe', d: { chatId: 'chat_142', afterSeq: 5 } }]);
+
+    act(() => socket.receive({ v: 1, t: 'job.progress', d: { chatId: 'chat_142', who: 'leo', action: 'reviewing', stage: 'running_agent', text: 'reading src/orders/list.ts' } }));
+    expect(await screen.findByText("leo's agent is reviewing…")).toBeInTheDocument();
+    expect(screen.getByText('reading src/orders/list.ts')).toBeInTheDocument();
+
+    act(() => socket.receive({ v: 1, t: 'chat.items', d: { chatId: 'chat_142', items: [item(6, { body: 'Round 2 started' })], lastSeq: 6 } }));
+    expect(await screen.findByText('Round 2 started')).toBeInTheDocument();
+
+    act(() => socket.receive({ v: 1, t: 'chat.state', d: { chatId: 'chat_142', view: chatView({ phase: 'ready', round: 2, lastSeq: 6 }) } }));
+    expect(await screen.findByText("Waiting for leo's approval")).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText("leo's agent is reviewing…")).not.toBeInTheDocument();
+  });
+
+  it('says "Nothing here" for a chat that does not exist or you cannot see', async () => {
+    serve(() => [404, { error: { code: 'not_found', message: 'No such chat.' } }]);
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { name: 'Nothing here' })).toBeInTheDocument();
+  });
+
+  it('asks you to reconnect GitHub when your sign-in expired (Review Focus 2)', async () => {
+    serve(() => [401, { error: { code: 'reauth', message: 'Sign in with GitHub again to see this chat.' } }]);
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { name: 'Sign in with GitHub again' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute('href', `/auth/github/login?next=${encodeURIComponent(PATH)}`);
+  });
+
+  it('asks the server again when the socket says you lost access, and shows "Nothing here"', async () => {
+    let gone = false;
+    serve(() => (gone ? [404, { error: { code: 'not_found', message: 'No such chat.' } }] : [200, CHAT]));
+    const { sockets } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    gone = true;
+    act(() => sockets.last().receive({ v: 1, t: 'chat.error', d: { chatId: 'chat_142', code: 'not_found' } }));
+    expect(await screen.findByRole('heading', { name: 'Nothing here' })).toBeInTheDocument();
+  });
+
+  it('loads earlier items on request', async () => {
+    serve(() => [200, chatResponse({ items: [item(201, { body: 'newer' })], hasOlder: true })], {
+      'GET /api/chats/chat_142/messages': (): Answer => [200, { items: [item(200, { body: 'older' })], hasOlder: false }],
+    });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Load earlier' }));
+    expect(await screen.findByText('older')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load earlier' })).not.toBeInTheDocument();
+  });
+
+  it('marks the chat read up to its newest item, for someone in it', async () => {
+    const fetch = serve();
+    renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/read') && init?.method === 'POST')).toBe(true), { timeout: 2_000 });
+    const [, init] = fetch.mock.calls.find(([url]) => String(url).endsWith('/read'))!;
+    expect(JSON.parse(String(init!.body))).toEqual({ seq: 5 });
+  });
+
+  it('has a way back to the inbox on a phone', async () => {
+    fakeViewport(false);
+    serve();
+    renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    expect(screen.getByRole('link', { name: 'Back to inbox' })).toHaveAttribute('href', '/');
+  });
+});
+```
+
+Every screen test now runs with pretend sockets, and a test can pick any window width. Replace `apps/web/src/test/render.tsx` with:
+
+```tsx
+import { QueryClientProvider } from '@tanstack/react-query';
+import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { vi } from 'vitest';
+import { AppRoutes, makeQueryClient } from '../app';
+import { SocketFactory } from '../live/LiveProvider';
+import { fakeSockets } from './socket';
+
+/** One answer: the status and the JSON body. */
+export type Answer = [status: number, body: unknown];
+
+/**
+ * A pretend Nitpilot server for component tests: answers each request by its method and path ('GET /api/me').
+ * A request it has no answer for gets the server's JSON 404. Returns the fetch mock, to check what was sent.
+ */
+export function fakeApi(routes: Record<string, () => Answer>) {
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const key = `${init?.method ?? 'GET'} ${new URL(String(input), 'http://localhost').pathname}`;
+    const [status, body] = routes[key]?.() ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
+    return new Response(status === 204 ? null : JSON.stringify(body), { status });
+  });
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+/**
+ * The app's routes at `path`, with a fresh data cache that doesn't wait between retries, and pretend sockets
+ * for `/ws/web`. Also returns that cache and the sockets the page opened.
+ */
+export function renderApp(path = '/') {
+  const queryClient = makeQueryClient({ retryDelay: 0 });
+  const sockets = fakeSockets();
+  const result = render(
+    <QueryClientProvider client={queryClient}>
+      <SocketFactory.Provider value={sockets.open}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </SocketFactory.Provider>
+    </QueryClientProvider>,
+  );
+  return { ...result, queryClient, sockets };
+}
+
+/**
+ * A stand-in for the browser's media queries, in the light theme: a window this many pixels wide, or `true` for
+ * a wide desktop and `false` for a phone.
+ */
+export function fakeViewport(width: boolean | number) {
+  const px = width === true ? 1440 : width === false ? 375 : width;
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: px >= Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+```
+
+Opening a chat now loads it, so the tests that open one answer for it. In `apps/web/src/routes/Inbox/Inbox.test.tsx`, import `chatRoutes` from `'../../test/chat'` and add `...chatRoutes(ROWS),` as the last entry of `serve`'s `fakeApi` routes. Replace `apps/web/src/routes/Shell/Shell.test.tsx` with:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatRoutes } from '../../test/chat';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+
+function serve() {
+  fakeApi({
+    'GET /api/me': (): Answer => [200, me],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    ...chatRoutes([{ repo: 'acme/shop-api', number: 139, title: 'Fix race in session refresh' }]),
+  });
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Shell (handoff "App shell and layout")', () => {
+  it('shows the inbox beside the open page on a desktop', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a pull request' })).toBeInTheDocument();
+  });
+
+  it('shows one pane on a phone: the inbox at /, the page elsewhere, and Esc goes back', async () => {
+    fakeViewport(false);
+    serve();
+    renderApp('/c/acme/shop-api/139');
+    expect(await screen.findByRole('heading', { name: 'Fix race in session refresh' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Fix race in session refresh' })).not.toBeInTheDocument();
+  });
+
+  it('keeps Sign out on the Settings page, reached from your avatar', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('link', { name: 'Settings · maya' }));
+    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 11: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/routes`
+Expected: FAIL: `test/render.tsx` imports `../live/LiveProvider`, which doesn't exist yet, so no screen test loads; `PointCard.test.tsx` can't resolve `./PointCard`.
+
+- [ ] **Step 12: The shared parts: copy, viewport, avatars, the data, and the socket's provider**
+
+The offline banner's copy button and the chat's command chips are the same, so it moves into a hook. Create `apps/web/src/lib/clipboard.ts`:
+
+```ts
+import { useEffect, useState } from 'react';
+
+/** Copy `text` and say "Copied" for 1.6 s. The command is on screen too, so a clipboard that's missing or refused (an insecure origin) only loses the shortcut. */
+export function useCopy(text: string): { copied: boolean; copy: () => void } {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1600);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return {
+    copied,
+    copy: () => {
+      navigator.clipboard?.writeText(text).catch(() => {});
+      setCopied(true);
+    },
+  };
+}
+```
+
+In `apps/web/src/routes/Inbox/InboxBanners.tsx`, drop the `useEffect`/`useState` import, import `useCopy` from `'../../lib/clipboard'`, and replace the state, the effect and `copy()` in `OfflineBanner` with `const { copied, copy } = useCopy(START);`.
+
+Replace `apps/web/src/lib/viewport.ts` with (one `useMediaQuery`, used at 760 px and 1180 px):
+
+```ts
+import { useSyncExternalStore } from 'react';
+
+/** The handoff's breakpoints: the sidebar and the chat side by side from 760 px, one pane below. */
+const DESKTOP = '(min-width: 760px)';
+/** The chat's details panel has room from 1180 px. */
+const WIDE = '(min-width: 1180px)';
+
+/** True while the media query matches, following the window as it's resized. Without matchMedia (very old browsers), true. */
+function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window.matchMedia !== 'function') return () => {};
+      const list = window.matchMedia(query);
+      list.addEventListener('change', onChange);
+      return () => list.removeEventListener('change', onChange);
+    },
+    () => typeof window.matchMedia !== 'function' || window.matchMedia(query).matches,
+  );
+}
+
+/** True at 760 px and wider. */
+export function useIsDesktop(): boolean {
+  return useMediaQuery(DESKTOP);
+}
+
+/** True at 1180 px and wider: room for the chat's details panel. */
+export function useIsWide(): boolean {
+  return useMediaQuery(WIDE);
+}
+```
+
+The chat's avatars are smaller than the inbox's. Replace `apps/web/src/components/Avatar/Avatar.tsx` with:
+
+```tsx
+import { useState, type ReactNode } from 'react';
+import styles from './Avatar.module.css';
+
+/** The handoff's avatar sizes, and the size of the initials in each. */
+const INITIALS_PX = { 22: 9.5, 28: 10.5, 30: 11, 32: 11, 38: 13 } as const;
+
+/**
+ * A person's GitHub picture in a circle, or their initials when there is none or it doesn't load.
+ * `children` sits on top, bottom-right (the AgentBadge).
+ */
+export function Avatar({ login, src, size, children }: { login: string; src: string | null; size: keyof typeof INITIALS_PX; children?: ReactNode }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className={styles.avatar} style={{ width: size, height: size }}>
+      {src && !broken ? (
+        <img className={styles.image} src={src} alt={login} width={size} height={size} loading="lazy" onError={() => setBroken(true)} />
+      ) : (
+        <span className={styles.initials} style={{ fontSize: INITIALS_PX[size] }} role="img" aria-label={login}>
+          {initials(login)}
+        </span>
+      )}
+      {children}
+    </span>
+  );
+}
+
+/** "maya" → "MA", "leo-park" → "LP". */
+export function initials(login: string): string {
+  const parts = login.split(/[-_.\s]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0]![0]! + parts[1]![0]! : login.slice(0, 2);
+  return letters.toUpperCase();
+}
+```
+
+Replace `apps/web/src/components/AgentBadge/AgentBadge.tsx` and `AgentBadge.module.css` with:
+
+```tsx
+import styles from './AgentBadge.module.css';
+
+/**
+ * The mark on a person's avatar for their agent (handoff: a dark rounded square holding a diamond): large on an
+ * inbox row, small in the chat's feed, tiny in a point's thread. Beside an agent's name it only decorates, so it
+ * says nothing to a screen reader; on its own it says the agent is at work.
+ */
+export function AgentBadge({ login, size = 'large', decorative = false }: { login: string; size?: 'large' | 'small' | 'tiny'; decorative?: boolean }) {
+  return (
+    <span className={`${styles.badge} ${styles[size]}`} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': `${login}'s agent is active` })}>
+      <span className={styles.diamond} />
+    </span>
+  );
+}
+```
+
+```css
+/* The ring around the badge is the colour of what's behind the avatar: --side in the sidebar, set to --bg in the chat. */
+.badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 4px;
+  background: var(--fg1);
+  box-shadow: 0 0 0 2px var(--badge-ring, var(--side));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.large {
+  width: 15px;
+  height: 15px;
+}
+
+.small {
+  width: 13px;
+  height: 13px;
+}
+
+.tiny {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1.5px var(--badge-ring, var(--side));
+}
+
+.diamond {
+  width: 5px;
+  height: 5px;
+  background: var(--badge-ring, var(--side));
+  transform: rotate(45deg);
+}
+
+.small .diamond {
+  width: 4px;
+  height: 4px;
+}
+
+.tiny .diamond {
+  width: 3.5px;
+  height: 3.5px;
+}
+```
+
+Create `apps/web/src/api/chat.ts`:
+
+```ts
+import { ChatResponse, FilesResponse, MessagesResponse, type InboxRow } from '@nitpilot/protocol';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { api } from './client';
+
+/** Where a chat lives in the data cache: by its address, as the screen opens it. `/ws/web` finds it by its id (live/apply.ts). */
+export const chatKey = (owner: string, repo: string, number: string) => ['chat', owner, repo, number] as const;
+
+/** A chat and its newest items (spec §10 `GET /api/chats/:owner/:repo/:number`). Kept fresh by `/ws/web`, never polled. */
+export function useChat(owner: string, repo: string, number: string) {
+  return useQuery({
+    queryKey: chatKey(owner, repo, number),
+    queryFn: () => api.get(`/api/chats/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(number)}`, ChatResponse),
+  });
+}
+
+/** The page of items before `beforeSeq`, for "Load earlier". */
+export function fetchOlderItems(chatId: string, beforeSeq: number): Promise<MessagesResponse> {
+  return api.get(`/api/chats/${chatId}/messages?before=${beforeSeq}`, MessagesResponse);
+}
+
+/** The PR's changed files (spec §10 `GET /api/chats/:id/files`). The server keeps them per head commit, so asking again is cheap. */
+export function useFiles(chatId: string) {
+  return useQuery({ queryKey: ['files', chatId], queryFn: () => api.get(`/api/chats/${chatId}/files`, FilesResponse), staleTime: 60_000 });
+}
+
+/**
+ * You've read the chat up to `seq` (spec §10 `POST /api/chats/:id/read`): once a second at most, while the tab is
+ * visible, and only for someone in the chat (for anyone else there's no cursor to move). The inbox row's unread
+ * count goes to 0 at once.
+ */
+export function useMarkRead(chatId: string, seq: number, participant: boolean): void {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!participant || seq === 0) return;
+    const timer = setTimeout(() => {
+      if (document.visibilityState !== 'visible') return;
+      api
+        .send('POST', `/api/chats/${chatId}/read`, { seq })
+        .then(() => queryClient.setQueryData<InboxRow[]>(['inbox'], (rows) => rows?.map((r) => (r.chatId === chatId ? { ...r, unread: 0 } : r))))
+        .catch(() => {});
+    }, 1_000);
+    return () => clearTimeout(timer);
+  }, [chatId, seq, participant, queryClient]);
+}
+```
+
+Create `apps/web/src/live/LiveProvider.tsx`:
+
+```tsx
+import { useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext, useEffect, useEffectEvent, useState, type ReactNode } from 'react';
+import { applyServerMessage } from './apply';
+import { LiveSocket, liveUrl, type SocketLike } from './socket';
+
+/** Where the socket comes from: the browser's WebSocket, or a test's pretend one (test/render.tsx). */
+export const SocketFactory = createContext<(url: string) => SocketLike>((url) => new WebSocket(url));
+
+const Live = createContext<LiveSocket | null>(null);
+
+/**
+ * The tab's one `/ws/web` socket, for everything signed in (routes/Shell/Shell.tsx). What it receives goes into the
+ * data cache; a closed session sends the tab back to the landing page.
+ */
+export function LiveProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const open = useContext(SocketFactory);
+  const [live] = useState(
+    () =>
+      new LiveSocket({
+        url: liveUrl(),
+        open,
+        onMessage: (msg) => applyServerMessage(queryClient, msg),
+        onSignedOut: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+      }),
+  );
+  useEffect(() => {
+    live.start();
+    return () => live.stop();
+  }, [live]);
+  return <Live.Provider value={live}>{children}</Live.Provider>;
+}
+
+/** Follow this chat's new items and changes while the screen shows it, starting after `afterSeq`. */
+export function useLiveChat(chatId: string, afterSeq: number): void {
+  const live = useContext(Live);
+  // Only a new chat subscribes again: the socket keeps the newest seq itself from then on.
+  const subscribe = useEffectEvent(() => live?.subscribe(chatId, afterSeq));
+  useEffect(() => {
+    if (!live) return;
+    subscribe();
+    return () => live.unsubscribe(chatId);
+  }, [live, chatId]);
+}
+```
+
+- [ ] **Step 13: The point card**
+
+Create `apps/web/src/routes/Chat/PointCard.tsx`:
+
+```tsx
+import type { PointView, Severity, TimelineItem } from '@nitpilot/protocol';
+import { useState } from 'react';
+import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { agentName, personName } from '../../lib/names';
+import { snippetLines, syntaxTokens } from '../../lib/snippet';
+import { itemTime } from '../../lib/time';
+import styles from './PointCard.module.css';
+
+const SEVERITY: Record<Severity, { word: string; bars: number }> = {
+  blocker: { word: 'Blocker', bars: 4 },
+  major: { word: 'Major', bars: 3 },
+  minor: { word: 'Minor', bars: 2 },
+  nit: { word: 'Nit', bars: 1 },
+};
+
+const STATUS: Record<PointView['status'], string> = { open: 'Open', addressed: 'Addressed', resolved: 'Resolved', escalated: 'Escalated' };
+
+/** What the chat knows about the people in it: their pictures, by GitHub id. */
+export type People = ReadonlyMap<string, { avatarUrl: string }>;
+
+/**
+ * A review point (handoff §3, the key component): severity, category, where in the code, what's wrong, the code
+ * around it, and the thread of replies and decisions. A resolved point starts collapsed to one line.
+ */
+export function PointCard({ point, thread, you, people, repoUrl }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string }) {
+  const [open, setOpen] = useState(point.status !== 'resolved');
+  const severity = SEVERITY[point.severity];
+  const label = `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;
+
+  if (!open) {
+    return (
+      <button type="button" className={styles.collapsed} onClick={() => setOpen(true)} aria-expanded="false" aria-label={label}>
+        <span className={styles.checkSmall} aria-hidden="true">
+          ✓
+        </span>
+        <span className={styles.id}>P{point.number}</span>
+        <span className={styles.collapsedTitle}>{point.title}</span>
+        <span className={styles.id}>{outcome(point, thread)}</span>
+        <span className={styles.resolvedWord}>Resolved</span>
+        <span className={styles.caret} aria-hidden="true">
+          ▾
+        </span>
+      </button>
+    );
+  }
+
+  const lines = snippetLines(point);
+  return (
+    <article className={`${styles.card} ${point.status === 'escalated' ? styles.escalatedCard : ''}`} aria-label={label}>
+      <div className={styles.head}>
+        <div className={styles.chips}>
+          <span className={`${styles.severity} ${styles[point.severity]}`}>
+            <span className={styles.bars} aria-hidden="true">
+              {[1, 2, 3, 4].map((bar) => (
+                <span key={bar} className={`${styles.bar} ${bar <= severity.bars ? styles.filled : ''}`} style={{ height: 2 + bar * 2 }} />
+              ))}
+            </span>
+            {severity.word}
+          </span>
+          <span className={styles.category}>{point.category}</span>
+          <span className={styles.id}>P{point.number}</span>
+          <span className={styles.spacer} />
+          <span className={`${styles.status} ${styles[point.status]}`}>
+            <StatusGlyph status={point.status} />
+            {STATUS[point.status]}
+          </span>
+          {point.status === 'resolved' && (
+            <button type="button" className={styles.collapse} onClick={() => setOpen(false)} aria-expanded="true" aria-label="Collapse point">
+              ▴
+            </button>
+          )}
+        </div>
+        {point.path && (
+          <a className={styles.file} href={point.url ?? undefined} target="_blank" rel="noreferrer">
+            {point.line ? `${point.path}:${point.line}` : point.path}
+          </a>
+        )}
+        <h3 className={styles.title}>{point.title}</h3>
+        <p className={styles.body}>{point.body}</p>
+      </div>
+      {lines.length > 0 && (
+        <div className={styles.snippet}>
+          <div className={styles.snippetHead}>
+            <span className={styles.snippetPath}>{point.path}</span>
+            <span>
+              L{lines[0]!.n}–{lines.at(-1)!.n}
+            </span>
+          </div>
+          <pre className={styles.code}>
+            {lines.map((line) => (
+              <div key={line.n} className={`${styles.line} ${line.highlighted ? styles.highlighted : ''}`} data-highlighted={line.highlighted || undefined}>
+                <span className={styles.lineNumber}>
+                  {line.highlighted && <span className={styles.gutterDiamond} aria-hidden="true" />}
+                  {line.n}
+                </span>
+                <code className={styles.lineText}>
+                  {syntaxTokens(line.text).map((token, i) => (
+                    <span key={i} className={styles[token.kind]}>
+                      {token.text}
+                    </span>
+                  ))}
+                </code>
+              </div>
+            ))}
+          </pre>
+        </div>
+      )}
+      {thread.length > 0 && (
+        <ol className={styles.thread}>
+          {thread.map((reply) => (
+            <Reply key={reply.seq} reply={reply} you={you} people={people} repoUrl={repoUrl} />
+          ))}
+        </ol>
+      )}
+    </article>
+  );
+}
+
+function StatusGlyph({ status }: { status: PointView['status'] }) {
+  if (status === 'resolved') {
+    return (
+      <span className={styles.checkSmall} aria-hidden="true">
+        ✓
+      </span>
+    );
+  }
+  return <span className={styles[`${status}Glyph`]} aria-hidden="true" />;
+}
+
+/** One reply in a point's thread: an agent's answer or decision, or a person's comment on GitHub. */
+function Reply({ reply, you, people, repoUrl }: { reply: TimelineItem; you: string; people: People; repoUrl: string }) {
+  const login = reply.author?.login ?? '';
+  const byAgent = reply.kind === 'point_reply' || reply.kind === 'point_decision';
+  const tag = replyTag(reply);
+  const commit = typeof reply.data?.commit === 'string' ? reply.data.commit : null;
+  return (
+    <li className={styles.reply}>
+      <Avatar login={login} src={people.get(reply.author?.githubId ?? '')?.avatarUrl ?? null} size={22}>
+        {byAgent && <AgentBadge login={login} size="tiny" decorative />}
+      </Avatar>
+      <div className={styles.replyMain}>
+        <div className={styles.replyHead}>
+          <span className={styles.replyName}>{byAgent ? agentName(login, you) : personName(login, you)}</span>
+          {tag && (
+            <span className={`${styles.tag} ${styles[tag.tone]}`}>
+              {tag.word}
+              {tag.word === 'Fixed in' && commit && (
+                <>
+                  {' '}
+                  <a className={styles.commit} href={`${repoUrl}/commit/${commit}`} target="_blank" rel="noreferrer">
+                    {commit.slice(0, 7)}
+                  </a>
+                </>
+              )}
+            </span>
+          )}
+          <span className={styles.replyTime}>{itemTime(reply.at)}</span>
+        </div>
+        {reply.body && <p className={styles.replyText}>{reply.body}</p>}
+      </div>
+    </li>
+  );
+}
+
+/** The outcome tag of a reply (handoff §3 "Outcome tags"). */
+function replyTag(reply: TimelineItem): { word: string; tone: 'ok' | 'plain' | 'warn' | 'accent' } | null {
+  const resolution = reply.data?.resolution;
+  if (resolution === 'fixed') return { word: 'Fixed in', tone: 'ok' };
+  if (resolution === 'declined') return { word: 'Declined', tone: 'plain' };
+  if (resolution === 'answered') return { word: 'Answered', tone: 'accent' };
+  const decision = reply.data?.decision;
+  if (decision === 'resolve') return { word: 'Resolved', tone: 'ok' };
+  if (decision === 'keep_open') return { word: 'Kept open', tone: 'warn' };
+  return null;
+}
+
+/** "Fixed · a1b2c3d", "Declined" or "Answered": how a resolved point ended, for its collapsed line. */
+function outcome(point: PointView, thread: TimelineItem[]): string {
+  if (point.authorResolution === 'fixed') {
+    const commit = thread.findLast((r) => typeof r.data?.commit === 'string')?.data?.commit;
+    return typeof commit === 'string' ? `Fixed · ${commit.slice(0, 7)}` : 'Fixed';
+  }
+  if (point.authorResolution === 'declined') return 'Declined';
+  if (point.authorResolution === 'answered') return 'Answered';
+  return '';
+}
+```
+
+Create `apps/web/src/routes/Chat/PointCard.module.css` (a card without a snippet keeps the 14 px the snippet's margin would give below its text):
+
+```css
+/* handoff §3, PointCard.dc.html */
+.card {
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.escalatedCard {
+  border-color: var(--red-line);
+}
+
+.head {
+  padding: 12px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A point without a snippet (a GitHub comment on the whole PR) keeps the 14px the snippet's margin gives below its text. */
+.head:last-child {
+  padding-bottom: 14px;
+}
+
+.head + .thread {
+  margin-top: 14px;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.blocker {
+  background: var(--red-tint);
+  color: var(--red-fg);
+  --bar: var(--red);
+}
+
+.major {
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  --bar: var(--warn);
+}
+
+.minor {
+  --bar: var(--fg2);
+}
+
+.nit {
+  --bar: var(--fg3);
+}
+
+.bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+
+.bar {
+  width: 2.5px;
+  border-radius: 1px;
+  background: var(--b1);
+}
+
+.filled {
+  background: var(--bar);
+}
+
+.category {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--b1);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg2);
+}
+
+.id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+  padding: 0 2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.open {
+  color: var(--fg2);
+}
+
+.addressed {
+  color: var(--acc-text);
+}
+
+.resolved {
+  color: var(--ok-fg);
+}
+
+.escalated {
+  color: var(--red-fg);
+}
+
+.openGlyph {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.addressedGlyph {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--acc);
+  background: linear-gradient(90deg, var(--acc) 50%, transparent 50%);
+}
+
+.escalatedGlyph {
+  width: 8px;
+  height: 8px;
+  margin: 0 1px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.checkSmall {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.collapse {
+  border: 0;
+  background: transparent;
+  color: var(--fg3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.collapse:hover {
+  color: var(--fg1);
+}
+
+.file {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--acc-text);
+  text-decoration: none;
+}
+
+.title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+.body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.snippet {
+  margin: 12px 14px 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--code);
+}
+
+.snippetHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--b1);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+  background: var(--surface);
+}
+
+.snippetPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code {
+  margin: 0;
+  overflow-x: auto;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.line {
+  display: flex;
+  min-width: max-content;
+}
+
+.highlighted {
+  background: var(--hl);
+}
+
+/* --fg4 is decoration only: these numbers repeat the L47–49 in the snippet's header. */
+.lineNumber {
+  flex: none;
+  position: relative;
+  width: 46px;
+  padding-right: 12px;
+  text-align: right;
+  color: var(--fg4);
+  user-select: none;
+}
+
+.highlighted .lineNumber {
+  color: var(--acc-text);
+}
+
+.gutterDiamond {
+  position: absolute;
+  left: 9px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  background: var(--acc);
+  transform: rotate(45deg);
+}
+
+.lineText {
+  white-space: pre;
+  padding-right: 16px;
+  font-family: inherit;
+}
+
+.plain {
+  color: var(--fg1);
+}
+
+.keyword {
+  color: var(--acc-text);
+}
+
+.string {
+  color: var(--ok-fg);
+}
+
+.number {
+  color: var(--warn-fg);
+}
+
+.comment {
+  color: var(--fg3);
+}
+
+.thread {
+  list-style: none;
+  margin: 0;
+  border-top: 1px solid var(--b2);
+  background: var(--bg);
+  padding: 4px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  --badge-ring: var(--bg);
+}
+
+.reply {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.replyMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.replyHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
+.replyName {
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.ok {
+  color: var(--ok-fg);
+}
+
+.plain.tag {
+  color: var(--fg2);
+}
+
+.warn {
+  color: var(--warn-fg);
+}
+
+.accent {
+  color: var(--acc-text);
+}
+
+.commit {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--acc-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.replyTime {
+  color: var(--fg3);
+  font-size: 11.5px;
+}
+
+.replyText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.collapsed {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--fg2);
+  text-align: left;
+}
+
+.collapsed:hover {
+  background: var(--hover);
+}
+
+.collapsedTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg1);
+}
+
+.resolvedWord {
+  flex: none;
+  font-size: 12px;
+  color: var(--ok-fg);
+  font-weight: 500;
+}
+
+.caret {
+  flex: none;
+  color: var(--fg3);
+  font-size: 12px;
+}
+```
+
+- [ ] **Step 14: The chat screen**
+
+Create `apps/web/src/routes/Chat/ChatHeader.tsx`:
+
+```tsx
+import type { ChatView } from '@nitpilot/protocol';
+import { Link } from 'react-router';
+import { Ping } from '../../components/Ping/Ping';
+import { agentName } from '../../lib/names';
+import { itemTime } from '../../lib/time';
+import styles from './ChatHeader.module.css';
+
+const ROLE = { author: 'Author', reviewer: 'Reviewer' } as const;
+
+/**
+ * The chat's header (handoff §2 "Header"). Desktop: the title, your role, "Open on GitHub" and the details toggle;
+ * then the repo and number, the branches, the round and the other side's agent. Phone: a back arrow, and the
+ * same facts stacked, shrinking to one line once the feed scrolls (`collapsed`).
+ */
+export function ChatHeader(props: { view: ChatView; you: string; desktop: boolean; collapsed: boolean; details: { available: boolean; open: boolean; toggle: () => void } }) {
+  const { view, you } = props;
+  const role = view.viewer.role;
+  const ref = `${view.repo} #${view.number}`;
+  if (!props.desktop) {
+    return (
+      <header className={styles.phone}>
+        <div className={styles.phoneTop}>
+          <Link to="/" className={styles.back} aria-label="Back to inbox">
+            <span className={styles.chevron} aria-hidden="true" />
+          </Link>
+          {props.collapsed ? <h1 className={styles.phoneTitleLine}>{view.title}</h1> : <span className={styles.phoneRef}>{ref}</span>}
+        </div>
+        {!props.collapsed && (
+          <div className={styles.phoneFull}>
+            <h1 className={styles.phoneTitle}>{view.title}</h1>
+            <div className={styles.branches}>
+              {view.headRef} → {view.baseRef}
+            </div>
+            <div className={styles.facts}>
+              {role && <span className={styles.roleChip}>{ROLE[role]}</span>}
+              <Round view={view} />
+              <Presence view={view} you={you} />
+            </div>
+          </div>
+        )}
+      </header>
+    );
+  }
+  return (
+    <header className={styles.desktop}>
+      <div className={styles.topRow}>
+        <h1 className={styles.title}>{view.title}</h1>
+        {role && <span className={styles.roleChip}>{ROLE[role]}</span>}
+        <a className={styles.button} href={view.url} target="_blank" rel="noreferrer">
+          Open on GitHub <span className={styles.arrow}>↗</span>
+        </a>
+        {props.details.available && (
+          <button type="button" className={`${styles.iconButton} ${props.details.open ? styles.pressed : ''}`} onClick={props.details.toggle} aria-pressed={props.details.open} aria-label="PR details" title="PR details">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M15 4v16" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className={styles.facts}>
+        <span className={styles.ref}>{ref}</span>
+        <span className={styles.branches}>
+          {view.headRef} <span className={styles.to}>→</span> {view.baseRef}
+        </span>
+        <Round view={view} />
+        <Presence view={view} you={you} />
+      </div>
+    </header>
+  );
+}
+
+/** One pip per allowed round (accent when used, all amber on the last round), then "Round 2 of 3". */
+function Round({ view }: { view: ChatView }) {
+  const last = view.round >= view.maxRounds;
+  return (
+    <span className={styles.round}>
+      <span className={styles.pips} aria-hidden="true">
+        {Array.from({ length: view.maxRounds }, (_, i) => (
+          <span key={i} className={`${styles.pip} ${i < view.round ? (last ? styles.lastPip : styles.usedPip) : ''}`} />
+        ))}
+      </span>
+      Round {view.round} of {view.maxRounds}
+    </span>
+  );
+}
+
+/**
+ * The agent that matters here: the one at work if any, else the other side's (your reviewer's, or the author's).
+ * A ping while it works, a dot while it's online, a ring with when it was last seen when it's offline.
+ */
+function Presence({ view, you }: { view: ChatView; you: string }) {
+  if (view.activity.kind === 'agent_working' && view.activity.who) {
+    return (
+      <span className={styles.presence}>
+        <Ping />
+        {agentName(view.activity.who, you)} · working
+      </span>
+    );
+  }
+  const others = view.participants.filter((p) => p.login !== you && p.agent && p.role !== view.viewer.role);
+  const other = others.find((p) => p.requested) ?? others[0];
+  if (!other?.agent) return null;
+  const { online, offlineSince } = other.agent;
+  return (
+    <span className={styles.presence}>
+      <span className={online ? styles.online : styles.offline} aria-hidden="true" />
+      {agentName(other.login, you)} · {online ? 'online' : offlineSince ? `offline since ${itemTime(offlineSince)}` : 'offline'}
+    </span>
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/ChatHeader.module.css`:
+
+```css
+/* handoff §2 "Header": surface, 1px bottom border, 12px 20px. */
+.desktop {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--b1);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17.6px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.roleChip {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  color: var(--fg2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  color: var(--fg1);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.arrow {
+  color: var(--fg3);
+}
+
+.iconButton {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pressed {
+  background: var(--muted);
+}
+
+.facts {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.ref {
+  font-family: var(--font-mono);
+  color: var(--fg2);
+}
+
+.branches {
+  font-family: var(--font-mono);
+}
+
+.to {
+  color: var(--fg3);
+}
+
+.round,
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pip {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--b1);
+}
+
+.usedPip {
+  background: var(--acc);
+}
+
+.lastPip {
+  background: var(--warn);
+}
+
+.online {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+
+.offline {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+/* Phone: 8px 12px 10px 4px, a 44×44 back arrow, the title wrapping at 20.9 px. */
+.phone {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px 4px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--b1);
+}
+
+.phoneTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding-left: 4px;
+  color: var(--acc-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chevron {
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.phoneRef {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneTitleLine {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.phoneFull {
+  padding: 0 4px 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.phoneTitle {
+  margin: 0;
+  font-size: 20.9px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.phoneFull .branches {
+  font-size: 11.5px;
+  color: var(--fg3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneFull .roleChip {
+  height: 20px;
+  padding: 0 7px;
+}
+```
+
+Create `apps/web/src/routes/Chat/ChatBanner.tsx`:
+
+```tsx
+import { BRAND, type ChatView } from '@nitpilot/protocol';
+import type { ReactNode } from 'react';
+import { Link, useLocation } from 'react-router';
+import type { Banner } from '../../lib/banner';
+import { useCopy } from '../../lib/clipboard';
+import { itemTime } from '../../lib/time';
+import styles from './ChatBanner.module.css';
+
+/**
+ * The banner under the header (handoff §2 "Banners", §10). Only text and links in W3: the buttons that change the
+ * chat (Resolve, Continue, Retry) arrive with the other actions in Task 13. An escalation is an alert; the rest
+ * are statuses.
+ */
+export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView }) {
+  const here = useLocation();
+  const reconnect = `/auth/github/login?next=${encodeURIComponent(here.pathname)}`;
+  const outcome = (rounds: number, resolved: number) => `${rounds} round${rounds === 1 ? '' : 's'} · ${resolved} point${resolved === 1 ? '' : 's'} resolved`;
+  switch (banner.kind) {
+    case 'none':
+      return null;
+    case 'github_expired':
+      return (
+        <Strip tone="warn" glyph="!" title="GitHub sign-in expired" body={`${BRAND.name} can't approve, post or push as you until you reconnect. Agents keep working in the meantime.`}>
+          {/* A full page load: the sign-in starts on the server. */}
+          <a className={styles.dark} href={reconnect}>
+            Reconnect GitHub
+          </a>
+        </Strip>
+      );
+    case 'escalated':
+      return (
+        <div className={styles.escalated} role="alert">
+          <div className={styles.escalatedHead}>
+            <span className={styles.diamond} aria-hidden="true" />
+            <span className={styles.title}>Needs a human decision</span>
+            <span className={styles.body}>{banner.note}</span>
+          </div>
+          <ul className={styles.points}>
+            {banner.points.map((p) => (
+              <li key={p.number} className={styles.point}>
+                <span className={styles.pointId}>P{p.number}</span>
+                <span className={styles.pointTitle}>{p.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case 'failed_job':
+      return (
+        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why. To run it again:">
+          <CopyCommand command={`${BRAND.cli} retry ${view.url}`} />
+        </Strip>
+      );
+    case 'failed_post':
+      return (
+        <Strip tone="warn" glyph="!" title="Couldn't post on GitHub as you" body={`Sign in with GitHub again, and ${BRAND.name} posts it.`}>
+          <a className={styles.dark} href={reconnect}>
+            Reconnect GitHub
+          </a>
+        </Strip>
+      );
+    case 'cap':
+      return (
+        <Strip tone="warn" glyph="!" title="Daily agent cap reached" body="Agents pick up again at midnight, or raise the cap in Settings.">
+          <Link className={styles.dark} to="/settings">
+            Raise cap
+          </Link>
+        </Strip>
+      );
+    case 'repo_not_linked':
+      return (
+        <Strip tone="muted" title={`${banner.repo} isn't linked on this computer`} body="Your agent can't review or fix this PR until the repo is linked. In your clone, run:">
+          <CopyCommand command={`${BRAND.cli} repos add`} />
+        </Strip>
+      );
+    case 'waiting':
+      return (
+        <Strip
+          tone="muted"
+          glyph="ring"
+          title="Waiting for your agent"
+          body={banner.offlineSince ? `Offline since ${itemTime(banner.offlineSince)}. Start it to pick the work up.` : "Your agent hasn't connected yet. Start it to pick the work up."}
+        >
+          <CopyCommand command={`${BRAND.cli} start`} />
+        </Strip>
+      );
+    case 'ready_reviewer':
+      return (
+        <Strip tone="ok" glyph="check" title="Ready for your approval" body={outcome(banner.rounds, banner.resolved)}>
+          {/* Approval always happens on GitHub (handoff §2). */}
+          <a className={styles.primary} href={`${view.url}/files`} target="_blank" rel="noreferrer">
+            Approve on GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </Strip>
+      );
+    case 'ready_author':
+      return (
+        <Strip tone="ok" glyph="check" title={banner.reviewer ? `Waiting for ${banner.reviewer}'s approval` : 'Waiting for approval'} body={outcome(banner.rounds, banner.resolved)}>
+          <a className={styles.secondary} href={view.url} target="_blank" rel="noreferrer">
+            View on GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </Strip>
+      );
+  }
+}
+
+/** One banner line: a glyph, a title and a line under it, then what you can do. */
+function Strip(props: { tone: 'ok' | 'warn' | 'muted'; glyph?: '!' | 'ring' | 'check'; title: string; body: string; children: ReactNode }) {
+  return (
+    <div className={`${styles.strip} ${styles[props.tone]}`} role="status">
+      {props.glyph === '!' && (
+        <span className={styles.bang} aria-hidden="true">
+          !
+        </span>
+      )}
+      {props.glyph === 'check' && (
+        <span className={styles.check} aria-hidden="true">
+          ✓
+        </span>
+      )}
+      {props.glyph === 'ring' && <span className={styles.ring} aria-hidden="true" />}
+      <div className={styles.text}>
+        <span className={styles.title}>{props.title}</span>
+        <span className={styles.body}>{props.body}</span>
+      </div>
+      {props.children}
+    </div>
+  );
+}
+
+/** "$ nitpilot start  Copy": a command to run in a terminal, copied with one click. */
+function CopyCommand({ command }: { command: string }) {
+  const { copied, copy } = useCopy(command);
+  return (
+    <button type="button" className={styles.command} onClick={copy} aria-label={`Copy ${command}`}>
+      <span className={styles.dollar} aria-hidden="true">
+        $
+      </span>
+      {command}
+      <span className={styles.copy}>{copied ? 'Copied' : 'Copy'}</span>
+    </button>
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/ChatBanner.module.css`:
+
+```css
+/* handoff §2 "Banners": pinned under the header, full width. */
+.strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--b1);
+}
+
+.ok {
+  background: var(--ok-tint);
+}
+
+.warn {
+  background: var(--warn-tint);
+}
+
+.muted {
+  background: var(--muted);
+}
+
+.text {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.body {
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.bang {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--warn);
+  color: #1a1205;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0 3px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--fg3);
+}
+
+.primary,
+.secondary,
+.dark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.secondary {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dark {
+  height: 30px;
+  padding: 0 12px;
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 12.5px;
+}
+
+.command {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dollar,
+.copy {
+  color: var(--fg3);
+}
+
+.copy {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+}
+
+/* The one red banner: red-tint with a red-line border. */
+.escalated {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--red-tint);
+  border-bottom: 1px solid var(--red-line);
+}
+
+.escalatedHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.diamond {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin: 0 4px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.pointId {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red-fg);
+}
+
+.pointTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+```
+
+Create `apps/web/src/routes/Chat/Timeline.tsx`:
+
+```tsx
+import type { ChatView, TimelineItem } from '@nitpilot/protocol';
+import { useFiles } from '../../api/chat';
+import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { Ping } from '../../components/Ping/Ping';
+import { useProgress } from '../../live/progress';
+import { agentName, personName } from '../../lib/names';
+import { itemTime } from '../../lib/time';
+import { severityCounts, timelineRows, withCommitHashes, type Glyph } from '../../lib/timeline';
+import { PointCard, type People } from './PointCard';
+import styles from './Timeline.module.css';
+
+/**
+ * The chat's feed (handoff §2 "Timeline", the single-column layout): everyone left-aligned like an activity log,
+ * point cards full width under the summary that raised them, and the live progress line at the end.
+ */
+export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlder: boolean; you: string; loadingEarlier: boolean; onLoadEarlier: () => void }) {
+  const { view, items, you } = props;
+  const people: People = new Map(view.participants.map((p) => [p.githubId, { avatarUrl: p.avatarUrl }]));
+  const repoUrl = view.url.replace(/\/pull\/\d+$/, '');
+  const avatarOf = (item: TimelineItem) => people.get(item.author?.githubId ?? '')?.avatarUrl ?? null;
+  return (
+    <div className={styles.feed}>
+      {props.hasOlder && (
+        <button type="button" className={styles.earlier} onClick={props.onLoadEarlier} disabled={props.loadingEarlier}>
+          {props.loadingEarlier ? 'Loading…' : 'Load earlier'}
+        </button>
+      )}
+      <ol className={styles.list}>
+        {timelineRows(items, view.points).map((row) => {
+          if (row.kind === 'point') {
+            return (
+              <li key={`P${row.point.number}`} className={styles.pointRow}>
+                <PointCard point={row.point} thread={row.thread} you={you} people={people} repoUrl={repoUrl} />
+              </li>
+            );
+          }
+          const { item } = row;
+          return (
+            <li key={item.seq}>
+              {row.kind === 'system' ? (
+                <SystemLine item={item} glyph={row.glyph} />
+              ) : (
+                <Message item={item} you={you} avatar={avatarOf(item)} agent={row.kind === 'summary'} />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {!view.trusted && view.viewer.attention === 'manual_review' && <UntrustedCard view={view} />}
+      <ProgressLine chatId={view.id} you={you} />
+    </div>
+  );
+}
+
+/** A system event: a glyph, the line in muted text, the time (handoff §2). */
+function SystemLine({ item, glyph }: { item: TimelineItem; glyph: Glyph }) {
+  return (
+    <div className={styles.system}>
+      <span className={styles.glyphColumn} aria-hidden="true">
+        <span className={styles[glyph]}>{glyph === 'check' ? '✓' : null}</span>
+      </span>
+      <span className={styles.systemText}>
+        {withCommitHashes(item.body).map((part, i) =>
+          part.hash ? (
+            <code key={i} className={styles.hash}>
+              {part.text}
+            </code>
+          ) : (
+            part.text
+          ),
+        )}
+      </span>
+      <time className={styles.time} dateTime={item.at}>
+        {itemTime(item.at)}
+      </time>
+    </div>
+  );
+}
+
+/** An agent's summary ("leo's agent", with severity counts) or a person's note (in a box; yours in your colour). */
+function Message({ item, you, avatar, agent }: { item: TimelineItem; you: string; avatar: string | null; agent: boolean }) {
+  const login = item.author?.login ?? '';
+  const mine = login === you;
+  const counts = agent ? severityCounts(item.data) : '';
+  // A person's comment that came from GitHub carries the thread it was in; a note sent from Nitpilot doesn't.
+  const fromGithub = item.data !== null && 'threadRootId' in item.data;
+  return (
+    <div className={styles.message}>
+      <Avatar login={login} src={avatar} size={28}>
+        {agent && <AgentBadge login={login} size="small" decorative />}
+      </Avatar>
+      <div className={styles.messageMain}>
+        <div className={styles.messageHead}>
+          <span className={styles.name}>{agent ? agentName(login, you) : personName(login, you)}</span>
+          {!agent && <span className={styles.sub}>{fromGithub ? 'on GitHub' : 'to the agents'}</span>}
+          <span className={styles.spacer} />
+          <time className={styles.time} dateTime={item.at}>
+            {itemTime(item.at)}
+          </time>
+        </div>
+        {agent ? (
+          <p className={styles.summary}>
+            {item.body}
+            {counts && <span className={styles.counts}> {counts}</span>}
+          </p>
+        ) : (
+          <p className={`${styles.note} ${mine ? styles.mine : ''}`}>{item.body}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const STAGE: Record<string, string> = { preparing: 'getting the code', running_agent: '', pushing: 'pushing', finishing: 'finishing' };
+
+/** What an agent is doing this second, from its CLI (handoff §2 "Live progress line"). */
+function ProgressLine({ chatId, you }: { chatId: string; you: string }) {
+  const progress = useProgress(chatId);
+  return (
+    <div className={styles.progress} role="status" aria-live="polite">
+      {progress && (
+        <>
+          <span className={styles.glyphColumn}>
+            <Ping />
+          </span>
+          <span className={styles.progressWho}>
+            {agentName(progress.who, you)} is {progress.action}…{STAGE[progress.stage] ? ` ${STAGE[progress.stage]}` : ''}
+          </span>
+          <span className={styles.progressText}>{progress.text}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A PR from an outside contributor (handoff §2 "Untrusted PR card"): agents don't start on it by themselves, so the
+ * requested reviewer skims the diff first. Its Review button arrives with the other actions (Task 13).
+ */
+function UntrustedCard({ view }: { view: ChatView }) {
+  const files = useFiles(view.id).data;
+  const biggest = files?.files.toSorted((a, b) => b.adds + b.dels - (a.adds + a.dels))[0];
+  return (
+    <section className={styles.untrusted} aria-label="First-time contributor">
+      <div className={styles.eyebrow}>
+        <span className={styles.ring} aria-hidden="true" />
+        First-time contributor
+      </div>
+      <h3 className={styles.untrustedTitle}>Your agent hasn't started</h3>
+      <p className={styles.untrustedBody}>Nitpilot doesn't run agents automatically on PRs from outside contributors. Skim the diff, then start the review yourself.</p>
+      {files && (
+        <p className={styles.fileLine}>
+          {files.files.length} file{files.files.length === 1 ? '' : 's'} · <span className={styles.adds}>+{files.adds}</span> <span className={styles.dels}>−{files.dels}</span>
+          {biggest ? ` · ${biggest.path}` : ''}
+        </p>
+      )}
+      <div>
+        <a className={styles.button} href={`${view.url}/files`} target="_blank" rel="noreferrer">
+          View diff on GitHub <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/Timeline.module.css`:
+
+```css
+/* handoff §2 "Timeline (feed)": max 780 px, 22px 24px padding with a 14px gap (16px 12px on a phone). */
+.feed {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 22px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  --badge-ring: var(--bg);
+}
+
+@media (max-width: 759px) {
+  .feed {
+    padding: 16px 12px 20px;
+  }
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.earlier {
+  align-self: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.system {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.glyphColumn {
+  flex: none;
+  width: 28px;
+  display: flex;
+  justify-content: center;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--fg4);
+}
+
+.check {
+  color: var(--ok-fg);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.ring {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.diamond {
+  width: 6px;
+  height: 6px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.systemText {
+  flex: 1;
+  min-width: 0;
+}
+
+.hash {
+  font-family: var(--font-mono);
+  color: var(--fg2);
+}
+
+.time {
+  flex: none;
+  font-size: 12px;
+  color: var(--fg3);
+  font-variant-numeric: tabular-nums;
+}
+
+.message {
+  display: flex;
+  gap: 10px;
+}
+
+.messageMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.messageHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.sub {
+  color: var(--fg3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.counts {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.note {
+  align-self: flex-start;
+  margin: 2px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--b1);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.mine {
+  background: var(--bubble);
+  border-color: var(--acc-line);
+}
+
+.pointRow {
+  padding-left: 38px;
+  margin-top: -6px;
+}
+
+@media (max-width: 759px) {
+  .pointRow {
+    padding-left: 0;
+  }
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--fg2);
+}
+
+.progress:empty {
+  display: none;
+}
+
+.progressWho {
+  white-space: nowrap;
+}
+
+.progressText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg1);
+}
+
+.untrusted {
+  margin-left: 38px;
+  padding: 16px 18px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+.untrustedTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.untrustedBody {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.fileLine {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.adds {
+  color: var(--ok-fg);
+}
+
+.dels {
+  color: var(--red-fg);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  color: var(--fg1);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+```
+
+Create `apps/web/src/routes/Chat/DetailsPanel.tsx`:
+
+```tsx
+import { BRAND, type ChatView, type ParticipantView } from '@nitpilot/protocol';
+import { useFiles } from '../../api/chat';
+import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { itemTime } from '../../lib/time';
+import styles from './DetailsPanel.module.css';
+
+/** The PR beside the chat (handoff §2 "Details panel", desktop at 1180 px and wider): its files, its people, the team's rules. */
+export function DetailsPanel({ view }: { view: ChatView }) {
+  return (
+    <aside className={styles.panel} aria-label="PR details">
+      <Files chatId={view.id} />
+      <section className={styles.section}>
+        <h2 className={styles.heading}>Participants</h2>
+        <ul className={styles.people}>
+          {view.participants.map((p) => (
+            <Person key={`${p.githubId} ${p.role}`} person={p} />
+          ))}
+        </ul>
+      </section>
+      <section className={styles.section}>
+        <div className={styles.headingRow}>
+          <h2 className={styles.heading}>Team rules</h2>
+          <span className={styles.meta}>{BRAND.teamConfigFile}</span>
+        </div>
+        <dl className={styles.rules}>
+          <dt>Max rounds</dt>
+          <dd className={styles.mono}>{view.rules.maxRounds}</dd>
+          <dt>Always escalate</dt>
+          <dd className={styles.mono}>{view.rules.alwaysEscalate.join(', ') || 'nothing'}</dd>
+          <dt>Auto modes</dt>
+          <dd>{autoModes(view.rules)}</dd>
+        </dl>
+        {view.rules.error && (
+          <p className={styles.rulesError}>
+            {BRAND.teamConfigFile} has an error, so the defaults apply: <span className={styles.mono}>{view.rules.error}</span>
+          </p>
+        )}
+      </section>
+      {view.summaryUrl && (
+        <a className={styles.summary} href={view.summaryUrl} target="_blank" rel="noreferrer">
+          Summary comment on GitHub <span aria-hidden="true">↗</span>
+        </a>
+      )}
+    </aside>
+  );
+}
+
+/** "6 · +123 −15", then one line per file, its path cut from the left so the file name shows. */
+function Files({ chatId }: { chatId: string }) {
+  const files = useFiles(chatId);
+  const data = files.data;
+  return (
+    <section className={styles.section}>
+      <div className={styles.headingRow}>
+        <h2 className={styles.heading}>Files changed</h2>
+        {data && (
+          <span className={styles.meta}>
+            {data.files.length}
+            {data.truncated ? '+' : ''} · +{data.adds} −{data.dels}
+          </span>
+        )}
+      </div>
+      {files.isPending && <p className={styles.note}>Loading…</p>}
+      {files.isError && <p className={styles.note}>{files.error.message}</p>}
+      {data && data.files.length > 0 && (
+        <ul className={styles.files}>
+          {data.files.map((f) => (
+            <li key={f.path} className={styles.file}>
+              <span className={styles.path} title={f.path}>
+                <bdi>{f.path}</bdi>
+              </span>
+              <span className={styles.adds}>+{f.adds}</span>
+              <span className={styles.dels}>−{f.dels}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function Person({ person }: { person: ParticipantView }) {
+  const agent = person.agent;
+  return (
+    <li className={styles.person}>
+      <Avatar login={person.login} src={person.avatarUrl} size={30}>
+        {agent?.working && <AgentBadge login={person.login} size="small" />}
+      </Avatar>
+      <div className={styles.personMain}>
+        <div className={styles.personName}>
+          <span>{person.login}</span>
+          <span className={styles.meta}>{person.role === 'author' ? 'Author' : 'Reviewer'}</span>
+        </div>
+        <div className={styles.personStatus}>
+          {agent && <span className={agent.online ? styles.online : styles.offline} aria-hidden="true" />}
+          {agentStatus(person)}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function agentStatus(person: ParticipantView): string {
+  if (person.isBot) return 'Bot';
+  const agent = person.agent;
+  if (!agent) return `Not on ${BRAND.name}`;
+  if (agent.working) return 'Agent working';
+  if (agent.online) return 'Agent online';
+  return agent.offlineSince ? `Agent offline since ${itemTime(agent.offlineSince)}` : 'No agent connected yet';
+}
+
+function autoModes(rules: ChatView['rules']): string {
+  if (rules.autoReview && rules.autoAddress) return 'Allowed';
+  if (rules.autoReview) return 'Auto-review only';
+  if (rules.autoAddress) return 'Auto-fix only';
+  return 'Off';
+}
+```
+
+Create `apps/web/src/routes/Chat/DetailsPanel.module.css`:
+
+```css
+/* handoff §2 "Details panel": 300 px of --side beside the chat, 18px 18px 24px, 22 px between sections. */
+.panel {
+  width: 300px;
+  flex: none;
+  min-height: 0;
+  overflow: auto;
+  background: var(--side);
+  border-left: 1px solid var(--b1);
+  padding: 18px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headingRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.headingRow .meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.file + .file {
+  border-top: 1px solid var(--b2);
+}
+
+/* rtl cuts the path from the left, so the file name stays; <bdi> keeps the path itself reading left to right. */
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--fg2);
+}
+
+.adds {
+  flex: none;
+  color: var(--ok-fg);
+}
+
+.dels {
+  flex: none;
+  color: var(--red-fg);
+}
+
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.personMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.personName {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.personStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.online {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+
+.offline {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.rules {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  font-size: 12.5px;
+}
+
+.rules dt {
+  color: var(--fg3);
+}
+
+.rules dd {
+  margin: 0;
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.rulesError {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  font-size: 12px;
+}
+
+.summary {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--acc-text);
+  text-decoration: none;
+}
+```
+
+Create `apps/web/src/routes/Chat/Chat.tsx` (the feed's scroll area takes focus when clicked or tabbed to, so ↑/↓ scroll it):
+
+```tsx
+import { BRAND, type ChatResponse, type WebMe } from '@nitpilot/protocol';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useLocation, useOutletContext, useParams } from 'react-router';
+import { chatKey, fetchOlderItems, useChat, useMarkRead } from '../../api/chat';
+import { ApiError } from '../../api/client';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { useLiveChat } from '../../live/LiveProvider';
+import { mergeItems } from '../../live/apply';
+import { chatBanner } from '../../lib/banner';
+import { useIsDesktop, useIsWide } from '../../lib/viewport';
+import { EmptyPane, Pane } from '../Shell/Pane';
+import { ChatBanner } from './ChatBanner';
+import { ChatHeader } from './ChatHeader';
+import { DetailsPanel } from './DetailsPanel';
+import { Timeline } from './Timeline';
+import styles from './Chat.module.css';
+
+/** `/c/:owner/:repo/:number`: one PR's chat (handoff §2), read-only in W3, kept live over `/ws/web`. */
+export function Chat() {
+  const me = useOutletContext<WebMe>();
+  const { owner = '', repo = '', number = '' } = useParams();
+  const chat = useChat(owner, repo, number);
+  if (chat.isPending) {
+    return (
+      <Pane>
+        <p className={styles.loading} role="status">
+          Loading…
+        </p>
+      </Pane>
+    );
+  }
+  if (chat.isError) return <ChatUnavailable error={chat.error} onRetry={() => void chat.refetch()} />;
+  return <ChatScreen key={chat.data.view.id} me={me} data={chat.data} cacheKey={chatKey(owner, repo, number)} />;
+}
+
+/** "No such chat" and "you can't see it" alike (spec §16); a GitHub sign-in to renew; anything else, with a way to try again. */
+function ChatUnavailable({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  const here = useLocation();
+  if (error instanceof ApiError && error.status === 404) {
+    return <EmptyPane title="Nothing here" body="This chat doesn't exist, or your GitHub account can't see its repo." />;
+  }
+  if (error instanceof ApiError && error.code === 'reauth') {
+    return (
+      <Pane>
+        <div className={styles.reauth} role="alert">
+          <h1 className={styles.reauthTitle}>Sign in with GitHub again</h1>
+          <p className={styles.reauthBody}>Your GitHub sign-in expired, so {BRAND.name} can't check that you can see this chat.</p>
+          {/* A full page load: the sign-in starts on the server. */}
+          <a className={styles.reauthButton} href={`/auth/github/login?next=${encodeURIComponent(here.pathname)}`}>
+            Reconnect GitHub
+          </a>
+        </div>
+      </Pane>
+    );
+  }
+  return <ErrorState message={error.message} onRetry={onRetry} />;
+}
+
+function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cacheKey: readonly unknown[] }) {
+  const { view, items, hasOlder } = data;
+  const queryClient = useQueryClient();
+  const desktop = useIsDesktop();
+  const wide = useIsWide();
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const newest = items.at(-1)?.seq ?? 0;
+  useLiveChat(view.id, newest);
+  useMarkRead(view.id, newest, view.viewer.role !== null);
+
+  async function loadEarlier(): Promise<void> {
+    const first = items[0];
+    if (!first) return;
+    setLoadingEarlier(true);
+    try {
+      const page = await fetchOlderItems(view.id, first.seq);
+      queryClient.setQueryData<ChatResponse>(cacheKey, (chat) => chat && { ...chat, items: mergeItems(page.items, chat.items), hasOlder: page.hasOlder });
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }
+
+  return (
+    <div className={styles.chat}>
+      <section className={styles.column} aria-label={`PR chat: ${view.title}`}>
+        <ChatHeader view={view} you={me.login} desktop={desktop} collapsed={!desktop && collapsed} details={{ available: wide, open: detailsOpen, toggle: () => setDetailsOpen((open) => !open) }} />
+        <ChatBanner banner={chatBanner(view, me)} view={view} />
+        {view.rules.error && (
+          <div className={styles.rulesChip}>
+            <span role="status">
+              <span className={styles.bang} aria-hidden="true">
+                !
+              </span>{' '}
+              <span className={styles.mono}>{BRAND.teamConfigFile}</span> has an error, using defaults
+            </span>
+          </div>
+        )}
+        {/* On a phone the header shrinks to one line once the feed has scrolled 48 px (handoff "App shell and layout").
+            It takes focus when clicked or tabbed to, so ↑/↓ scroll it (lib/keys.ts leaves them alone inside <main>). */}
+        <div className={styles.scroll} tabIndex={0} onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
+          <Timeline view={view} items={items} hasOlder={hasOlder} you={me.login} loadingEarlier={loadingEarlier} onLoadEarlier={() => void loadEarlier()} />
+        </div>
+      </section>
+      {wide && detailsOpen && <DetailsPanel view={view} />}
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/Chat.module.css`:
+
+```css
+/* The chat fills the page beside the inbox: a column (header, banner, the feed scrolling) and the details panel. */
+.chat {
+  height: 100%;
+  display: flex;
+  min-height: 0;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.loading {
+  margin: 40px auto;
+  color: var(--fg3);
+  font-size: 13px;
+}
+
+/* handoff §10 `rules`: a centred warn chip under the header. */
+.rulesChip {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px 0;
+}
+
+.rulesChip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.bang {
+  font-weight: 700;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.reauth {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 40px;
+}
+
+.reauthTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.reauthBody {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg2);
+}
+
+.reauthButton {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+```
+
+Delete `apps/web/src/routes/Chat/ChatPlaceholder.tsx`. In `apps/web/src/app.tsx`, import `Chat` from `'./routes/Chat/Chat'` instead of `ChatPlaceholder`, and the route becomes `<Route path="c/:owner/:repo/:number" element={<Chat />} />`.
+
+Replace `apps/web/src/routes/Shell/Shell.tsx` with (one socket for everything signed in; the pages read `me` from the outlet):
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { Outlet, useMatch, useNavigate } from 'react-router';
+import { LiveProvider } from '../../live/LiveProvider';
+import { useEscapeBack } from '../../lib/keys';
+import { useIsDesktop } from '../../lib/viewport';
+import { Inbox } from '../Inbox/Inbox';
+import styles from './Shell.module.css';
+
+/**
+ * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
+ * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
+ * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet.
+ */
+export function Shell({ me }: { me: WebMe }) {
+  return (
+    <LiveProvider>
+      <Layout me={me} />
+    </LiveProvider>
+  );
+}
+
+function Layout({ me }: { me: WebMe }) {
+  const desktop = useIsDesktop();
+  const atInbox = useMatch('/') !== null;
+  const navigate = useNavigate();
+  useEscapeBack(!desktop && !atInbox, () => void navigate('/'));
+
+  if (!desktop) {
+    return atInbox ? (
+      <div className={styles.phone}>
+        <Inbox me={me} />
+      </div>
+    ) : (
+      <main className={styles.phone}>
+        <Outlet context={me} />
+      </main>
+    );
+  }
+  return (
+    <div className={styles.shell}>
+      <div className={styles.sidebar}>
+        <Inbox me={me} />
+      </div>
+      <main className={styles.main}>
+        <Outlet context={me} />
+      </main>
+    </div>
+  );
+}
+```
+
+The inbox's times move on every minute (W2 carry-forward). In `apps/web/src/routes/Inbox/InboxRow.tsx`, `Props` gains
+
+```ts
+  /** The time now, moving on every minute (lib/time.ts `useNow`). */
+  now: Date;
+```
+
+after `cursor`; destructure `now`, and the time becomes `{rowTime(row.updatedAt, now)}`. In `apps/web/src/routes/Inbox/Inbox.tsx`, import `useNow` from `'../../lib/time'`, add `const now = useNow();` after the `cursor` state, and pass `now={now}` to each `InboxRowItem`.
+
+In `apps/web/src/lib/inbox.ts`, `chatPath`'s comment becomes `/** A chat's address in the app: the same URL the summary comment links to (spec §10). */`.
+
+- [ ] **Step 15: Run the web tests to see them pass**
+
+Run: `npm test -w apps/web && npm run typecheck && npm run lint`
+Expected: PASS, 115 tests (PointCard 5, Chat 9; Inbox 14 and Shell 3 unchanged in number); typecheck and lint clean.
+
+- [ ] **Step 16: Retire the server's transcript page**
+
+The web app now answers `/c/:owner/:repo/:number` (the SPA fallback), so the server's page goes:
+- Delete `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx` and `apps/server/src/http/routes/transcript.db.test.ts`.
+- In `apps/server/src/http/app.ts`, remove `import { transcriptRoutes } from './routes/transcript';` and `app.route('/', transcriptRoutes(deps));`.
+- In `apps/web/vite.config.ts`, remove the `'/c/': SERVER,` proxy line, and its comment becomes `// Still rendered by the server: device approval, until Task 23.`
+- In `apps/server/src/lib/urls.ts`, `transcriptUrl`'s comment becomes `/** A chat's page in the web app, which the summary comment and the notifications link to (spec §10). */`; in `apps/server/src/chats/access.ts`, `chatAccessByPath`'s comment drops ", as the transcript page did".
+- Delete `docs/why/transcript-page.md`, and create `docs/why/chat-page.md` (what it said about derived activity and untrusted text, now about the web app's screen):
+
+```markdown
+# The chat page: what it's waiting on, and text from strangers
+
+**In one sentence:** `/c/<owner>/<repo>/<number>` is the web app's chat screen (`apps/web/src/routes/Chat/`); it shows a line saying what the chat is waiting on right now, worked out when it's read and never stored, and it shows everything people and agents wrote as plain text.
+
+Until W3 the server rendered a plain read-only page at this address. The web app took the address over: the summary comment on GitHub still links here, and who may see it is in [chat-access-rules.md](chat-access-rules.md).
+
+## What it's waiting on (`apps/server/src/chats/activity.ts`)
+
+"leo's agent is waiting: offline since 09:30" is never stored. It's **derived** each time the chat is read, from the chat's queued and running jobs and the CLIs connected right then. Storing it would mean updating it whenever a laptop goes to sleep, which no event tells us about. `deriveActivity` is a pure function (facts in, status out), so every case has a plain table test; `loadActivity` gathers the facts from the database and the CLI hub, and `chats/views.ts` puts it in the chat's view.
+
+Because it isn't stored, nothing changes in the database when a CLI connects or disconnects, so nothing would tell an open chat. The CLI hub reports it instead (`CliHub.onPresence`), and `ws/web-wire.ts` sends again the chats where that person's agent has work and the open chats they take part in, so "waiting" turns into "working", and the presence dot changes, on everyone's screen.
+
+## Text from strangers
+
+Point titles, bodies and replies come from agents and PR authors, so they may contain HTML. React escapes text it renders, like JSX on the server did: `<script>` shows up as text and never runs. Nothing in the chat uses `dangerouslySetInnerHTML`.
+
+## The React analogy
+
+Activity is derived state, like a value you compute from props in render instead of copying it into `useState`: there's nothing to keep in sync, because it's worked out from the source of truth every time.
+```
+
+- In `docs/why/content-security-policy.md`, the `frame-ancestors` row's last cell (it pointed at `transcript-page.md`) becomes: "Clickjacking: another site could load one of our pages in an invisible frame and trick you into clicking a button on it, such as "Approve" on the CLI approval page."
+
+Run: `npm test -w apps/server && npm run test:e2e`
+Expected: server 700 (716 − the transcript's 16); end to end 5 (the summary comment's link is unchanged).
+
+- [ ] **Step 17: A chat that updates in a real browser (Playwright)**
+
+A review slow enough to see the progress line. Create `apps/cli/src/agents/fake/scenarios/paced.json`:
+
+```json
+{
+  "review": [
+    { "sleep": 1500 },
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "major", "category": "bug", "title": "Page size is too big", "body": "Use 25, like the other endpoints." } },
+    { "sleep": 500 },
+    { "finish": "One point: the page size." }
+  ]
+}
+```
+
+The pretend GitHub only had `refs/pull/42/head`, and a CLI fetches `refs/pull/<number>/head`: every PR the control API opens needs its own. In `apps/server/test/e2e/github.ts`, add before `pushAsHuman`:
+
+```ts
+    /**
+     * Another PR on the same repo, at the same head as #42: GitHub keeps refs/pull/<number>/head for every PR,
+     * and that is what a CLI fetches (the Playwright tests open PRs with other numbers).
+     */
+    addPull(number: number): void {
+      git(root, setup, '--git-dir', bare, 'update-ref', `refs/pull/${number}/head`, headSha);
+    },
+```
+
+The Playwright tests share one server and database, so each test that opens PRs first forgets the earlier ones (`POST /reset`); and a test can start and stop someone's CLI. Replace `apps/server/test/e2e/web-server.ts` with:
+
+```ts
+/**
+ * The server the Playwright tests in apps/web/e2e talk to: Plan 1's end-to-end harness (the real server with
+ * FakePlatform, Postgres and fake-agent CLIs) on a fixed port, serving the built web app, plus a small
+ * control API on a second port that only the tests use (sign someone in, and later: send webhooks, read
+ * state). Playwright starts it (apps/web/playwright.config.ts); it is never imported by src/.
+ *
+ * Run by hand: E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server
+ */
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import setupTestDatabase from '../global-setup';
+import { testDatabaseUrl } from '../test-database';
+import { TEST_ENV } from '../test-env';
+
+const webPort = Number(process.env.E2E_WEB_PORT);
+const controlPort = Number(process.env.E2E_CONTROL_PORT);
+if (!webPort || !controlPort) throw new Error('Set E2E_WEB_PORT and E2E_CONTROL_PORT (apps/web/playwright.config.ts does).');
+
+// The test database, created and migrated as Vitest's global setup does (it reads the dev DATABASE_URL).
+await setupTestDatabase();
+const devUrl = process.env.DATABASE_URL!;
+// Then the environment the server reads. The page and its API are on this origin.
+Object.assign(process.env, TEST_ENV, { PUBLIC_URL: `http://127.0.0.1:${webPort}`, DATABASE_URL: testDatabaseUrl(devUrl) });
+
+// Only now load the server's modules: the database client reads DATABASE_URL when it's first imported.
+const { startE2e } = await import('./harness');
+const { sessionCookieFor } = await import('../http');
+const { people, prEvent, pull } = await import('../fixtures/github');
+const { fakeFetch } = await import('../fake-fetch');
+const { encrypt } = await import('../../src/lib/crypto');
+const { prisma } = await import('../../src/lib/prisma');
+const { GithubClient } = await import('../../src/platform/github/client');
+
+const e2e = await startE2e({
+  port: webPort,
+  webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
+  github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
+});
+// The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
+const later = new Date(Date.now() + 365 * 86_400_000);
+for (const user of Object.values(e2e.users)) {
+  await prisma.githubAuth.create({ data: { userId: user.id, accessTokenEnc: encrypt(`ghu_${user.id}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status: 'ok' } });
+}
+
+const control = new Hono();
+/** Sign someone in: answers the session cookie for the browser to use. */
+control.post('/signin', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  const [name, value] = (await sessionCookieFor(user.id)).split('=') as [string, string];
+  return c.json({ name, value });
+});
+/** Open a PR on octo/sandbox, as GitHub's webhook would: `author`'s PR, with `reviewer` requested. */
+control.post('/pr', async (c) => {
+  const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
+  const base = pull();
+  e2e.github.addPull(number);
+  await e2e.deliver(
+    'pull_request',
+    prEvent('opened', {
+      pull: {
+        number,
+        title,
+        html_url: `https://github.com/${base.base.repo.full_name}/pull/${number}`,
+        user: people[author],
+        requested_reviewers: [people[reviewer]],
+        head: { ...base.head, ref: `feature-${number}`, sha: e2e.github.headSha },
+        base: { ...base.base, sha: e2e.github.baseSha },
+      },
+    }),
+  );
+  return c.body(null, 204);
+});
+/**
+ * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
+ * People, their sign-ins and the installation stay.
+ */
+control.post('/reset', async (c) => {
+  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat" CASCADE');
+  return c.body(null, 204);
+});
+/** Each person's running CLI, started by a test. */
+const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
+/** Start someone's `nitpilot start` on the fake agent, with a scenario from apps/cli/src/agents/fake/scenarios. */
+control.post('/cli', async (c) => {
+  const { login, scenario } = (await c.req.json()) as { login: 'maya' | 'leo'; scenario?: string };
+  if (!clis.has(login)) clis.set(login, await e2e.startCli(login, scenario));
+  return c.body(null, 204);
+});
+/** Stop it again, so the next test finds that person's agent offline. */
+control.delete('/cli', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  await clis.get(login)?.stop();
+  clis.delete(login);
+  return c.body(null, 204);
+});
+serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
+
+console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}`);
+
+const stop = async () => {
+  await e2e.close();
+  process.exit(0);
+};
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+```
+
+Replace `apps/web/e2e/control.ts` with:
+
+```ts
+import type { BrowserContext, Page } from '@playwright/test';
+import { BASE_URL, CONTROL_URL } from './ports';
+
+/** Sign a test user in: the browser gets the session cookie a real GitHub sign-in would have set. */
+export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/signin`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`signing in ${login} failed: ${res.status} ${await res.text()}`);
+  const cookie = (await res.json()) as { name: string; value: string };
+  await context.addCookies([{ ...cookie, url: BASE_URL }]);
+}
+
+/** Forget every PR the earlier tests opened (they share one server and database). People stay signed up. */
+export async function resetChats(): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/reset`, { method: 'POST' });
+  if (!res.ok) throw new Error(`resetting failed: ${res.status} ${await res.text()}`);
+}
+
+/** Open a pull request on the test repo (octo/sandbox), as GitHub's webhook would. */
+export async function openPr(pr: { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' }): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/pr`, { method: 'POST', body: JSON.stringify(pr) });
+  if (!res.ok) throw new Error(`opening PR #${pr.number} failed: ${res.status} ${await res.text()}`);
+}
+
+/** Start someone's CLI on the fake agent, running a scenario from apps/cli/src/agents/fake/scenarios. */
+export async function startCli(login: 'maya' | 'leo', scenario: string): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/cli`, { method: 'POST', body: JSON.stringify({ login, scenario }) });
+  if (!res.ok) throw new Error(`starting ${login}'s CLI failed: ${res.status} ${await res.text()}`);
+}
+
+export async function stopCli(login: 'maya' | 'leo'): Promise<void> {
+  await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
+}
+
+/**
+ * What went wrong on the page: a script error, or something the Content-Security-Policy blocked. (A request
+ * that answers 401 is logged by the browser too, but signed out that's expected, so it isn't collected.)
+ */
+export function pageProblems(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && msg.text().includes('Content Security Policy')) errors.push(msg.text());
+  });
+  page.on('pageerror', (err) => errors.push(err.message));
+  return errors;
+}
+```
+
+In `apps/web/e2e/inbox.spec.ts`, import `resetChats` beside the others and add `test.beforeEach(resetChats);` before the test.
+
+Create `apps/web/e2e/chat-live.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { openPr, pageProblems, resetChats, signIn, startCli, stopCli } from './control';
+
+test.beforeEach(resetChats);
+
+test('a chat updates while an agent reviews: its progress line, then its summary and point, without a reload', async ({ page, context }) => {
+  await openPr({ number: 52, title: 'Paginate invoices', author: 'maya', reviewer: 'leo' });
+  const errors = pageProblems(page);
+  await signIn(context, 'maya');
+  await page.goto('/c/octo/sandbox/52');
+  await expect(page.getByRole('heading', { level: 1, name: 'Paginate invoices' })).toBeVisible();
+  // leo's CLI isn't connected yet: his review waits.
+  await expect(page.getByText("leo's agent · offline")).toBeVisible();
+
+  await startCli('leo', 'paced.json');
+  try {
+    await expect(page.getByText("leo's agent is reviewing…")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('One point: the page size.')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('article', { name: /P1, Major bug point, Open: Page size is too big/ })).toBeVisible();
+    await expect(page.getByText("leo's agent is reviewing…")).toBeHidden();
+  } finally {
+    await stopCli('leo');
+  }
+  expect(errors).toEqual([]);
+});
+```
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 5 tests. Run it twice more: the inbox test must pass after the chat test too.
+
+- [ ] **Step 18: Look at it (controller, in the in-app browser)**
+
+Start the Playwright server (launch config `nitpilot-e2e-web`), then seed three chats: maya's #52 reviewed by leo's agent with two points, leo's #53 for maya to review, and maya's #54 with a security blocker that escalates:
+
+```bash
+C=http://127.0.0.1:4320
+curl -s -X POST $C/pr -d '{"number":52,"title":"Paginate invoices with a cursor","author":"maya","reviewer":"leo"}'
+curl -s -X POST $C/pr -d '{"number":53,"title":"Retry webhooks with backoff","author":"leo","reviewer":"maya"}'
+curl -s -X POST $C/cli -d '{"login":"leo","scenario":"happy.json"}'; sleep 6; curl -s -X DELETE $C/cli -d '{"login":"leo"}'
+curl -s -X POST $C/pr -d '{"number":54,"title":"Sign export links","author":"maya","reviewer":"leo"}'
+curl -s -X POST $C/cli -d '{"login":"leo","scenario":"security.json"}'; sleep 6; curl -s -X DELETE $C/cli -d '{"login":"leo"}'
+```
+
+Sign in with `curl -s -X POST $C/signin -d '{"login":"maya"}'` and set that cookie in the tab (`document.cookie`). Check at 1280 px and 375 px, light and dark: the header (role chip, Open on GitHub, round pips, "leo's agent · offline since …"), the waiting banner with its copy chip on #52 and the red escalation banner on #54, the summary with its counts, the cards (severity bars, category, `path:line`, the snippet with its highlighted line, a card without a snippet ending with room below its text), the details panel at 1280 px (files, people, rules, summary link); on the phone, the back arrow, the header shrinking to one line once the feed scrolls, and the inbox after ‹. Then, with #52 open, start leo's CLI (`curl -s -X POST $C/cli -d '{"login":"leo","scenario":"silent.json"}'`) and stop it: his presence turns online and back to offline without a reload. Click into the feed and press ↓: the feed scrolls and the inbox cursor stays put. Stop the server afterwards: it shares the test database with `npm test`. Screenshots in the task report.
+
+- [ ] **Step 19: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 49, CLI 294 passed + 14 skipped, server 700, web 115; end to end 5; Playwright 5; typecheck and lint clean.
+
+```bash
+git add -A apps/web apps/server apps/cli/src/agents/fake/scenarios/paced.json docs/why docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): the chat screen, live over /ws/web; the server's transcript page retired
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
