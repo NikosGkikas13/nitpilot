@@ -1,5 +1,6 @@
 import type { HealthResponse } from '@nitpilot/protocol';
 import { Hono } from 'hono';
+import type { RepoAccess } from '../auth/repo-access';
 import type { LiveClis } from '../chats/activity';
 import type { Dispatch } from '../chats/dispatch';
 import type { Ingest } from '../ingest/process';
@@ -27,6 +28,8 @@ export type AppDeps = {
   ingest: Ingest;
   dispatch: Dispatch;
   clis: LiveClis;
+  /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
+  access: RepoAccess;
   /** GitHub reads with the app's installation token (the chat screen's file list). */
   platform: PlatformReads;
   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */

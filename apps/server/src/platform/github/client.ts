@@ -9,8 +9,10 @@ export class GithubError extends Error {
     message: string,
     /** How long GitHub asked us to wait before trying again (rate limits), if it said. */
     readonly retryAfterMs?: number,
+    /** What went wrong underneath (the failed fetch), when there was no response to show. */
+    cause?: unknown,
   ) {
-    super(message);
+    super(message, cause === undefined ? undefined : { cause });
     this.name = 'GithubError';
   }
 }
@@ -92,7 +94,11 @@ export class GithubClient {
     return data;
   }
 
-  /** Run one call (the request and reading its answer), giving up after `timeoutMs`. */
+  /**
+   * Run one call (the request and reading its answer), giving up after `timeoutMs`. Anything that goes wrong
+   * before GitHub has answered is GitHub being out of reach, so callers see a GithubError either way: a 504 for
+   * no answer in time, a 503 for a failed connection (DNS, refused, reset).
+   */
   private async timed<T>(what: string, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
     try {
       return await call(AbortSignal.timeout(this.timeoutMs));
@@ -100,7 +106,7 @@ export class GithubClient {
       if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
         throw new GithubError(504, null, `GitHub didn't answer ${what} in ${this.timeoutMs / 1000} s`);
       }
-      throw err;
+      throw new GithubError(503, null, `Couldn't reach GitHub for ${what}: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
     }
   }
 }

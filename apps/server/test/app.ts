@@ -1,3 +1,4 @@
+import { RepoAccess } from '../src/auth/repo-access';
 import { Dispatcher } from '../src/chats/dispatch';
 import { createApp, type AppDeps } from '../src/http/app';
 import { createIngest } from '../src/ingest/process';
@@ -16,6 +17,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     dispatch: new Dispatcher().dispatch,
     // No CLI is connected.
     clis: { connectionsFor: () => [] },
+    access: over.access ?? new RepoAccess(github),
     platform: new FakePlatform(),
     // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
     webDistDir: '/nonexistent/nitpilot-web-dist',

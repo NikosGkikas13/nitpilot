@@ -1,11 +1,10 @@
 /** @jsxImportSource hono/jsx */
 import { Hono } from 'hono';
-import { RepoAccess } from '../../auth/repo-access';
+import type { RepoAccess } from '../../auth/repo-access';
 import { currentUser } from '../../auth/session';
 import { loadActivity, type LiveClis } from '../../chats/activity';
 import { rulesFromJson } from '../../chats/rules';
 import { prisma } from '../../lib/prisma';
-import type { GithubClient } from '../../platform/github/client';
 import { renderPage } from '../pages/layout';
 import { GithubUnavailable, SignInAgain, TranscriptNotFound, TranscriptPage } from '../pages/transcript';
 
@@ -16,9 +15,9 @@ const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !== '.' && 
  * The read-only chat transcript (spec §10), linked from the summary comment. Only for people signed in
  * to Nitpilot whose GitHub account can read the repo (spec §16 "Who can see a chat").
  */
-export function transcriptRoutes(deps: { github: GithubClient; clis: LiveClis }): Hono {
+export function transcriptRoutes(deps: { access: RepoAccess; clis: LiveClis }): Hono {
   const app = new Hono();
-  const access = new RepoAccess(deps.github);
+  const { access } = deps;
 
   app.get('/c/:owner/:repo/:number', async (c) => {
     const path = new URL(c.req.url).pathname;

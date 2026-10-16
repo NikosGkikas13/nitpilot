@@ -44,7 +44,9 @@ async function main(): Promise<void> {
   const hub = new CliHub();
   const notifier = new CliNotifier(hub);
   // Browsers follow chats live over /ws/web: their new items as they're saved (spec §10, docs/why/web-socket-and-origin.md).
-  const webHub = new WebHub({ access: new RepoAccess(github), loadItems: loadItemsAfter });
+  // One answer per person and repo to "can they read it?", for every chat read and the browser's socket (auth/repo-access.ts).
+  const access = new RepoAccess(github);
+  const webHub = new WebHub({ access, loadItems: loadItemsAfter });
 
   // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub, and jobs → CLIs.
   const dispatcher = new Dispatcher();
@@ -59,7 +61,7 @@ async function main(): Promise<void> {
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
-  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, platform, webSockets: webHub });
+  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });

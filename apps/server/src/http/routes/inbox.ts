@@ -1,17 +1,16 @@
 import { BRAND, MarkReadRequest, type InboxResponse, type InboxRow } from '@nitpilot/protocol';
 import { Hono } from 'hono';
-import { RepoAccess, type RepoAccessResult } from '../../auth/repo-access';
+import type { RepoAccess, RepoAccessResult } from '../../auth/repo-access';
 import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
 import type { LiveClis } from '../../chats/activity';
 import { loadInboxRows } from '../../chats/inbox';
 import { isUniqueViolation, prisma } from '../../lib/prisma';
-import type { GithubClient } from '../../platform/github/client';
 import { HttpError } from '../errors';
 
 /** `GET /api/inbox` and `POST /api/chats/:id/read` (spec §10 "REST endpoints in Plan 2"). */
-export function inboxRoutes(deps: { clis: LiveClis; github: GithubClient }): Hono<{ Variables: UserVariables }> {
+export function inboxRoutes(deps: { clis: LiveClis; access: RepoAccess }): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
-  const access = new RepoAccess(deps.github);
+  const { access } = deps;
 
   app.get('/api/inbox', requireUser, async (c) => {
     const user = c.get('user');

@@ -76,7 +76,7 @@ describe('getUserToken', () => {
   it('keeps the user signed in when the network fails', async () => {
     const user = await userWithTokens(minutes(1));
     const gh = new GithubClient(async () => { throw new TypeError('fetch failed'); });
-    await expect(getUserToken(user.id, gh, NOW)).rejects.toThrow('fetch failed');
+    await expect(getUserToken(user.id, gh, NOW)).rejects.toMatchObject({ status: 503, message: expect.stringContaining('fetch failed') });
     expect((await prisma.githubAuth.findUniqueOrThrow({ where: { userId: user.id } })).status).toBe('ok');
   });
 });

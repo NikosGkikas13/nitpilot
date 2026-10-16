@@ -1,18 +1,20 @@
 import { ChatResponse, FilesResponse, MessagesResponse } from '@nitpilot/protocol';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeChat, makeGithubSignIn, makeParticipant, makeRepo, makeUser } from '../../../test/db';
 import { fakeFetch, json } from '../../../test/fake-fetch';
 import { sessionCookieFor } from '../../../test/http';
 import { prisma } from '../../lib/prisma';
 import { FakePlatform } from '../../platform/fake/fake-platform';
-import { GithubClient } from '../../platform/github/client';
+import { GithubClient, GithubError } from '../../platform/github/client';
+
+afterEach(() => vi.restoreAllMocks());
 
 /**
  * maya's chat in a repo, a reader signed in with GitHub, and what GitHub says about the reader and the repo:
  * 200 (can read), 404 (can't), or 500 (GitHub is down).
  */
-async function scene(opts: { github?: 200 | 404 | 500; signIn?: 'ok' | 'needs_reauth' } = {}) {
+async function scene(opts: { github?: 200 | 404 | 500 | 'unreachable'; signIn?: 'ok' | 'needs_reauth' } = {}) {
   const repo = await makeRepo();
   const maya = await makeUser({ login: 'maya' });
   const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
@@ -20,7 +22,12 @@ async function scene(opts: { github?: 200 | 404 | 500; signIn?: 'ok' | 'needs_re
   const reader = await makeUser();
   await makeGithubSignIn(reader.id, opts.signIn ?? 'ok');
   const status = opts.github ?? 200;
-  const fetch = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => (status === 200 ? { id: 1 } : json({ message: 'no' }, status)) });
+  const fetch = fakeFetch({
+    [`GET /repos/${repo.fullName}`]: () => {
+      if (status === 'unreachable') throw new TypeError('fetch failed'); // no network: the fetch itself fails
+      return status === 200 ? { id: 1 } : json({ message: 'no' }, status);
+    },
+  });
   const platform = new FakePlatform();
   const app = testApp({ github: new GithubClient(fetch), platform });
   const cookie = await sessionCookieFor(reader.id);
@@ -71,7 +78,23 @@ describe('GET /api/chats/:owner/:repo/:number', () => {
     const res = await get(path);
     expect(res.status).toBe(502);
     expect((await errorOf(res)).code).toBe('github_unavailable');
-    vi.restoreAllMocks();
+  });
+
+  it("is a 502, not a 500, when GitHub can't be reached at all", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { get, path } = await scene({ github: 'unreachable' });
+    const res = await get(path);
+    expect(res.status).toBe(502);
+    expect((await errorOf(res)).code).toBe('github_unavailable');
+    expect(console.error).toHaveBeenCalledWith('[chats] GitHub did not answer:', expect.stringContaining("Couldn't reach GitHub"));
+  });
+
+  it('asks GitHub once for the inbox and the chat together: they share one access answer', async () => {
+    const { repo, chat, reader, fetch, get, path } = await scene();
+    await makeParticipant(chat.id, reader, 'reviewer');
+    expect((await get('/api/inbox')).status).toBe(200);
+    expect((await get(path)).status).toBe(200);
+    expect(fetch.calls.filter((c) => c.url.pathname === `/repos/${repo.fullName}`)).toHaveLength(1);
   });
 
   it('is a 401 without a session', async () => {
@@ -119,5 +142,45 @@ describe('GET /api/chats/:id/files', () => {
     const { chat, get, platform } = await scene({ github: 404 });
     expect((await get(`/api/chats/${chat.id}/files`)).status).toBe(404);
     expect(platform.fileLists).toEqual([]);
+  });
+});
+
+describe('the same access answers on messages and files', () => {
+  const routes = (chatId: string) => [`/api/chats/${chatId}/messages`, `/api/chats/${chatId}/files`];
+
+  it('are a 401 reauth when your GitHub sign-in expired', async () => {
+    const { chat, get, platform } = await scene({ signIn: 'needs_reauth' });
+    for (const route of routes(chat.id)) {
+      const res = await get(route);
+      expect(res.status).toBe(401);
+      expect(await errorOf(res)).toEqual({ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' });
+    }
+    expect(platform.fileLists).toEqual([]);
+  });
+
+  it("are a 502 github_unavailable when GitHub doesn't answer the access check", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { chat, get, platform } = await scene({ github: 500 });
+    for (const route of routes(chat.id)) {
+      const res = await get(route);
+      expect(res.status).toBe(502);
+      expect((await errorOf(res)).code).toBe('github_unavailable');
+    }
+    expect(platform.fileLists).toEqual([]);
+  });
+
+  it('answer a 502 when the file list fails, and ask the platform again next time (a failure is not kept)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { repo, chat, get, platform } = await scene();
+    const file = { path: 'src/a.ts', oldPath: null, status: 'modified' as const, adds: 1, dels: 0 };
+    platform.prFiles.set(`${repo.fullName}#${chat.number}`, [file]);
+    vi.spyOn(platform, 'listPrFiles').mockRejectedValueOnce(new GithubError(503, null, 'GitHub down'));
+    const failed = await get(`/api/chats/${chat.id}/files`);
+    expect(failed.status).toBe(502);
+    expect((await errorOf(failed)).code).toBe('github_unavailable');
+    const retried = await get(`/api/chats/${chat.id}/files`);
+    expect(retried.status).toBe(200);
+    expect(FilesResponse.parse(await retried.json()).files).toEqual([file]);
+    expect(platform.listPrFiles).toHaveBeenCalledTimes(2);
   });
 });

@@ -40,3 +40,14 @@ describe('a GitHub call that never answers', () => {
     await expect(github.oauth('/login/oauth/access_token', {})).rejects.toMatchObject({ status: 504 });
   });
 });
+
+describe('a GitHub call that cannot reach GitHub', () => {
+  it('is a 503 that names the call, so callers treat it as GitHub being down', async () => {
+    const github = new GithubClient(async () => { throw new TypeError('fetch failed'); });
+    const err = await github.api('GET', '/repos/octo/sandbox').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GithubError);
+    expect(err).toMatchObject({ status: 503, message: "Couldn't reach GitHub for GET /repos/octo/sandbox: fetch failed" });
+    expect((err as GithubError).cause).toBeInstanceOf(TypeError);
+    await expect(github.oauth('/login/oauth/access_token', {})).rejects.toMatchObject({ status: 503, message: expect.stringContaining('OAuth /login/oauth/access_token') });
+  });
+});

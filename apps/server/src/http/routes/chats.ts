@@ -1,7 +1,7 @@
 import type { ChatResponse, FilesResponse, MessagesResponse } from '@nitpilot/protocol';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { RepoAccess } from '../../auth/repo-access';
+import type { RepoAccess } from '../../auth/repo-access';
 import { requireUser, type UserVariables } from '../../auth/request-user';
 import { chatAccess, chatAccessByPath, type ChatAccess } from '../../chats/access';
 import type { LiveClis } from '../../chats/activity';
@@ -10,7 +10,7 @@ import { loadItemsBefore } from '../../chats/timeline';
 import { loadChatPage } from '../../chats/views';
 import { prisma } from '../../lib/prisma';
 import { TtlCache } from '../../lib/ttl-cache';
-import { GithubError, type GithubClient } from '../../platform/github/client';
+import { GithubError } from '../../platform/github/client';
 import type { PlatformReads } from '../../platform/types';
 import { HttpError } from '../errors';
 
@@ -25,9 +25,9 @@ const BeforeQuery = z.object({ before: z.coerce.number().int().positive().option
  * The chat screen's reads (spec §10 "REST endpoints in Plan 2"): the chat, older timeline items, and the PR's
  * changed files. Each one first asks whether you can read the chat (chats/access.ts, docs/why/chat-access-rules.md).
  */
-export function chatRoutes(deps: { github: GithubClient; platform: PlatformReads; clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; clis: LiveClis }): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
-  const access = new RepoAccess(deps.github);
+  const { access } = deps;
   const fileLists = new TtlCache<FilesResponse>(FILES_TTL_MS, MAX_FILE_LISTS);
 
   app.get('/api/chats/:owner/:repo/:number', requireUser, async (c) => {
