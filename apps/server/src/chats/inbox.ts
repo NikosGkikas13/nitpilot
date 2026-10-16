@@ -124,7 +124,7 @@ async function avatarsOf(githubIds: string[]): Promise<Map<string, string>> {
 }
 
 /** GitHub's public profile picture for anyone, on Nitpilot or not. */
-function githubAvatar(githubId: string): string {
+export function githubAvatar(githubId: string): string {
   return `https://avatars.githubusercontent.com/u/${githubId}`;
 }
 

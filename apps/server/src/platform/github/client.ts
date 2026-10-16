@@ -27,6 +27,9 @@ export function retryAfterMs(headers: Headers, now = Date.now()): number | undef
   return undefined;
 }
 
+/** How long one GitHub call may take before we give up on it: a request waiting on GitHub never waits forever. */
+export const GITHUB_TIMEOUT_MS = 15_000;
+
 export type GithubRequest = {
   token?: string;
   body?: unknown;
@@ -39,13 +42,15 @@ export type GithubResponse<T> = { status: number; data: T; headers: Headers };
 
 /**
  * A small typed wrapper around fetch for GitHub. Tests pass a fake fetch (test/fake-fetch.ts).
- * Statuses below 400 (including 304 Not Modified) are returned; 400+ throw GithubError.
+ * Statuses below 400 (including 304 Not Modified) are returned; 400+ throw GithubError. A call that gets no
+ * answer within `timeoutMs` is a GithubError with status 504, like any other GitHub outage.
  */
 export class GithubClient {
   constructor(
     private readonly fetchImpl: FetchLike = fetch,
     readonly apiBase = 'https://api.github.com',
     readonly webBase = 'https://github.com',
+    private readonly timeoutMs = GITHUB_TIMEOUT_MS,
   ) {}
 
   async api<T = unknown>(method: string, path: string, opts: GithubRequest = {}): Promise<GithubResponse<T>> {
@@ -57,28 +62,46 @@ export class GithubClient {
     };
     if (opts.token) headers.authorization = `Bearer ${opts.token}`;
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
-    const res = await this.fetchImpl(`${this.apiBase}${path}`, {
-      method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    const { res, data } = await this.timed(`${method} ${path}`, async (signal) => {
+      const res = await this.fetchImpl(`${this.apiBase}${path}`, {
+        method,
+        headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal,
+      });
+      return { res, data: opts.raw ? await res.text() : await readBody(res) };
     });
-    const data = opts.raw ? await res.text() : await readBody(res);
     if (res.status >= 400) throw new GithubError(res.status, data, `GitHub ${method} ${path} failed with ${res.status}`, retryAfterMs(res.headers));
     return { status: res.status, data: data as T, headers: res.headers };
   }
 
   /** POST to github.com/login/oauth/*. GitHub reports OAuth errors as 200 + `{ error }`. */
   async oauth<T>(path: string, params: Record<string, string>): Promise<T> {
-    const res = await this.fetchImpl(`${this.webBase}${path}`, {
-      method: 'POST',
-      headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': BRAND.userAgent },
-      body: JSON.stringify(params),
+    const { res, data } = await this.timed(`OAuth ${path}`, async (signal) => {
+      const res = await this.fetchImpl(`${this.webBase}${path}`, {
+        method: 'POST',
+        headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': BRAND.userAgent },
+        body: JSON.stringify(params),
+        signal,
+      });
+      return { res, data: (await readBody(res)) as (T & { error?: string }) | null };
     });
-    const data = (await readBody(res)) as (T & { error?: string }) | null;
     if (res.status >= 400 || !data || data.error) {
       throw new GithubError(res.status, data, `GitHub OAuth ${path} failed: ${data?.error ?? res.status}`);
     }
     return data;
+  }
+
+  /** Run one call (the request and reading its answer), giving up after `timeoutMs`. */
+  private async timed<T>(what: string, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    try {
+      return await call(AbortSignal.timeout(this.timeoutMs));
+    } catch (err) {
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        throw new GithubError(504, null, `GitHub didn't answer ${what} in ${this.timeoutMs / 1000} s`);
+      }
+      throw err;
+    }
   }
 }
 

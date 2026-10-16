@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { message } from './envelope';
-import { InboxRow, TimelineItem, WebMe } from './web-api';
+import { ChatView, InboxRow, TimelineItem, WebMe } from './web-api';
 
 /** Where the web app opens its WebSocket (spec §10 "Web ↔ server"). */
 export const WEB_WS_PATH = '/ws/web';
@@ -21,6 +21,9 @@ export type WebToServer = z.infer<typeof WebToServer>;
 
 /** New timeline items for a chat you subscribed to, oldest first. `lastSeq` is the newest one you now have. */
 export const ChatItems = message('chat.items', z.object({ chatId: z.string(), items: z.array(TimelineItem), lastSeq: z.number().int().nonnegative() }));
+
+/** The chat changed: its view as you see it now (points, phase, people, presence). Items come in chat.items. */
+export const ChatState = message('chat.state', z.object({ chatId: z.string(), view: ChatView }));
 
 /**
  * You can't (or can no longer) follow this chat. `not_found` covers "no such chat" and "you can't see its repo"
@@ -45,5 +48,5 @@ export const InboxUpsert = message('inbox.upsert', z.object({ chatId: z.string()
 /** What `GET /api/me` would answer now: one of your CLIs connected or disconnected. */
 export const MeUpdate = message('me.update', z.object({ me: WebMe }));
 
-export const ServerToWeb = z.discriminatedUnion('t', [ChatItems, ChatError, WebJobProgress, InboxUpsert, MeUpdate]);
+export const ServerToWeb = z.discriminatedUnion('t', [ChatItems, ChatState, ChatError, WebJobProgress, InboxUpsert, MeUpdate]);
 export type ServerToWeb = z.infer<typeof ServerToWeb>;

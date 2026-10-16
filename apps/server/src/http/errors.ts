@@ -5,6 +5,8 @@ import { ZodError } from 'zod';
 
 export type ErrorCode =
   | 'unauthorized'
+  /** Signed in to Nitpilot, but the GitHub sign-in expired: only signing in again helps (spec §16). */
+  | 'reauth'
   | 'forbidden'
   | 'not_found'
   | 'validation_error'
@@ -16,6 +18,7 @@ export type ErrorCode =
 
 const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   unauthorized: 401,
+  reauth: 401,
   forbidden: 403,
   not_found: 404,
   validation_error: 400,

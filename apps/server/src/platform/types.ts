@@ -1,3 +1,4 @@
+import type { PrFile } from '@nitpilot/protocol';
 import type { DomainEvent, Person } from '../engine/types';
 
 /** Which PR, on which installation. All ids are strings (spec §8). */
@@ -71,7 +72,12 @@ export interface PlatformReads {
    * (spec §15 "Catching up"). Each PR once.
    */
   findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
+  /** The PR's changed files, at most `MAX_PR_FILES`; `truncated` when there may be more. */
+  listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>;
 }
+
+/** How many changed files a PR's file list shows: three pages of 100. */
+export const MAX_PR_FILES = 300;
 
 /** On a retry, first look for an earlier write whose body contains this marker, and reuse it. */
 export type WriteOptions = { reuseIfContains?: string };

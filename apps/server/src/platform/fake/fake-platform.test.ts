@@ -37,4 +37,13 @@ describe('FakePlatform', () => {
     expect(await fake.readDefaultBranchFile(ref, '.nitpilot.yml', (first as { etag: string }).etag)).toBe('not_modified');
     await expect(fake.getPr(ref)).rejects.toThrow(/no PR/);
   });
+
+  it("lists a PR's changed files it was given, and records each time it's asked", async () => {
+    const fake = new FakePlatform();
+    const file = { path: 'src/a.ts', oldPath: null, status: 'modified' as const, adds: 1, dels: 0 };
+    fake.prFiles.set('octo/sandbox#42', [file]);
+    expect(await fake.listPrFiles(ref)).toEqual({ files: [file], truncated: false });
+    expect(await fake.listPrFiles({ ...ref, number: 43 })).toEqual({ files: [], truncated: false });
+    expect(fake.fileLists).toEqual(['octo/sandbox#42', 'octo/sandbox#43']);
+  });
 });

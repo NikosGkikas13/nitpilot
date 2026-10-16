@@ -7729,7 +7729,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces (server): `TtlCache<V>(ttlMs, maxEntries, now?)` with `get(key): V | undefined` and `set(key, value)` (`lib/ttl-cache.ts`). `ErrorCode` gains `'reauth'` (401). `isGithubName(s): boolean` and `chatAccessByPath(user, path: { owner; repo; number }, access): Promise<ChatAccess>` (`chats/access.ts`). `loadItemsBefore(chatId, beforeSeq: number | null): Promise<MessagesResponse>` (`chats/timeline.ts`). `ChatViewer = { githubId }`, `loadChatView(chatId, viewer, clis, now?): Promise<ChatView>`, `loadChatPage(chatId, viewer, clis): Promise<ChatResponse>` (`chats/views.ts`). `chatRoutes(deps: { github; platform: PlatformReads; clis })` with `FILES_TTL_MS = 10 min`, `MAX_FILE_LISTS = 500`. `PlatformReads.listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>`, `MAX_PR_FILES = 300` (`platform/types.ts`); `FakePlatform.prFiles` (`Map<"owner/repo#n", PrFile[]>`) and `fileLists` (what was asked). `GITHUB_TIMEOUT_MS = 15_000`; `GithubClient`'s fourth constructor argument is `timeoutMs`. `AppDeps.platform: PlatformReads`. `githubAvatar(githubId)` is exported from `chats/inbox.ts`.
 - Routes: `GET /api/chats/:owner/:repo/:number` → `ChatResponse` (newest 200 items); `GET /api/chats/:id/messages?before=<seq>` → `MessagesResponse`; `GET /api/chats/:id/files` → `FilesResponse`, kept per `(chatId, headSha)` for 10 minutes. Each: `requireUser`, then the access check; "no such chat" and "can't see it" are the same 404 `{ code: 'not_found' }`; an expired GitHub sign-in is a 401 `{ code: 'reauth', message: 'Sign in with GitHub again to see this chat.' }`; GitHub not answering is a 502 `github_unavailable`.
 
-- [ ] **Step 1: Write the failing test for the chat's bodies**
+- [x] **Step 1: Write the failing test for the chat's bodies**
 
 In `packages/protocol/src/web-api.test.ts`, import `ChatResponse`, `FilesResponse` and `type ChatView` beside the others, and add after the last test:
 
@@ -7759,12 +7759,12 @@ In `packages/protocol/src/web-api.test.ts`, import `ChatResponse`, `FilesRespons
   });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w packages/protocol -- src/web-api.test.ts`
 Expected: FAIL: `TypeError: Cannot read properties of undefined (reading 'parse')` (no `ChatResponse` yet).
 
-- [ ] **Step 3: The chat's bodies, and `chat.state`**
+- [x] **Step 3: The chat's bodies, and `chat.state`**
 
 In `packages/protocol/src/web-api.ts`, the enums import becomes `import { Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';`, add `import { Snippet } from './job-result';`, and add after `TimelineItem`:
 
@@ -7901,12 +7901,12 @@ export const ChatState = message('chat.state', z.object({ chatId: z.string(), vi
 
 and add `ChatState` to `ServerToWeb`'s list, after `ChatItems`.
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 49 tests.
 
-- [ ] **Step 5: Write the failing tests for GitHub's timeout, the file list and the cache**
+- [x] **Step 5: Write the failing tests for GitHub's timeout, the file list and the cache**
 
 **M4:** a GitHub call that never answers must not hold a request forever. In `apps/server/src/platform/github/client.test.ts`, add at the end:
 
@@ -7993,12 +7993,12 @@ describe('TtlCache', () => {
 });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/platform src/lib/ttl-cache.test.ts`
 Expected: FAIL: the timeout test times out (the fake fetch never answers), `listPrFiles is not a function` (3), and `./ttl-cache` doesn't exist.
 
-- [ ] **Step 7: A timeout on every GitHub call, the file list, and the cache**
+- [x] **Step 7: A timeout on every GitHub call, the file list, and the cache**
 
 Replace `apps/server/src/platform/github/client.ts` with (an abort becomes a `GithubError` with status 504, so every caller that already treats a 5xx as "GitHub is down" handles a timeout too):
 
@@ -8290,12 +8290,12 @@ export class RepoAccess {
 }
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/platform src/lib/ttl-cache.test.ts && npm run test:db -w apps/server -- src/auth/repo-access.db.test.ts`
 Expected: PASS: client 4, reads 15, fake platform 5, ttl-cache 2; `RepoAccess`'s 5 tests unchanged.
 
-- [ ] **Step 9: One token refresh at a time (M5)**
+- [x] **Step 9: One token refresh at a time (M5)**
 
 Plan 1 already shared one in-flight refresh per user, but a call that read the row just before another call's refresh finished could still start a second refresh with the spent refresh token, which signs the person out (refresh tokens are single-use). Now a refresh runs under a per-user lock, and whoever gets the lock reads the row again first. Replace `apps/server/src/auth/user-tokens.ts` with:
 
@@ -8394,7 +8394,7 @@ No new test: the gap is a race between a database read and another request's com
 Run: `npm run test:db -w apps/server -- src/auth/user-tokens.db.test.ts`
 Expected: PASS, 6 tests (unchanged, including "runs only one refresh when several writes need the token at once").
 
-- [ ] **Step 10: Write the failing tests for the view and the routes**
+- [x] **Step 10: Write the failing tests for the view and the routes**
 
 Create `apps/server/src/chats/views.db.test.ts`:
 
@@ -8629,12 +8629,12 @@ describe('GET /api/chats/:id/files', () => {
 });
 ```
 
-- [ ] **Step 11: Run them to see them fail**
+- [x] **Step 11: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts src/http/routes/chats.db.test.ts`
 Expected: FAIL: `./views` doesn't exist, and every chat route answers the app's JSON 404 (there are none yet), so only its tests that expect a 404 pass.
 
-- [ ] **Step 12: The view, the routes, and a 401 that says "reauth"**
+- [x] **Step 12: The view, the routes, and a 401 that says "reauth"**
 
 A web app can't tell "sign in again with GitHub" from "you're signed out" by status alone, so it gets its own code. In `apps/server/src/http/errors.ts`, add to `ErrorCode` after `'unauthorized'`:
 
@@ -8943,12 +8943,12 @@ after `clis`; and `app.route('/', chatRoutes(deps));` goes after `app.route('/',
 
 In `apps/server/test/app.ts`, import `FakePlatform` from `'../src/platform/fake/fake-platform'` and add `platform: new FakePlatform(),` after `clis` in `testDeps`. In `apps/server/src/main.ts`, `createApp({ …, clis: hub })` becomes `createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, platform })`. In `apps/server/test/e2e/harness.ts`, `testApp({ …, github: githubApi, … })` gains `platform,` after `github: githubApi,`.
 
-- [ ] **Step 13: Run them to see them pass**
+- [x] **Step 13: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts src/http/routes/chats.db.test.ts src/http/routes/inbox.db.test.ts`
 Expected: PASS, 6, 10 and 14 tests.
 
-- [ ] **Step 14: The explainer, and the spec**
+- [x] **Step 14: The explainer, and the spec**
 
 Create `docs/why/chat-access-rules.md`:
 
@@ -9004,12 +9004,12 @@ It's a route guard, like a `<RequireAuth>` wrapper around a page, except the gua
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "REST endpoints in Plan 2", the chat read becomes "`GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`, and the newest 200 timeline items)", and `GET /api/chats/:id/files` becomes "(changed files from the platform, at most 300, kept in memory per head commit for 10 minutes)". After the "Personal:" line, add: "A chat read that isn't allowed answers like the inbox: the same 404 for a chat that doesn't exist and one you can't see, a 401 with code `reauth` when your GitHub sign-in expired, a 502 when GitHub doesn't answer. Every GitHub call gives up after 15 seconds."
 
-- [ ] **Step 15: Run the full suite**
+- [x] **Step 15: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: protocol 49, CLI 293 passed + 14 skipped, server 708, web 73; end to end 5; typecheck and lint clean.
 
-- [ ] **Step 16: Commit**
+- [x] **Step 16: Commit**
 
 ```bash
 git add packages/protocol/src apps/server/src apps/server/test/app.ts apps/server/test/e2e/harness.ts docs/why/chat-access-rules.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

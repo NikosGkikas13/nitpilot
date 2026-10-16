@@ -64,3 +64,12 @@ export type GhInstallationReposEvent = {
   repositories_removed: GhRepo[];
 };
 export type GhRepositoryEvent = Envelope & { action: string };
+
+/** One changed file of a PR, as `GET /repos/{o}/{r}/pulls/{n}/files` describes it. */
+export type GhPrFile = {
+  filename: string;
+  previous_filename?: string;
+  status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged';
+  additions: number;
+  deletions: number;
+};

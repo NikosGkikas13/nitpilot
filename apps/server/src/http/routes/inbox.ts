@@ -59,7 +59,7 @@ async function rowsInReposYouCanRead(rows: InboxRow[], userId: string, access: R
     console.error('[inbox] could not check repo access:', err);
     throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
   }
-  if (answers.includes('reauth')) throw new HttpError('unauthorized', `Your GitHub sign-in expired, so ${BRAND.name} can't check which repos you can see. Sign in again.`);
+  if (answers.includes('reauth')) throw new HttpError('reauth', `Your GitHub sign-in expired, so ${BRAND.name} can't check which repos you can see. Sign in again.`);
   const readable = new Set(repos.filter((_, i) => answers[i] === 'read'));
   return rows.filter((r) => readable.has(r.repo));
 }

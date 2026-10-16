@@ -1,9 +1,10 @@
-import type { FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformReads, PrRef, PrSnapshot, RepoRef } from '../types';
+import type { PrFile } from '@nitpilot/protocol';
+import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef } from '../types';
 import type { AppAuth } from './app-auth';
 import { GithubError, type GithubClient } from './client';
 import { gitSpecFor, snapshotFromPull } from './mapping';
 import { parseGithubWebhook } from './normalize/index';
-import type { GhPull, GhReviewComment } from './payloads';
+import type { GhPrFile, GhPull, GhReviewComment } from './payloads';
 
 export { gitSpecFor, isTrustedAssociation, snapshotFromPull, toPerson } from './mapping';
 
@@ -79,4 +80,22 @@ export class GithubReads implements PlatformReads {
     }
     return [...found.values()];
   }
+
+  /** Page by page, 100 at a time, with the installation token, up to MAX_PR_FILES. */
+  async listPrFiles(ref: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
+    const token = await this.appAuth.installationToken(ref.installationId);
+    const files: PrFile[] = [];
+    for (let page = 1; files.length < MAX_PR_FILES; page++) {
+      const { data } = await this.github.api<GhPrFile[]>('GET', `/repos/${ref.repoFullName}/pulls/${ref.number}/files?per_page=100&page=${page}`, { token });
+      files.push(...data.map(toPrFile));
+      if (data.length < 100) return { files, truncated: false };
+    }
+    return { files, truncated: true };
+  }
+}
+
+/** GitHub's file statuses, as the four the web app shows: a copy is new, a mode change is a change. */
+function toPrFile(f: GhPrFile): PrFile {
+  const status = f.status === 'copied' ? 'added' : f.status === 'changed' || f.status === 'unchanged' ? 'modified' : f.status;
+  return { path: f.filename, oldPath: f.status === 'renamed' ? (f.previous_filename ?? null) : null, status, adds: f.additions, dels: f.deletions };
 }

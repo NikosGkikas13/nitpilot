@@ -2,6 +2,7 @@ import { Dispatcher } from '../src/chats/dispatch';
 import { createApp, type AppDeps } from '../src/http/app';
 import { createIngest } from '../src/ingest/process';
 import { AppAuth } from '../src/platform/github/app-auth';
+import { FakePlatform } from '../src/platform/fake/fake-platform';
 import { GithubClient } from '../src/platform/github/client';
 import { fakeFetch } from './fake-fetch';
 
@@ -15,6 +16,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     dispatch: new Dispatcher().dispatch,
     // No CLI is connected.
     clis: { connectionsFor: () => [] },
+    platform: new FakePlatform(),
     // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
     webDistDir: '/nonexistent/nitpilot-web-dist',
     ...over,

@@ -6,9 +6,11 @@ import type { Ingest } from '../ingest/process';
 import { getEnv } from '../lib/env';
 import type { AppAuth } from '../platform/github/app-auth';
 import type { GithubClient } from '../platform/github/client';
+import type { PlatformReads } from '../platform/types';
 import { SERVER_VERSION } from '../version';
 import { errorBody, onError } from './errors';
 import { authRoutes } from './routes/auth';
+import { chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
 import { inboxRoutes } from './routes/inbox';
@@ -25,6 +27,8 @@ export type AppDeps = {
   ingest: Ingest;
   dispatch: Dispatch;
   clis: LiveClis;
+  /** GitHub reads with the app's installation token (the chat screen's file list). */
+  platform: PlatformReads;
   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
   webSockets?: { closeSession(tokenHash: string): void };
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
@@ -41,6 +45,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', authRoutes(deps));
   app.route('/', meRoutes(deps));
   app.route('/', inboxRoutes(deps));
+  app.route('/', chatRoutes(deps));
   app.route('/', cliRoutes(deps));
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));

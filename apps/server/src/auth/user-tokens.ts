@@ -1,6 +1,7 @@
 import type { GithubAuth } from '../generated/prisma/client';
 import { decrypt, encrypt } from '../lib/crypto';
 import { getEnv } from '../lib/env';
+import { KeyedLock } from '../lib/key-lock';
 import { prisma } from '../lib/prisma';
 import { GithubError, type GithubClient } from '../platform/github/client';
 import { refreshTokens, type OAuthTokens } from './github-oauth';
@@ -16,19 +17,32 @@ export class NeedsReauthError extends Error {
 /** Refresh a little early, so a token never expires halfway through a write. */
 const REFRESH_MARGIN_MS = 5 * 60_000;
 
-/** One refresh per user at a time: refresh tokens are single-use (spec §15). */
-const inFlight = new Map<string, Promise<string>>();
+/**
+ * One refresh per user at a time: refresh tokens are single-use (spec §8 `GithubAuth`), and a second refresh
+ * with a spent one would sign the person out. Whoever waits re-reads the row once it's their turn, so they find
+ * the token the first refresh saved instead of refreshing again.
+ */
+const refreshes = new KeyedLock();
 
 export async function getUserToken(userId: string, github: GithubClient, now = new Date()): Promise<string> {
+  const auth = await readAuth(userId);
+  if (isFresh(auth, now)) return decrypt(auth.accessTokenEnc);
+  return refreshes.run(userId, async () => {
+    const latest = await readAuth(userId);
+    if (isFresh(latest, now)) return decrypt(latest.accessTokenEnc);
+    return refreshOnce(latest, github, now);
+  });
+}
+
+async function readAuth(userId: string): Promise<GithubAuth> {
   const auth = await prisma.githubAuth.findUnique({ where: { userId } });
   if (!auth || auth.status !== 'ok') throw new NeedsReauthError(userId);
-  if (auth.accessExpiresAt.getTime() - now.getTime() > REFRESH_MARGIN_MS) return decrypt(auth.accessTokenEnc);
+  return auth;
+}
 
-  const running = inFlight.get(userId);
-  if (running) return running;
-  const refresh = refreshOnce(auth, github, now).finally(() => inFlight.delete(userId));
-  inFlight.set(userId, refresh);
-  return refresh;
+/** Good for more than 5 minutes. */
+function isFresh(auth: GithubAuth, now: Date): boolean {
+  return auth.accessExpiresAt.getTime() - now.getTime() > REFRESH_MARGIN_MS;
 }
 
 async function refreshOnce(auth: GithubAuth, github: GithubClient, now: Date): Promise<string> {

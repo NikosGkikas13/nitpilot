@@ -70,7 +70,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   // GitHub's API for people's own access checks; nothing answers unless the caller passes one that does.
   const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
   const webHub = new WebHub({ access: new RepoAccess(githubApi), loadItems: loadItemsAfter });
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, webSockets: webHub, github: githubApi, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, webSockets: webHub, github: githubApi, platform, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */

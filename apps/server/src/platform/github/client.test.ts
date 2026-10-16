@@ -28,3 +28,15 @@ describe('how long GitHub asks us to wait', () => {
     expect((await failure(502)).retryAfterMs).toBeUndefined();
   });
 });
+
+describe('a GitHub call that never answers', () => {
+  it('gives up after the timeout, as a 504 the callers already treat as GitHub being down', async () => {
+    // A fetch that never answers, but stops when it's told to, as the real one does.
+    const hang = (_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason)));
+    const github = new GithubClient(hang, 'https://api.github.com', 'https://github.com', 50);
+    const err = await github.api('GET', '/repos/octo/sandbox').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(GithubError);
+    expect(err).toMatchObject({ status: 504, message: "GitHub didn't answer GET /repos/octo/sandbox in 0.05 s" });
+    await expect(github.oauth('/login/oauth/access_token', {})).rejects.toMatchObject({ status: 504 });
+  });
+});

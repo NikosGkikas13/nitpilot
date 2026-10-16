@@ -88,7 +88,7 @@ describe('GET /api/inbox', () => {
     githubStatus.set(repo.fullName, 401);
     const res = await getInbox();
     expect(res.status).toBe(401);
-    expect((await errorOf(res)).message).toMatch(/sign in again/i);
+    expect(await errorOf(res)).toMatchObject({ code: 'reauth', message: expect.stringMatching(/sign in again/i) });
   });
 
   it('is the same 401 when the person never signed in with GitHub', async () => {

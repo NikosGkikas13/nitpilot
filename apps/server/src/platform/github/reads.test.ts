@@ -116,3 +116,27 @@ describe('findOpenPrsFor (spec §15 "Catching up")', () => {
     expect(searches.map((c) => c.headers.get('authorization'))).toEqual(Array(3).fill('Bearer ghu_user-leo'));
   });
 });
+
+describe('listPrFiles', () => {
+  const file = (i: number) => ({ filename: `src/f${i}.ts`, status: 'modified', additions: 2, deletions: 1 });
+
+  it('reads the changed files page by page, renamed ones with their old path', async () => {
+    const pages = [Array.from({ length: 100 }, (_, i) => file(i)), [{ filename: 'src/new.ts', previous_filename: 'src/old.ts', status: 'renamed', additions: 0, deletions: 0 }, { filename: 'b.txt', status: 'copied', additions: 3, deletions: 0 }]];
+    const { platform, fetch } = reads({ 'GET /repos/octo/sandbox/pulls/42/files': (req) => pages[Number(req.url.searchParams.get('page')) - 1] ?? [] });
+    const { files, truncated } = await platform.listPrFiles(ref);
+    expect(files).toHaveLength(102);
+    expect(files.slice(100)).toEqual([
+      { path: 'src/new.ts', oldPath: 'src/old.ts', status: 'renamed', adds: 0, dels: 0 },
+      { path: 'b.txt', oldPath: null, status: 'added', adds: 3, dels: 0 },
+    ]);
+    expect(truncated).toBe(false);
+    expect(fetch.calls.filter((c) => c.url.pathname.endsWith('/files')).map((c) => c.headers.get('authorization'))).toEqual(['Bearer ghs_x', 'Bearer ghs_x']);
+  });
+
+  it('stops at 300 files and says the list was cut', async () => {
+    const { platform } = reads({ 'GET /repos/octo/sandbox/pulls/42/files': () => Array.from({ length: 100 }, (_, i) => file(i)) });
+    const { files, truncated } = await platform.listPrFiles(ref);
+    expect(files).toHaveLength(300);
+    expect(truncated).toBe(true);
+  });
+});

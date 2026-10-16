@@ -1,3 +1,4 @@
+import type { PrFile } from '@nitpilot/protocol';
 import { GithubError } from '../github/client';
 import { parseGithubWebhook } from '../github/normalize/index';
 import type { GhReviewComment } from '../github/payloads';
@@ -34,6 +35,10 @@ export class FakePlatform implements PlatformAdapter {
   readonly openPrs = new Map<string, FoundPr[]>();
   /** Whose PRs were searched, in order. */
   readonly searches: string[] = [];
+  /** `${repoFullName}#${number}` → that PR's changed files */
+  readonly prFiles = new Map<string, PrFile[]>();
+  /** Which PRs' files were listed, in order. */
+  readonly fileLists: string[] = [];
   /** Make the next postReview with inline comments fail like GitHub does for lines outside the diff. */
   rejectNextInlineReview = false;
   private nextId = Date.now() * 1000;
@@ -70,6 +75,11 @@ export class FakePlatform implements PlatformAdapter {
   async findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]> {
     this.searches.push(user.id);
     return this.openPrs.get(user.id) ?? [];
+  }
+
+  async listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
+    this.fileLists.push(prKey(pr));
+    return { files: this.prFiles.get(prKey(pr)) ?? [], truncated: false };
   }
 
   async upsertSummary(pr: PrRef, body: string, existingId?: string, opts?: WriteOptions): Promise<{ id: string }> {

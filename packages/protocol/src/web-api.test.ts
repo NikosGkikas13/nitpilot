@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
-import { InboxResponse, InboxStatus, MarkReadRequest, WebMe, type InboxRow } from './web-api';
+import { ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, WebMe, type ChatView, type InboxRow } from './web-api';
 
 describe('web API bodies', () => {
   const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
@@ -26,5 +26,29 @@ describe('web API bodies', () => {
     };
     expect(InboxResponse.parse(JSON.parse(JSON.stringify({ rows: [row] })))).toEqual({ rows: [row] });
     expect(() => MarkReadRequest.parse({ seq: -1 })).toThrow();
+  });
+
+  it('round-trips a chat with its points and items, and a files list', () => {
+    const view: ChatView = {
+      id: 'chat_1', repo: 'acme/shop-api', number: 142, title: 'Cursor pagination', url: 'https://github.com/acme/shop-api/pull/142',
+      author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'escalated', round: 2, maxRounds: 3,
+      merged: false, closed: false, trusted: true, isDraft: false,
+      viewer: { role: 'reviewer', attention: 'decision', failure: null },
+      participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
+      activity: { kind: 'none', who: null, why: null, offlineSince: null },
+      points: [{
+        number: 1, raisedBy: { githubId: '1002', login: 'leo' }, origin: 'agent', path: 'src/orders/list.ts', line: 48, side: 'RIGHT',
+        url: 'https://github.com/acme/shop-api/blob/abc1234/src/orders/list.ts#L48', severity: 'blocker', category: 'security',
+        title: 'SQL built from input', body: 'Use a parameter.', snippet: { startLine: 43, lines: ['const q = `…`;'] },
+        status: 'escalated', authorResolution: null, escalationReason: 'category', trusted: true, round: 1,
+      }],
+      rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
+      summaryUrl: null, lastSeq: 7,
+    };
+    const body = { view, items: [], hasOlder: false };
+    expect(ChatResponse.parse(JSON.parse(JSON.stringify(body)))).toEqual(body);
+    expect(() => ChatResponse.parse({ ...body, view: { ...view, phase: 'waiting' } })).toThrow();
+    const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
+    expect(FilesResponse.parse(files)).toEqual(files);
   });
 });

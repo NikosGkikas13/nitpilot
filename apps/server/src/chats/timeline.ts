@@ -1,4 +1,4 @@
-import type { MessageKind, TimelineItem } from '@nitpilot/protocol';
+import type { MessageKind, MessagesResponse, TimelineItem } from '@nitpilot/protocol';
 import type { Message } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 
@@ -42,4 +42,17 @@ export async function loadItemsAfter(chatId: string, afterSeq: number): Promise<
     threadPointsOf(chatId),
   ]);
   return messages.map((m) => toTimelineItem(m, threads));
+}
+
+/**
+ * The newest page of items before `beforeSeq` (or the newest of all, for null), oldest first: the chat screen's
+ * first page, then "Load earlier". Seqs have no gaps, so there are older items exactly when the first isn't 1.
+ */
+export async function loadItemsBefore(chatId: string, beforeSeq: number | null): Promise<MessagesResponse> {
+  const [newestFirst, threads] = await Promise.all([
+    prisma.message.findMany({ where: { chatId, ...(beforeSeq === null ? {} : { seq: { lt: beforeSeq } }) }, orderBy: { seq: 'desc' }, take: ITEMS_PER_PAGE }),
+    threadPointsOf(chatId),
+  ]);
+  const items = newestFirst.reverse().map((m) => toTimelineItem(m, threads));
+  return { items, hasOlder: (items[0]?.seq ?? 1) > 1 };
 }

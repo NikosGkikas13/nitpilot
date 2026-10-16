@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MeResponse } from './api';
-import { MessageKind, Role } from './enums';
+import { Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+import { Snippet } from './job-result';
 
 // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
 // answer with these, as the CLI does with api.ts.
@@ -76,3 +77,125 @@ export const TimelineItem = z.object({
   at: z.string(),
 });
 export type TimelineItem = z.infer<typeof TimelineItem>;
+
+/** `GET /api/chats/:id/messages?before=`: older items, oldest first. `hasOlder` says whether there are more before them. */
+export const MessagesResponse = z.object({ items: z.array(TimelineItem), hasOlder: z.boolean() });
+export type MessagesResponse = z.infer<typeof MessagesResponse>;
+
+/**
+ * What a chat is waiting on right now (spec §9.1 "Activity"), worked out when it's read: an agent at work, an
+ * agent that can't start (`why`), a person's turn, or nothing. `who` is a GitHub login.
+ */
+export const ActivityView = z.object({
+  kind: z.enum(['agent_working', 'agent_waiting', 'human_turn', 'none']),
+  who: z.string().nullable(),
+  why: z.enum(['offline', 'repo_not_linked', 'cap_reached']).nullable(),
+  /** For an agent waiting offline: when its CLI was last seen (null if it never connected). */
+  offlineSince: z.string().nullable(),
+});
+export type ActivityView = z.infer<typeof ActivityView>;
+
+/** A person in the chat, and their agent: null for someone who isn't on Nitpilot (or a bot). */
+export const ParticipantView = z.object({
+  githubId: z.string(),
+  login: z.string(),
+  avatarUrl: z.string(),
+  role: Role,
+  isBot: z.boolean(),
+  onNitpilot: z.boolean(),
+  /** A reviewer the author asked for. */
+  requested: z.boolean(),
+  agent: z.object({ online: z.boolean(), offlineSince: z.string().nullable(), working: z.boolean() }).nullable(),
+});
+export type ParticipantView = z.infer<typeof ParticipantView>;
+
+/** A review point (spec §8 `Point`), with who raised it and a link to its line on GitHub. */
+export const PointView = z.object({
+  number: z.number().int().positive(),
+  raisedBy: z.object({ githubId: z.string(), login: z.string() }),
+  origin: PointOrigin,
+  path: z.string().nullable(),
+  line: z.number().int().positive().nullable(),
+  side: Side.nullable(),
+  /** The file at that line on GitHub; null for a point about the whole PR. */
+  url: z.string().nullable(),
+  severity: Severity,
+  category: Category,
+  title: z.string(),
+  body: z.string(),
+  snippet: Snippet.nullable(),
+  status: PointStatus,
+  authorResolution: Resolution.nullable(),
+  escalationReason: EscalationReason.nullable(),
+  trusted: z.boolean(),
+  round: z.number().int().positive(),
+});
+export type PointView = z.infer<typeof PointView>;
+
+/**
+ * A chat as the person reading it sees it (spec §10, handoff §2): the PR, the people and their agents, the
+ * points, the team rules, and the reader's own place in it (`viewer`). `/ws/web` sends it again (`chat.state`)
+ * whenever it changes. The timeline items travel separately: in `ChatResponse`, then in `chat.items`.
+ */
+export const ChatView = z.object({
+  id: z.string(),
+  repo: z.string(),
+  number: z.number().int().positive(),
+  title: z.string(),
+  /** The PR on GitHub. */
+  url: z.string(),
+  /** The PR author's GitHub login. */
+  author: z.string(),
+  headRef: z.string(),
+  baseRef: z.string(),
+  phase: Phase,
+  round: z.number().int().positive(),
+  maxRounds: z.number().int().positive(),
+  merged: z.boolean(),
+  closed: z.boolean(),
+  /** False for a PR from an outside contributor: agents don't start on it by themselves (spec §6.1). */
+  trusted: z.boolean(),
+  isDraft: z.boolean(),
+  viewer: z.object({
+    /** Your role here, or null if you only read along. An author who also reviews is the author. */
+    role: Role.nullable(),
+    attention: Attention,
+    /** Why you're flagged `failed`: your agent's job failed (Retry), or a GitHub post in your name did (Reconnect). */
+    failure: z.enum(['agent', 'github_post']).nullable(),
+  }),
+  participants: z.array(ParticipantView),
+  activity: ActivityView,
+  points: z.array(PointView),
+  rules: z.object({
+    maxRounds: z.number().int().positive(),
+    alwaysEscalate: z.array(Category),
+    autoReview: z.boolean(),
+    autoAddress: z.boolean(),
+    /** Why `.nitpilot.yml` couldn't be used, so the defaults apply; null when it's fine or missing. */
+    error: z.string().nullable(),
+  }),
+  /** Nitpilot's summary comment on GitHub, once it's posted. */
+  summaryUrl: z.string().nullable(),
+  /** The newest timeline item's seq (0 for none). */
+  lastSeq: z.number().int().nonnegative(),
+});
+export type ChatView = z.infer<typeof ChatView>;
+
+/** `GET /api/chats/:owner/:repo/:number`: the chat, and its newest 200 timeline items, oldest first. */
+export const ChatResponse = z.object({ view: ChatView, items: z.array(TimelineItem), hasOlder: z.boolean() });
+export type ChatResponse = z.infer<typeof ChatResponse>;
+
+/** One changed file of the PR (spec §10 `GET /api/chats/:id/files`). */
+export const PrFile = z.object({
+  path: z.string(),
+  /** Its old path, for a renamed file. */
+  oldPath: z.string().nullable(),
+  status: z.enum(['added', 'modified', 'removed', 'renamed']),
+  adds: z.number().int().nonnegative(),
+  dels: z.number().int().nonnegative(),
+});
+export type PrFile = z.infer<typeof PrFile>;
+
+/** The PR's changed files, at most 300; `truncated` when it has more. `adds` and `dels` add up the files listed. */
+export const FilesResponse = z.object({ files: z.array(PrFile), adds: z.number().int(), dels: z.number().int(), truncated: z.boolean() });
+export type FilesResponse = z.infer<typeof FilesResponse>;
