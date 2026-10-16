@@ -17,7 +17,7 @@ Reviews and replies are posted **as you**, so GitHub shows your avatar plus the 
 ## Refreshing safely (`auth/user-tokens.ts`)
 
 - **Early:** a token that expires within 5 minutes is refreshed first, so it never runs out halfway through posting a review.
-- **One at a time ("single-flight"):** if three writes need a fresh token at once, only the first asks GitHub. The other two wait for that same answer. If all three asked, GitHub would accept the old refresh token once and reject it the other two times, and we'd wrongly decide you have to sign in again.
+- **One at a time ("single-flight"):** if three writes need a fresh token at once, only the first asks GitHub. The other two share that same answer, and if GitHub is down they fail together instead of queueing up to fail one after another. If all three asked, GitHub would accept the old refresh token once and reject it the other two times, and we'd wrongly decide you have to sign in again. Before asking, the refresh reads the row once more: a write that looked at the row just before another refresh finished finds the new token there and uses it, instead of refreshing with the spent one.
 - **Saved only if nothing changed (a version check):** every `GithubAuth` row has a `version` number. We save the new tokens only `where version` is still what we read, and bump it. If someone else saved first, we use their tokens instead of overwriting them. This is called *compare-and-swap* or *optimistic locking*.
 - **Failures:** if GitHub says the refresh token is no good, the user is marked `needs_reauth` and Nitpilot stops acting as them until they sign in again. It never falls back to posting as the bot. If the network fails, nothing is marked; the next write tries again.
 

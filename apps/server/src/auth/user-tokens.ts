@@ -1,7 +1,6 @@
 import type { GithubAuth } from '../generated/prisma/client';
 import { decrypt, encrypt } from '../lib/crypto';
 import { getEnv } from '../lib/env';
-import { KeyedLock } from '../lib/key-lock';
 import { prisma } from '../lib/prisma';
 import { GithubError, type GithubClient } from '../platform/github/client';
 import { refreshTokens, type OAuthTokens } from './github-oauth';
@@ -18,20 +17,27 @@ export class NeedsReauthError extends Error {
 const REFRESH_MARGIN_MS = 5 * 60_000;
 
 /**
- * One refresh per user at a time: refresh tokens are single-use (spec §8 `GithubAuth`), and a second refresh
- * with a spent one would sign the person out. Whoever waits re-reads the row once it's their turn, so they find
- * the token the first refresh saved instead of refreshing again.
+ * One refresh per user at a time, and everyone who needs the token meanwhile shares its answer, success or
+ * failure (like React Query sharing one request between components with the same key). Refresh tokens are
+ * single-use (spec §8 `GithubAuth`), so a second refresh with a spent one would sign the person out. A refresh
+ * re-reads the row before it asks GitHub: a caller that read the row just before another refresh finished
+ * starts a new one, finds the token that refresh saved, and uses it instead of refreshing again.
  */
-const refreshes = new KeyedLock();
+const inFlight = new Map<string, Promise<string>>();
 
 export async function getUserToken(userId: string, github: GithubClient, now = new Date()): Promise<string> {
   const auth = await readAuth(userId);
   if (isFresh(auth, now)) return decrypt(auth.accessTokenEnc);
-  return refreshes.run(userId, async () => {
+
+  const running = inFlight.get(userId);
+  if (running) return running;
+  const refresh = (async () => {
     const latest = await readAuth(userId);
     if (isFresh(latest, now)) return decrypt(latest.accessTokenEnc);
     return refreshOnce(latest, github, now);
-  });
+  })().finally(() => inFlight.delete(userId));
+  inFlight.set(userId, refresh);
+  return refresh;
 }
 
 async function readAuth(userId: string): Promise<GithubAuth> {

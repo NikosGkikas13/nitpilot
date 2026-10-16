@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeUser } from '../../test/db';
-import { fakeFetch } from '../../test/fake-fetch';
+import { fakeFetch, json } from '../../test/fake-fetch';
 import { decrypt, encrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
 import { GithubClient } from '../platform/github/client';
@@ -44,6 +44,16 @@ describe('getUserToken', () => {
     const tokens = await Promise.all([getUserToken(user.id, gh, NOW), getUserToken(user.id, gh, NOW), getUserToken(user.id, gh, NOW)]);
     expect(tokens).toEqual(['ghu_new', 'ghu_new', 'ghu_new']);
     expect(fetch.calls).toHaveLength(1);
+  });
+
+  it("makes everyone waiting share one failed refresh, not queue up to fail one after another", async () => {
+    const user = await userWithTokens(minutes(1));
+    const fetch = fakeFetch({ 'POST /login/oauth/access_token': () => json({ message: 'down' }, 503) });
+    const gh = new GithubClient(fetch);
+    const results = await Promise.allSettled(Array.from({ length: 5 }, () => getUserToken(user.id, gh, NOW)));
+    expect(results.map((r) => r.status)).toEqual(Array(5).fill('rejected'));
+    expect(fetch.calls).toHaveLength(1);
+    expect((await prisma.githubAuth.findUniqueOrThrow({ where: { userId: user.id } })).status).toBe('ok');
   });
 
   it('marks the user needs_reauth when GitHub rejects the refresh token, and stops calling GitHub', async () => {
