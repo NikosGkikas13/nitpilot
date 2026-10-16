@@ -32,7 +32,7 @@ describe('connecting to /ws/cli', () => {
     expect(await upgradeStatus(port, CLI_WS_PATH)).toBe(401);
     expect(await upgradeStatus(port, CLI_WS_PATH, bearer('nit_not-a-real-token'))).toBe(401);
     expect(await upgradeStatus(port, CLI_WS_PATH, bearer(revoked.raw))).toBe(401);
-    expect(await upgradeStatus(port, '/ws/web', bearer(token.raw))).toBe(404);
+    expect(await upgradeStatus(port, '/ws/other', bearer(token.raw))).toBe(404);
     expect(await upgradeStatus(port, CLI_WS_PATH, bearer(token.raw))).toBe(101);
   });
 

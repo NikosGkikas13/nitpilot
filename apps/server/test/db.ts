@@ -1,5 +1,6 @@
 import type { Person } from '../src/engine/types';
 import type { Prisma } from '../src/generated/prisma/client';
+import { encrypt } from '../src/lib/crypto';
 import { prisma } from '../src/lib/prisma';
 import { generateToken } from '../src/lib/tokens';
 import { assertTestDatabase } from './test-database';
@@ -98,6 +99,12 @@ export async function makeMessage(chatId: string, author: { githubId: string; lo
   return prisma.message.create({
     data: { chatId, seq: chat.lastSeq, kind: author ? 'human' : 'system', authorGithubId: author?.githubId ?? null, authorLogin: author?.login ?? null, body },
   });
+}
+
+/** A GitHub sign-in for `userId` that lasts a day, as signing in stores one (`needs_reauth` once it expired). */
+export async function makeGithubSignIn(userId: string, status: 'ok' | 'needs_reauth' = 'ok') {
+  const later = new Date(Date.now() + 86_400_000);
+  return prisma.githubAuth.create({ data: { userId, accessTokenEnc: encrypt(`ghu_${userId}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status } });
 }
 
 /** Empty every table. Only for tests of sweeps over all rows (task runner, replay, purge). Refuses any database not named *_test. */

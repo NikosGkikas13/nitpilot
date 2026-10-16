@@ -6520,7 +6520,7 @@ No new packages: W3 uses what W1 installed (`ws` was already the server's).
 - Produces (protocol): `TimelineItem = { seq, kind: MessageKind, author: { githubId, login } | null, pointNumber: number | null, jobId: string | null, body, data: Record<string, unknown> | null, at: string }` (`web-api.ts`). `WEB_WS_PATH = '/ws/web'`, `MAX_WEB_MESSAGE_BYTES = 64 KB`. `WebToServer = chat.subscribe { chatId, afterSeq } | chat.unsubscribe { chatId }`. `ServerToWeb = chat.items { chatId, items: TimelineItem[], lastSeq } | chat.error { chatId, code: 'not_found' | 'reauth' | 'unavailable' } | job.progress { chatId, who, action: 'reviewing' | 'fixing', stage, text } | inbox.upsert { chatId, rows: InboxRow[] } | me.update { me: WebMe }`, all in the `{ v: 1, t, d }` envelope. Task 8 adds `chat.state`.
 - Produces (server): `routeUpgrades(server: Server, routes: Record<string, UpgradeHandler>): void` and `refuse(socket, status: 401 | 403 | 404 | 500)` (`ws/upgrade-router.ts`); `CliHub.handleUpgrade(req, socket, head)` replaces `attach(server)`. `isAllowedUpgradeOrigin(headers: { origin?: string; host?: string }, publicUrl: string): boolean` (`lib/csrf.ts`). `sessionUserFromCookieHeader(header: string | undefined, now?): Promise<SessionUser | null>` (`auth/session.ts`). `ITEMS_PER_PAGE = 200`, `ThreadPoints`, `toTimelineItem(m: Message, threads: ThreadPoints): TimelineItem`, `threadPointsOf(chatId)`, `loadItemsAfter(chatId, afterSeq): Promise<TimelineItem[]>` (`chats/timeline.ts`). `ChatAccess = { kind: 'read'; chat: { id; repoFullName } } | { kind: 'none' } | { kind: 'reauth' }`, `chatAccess(user: { id }, chatId, access: RepoAccess): Promise<ChatAccess>` (`chats/access.ts`; GitHub not answering is thrown). `WebHubDeps = { access: RepoAccess; loadItems(chatId, afterSeq): Promise<TimelineItem[]>; now?: () => number; heartbeatMs?: number }`; `class WebHub { handleUpgrade; publishItems(chatId, items); sendToChat(chatId, msg); sendToChatViewer(chatId, userId, msg); sendToUser(userId, msg); subscribers(chatId): SessionUser[]; idle(): Promise<void>; close(code, reason?) }`. Test helpers: `makeGithubSignIn(userId, status?: 'ok' | 'needs_reauth')` (`test/db.ts`); `startWebHub(deps)` and `TestTab` (`open`, `send`, `subscribe`, `next(t)`, `seqs(chatId)`, `nothing(t)`, `closed`) in `test/web-ws.ts`.
 
-- [ ] **Step 1: Write the failing test for the socket's messages**
+- [x] **Step 1: Write the failing test for the socket's messages**
 
 Create `packages/protocol/src/web-messages.test.ts`:
 
@@ -6564,12 +6564,12 @@ describe('/ws/web messages', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w packages/protocol -- src/web-messages.test.ts`
 Expected: FAIL: `./web-messages` doesn't exist yet, so the file doesn't load.
 
-- [ ] **Step 3: The timeline item and the socket's messages**
+- [x] **Step 3: The timeline item and the socket's messages**
 
 A timeline item is what the browser reads of a stored `Message`. In `packages/protocol/src/web-api.ts`, import `MessageKind` beside `Role` (`import { MessageKind, Role } from './enums';`) and add at the end:
 
@@ -6648,12 +6648,12 @@ export type ServerToWeb = z.infer<typeof ServerToWeb>;
 
 In `packages/protocol/src/index.ts`, add `export * from './web-messages';` after `export * from './web-api';`.
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 48 tests (3 new).
 
-- [ ] **Step 5: Write the failing tests for the router and the Origin check**
+- [x] **Step 5: Write the failing tests for the router and the Origin check**
 
 Node gives an HTTP server one `'upgrade'` event for every WebSocket path, so two hubs can't each listen: one router picks the hub by path. Create `apps/server/src/ws/upgrade-router.test.ts`:
 
@@ -6707,12 +6707,12 @@ describe('isAllowedUpgradeOrigin', () => {
 });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/ws/upgrade-router.test.ts src/lib/csrf.test.ts`
 Expected: FAIL: `./upgrade-router` doesn't exist, and the 3 new csrf tests fail with `TypeError: isAllowedUpgradeOrigin is not a function`.
 
-- [ ] **Step 7: One upgrade listener, and the Origin check for sockets**
+- [x] **Step 7: One upgrade listener, and the Origin check for sockets**
 
 Create `apps/server/src/ws/upgrade-router.ts` (`refuse` moves here from `cli-hub.ts`, so both hubs answer a refused upgrade the same way):
 
@@ -6780,12 +6780,12 @@ export function isAllowedUpgradeOrigin(headers: { origin?: string; host?: string
 
 (The `host` the socket was opened on counts as ours, as `isAllowedOrigin` counts the request's own origin: a developer reaching the server on `127.0.0.1` or a LAN address still gets a socket.)
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/ws/upgrade-router.test.ts src/lib/csrf.test.ts && npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
 Expected: PASS, 2 and 8 tests; the CLI hub's 10 tests still pass behind the router.
 
-- [ ] **Step 9: Write the failing tests for reading items and who can read a chat**
+- [x] **Step 9: Write the failing tests for reading items and who can read a chat**
 
 The tests make people with a GitHub sign-in on file. In `apps/server/test/db.ts`, import `encrypt` from `'../src/lib/crypto'` and add before `resetDb`:
 
@@ -6876,12 +6876,12 @@ describe('chatAccess (spec §16 "Who can see a chat")', () => {
 });
 ```
 
-- [ ] **Step 10: Run them to see them fail**
+- [x] **Step 10: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/timeline.db.test.ts src/chats/access.db.test.ts`
 Expected: FAIL: `./timeline` and `./access` don't exist.
 
-- [ ] **Step 11: Items after a seq, and who can read a chat**
+- [x] **Step 11: Items after a seq, and who can read a chat**
 
 Create `apps/server/src/chats/timeline.ts` (a person's reply in a point's GitHub thread is stored with `data.threadRootId` and no point number; the server fills the number in, so the web app can put the reply in that point's card):
 
@@ -6956,12 +6956,12 @@ export async function chatAccess(user: { id: string }, chatId: string, access: R
 }
 ```
 
-- [ ] **Step 12: Run them to see them pass**
+- [x] **Step 12: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/timeline.db.test.ts src/chats/access.db.test.ts`
 Expected: PASS, 2 and 2 tests.
 
-- [ ] **Step 13: Write the failing hub tests**
+- [x] **Step 13: Write the failing hub tests**
 
 A test client that opens a socket the way a browser tab does: Node's built-in `WebSocket` with a cookie and an `Origin`. Create `apps/server/test/web-ws.ts`:
 
@@ -7300,12 +7300,12 @@ describe('WebHub: subscriptions', () => {
 });
 ```
 
-- [ ] **Step 14: Run them to see them fail**
+- [x] **Step 14: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-hub.db.test.ts`
 Expected: FAIL: `../src/ws/web-hub` doesn't exist (imported by `test/web-ws.ts`).
 
-- [ ] **Step 15: The hub**
+- [x] **Step 15: The hub**
 
 An upgrade arrives as Node's raw request, not a Hono `Context`, so the session is read from the `cookie` header. In `apps/server/src/auth/session.ts`, import `parse` from `'hono/utils/cookie'` and replace `currentUser`'s first line (`const raw = getCookie(c, BRAND.sessionCookie);`) so the lookup is shared:
 
@@ -7594,12 +7594,12 @@ function readMessage(data: RawData, isBinary: boolean): WebToServer | null {
 }
 ```
 
-- [ ] **Step 16: Run them to see them pass**
+- [x] **Step 16: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-hub.db.test.ts`
 Expected: PASS, 12 tests.
 
-- [ ] **Step 17: Serve it**
+- [x] **Step 17: Serve it**
 
 In `apps/server/src/main.ts`:
 1. Imports: `CLI_WS_PATH` and `WEB_WS_PATH` beside `CLOSE_CODES` from `@nitpilot/protocol`; `RepoAccess` from `'./auth/repo-access'`; `loadItemsAfter` from `'./chats/timeline'`; `routeUpgrades` from `'./ws/upgrade-router'`; `WebHub` from `'./ws/web-hub'`.
@@ -7634,7 +7634,7 @@ In `apps/server/test/e2e/harness.ts`, the same wiring:
 4. Replace `hub.attach(listening);` with `routeUpgrades(listening, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });`.
 5. Return `webHub` beside `hub`.
 
-- [ ] **Step 18: The explainer, and the spec**
+- [x] **Step 18: The explainer, and the spec**
 
 Create `docs/why/web-socket-and-origin.md` (CLAUDE.md: the first time a backend concept shows up in the code):
 
@@ -7703,12 +7703,12 @@ In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "Web ↔ server",
 
 In §16 "Who can see a chat", after "checked with their own token and cached for 5 minutes.", add: "A chat open on `/ws/web` is checked again once that answer is 5 minutes old, the next time something is sent for it; losing access ends the subscription with `chat.error`."
 
-- [ ] **Step 19: Run the full suite**
+- [x] **Step 19: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: protocol 48, CLI 293 passed + 14 skipped, server 686, web 73; end to end 5; typecheck and lint clean.
 
-- [ ] **Step 20: Commit**
+- [x] **Step 20: Commit**
 
 ```bash
 git add packages/protocol/src apps/server/src/ws apps/server/src/chats/timeline.ts apps/server/src/chats/timeline.db.test.ts apps/server/src/chats/access.ts apps/server/src/chats/access.db.test.ts apps/server/src/lib/csrf.ts apps/server/src/lib/csrf.test.ts apps/server/src/auth/session.ts apps/server/src/main.ts apps/server/test/db.ts apps/server/test/ws.ts apps/server/test/web-ws.ts apps/server/test/e2e/harness.ts docs/why/web-socket-and-origin.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

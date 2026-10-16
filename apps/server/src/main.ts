@@ -2,9 +2,11 @@
 import 'dotenv/config';
 import type { Server } from 'node:http';
 import { serve } from '@hono/node-server';
-import { CLOSE_CODES } from '@nitpilot/protocol';
+import { CLI_WS_PATH, CLOSE_CODES, WEB_WS_PATH } from '@nitpilot/protocol';
+import { RepoAccess } from './auth/repo-access';
 import { getUserToken } from './auth/user-tokens';
 import { Dispatcher } from './chats/dispatch';
+import { loadItemsAfter } from './chats/timeline';
 import { createApp } from './http/app';
 import { createDeliveryHandler } from './ingest/handle';
 import { createIngest } from './ingest/process';
@@ -20,6 +22,8 @@ import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
 import { TaskRunner } from './tasks/runner';
 import { CliHub } from './ws/cli-hub';
+import { routeUpgrades } from './ws/upgrade-router';
+import { WebHub } from './ws/web-hub';
 import { wireCliHub } from './ws/wire';
 
 async function main(): Promise<void> {
@@ -39,6 +43,8 @@ async function main(): Promise<void> {
   // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
   const hub = new CliHub();
   const notifier = new CliNotifier(hub);
+  // Browsers follow chats live over /ws/web: their new items as they're saved (spec §10, docs/why/web-socket-and-origin.md).
+  const webHub = new WebHub({ access: new RepoAccess(github), loadItems: loadItemsAfter });
 
   // The core loop: webhook → ingest → router → dispatcher (engine) → tasks → GitHub, and jobs → CLIs.
   const dispatcher = new Dispatcher();
@@ -57,8 +63,8 @@ async function main(): Promise<void> {
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });
-  // serve() makes a plain HTTP/1 server; WebSocket upgrades on it go to the hub.
-  hub.attach(server as Server);
+  // serve() makes a plain HTTP/1 server. Each WebSocket upgrade on it goes to the hub for its path.
+  routeUpgrades(server as Server, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });
 
   const recovered = await recoverOnBoot({ ingest, platform });
   console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
@@ -77,6 +83,7 @@ async function main(): Promise<void> {
     cliJobs.stop();
     // 1012 tells every CLI the server is restarting, so they reconnect.
     hub.closeAll(CLOSE_CODES.serverRestart, 'server restarting');
+    webHub.close(CLOSE_CODES.serverRestart, 'server restarting');
     server.close();
     await lock.release();
     process.exit(0);

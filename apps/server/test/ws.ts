@@ -5,6 +5,7 @@ import { CLI_WS_PATH, PROTOCOL_VERSION, type CliToServer, type RunningJob, type 
 import { Dispatcher } from '../src/chats/dispatch';
 import { FakePlatform } from '../src/platform/fake/fake-platform';
 import { CliHub } from '../src/ws/cli-hub';
+import { routeUpgrades } from '../src/ws/upgrade-router';
 import { wireCliHub } from '../src/ws/wire';
 
 // Helpers for testing the CLI hub over real WebSockets (spec §19 "CLI hub").
@@ -14,10 +15,10 @@ type FromServer<T extends ServerToCli['t']> = Extract<ServerToCli, { t: T }>;
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Serve `hub` on a random local port, the way main.ts attaches it to the real server. */
+/** Serve `hub` on a random local port, behind the upgrade router as in main.ts. */
 export async function listen(hub: CliHub) {
   const server = createServer();
-  hub.attach(server);
+  routeUpgrades(server, { [CLI_WS_PATH]: hub.handleUpgrade });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
   return {

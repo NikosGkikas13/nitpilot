@@ -287,12 +287,13 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - **Auth:** the session cookie and the `Origin` header are both checked before the upgrade. Browsers send cookies on a WebSocket to another site and SameSite doesn't stop it, so the Origin check is what keeps another site from opening a socket as you.
 - **Push only:** the server sends:
   - `chat.items {chatId, items, lastSeq}` and `chat.state {chatId, …}` to subscribers after each dispatcher commit;
-  - `job.progress {chatId, who, stage, text}`, forwarded live from the CLI;
-  - `inbox.upsert {row}` to every participant of a chat that changed;
+  - `job.progress {chatId, who, action, stage, text}`, forwarded live from the CLI (`action` is `reviewing` or `fixing`, so the line can say "leo's agent is reviewing…");
+  - `inbox.upsert {chatId, rows}` to every participant of a chat that changed: every row that person has for that chat (an author who also reviews has two), an empty list removing them;
   - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding). The chats where that person's agent has active jobs are sent again too, so "working" and "waiting" stay true for everyone.
+  - `chat.error {chatId, code}` when a subscribe is refused, or an open subscription's access check fails: `not_found` (no such chat, or you can't see its repo), `reauth` (your GitHub sign-in expired), `unavailable` (GitHub didn't answer; the client asks again a little later). The subscription is gone. A socket whose session ended is closed with 4401.
 
   The client sends `chat.subscribe {chatId, afterSeq}` and `chat.unsubscribe {chatId}`. A subscribe needs read access to the chat (§16). All changes go through REST.
-- **Resuming without gaps:** subscribe first (live items are buffered), then catch up from `afterSeq` out of the database, then flush the buffer while skipping duplicates (Odyhook's `listen/route.ts` pattern). The client also drops any `seq` it already has, and re-subscribes with each open chat's `lastSeq` after a reconnect.
+- **Resuming without gaps:** subscribe first (live items are buffered), then catch up from `afterSeq` out of the database, every missed item, in `chat.items` messages of at most 200, then flush the buffer while skipping duplicates (Odyhook's `listen/route.ts` pattern). The client also drops any `seq` it already has, and re-subscribes with each open chat's `lastSeq` after a reconnect.
 
 **REST endpoints in Plan 2** (JSON, signed in by the session cookie; every write gets an Origin check, needs read access to the chat's repo, and is checked against the access rules in §16 before it becomes an engine event under the chat's lock):
 - Reads: `GET /api/me` (adds settings, onboarding facts and the Web Push public key to Plan 1's answer), `GET /api/inbox`, `GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`), `GET /api/chats/:id/messages?before=` (older items; newer ones arrive on `/ws/web`), `GET /api/chats/:id/files` (changed files from the platform, kept in memory per head commit), `GET /api/devices`.
@@ -647,7 +648,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
   5. `nitpilot start`.
   The checklist ticks itself off as each step completes (`me.update` on `/ws/web`, §10).
 - **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA. A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway.
-- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of, and only those in repos they can still read: the same check, made once per repo and kept for 5 minutes. An expired GitHub sign-in makes the inbox a 401 that says so, and GitHub not answering makes it a 502.
+- **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. A chat open on `/ws/web` is checked again once that answer is 5 minutes old, the next time something is sent for it; losing access ends the subscription with `chat.error`. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of, and only those in repos they can still read: the same check, made once per repo and kept for 5 minutes. An expired GitHub sign-in makes the inbox a 401 that says so, and GitHub not answering makes it a 502.
 - **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
   - **Notes:** the author and the reviewers who are on Nitpilot.
   - **Resolve** an escalated point: only the reviewer who raised it. A point that came from a GitHub comment is resolved on GitHub, by resolving its thread.

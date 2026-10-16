@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MeResponse } from './api';
-import { Role } from './enums';
+import { MessageKind, Role } from './enums';
 
 // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
 // answer with these, as the CLI does with api.ts.
@@ -59,3 +59,20 @@ export type InboxResponse = z.infer<typeof InboxResponse>;
 /** `POST /api/chats/:id/read`: you've read up to this timeline item. */
 export const MarkReadRequest = z.object({ seq: z.number().int().nonnegative() });
 export type MarkReadRequest = z.infer<typeof MarkReadRequest>;
+
+/**
+ * One item of a chat's timeline (spec §8 `Message`), as the web app reads it over REST and `/ws/web`. `seq` is the
+ * chat's resume cursor: 1, 2, 3… with no gaps. `pointNumber` also names the point for a person's reply in its
+ * GitHub thread, so the web app can show the reply in that point's card. `author` is null for a system event.
+ */
+export const TimelineItem = z.object({
+  seq: z.number().int().positive(),
+  kind: MessageKind,
+  author: z.object({ githubId: z.string(), login: z.string() }).nullable(),
+  pointNumber: z.number().int().positive().nullable(),
+  jobId: z.string().nullable(),
+  body: z.string(),
+  data: z.record(z.string(), z.unknown()).nullable(),
+  at: z.string(),
+});
+export type TimelineItem = z.infer<typeof TimelineItem>;

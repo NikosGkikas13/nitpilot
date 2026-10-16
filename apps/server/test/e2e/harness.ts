@@ -3,25 +3,31 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { serve } from '@hono/node-server';
+import { CLI_WS_PATH, WEB_WS_PATH } from '@nitpilot/protocol';
 import { fakeAdapter, FAKE_SCENARIOS } from '../../../cli/src/agents/fake/adapter';
 import { start } from '../../../cli/src/commands/start';
 import { PersonalConfigSchema, saveConfig } from '../../../cli/src/config/config';
 import type { Out } from '../../../cli/src/out';
+import { RepoAccess } from '../../src/auth/repo-access';
 import { Dispatcher } from '../../src/chats/dispatch';
+import { loadItemsAfter } from '../../src/chats/timeline';
 import { createDeliveryHandler } from '../../src/ingest/handle';
 import { createIngest } from '../../src/ingest/process';
 import { prisma } from '../../src/lib/prisma';
 import { FakePlatform } from '../../src/platform/fake/fake-platform';
-import type { GithubClient } from '../../src/platform/github/client';
+import { GithubClient } from '../../src/platform/github/client';
 import { CliNotifier } from '../../src/tasks/cli-notifier';
 import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
 import { createTaskHandlers } from '../../src/tasks/handlers/index';
 import type { Notification } from '../../src/tasks/notifier';
 import { TaskRunner } from '../../src/tasks/runner';
 import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
+import { routeUpgrades } from '../../src/ws/upgrade-router';
+import { WebHub } from '../../src/ws/web-hub';
 import { wireCliHub } from '../../src/ws/wire';
 import { testApp } from '../app';
 import { makeCliToken, resetDb } from '../db';
+import { fakeFetch } from '../fake-fetch';
 import { installationEvent, people, prEvent, pull } from '../fixtures/github';
 import { sendWebhook } from '../webhooks';
 import { localGithub, type Who } from './github';
@@ -61,7 +67,10 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   hub.onMessage(async (conn, msg) => intercept?.(conn, msg));
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}), ...(opts.github ? { github: opts.github } : {}) });
+  // GitHub's API for people's own access checks; nothing answers unless the caller passes one that does.
+  const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
+  const webHub = new WebHub({ access: new RepoAccess(githubApi), loadItems: loadItemsAfter });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, github: githubApi, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
@@ -72,6 +81,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
       runner.stop();
       await hub.idle();
       hub.closeAll(1001, 'test over');
+      webHub.close(1001, 'test over');
       const listening = server;
       if (listening) {
         listening.closeAllConnections();
@@ -89,7 +99,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
       const s = serve({ fetch: app.fetch, port: opts.port ?? 0, hostname: '127.0.0.1' }, () => resolve(s as Server));
     });
     server = listening;
-    hub.attach(listening);
+    routeUpgrades(listening, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });
     const url = `http://127.0.0.1:${(listening.address() as AddressInfo).port}`;
     runner.start();
     cliJobs.start();
@@ -113,6 +123,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
       github,
       platform,
       hub,
+      webHub,
       notified,
       users,
       deliver,

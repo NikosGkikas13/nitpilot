@@ -1,12 +1,13 @@
-import { STATUS_CODES, type IncomingMessage, type Server } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import {
-  BRAND, CLI_WS_PATH, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli,
+  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli,
 } from '@nitpilot/protocol';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { authenticateCliToken, touchCliToken, type CliAuth } from '../auth/cli-token';
 import { prisma } from '../lib/prisma';
 import { SerialQueue } from '../lib/serial-queue';
+import { refuse } from './upgrade-router';
 
 /** A socket that hasn't said hello by then is closed. */
 const HELLO_TIMEOUT_MS = 10_000;
@@ -53,10 +54,10 @@ export class CliHub {
 
   constructor(private readonly opts: { helloTimeoutMs?: number } = {}) {}
 
-  /** Take over WebSocket upgrades on this HTTP server. */
-  attach(server: Server): void {
-    server.on('upgrade', (req, socket, head) => void this.upgrade(req, socket, head));
-  }
+  /** An upgrade request for /ws/cli, handed over by the upgrade router (ws/upgrade-router.ts). */
+  handleUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    void this.upgrade(req, socket, head);
+  };
 
   onMessage(listener: MessageListener): void {
     this.listeners.push(listener);
@@ -106,7 +107,6 @@ export class CliHub {
     const onError = () => socket.destroy();
     socket.on('error', onError);
     try {
-      if (new URL(req.url ?? '/', 'http://localhost').pathname !== CLI_WS_PATH) return refuse(socket, 404);
       // The token is checked before the upgrade: without one there's no socket at all (spec §10).
       const auth = await authenticateCliToken(req.headers.authorization);
       if (!auth) return refuse(socket, 401);
@@ -209,12 +209,6 @@ export class CliHub {
       }
     }
   }
-}
-
-/** Answer an upgrade request with a plain HTTP error and hang up. */
-function refuse(socket: Duplex, status: 401 | 404 | 500): void {
-  socket.once('finish', () => socket.destroy());
-  socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
 
 /** One frame as a CLI message, or null (logged) when it isn't one. A bad message never closes the socket. */

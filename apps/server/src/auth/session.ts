@@ -1,6 +1,7 @@
 import { BRAND } from '@nitpilot/protocol';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { parse } from 'hono/utils/cookie';
 import { getEnv } from '../lib/env';
 import { prisma } from '../lib/prisma';
 import { hashToken, randomSecret } from '../lib/tokens';
@@ -27,7 +28,18 @@ export async function startSession(c: Context, userId: string, now = new Date())
 }
 
 export async function currentUser(c: Context, now = new Date()): Promise<SessionUser | null> {
-  const raw = getCookie(c, BRAND.sessionCookie);
+  return sessionUser(getCookie(c, BRAND.sessionCookie), now);
+}
+
+/**
+ * The same, for a request Hono doesn't handle: a WebSocket upgrade arrives as Node's raw request, with only
+ * its `cookie` header (ws/web-hub.ts). The hub also calls it again later, to notice a sign-out.
+ */
+export async function sessionUserFromCookieHeader(header: string | undefined, now = new Date()): Promise<SessionUser | null> {
+  return sessionUser(header ? parse(header, BRAND.sessionCookie)[BRAND.sessionCookie] : undefined, now);
+}
+
+async function sessionUser(raw: string | undefined, now: Date): Promise<SessionUser | null> {
   if (!raw) return null;
   const session = await prisma.webSession.findUnique({ where: { tokenHash: hashToken(raw) }, include: { user: true } });
   if (!session || session.expiresAt <= now) return null;
