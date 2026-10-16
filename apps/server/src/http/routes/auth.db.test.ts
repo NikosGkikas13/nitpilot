@@ -6,6 +6,7 @@ import { testApp } from '../../../test/app';
 import { cookieHeader, sessionCookieFor } from '../../../test/http';
 import { decrypt } from '../../lib/crypto';
 import { prisma } from '../../lib/prisma';
+import { hashToken } from '../../lib/tokens';
 import { pkceChallenge } from '../../auth/github-oauth';
 import { Dispatcher } from '../../chats/dispatch';
 import { GithubClient } from '../../platform/github/client';
@@ -81,6 +82,27 @@ describe('GitHub sign-in', () => {
     const res = await app.request('/auth/logout', { method: 'POST', headers: { cookie, origin: 'http://localhost:8787' } });
     expect(res.status).toBe(302);
     expect(await prisma.webSession.count({ where: { userId: user.id } })).toBe(0);
+  });
+});
+
+describe('signing out and open sockets', () => {
+  it('tells the web socket hub which session ended, so its sockets close', async () => {
+    const user = await prisma.user.create({ data: { githubId: ghId(), login: 'maya' } });
+    const cookie = await sessionCookieFor(user.id);
+    const closeSession = vi.fn();
+    const app = testApp({ github: new GithubClient(fakeFetch({})), webSockets: { closeSession } });
+
+    await app.request('/auth/logout', { method: 'POST', headers: { cookie, origin: 'http://localhost:8787' } });
+    expect(closeSession).toHaveBeenCalledOnce();
+    expect(closeSession).toHaveBeenCalledWith(hashToken(cookie.split('=')[1]!));
+  });
+
+  it('has nothing to close when there was no session', async () => {
+    const closeSession = vi.fn();
+    const app = testApp({ github: new GithubClient(fakeFetch({})), webSockets: { closeSession } });
+    const res = await app.request('/auth/logout', { method: 'POST', headers: { origin: 'http://localhost:8787' } });
+    expect(res.status).toBe(302);
+    expect(closeSession).not.toHaveBeenCalled();
   });
 });
 

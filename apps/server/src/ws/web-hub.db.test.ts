@@ -1,4 +1,4 @@
-import { WEB_WS_PATH, type TimelineItem } from '@nitpilot/protocol';
+import { MAX_WEB_MESSAGE_BYTES, WEB_WS_PATH, type TimelineItem } from '@nitpilot/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeGithubSignIn, makeMessage, makeRepo, makeUser } from '../../test/db';
 import { fakeFetch, json } from '../../test/fake-fetch';
@@ -8,6 +8,7 @@ import { sleep, upgradeStatus } from '../../test/ws';
 import { ACCESS_TTL_MS, RepoAccess } from '../auth/repo-access';
 import { loadItemsAfter } from '../chats/timeline';
 import { prisma } from '../lib/prisma';
+import { hashToken } from '../lib/tokens';
 import { GithubClient } from '../platform/github/client';
 
 /** What GitHub answers about each repo, by full name: read access (200), none (404), a revoked token (401), or a failure (500). */
@@ -25,6 +26,8 @@ let clock = Date.now();
 const now = () => clock;
 let server: Awaited<ReturnType<typeof startWebHub>> | null = null;
 afterEach(async () => {
+  // Also puts back a console.error spy that a failed assertion left behind.
+  vi.restoreAllMocks();
   await server?.close();
   server = null;
 });
@@ -83,6 +86,45 @@ describe('WebHub: who may open a socket (spec §10)', () => {
     await prisma.webSession.deleteMany({ where: { userId: user.id } });
     tab.subscribe(chat.id);
     expect((await tab.closed).code).toBe(4401);
+  });
+});
+
+describe('WebHub: signing out and the limits on what a browser sends', () => {
+  it("closes the sockets of a signed-out session with 4401, and leaves the same person's other session alone", async () => {
+    const { url, origin } = await start();
+    const user = await makeUser();
+    await makeGithubSignIn(user.id);
+    const [first, second] = [await sessionCookieFor(user.id), await sessionCookieFor(user.id)];
+    const tab = await TestTab.open(url, { cookie: first, origin });
+    const otherTab = await TestTab.open(url, { cookie: second, origin });
+    server!.hub.closeSession(hashToken(first.split('=')[1]!));
+    expect((await tab.closed).code).toBe(4401);
+    server!.hub.sendToUser(user.id, { v: 1, t: 'inbox.upsert', d: { chatId: 'chat_1', rows: [] } });
+    expect((await otherTab.next('inbox.upsert')).d.chatId).toBe('chat_1');
+  });
+
+  it('closes a socket that sends more than 64 KB (1009)', async () => {
+    const { url, origin } = await start();
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.sendRaw('x'.repeat(MAX_WEB_MESSAGE_BYTES + 1));
+    expect((await tab.closed).code).toBe(1009);
+  });
+
+  it("sends a viewer's own message only to their sockets that follow the chat", async () => {
+    const { url, origin } = await start();
+    const { chat } = await chatWith(0);
+    const [maya, leo] = [await person(), await person()];
+    const following = await TestTab.open(url, { cookie: maya.cookie, origin });
+    const notFollowing = await TestTab.open(url, { cookie: maya.cookie, origin });
+    const someoneElse = await TestTab.open(url, { cookie: leo.cookie, origin });
+    following.subscribe(chat.id);
+    someoneElse.subscribe(chat.id);
+    await following.next('chat.items');
+    await someoneElse.next('chat.items');
+    server!.hub.sendToChatViewer(chat.id, maya.user.id, { v: 1, t: 'inbox.upsert', d: { chatId: chat.id, rows: [] } });
+    expect((await following.next('inbox.upsert')).d.chatId).toBe(chat.id);
+    await notFollowing.nothing('inbox.upsert');
+    await someoneElse.nothing('inbox.upsert');
   });
 });
 
@@ -210,7 +252,18 @@ describe('WebHub: when it cannot check or read', () => {
     await commitItem(chat.id);
     await tab.nothing('chat.items');
     expect(log).toHaveBeenCalled();
-    log.mockRestore();
+  });
+
+  it('answers "unavailable", and keeps no subscription, when GitHub fails the access check of a subscribe', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { url, origin } = await start();
+    const { chat } = await chatWith(1, 500);
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(chat.id);
+    expect((await tab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'unavailable' });
+    expect(server!.hub.subscribers(chat.id)).toEqual([]);
+    await tab.nothing('chat.items');
+    expect(log).toHaveBeenCalled();
   });
 
   it('answers "unavailable" when the catch-up cannot be read, leaves no subscription, and catches up on the next try', async () => {
@@ -228,7 +281,6 @@ describe('WebHub: when it cannot check or read', () => {
     await commitItem(chat.id);
     await tab.nothing('chat.items');
     expect(log).toHaveBeenCalled();
-    log.mockRestore();
 
     broken = false;
     tab.subscribe(chat.id, 0);

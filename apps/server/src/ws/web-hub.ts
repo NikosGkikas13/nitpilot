@@ -3,7 +3,7 @@ import type { Duplex } from 'node:stream';
 import { CLOSE_CODES, MAX_WEB_MESSAGE_BYTES, WebToServer, type ServerToWeb, type TimelineItem } from '@nitpilot/protocol';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { ACCESS_TTL_MS, type RepoAccess } from '../auth/repo-access';
-import { sessionUserFromCookieHeader, type SessionUser } from '../auth/session';
+import { sessionHashFromCookieHeader, sessionUserFromCookieHeader, type SessionUser } from '../auth/session';
 import { chatAccess } from '../chats/access';
 import { ITEMS_PER_PAGE } from '../chats/timeline';
 import { isAllowedUpgradeOrigin } from '../lib/csrf';
@@ -34,6 +34,8 @@ type Client = {
   user: SessionUser;
   /** The cookie it connected with, to notice a sign-out later. */
   cookie: string | undefined;
+  /** Names its session (what WebSession stores), so signing out can close it. */
+  sessionHash: string | null;
   subs: Map<string, Subscription>;
   /** Everything for this socket happens in order: subscribes, catch-ups, sends. */
   queue: SerialQueue;
@@ -121,6 +123,11 @@ export class WebHub {
     await Promise.all([...this.clients].map((c) => c.queue.idle()));
   }
 
+  /** Signing out: close every socket of that session (and only that one: the same person's other sessions stay). */
+  closeSession(tokenHash: string): void {
+    for (const client of this.clients) if (client.sessionHash === tokenHash) client.ws.close(CLOSE_CODES.reauth, 'signed out');
+  }
+
   /** Close every socket and stop the heartbeat. With 1012 on shutdown, the tabs reconnect. */
   close(code: number, reason = ''): void {
     clearInterval(this.heartbeat);
@@ -144,7 +151,7 @@ export class WebHub {
   }
 
   private accept(ws: WebSocket, user: SessionUser, cookie: string | undefined): void {
-    const client: Client = { ws, user, cookie, subs: new Map(), queue: new SerialQueue(), alive: true };
+    const client: Client = { ws, user, cookie, sessionHash: sessionHashFromCookieHeader(cookie), subs: new Map(), queue: new SerialQueue(), alive: true };
     this.clients.add(client);
     ws.on('pong', () => (client.alive = true));
     ws.on('message', (data, isBinary) => {

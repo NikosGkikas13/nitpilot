@@ -39,6 +39,12 @@ export async function sessionUserFromCookieHeader(header: string | undefined, no
   return sessionUser(header ? parse(header, BRAND.sessionCookie)[BRAND.sessionCookie] : undefined, now);
 }
 
+/** The hash that names the session in this `cookie` header (what WebSession stores), or null when it has no session cookie. */
+export function sessionHashFromCookieHeader(header: string | undefined): string | null {
+  const raw = header ? parse(header, BRAND.sessionCookie)[BRAND.sessionCookie] : undefined;
+  return raw ? hashToken(raw) : null;
+}
+
 async function sessionUser(raw: string | undefined, now: Date): Promise<SessionUser | null> {
   if (!raw) return null;
   const session = await prisma.webSession.findUnique({ where: { tokenHash: hashToken(raw) }, include: { user: true } });
@@ -47,8 +53,11 @@ async function sessionUser(raw: string | undefined, now: Date): Promise<SessionU
   return { id, githubId, login, avatarUrl };
 }
 
-export async function endSession(c: Context): Promise<void> {
+/** Sign the browser out. Returns the hash of the session that ended (null if there was none), so open sockets on it can be closed. */
+export async function endSession(c: Context): Promise<string | null> {
   const raw = getCookie(c, BRAND.sessionCookie);
-  if (raw) await prisma.webSession.deleteMany({ where: { tokenHash: hashToken(raw) } });
+  const tokenHash = raw ? hashToken(raw) : null;
+  if (tokenHash) await prisma.webSession.deleteMany({ where: { tokenHash } });
   deleteCookie(c, BRAND.sessionCookie, { path: '/' });
+  return tokenHash;
 }

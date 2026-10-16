@@ -25,6 +25,8 @@ export type AppDeps = {
   ingest: Ingest;
   dispatch: Dispatch;
   clis: LiveClis;
+  /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
+  webSockets?: { closeSession(tokenHash: string): void };
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
   webDistDir?: string;
 };

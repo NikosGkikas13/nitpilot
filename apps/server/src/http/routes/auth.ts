@@ -5,13 +5,12 @@ import { z } from 'zod';
 import { authorizeUrl, exchangeCode, fetchGithubUser, pkceChallenge } from '../../auth/github-oauth';
 import { cookieOptions, endSession, startSession } from '../../auth/session';
 import { saveGithubUser } from '../../auth/users';
-import type { Dispatch } from '../../chats/dispatch';
 import { resumeAfterSignIn } from '../../chats/failed-flags';
 import { isAllowedOrigin } from '../../lib/csrf';
 import { decrypt, encrypt } from '../../lib/crypto';
 import { getEnv } from '../../lib/env';
 import { randomSecret } from '../../lib/tokens';
-import type { GithubClient } from '../../platform/github/client';
+import type { AppDeps } from '../app';
 import { HttpError } from '../errors';
 
 const OAuthCookie = z.object({ state: z.string(), verifier: z.string(), next: z.string() });
@@ -36,7 +35,7 @@ function readOAuthCookie(value: string | undefined): z.infer<typeof OAuthCookie>
   }
 }
 
-export function authRoutes(deps: { github: GithubClient; dispatch: Dispatch }): Hono {
+export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSockets'>): Hono {
   const app = new Hono();
 
   app.get('/auth/github/login', (c) => {
@@ -91,7 +90,9 @@ export function authRoutes(deps: { github: GithubClient; dispatch: Dispatch }): 
 
   app.post('/auth/logout', async (c) => {
     if (!isAllowedOrigin(c.req.raw, getEnv().PUBLIC_URL)) throw new HttpError('forbidden', 'Request did not come from Nitpilot.');
-    await endSession(c);
+    const endedSession = await endSession(c);
+    // Sockets open on that session close now, rather than staying signed in until something is sent to them.
+    if (endedSession) deps.webSockets?.closeSession(endedSession);
     return c.redirect('/');
   });
 
