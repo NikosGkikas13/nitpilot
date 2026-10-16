@@ -31,6 +31,8 @@ export function Inbox({ me }: { me: WebMe }) {
   const [cursor, setCursor] = useState<string | null>(null);
 
   const all = inbox.data ?? [];
+  // Settle the opening tab once, when the first data arrives: a later refetch must not flip the tab under you.
+  if (chosenTab === null && inbox.data) setChosenTab(defaultTab(inbox.data));
   const tab = chosenTab ?? defaultTab(all);
   const rows = sortRows(filterRows(all, { tab, query, repos, statuses }));
   const allRepos = [...new Set(all.map((r) => r.repo))].sort();

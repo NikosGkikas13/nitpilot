@@ -21,15 +21,17 @@ export function fakeApi(routes: Record<string, () => Answer>) {
   return fetch;
 }
 
-/** The app's routes at `path`, with a fresh data cache that doesn't wait between retries. */
+/** The app's routes at `path`, with a fresh data cache that doesn't wait between retries. Also returns that cache. */
 export function renderApp(path = '/') {
-  return render(
-    <QueryClientProvider client={makeQueryClient({ retryDelay: 0 })}>
+  const queryClient = makeQueryClient({ retryDelay: 0 });
+  const result = render(
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
         <AppRoutes />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...result, queryClient };
 }
 
 /** A stand-in for the browser's media queries: a phone (below 760 px) or a desktop, in the light theme. */

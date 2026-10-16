@@ -14,8 +14,9 @@ export function InboxTabs({ tab, counts, pick }: { tab: Tab; counts: Record<Tab,
         <button key={id} type="button" role="tab" aria-selected={tab === id} className={styles.tab} onClick={() => pick(id)}>
           {label}
           {counts[id] > 0 && (
-            <span className={styles.count} aria-label={`${counts[id]} need you`}>
-              {counts[id]}
+            <span className={styles.count}>
+              <span aria-hidden="true">{counts[id]}</span>
+              <span className="visually-hidden">{counts[id]} need you</span>
             </span>
           )}
         </button>

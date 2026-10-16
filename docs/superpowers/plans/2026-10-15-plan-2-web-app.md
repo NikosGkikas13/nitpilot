@@ -6409,7 +6409,7 @@ test('the inbox lists the PRs you review and your own, each under its tab', asyn
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 15: Look at it (controller, in the in-app browser)**
+- [x] **Step 15: Look at it (controller, in the in-app browser)**
 
 Start the Playwright server (launch config `nitpilot-e2e-web`), seed it, and sign in:
 

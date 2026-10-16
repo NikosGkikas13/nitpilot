@@ -1,5 +1,5 @@
 import type { InboxRow, WebMe } from '@nitpilot/protocol';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeApi, renderApp, type Answer } from '../../test/render';
@@ -38,7 +38,7 @@ describe('Inbox (handoff §1)', () => {
     renderApp('/');
     expect(await screen.findByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
     expect(await titles()).toEqual(['Fix race in session refresh', 'Refactor webhook retries']);
-    expect(screen.getByLabelText('1 need you')).toHaveTextContent('1');
+    expect(within(screen.getByRole('tab', { name: /To review/ })).getByText('1 need you')).toBeInTheDocument();
   });
 
   it("shows each row's repo and number, pill, last activity, round and unread dot", async () => {
@@ -48,7 +48,7 @@ describe('Inbox (handoff §1)', () => {
     expect(first).toHaveTextContent('acme/shop-api #139');
     expect(within(first).getByText('Needs you')).toBeInTheDocument();
     expect(first).toHaveTextContent('P1 needs a human decision');
-    expect(within(first).getByLabelText('Round 2 of 3')).toHaveTextContent('2/3');
+    expect(within(first).getByText('Round 2 of 3')).toBeInTheDocument();
     expect(within(first).getByLabelText('Unread')).toBeInTheDocument();
   });
 
@@ -140,5 +140,41 @@ describe('Inbox (handoff §1)', () => {
     renderApp('/');
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await titles()).toHaveLength(2);
+  });
+
+  it('keeps the tab it opened on when a refetch would pick the other one', async () => {
+    let rows = ROWS;
+    fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows }] });
+    const { queryClient } = renderApp('/');
+    // Wait for the first answer (the tabs show before it arrives).
+    expect(await titles()).toHaveLength(2);
+    expect(screen.getByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
+    // Now it is the Mine row that needs you, so a fresh default would be Mine.
+    rows = [ROWS[0]!, { ...ROWS[1]!, needsYou: false }, { ...ROWS[2]!, needsYou: true }];
+    await act(() => queryClient.invalidateQueries({ queryKey: ['inbox'] }));
+    expect(await screen.findByRole('tab', { name: /Mine/ })).toHaveTextContent('1 need you');
+    expect(screen.getByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('puts the focus back on Filter when Esc closes the menu', async () => {
+    serve();
+    renderApp('/');
+    const filter = await screen.findByRole('button', { name: 'Filter' });
+    await userEvent.click(filter);
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Waiting' }));
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Waiting' })).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filter · 1' })).toHaveFocus();
+  });
+
+  it('names the filter menu’s two groups', async () => {
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Filter' }));
+    const repo = screen.getByRole('group', { name: 'Repo' });
+    const status = screen.getByRole('group', { name: 'Status' });
+    expect(within(repo).getAllByRole('menuitemcheckbox').map((i) => i.textContent)).toEqual(['acme/shop-api']);
+    expect(within(status).getAllByRole('menuitemcheckbox').map((i) => i.textContent)).toEqual(['Needs you', 'Agent working', 'Waiting', 'Their turn', 'Ready', 'Closed']);
   });
 });

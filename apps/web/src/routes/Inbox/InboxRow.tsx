@@ -45,8 +45,13 @@ export function InboxRowItem({ row, viewerLogin, selected, cursor, onOpen }: Pro
         <span className={styles.bottom}>
           <StatusPill status={row.status} viewerLogin={viewerLogin} />
           <span className={styles.last}>{row.lastActivity}</span>
-          <span className={styles.round} aria-label={`Round ${row.round} of ${row.maxRounds}`}>
-            {row.round}/{row.maxRounds}
+          <span className={styles.round}>
+            <span aria-hidden="true">
+              {row.round}/{row.maxRounds}
+            </span>
+            <span className="visually-hidden">
+              Round {row.round} of {row.maxRounds}
+            </span>
           </span>
         </span>
       </span>

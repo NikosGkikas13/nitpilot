@@ -12,7 +12,7 @@ export function Home() {
     return (
       <div className={styles.loading} role="status" aria-busy="true">
         <Wordmark size={26} />
-        <span className={styles.visuallyHidden}>Loading…</span>
+        <span className="visually-hidden">Loading…</span>
       </div>
     );
   }
