@@ -1,6 +1,7 @@
 import type { Command } from '../engine/types';
 import type { Prisma } from '../generated/prisma/client';
 import type { Tx } from '../lib/prisma';
+import type { SeqRange } from './save';
 
 /** Summary edits wait for 5 quiet seconds, so a burst of changes makes one GitHub request (spec §15). */
 export const SUMMARY_DEBOUNCE_MS = 5_000;
@@ -10,13 +11,15 @@ export type DispatchEffects = {
   tasksCreated: boolean;
   /** Jobs that were running on a CLI when cancelled; Plan 1b's hub sends them job.cancel. */
   cancelledJobs: { id: string; attempt: number; cliTokenId: string | null; reason: string }[];
+  /** The timeline items this commit added, for the browsers following the chat (ws/web-wire.ts). Null when none. */
+  timeline: SeqRange | null;
 };
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
 /** Turn the engine's commands into Job and Task rows, inside the dispatcher's transaction. */
 export async function applyCommands(tx: Tx, chatId: string, commands: Command[], now: Date): Promise<DispatchEffects> {
-  const effects: DispatchEffects = { jobsChanged: false, tasksCreated: false, cancelledJobs: [] };
+  const effects: DispatchEffects = { jobsChanged: false, tasksCreated: false, cancelledJobs: [], timeline: null };
 
   for (const cmd of commands) {
     switch (cmd.type) {

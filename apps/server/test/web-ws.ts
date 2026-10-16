@@ -34,12 +34,16 @@ export async function startWebHub(deps: WebHubDeps) {
 export class TestTab {
   private readonly inbox: ServerToWeb[] = [];
   private readonly waiting = new Set<() => void>();
+  /** The type of every message received, in order, whether or not a test took it out of the inbox. */
+  readonly log: ServerToWeb['t'][] = [];
   /** Resolves when the socket closes, with the code the server gave. */
   readonly closed: Promise<{ code: number; reason: string }>;
 
   private constructor(private readonly ws: WebSocket) {
     ws.addEventListener('message', (event) => {
-      this.inbox.push(JSON.parse(String(event.data)) as ServerToWeb);
+      const msg = JSON.parse(String(event.data)) as ServerToWeb;
+      this.inbox.push(msg);
+      this.log.push(msg.t);
       for (const wake of this.waiting) wake();
     });
     this.closed = new Promise((resolve) => ws.addEventListener('close', (event) => resolve({ code: event.code, reason: event.reason })));

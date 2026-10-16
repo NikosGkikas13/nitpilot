@@ -36,11 +36,11 @@ export class Dispatcher {
       const out = decide({ chat: loaded.state, rules: loaded.rules, event, now });
       const effects = await prisma.$transaction(async (tx) => {
         await saveChatState(tx, chatId, loaded.state, out.chat, now);
-        await appendTimeline(tx, chatId, out.timeline);
+        const timeline = await appendTimeline(tx, chatId, out.timeline);
         // All or nothing: a comment counts as seen only if what it caused was saved too.
         const seen = opts.seenCommentIds ?? [];
         if (seen.length > 0) await tx.seenComment.createMany({ data: seen.map((commentId) => ({ commentId })), skipDuplicates: true });
-        return applyCommands(tx, chatId, out.commands, now);
+        return { ...(await applyCommands(tx, chatId, out.commands, now)), timeline };
       });
       for (const listener of this.listeners) {
         try {

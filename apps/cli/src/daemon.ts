@@ -62,7 +62,7 @@ export type DaemonOptions = {
 
 export type Daemon = { stopped: Promise<StopReason>; stop(): void };
 
-/** Live status goes out at most this often (spec §10). */
+/** Live status goes out at most this often, except that a new stage goes at once (spec §10). */
 const PROGRESS_EVERY_MS = 2_000;
 
 /** How long to wait for GET /api/me when checking whether the token still works, so a dead server can't stall the daemon. */
@@ -242,11 +242,15 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 
   async function execute(bundle: JobBundle, job: RunningEntry): Promise<JobOutcome> {
     let lastProgress = 0;
+    let lastStage: Stage | null = null;
     const io: JobIo = {
       progress(stage, text) {
         const now = Date.now();
-        if (!welcomed || now - lastProgress < PROGRESS_EVERY_MS) return;
+        if (!welcomed) return;
+        // A new stage ("pushing" after "running_agent") goes at once, so the status line never shows a stale one.
+        if (stage === lastStage && now - lastProgress < PROGRESS_EVERY_MS) return;
         lastProgress = now;
+        lastStage = stage;
         socket?.send({ v: 1, t: 'job.progress', d: { jobId: job.jobId, attempt: job.attempt, stage, text: text.slice(0, 200) } });
       },
       pushing: (from, to) => sendAcked({ v: 1, t: 'job.pushing', id: randomUUID(), d: { jobId: job.jobId, attempt: job.attempt, from, to } }),

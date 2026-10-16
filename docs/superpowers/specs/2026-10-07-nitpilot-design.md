@@ -288,8 +288,8 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - **Push only:** the server sends:
   - `chat.items {chatId, items, lastSeq}` and `chat.state {chatId, …}` to subscribers after each dispatcher commit;
   - `job.progress {chatId, who, action, stage, text}`, forwarded live from the CLI (`action` is `reviewing` or `fixing`, so the line can say "leo's agent is reviewing…");
-  - `inbox.upsert {chatId, rows}` to every participant of a chat that changed: every row that person has for that chat (an author who also reviews has two), an empty list removing them;
-  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding). The chats where that person's agent has active jobs are sent again too, so "working" and "waiting" stay true for everyone.
+  - `inbox.upsert {chatId, rows}` to every participant of a chat that changed: every row that person has for that chat (an author who also reviews has two), an empty list removing them. Only to people who can still read the repo (the inbox's own check);
+  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding). The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone.
   - `chat.error {chatId, code}` when a subscribe is refused, or an open subscription's access check fails: `not_found` (no such chat, or you can't see its repo), `reauth` (your GitHub sign-in expired), `unavailable` (GitHub didn't answer; the client asks again a little later). The subscription is gone. A socket whose session ended is closed with 4401.
 
   The client sends `chat.subscribe {chatId, afterSeq}` and `chat.unsubscribe {chatId}`. A subscribe needs read access to the chat (§16). All changes go through REST.

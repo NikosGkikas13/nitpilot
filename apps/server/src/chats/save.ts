@@ -76,9 +76,12 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
   }
 }
 
-/** Append timeline items with the next sequence numbers (the chat's resume cursor). */
-export async function appendTimeline(tx: Tx, chatId: string, items: NewItem[]): Promise<void> {
-  if (items.length === 0) return;
+/** The seqs a commit added to a chat's timeline, first to last. */
+export type SeqRange = { fromSeq: number; toSeq: number };
+
+/** Append timeline items with the next sequence numbers (the chat's resume cursor). Returns their seqs, or null for none. */
+export async function appendTimeline(tx: Tx, chatId: string, items: NewItem[]): Promise<SeqRange | null> {
+  if (items.length === 0) return null;
   const { lastSeq } = await tx.prChat.update({ where: { id: chatId }, data: { lastSeq: { increment: items.length } }, select: { lastSeq: true } });
   const first = lastSeq - items.length + 1;
   await tx.message.createMany({
@@ -94,4 +97,5 @@ export async function appendTimeline(tx: Tx, chatId: string, items: NewItem[]): 
       data: (item.data ?? undefined) as Prisma.InputJsonValue | undefined,
     })),
   });
+  return { fromSeq: first, toSeq: lastSeq };
 }

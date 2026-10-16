@@ -24,6 +24,7 @@ import { TaskRunner } from '../../src/tasks/runner';
 import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
 import { routeUpgrades } from '../../src/ws/upgrade-router';
 import { WebHub } from '../../src/ws/web-hub';
+import { wireWebHub } from '../../src/ws/web-wire';
 import { wireCliHub } from '../../src/ws/wire';
 import { testApp } from '../app';
 import { makeCliToken, resetDb } from '../db';
@@ -71,6 +72,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
   const access = new RepoAccess(githubApi);
   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
   const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
@@ -79,6 +81,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
     try {
       for (const cli of clis) await cli.stop().catch(() => {});
       cliJobs.stop();
+      live.stop();
       runner.stop();
       await hub.idle();
       hub.closeAll(1001, 'test over');

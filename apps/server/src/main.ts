@@ -24,6 +24,7 @@ import { TaskRunner } from './tasks/runner';
 import { CliHub } from './ws/cli-hub';
 import { routeUpgrades } from './ws/upgrade-router';
 import { WebHub } from './ws/web-hub';
+import { wireWebHub } from './ws/web-wire';
 import { wireCliHub } from './ws/wire';
 
 async function main(): Promise<void> {
@@ -59,6 +60,8 @@ async function main(): Promise<void> {
   });
   // Jobs → CLIs: the assigner, leases, and what CLIs report back (ws/wire.ts).
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
+  // Commits, CLI presence and progress → the browsers following along (ws/web-wire.ts).
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
   const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub });
@@ -83,6 +86,7 @@ async function main(): Promise<void> {
     clearInterval(retries);
     runner.stop();
     cliJobs.stop();
+    live.stop();
     // 1012 tells every CLI the server is restarting, so they reconnect.
     hub.closeAll(CLOSE_CODES.serverRestart, 'server restarting');
     webHub.close(CLOSE_CODES.serverRestart, 'server restarting');

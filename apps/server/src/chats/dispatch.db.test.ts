@@ -27,7 +27,14 @@ describe('Dispatcher', () => {
     expect(saved.jobs[0]!.activeFor).toBe(saved.jobs[0]!.participantId);
     expect(saved.messages.map((m) => m.seq)).toEqual([1, 2]);
     expect(saved.lastSeq).toBe(2);
-    expect(effects[0]).toMatchObject({ jobsChanged: true });
+    expect(effects[0]).toMatchObject({ jobsChanged: true, timeline: { fromSeq: 1, toSeq: 2 } });
+  });
+
+  it('tells listeners which timeline items each commit added, and none when it added nothing', async () => {
+    const { chat, maya, person, dispatcher, effects } = await scene();
+    await dispatcher.dispatch(chat.id, { type: 'human_note', author: person(maya), body: 'Please keep the old API' });
+    await dispatcher.dispatch(chat.id, { type: 'timer', key: 'no-such-timer' });
+    expect(effects.map((e) => e.timeline)).toEqual([{ fromSeq: 1, toSeq: 2 }, { fromSeq: 3, toSeq: 3 }, null]);
   });
 
   it('serializes events for one chat so timeline numbers never collide', async () => {

@@ -41,6 +41,9 @@ export type CliConnection = {
 /** Called for every message a CLI sends, from its hello on: one message at a time per CLI, in order. */
 export type MessageListener = (conn: CliConnection, msg: CliToServer) => Promise<void>;
 
+/** A device came online (its hello was welcomed) or went away. The web app shows it (spec §10 `me.update`). */
+export type PresenceChange = { userId: string; tokenId: string; change: 'connected' | 'disconnected' };
+
 /**
  * The server end of `nitpilot start` (spec §10). CLIs connect to /ws/cli with their token, say
  * hello, and then exchange job messages. This class only looks after the sockets; what a message
@@ -51,6 +54,7 @@ export class CliHub {
   private readonly byToken = new Map<string, CliConnection>();
   private readonly queues = new Set<SerialQueue>();
   private readonly listeners: MessageListener[] = [];
+  private readonly presenceListeners: ((e: PresenceChange) => void)[] = [];
 
   constructor(private readonly opts: { helloTimeoutMs?: number } = {}) {}
 
@@ -61,6 +65,11 @@ export class CliHub {
 
   onMessage(listener: MessageListener): void {
     this.listeners.push(listener);
+  }
+
+  /** Called when a device comes online or goes away. Not when a newer connection of the same device replaces an older one. */
+  onPresence(listener: (e: PresenceChange) => void): void {
+    this.presenceListeners.push(listener);
   }
 
   connections(): CliConnection[] {
@@ -99,6 +108,7 @@ export class CliHub {
     for (const c of silent) {
       this.byToken.delete(c.tokenId);
       c.terminate();
+      this.presenceChanged(c, 'disconnected');
     }
     return silent.length;
   }
@@ -161,7 +171,10 @@ export class CliHub {
     ws.on('close', () => {
       clearTimeout(helloTimer);
       // A newer connection with the same token may already have taken this one's place: leave it be.
-      if (conn && this.byToken.get(conn.tokenId) === conn) this.byToken.delete(conn.tokenId);
+      if (conn && this.byToken.get(conn.tokenId) === conn) {
+        this.byToken.delete(conn.tokenId);
+        this.presenceChanged(conn, 'disconnected');
+      }
       void queue.idle().then(() => this.queues.delete(queue));
     });
     ws.on('error', (err) => console.warn('[cli-hub] socket error:', err.message));
@@ -194,10 +207,23 @@ export class CliHub {
     };
     // One connection per device. A second one with the same token is the same laptop back from
     // sleep, or a second `nitpilot start`: the newest wins, and the old one is told to stop.
-    this.byToken.get(auth.tokenId)?.close(CLOSE_CODES.replaced, `Another ${BRAND.cli} start on this device took over.`);
+    const replaced = this.byToken.get(auth.tokenId);
+    replaced?.close(CLOSE_CODES.replaced, `Another ${BRAND.cli} start on this device took over.`);
     this.byToken.set(auth.tokenId, conn);
     conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC } });
+    // The same device again (back from sleep) was online all along, as far as anyone watching can tell.
+    if (!replaced) this.presenceChanged(conn, 'connected');
     return conn;
+  }
+
+  private presenceChanged(conn: CliConnection, change: PresenceChange['change']): void {
+    for (const listener of this.presenceListeners) {
+      try {
+        listener({ userId: conn.userId, tokenId: conn.tokenId, change });
+      } catch (err) {
+        console.error('[cli-hub] presence listener failed:', err);
+      }
+    }
   }
 
   private async emit(conn: CliConnection, msg: CliToServer): Promise<void> {

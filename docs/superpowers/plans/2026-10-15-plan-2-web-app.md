@@ -9034,7 +9034,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `job.progress` from a CLI goes to that chat's followers only when the job is that CLI owner's own (a small cache from job id to chat, login and kind, filled from the database on a miss), as `{ chatId, who: login, action: 'reviewing' | 'fixing', stage, text }`.
 - CLI: `progress(stage, text)` sends at once when `stage` differs from the last stage sent for that job; otherwise at most every 2 s, as before.
 
-- [ ] **Step 1: Write the failing test for the seqs a commit adds**
+- [x] **Step 1: Write the failing test for the seqs a commit adds**
 
 In `apps/server/src/chats/dispatch.db.test.ts`, the first test's last line becomes `expect(effects[0]).toMatchObject({ jobsChanged: true, timeline: { fromSeq: 1, toSeq: 2 } });`, and a test follows it:
 
@@ -9047,12 +9047,12 @@ In `apps/server/src/chats/dispatch.db.test.ts`, the first test's last line becom
   });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/dispatch.db.test.ts`
 Expected: FAIL, 2 tests: the effects have no `timeline`.
 
-- [ ] **Step 3: A commit says which items it added**
+- [x] **Step 3: A commit says which items it added**
 
 In `apps/server/src/chats/save.ts`, replace `appendTimeline`'s doc comment and first lines (`export async function appendTimeline(…): Promise<void> {` and `if (items.length === 0) return;`) so it ends up as:
 
@@ -9093,12 +9093,12 @@ and start `applyCommands` with `const effects: DispatchEffects = { jobsChanged: 
 
 In `apps/server/src/chats/dispatch.ts`, inside the transaction, `await appendTimeline(tx, chatId, out.timeline);` becomes `const timeline = await appendTimeline(tx, chatId, out.timeline);`, and `return applyCommands(tx, chatId, out.commands, now);` becomes `return { ...(await applyCommands(tx, chatId, out.commands, now)), timeline };`.
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/dispatch.db.test.ts`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 5: Write the failing test for presence**
+- [x] **Step 5: Write the failing test for presence**
 
 In `apps/server/src/ws/cli-hub.db.test.ts`, import `type PresenceChange` beside `CliHub`, and add after the test "lets a newer connection with the same token take over, and tells the older one to stop":
 
@@ -9123,12 +9123,12 @@ In `apps/server/src/ws/cli-hub.db.test.ts`, import `type PresenceChange` beside 
   });
 ```
 
-- [ ] **Step 6: Run it to see it fail**
+- [x] **Step 6: Run it to see it fail**
 
 Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
 Expected: FAIL: `TypeError: hub.onPresence is not a function`.
 
-- [ ] **Step 7: The CLI hub reports presence**
+- [x] **Step 7: The CLI hub reports presence**
 
 In `apps/server/src/ws/cli-hub.ts`, add after `MessageListener`:
 
@@ -9184,12 +9184,12 @@ Then call it where a device comes and goes:
 
 (The replaced connection's own `'close'` later finds a newer connection under its token and reports nothing.)
 
-- [ ] **Step 8: Run it to see it pass**
+- [x] **Step 8: Run it to see it pass**
 
 Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
 Expected: PASS, 11 tests.
 
-- [ ] **Step 9: Write the failing wiring tests**
+- [x] **Step 9: Write the failing wiring tests**
 
 The tests check the order messages arrive in, so the test tab keeps a log. In `apps/server/test/web-ws.ts`, add a field to `TestTab` after `waiting`:
 
@@ -9346,12 +9346,12 @@ describe('wireWebHub: progress lines', () => {
 });
 ```
 
-- [ ] **Step 10: Run them to see them fail**
+- [x] **Step 10: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
 Expected: FAIL: `./web-wire` doesn't exist.
 
-- [ ] **Step 11: Wire the hubs together**
+- [x] **Step 11: Wire the hubs together**
 
 `me.update` sends what `GET /api/me` answers, so that answer moves where both can use it. In `apps/server/src/auth/users.ts`, import `type WebMe` from `@nitpilot/protocol` and `type LiveClis` from `'../chats/activity'`, and add at the end:
 
@@ -9563,12 +9563,12 @@ async function participantsOnNitpilot(chatId: string): Promise<string[]> {
 }
 ```
 
-- [ ] **Step 12: Run them to see them pass**
+- [x] **Step 12: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts src/http/routes/me.db.test.ts`
 Expected: PASS, 6 and 4 tests.
 
-- [ ] **Step 13: Wire it in `main.ts` and the end-to-end harness**
+- [x] **Step 13: Wire it in `main.ts` and the end-to-end harness**
 
 In `apps/server/src/main.ts`: import `wireWebHub` from `'./ws/web-wire'`; the hub's line becomes
 
@@ -9588,7 +9588,7 @@ and in the shutdown handler, `live.stop();` after `cliJobs.stop();`.
 
 In `apps/server/test/e2e/harness.ts`, the same: import `wireWebHub`; the hub's line becomes `const access = new RepoAccess(githubApi);`, `const webHub = new WebHub({ access, loadItems: loadItemsAfter });`, `const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });`; and `live.stop();` after `cliJobs.stop();` in `close()`.
 
-- [ ] **Step 14: Write the failing CLI test for stage changes**
+- [x] **Step 14: Write the failing CLI test for stage changes**
 
 Plan 1b's deferred minor: the 2-second throttle dropped a stage change, so the line could say "running the agent" while it was pushing. In `apps/cli/src/daemon.test.ts`, add before the test "stops a job the server cancels, and sends nothing for it":
 
@@ -9615,7 +9615,7 @@ Plan 1b's deferred minor: the 2-second throttle dropped a stage change, so the l
 Run: `npm test -w apps/cli -- src/daemon.test.ts`
 Expected: FAIL: the second `job.progress` never arrives (the throttle drops it).
 
-- [ ] **Step 15: A new stage goes at once**
+- [x] **Step 15: A new stage goes at once**
 
 In `apps/cli/src/daemon.ts`, `PROGRESS_EVERY_MS`'s comment becomes `/** Live status goes out at most this often, except that a new stage goes at once (spec §10). */`, and in `execute`, the start of `io` becomes:
 
@@ -9637,16 +9637,16 @@ In `apps/cli/src/daemon.ts`, `PROGRESS_EVERY_MS`'s comment becomes `/** Live sta
 Run: `npm test -w apps/cli -- src/daemon.test.ts`
 Expected: PASS, 26 tests.
 
-- [ ] **Step 16: The spec**
+- [x] **Step 16: The spec**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "Web ↔ server", the `me.update` item's second sentence ("The chats where that person's agent has active jobs are sent again too, so "working" and "waiting" stay true for everyone.") becomes: "The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone." In the `inbox.upsert` item, add: "Only to people who can still read the repo (the inbox's own check)."
 
-- [ ] **Step 17: Run the full suite**
+- [x] **Step 17: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: protocol 49, CLI 294 passed + 14 skipped, server 716, web 73; end to end 5; typecheck and lint clean.
 
-- [ ] **Step 18: Commit**
+- [x] **Step 18: Commit**
 
 ```bash
 git add apps/server/src apps/server/test/web-ws.ts apps/server/test/e2e/harness.ts apps/cli/src/daemon.ts apps/cli/src/daemon.test.ts docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeCliToken, makeUser } from '../../test/db';
 import { hello, listen, ping, sleep, TestCli, upgradeStatus } from '../../test/ws';
 import { prisma } from '../lib/prisma';
-import { CliHub } from './cli-hub';
+import { CliHub, type PresenceChange } from './cli-hub';
 
 const running: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -122,6 +122,25 @@ describe('connections', () => {
     expect((await first.closed).code).toBe(CLOSE_CODES.replaced);
     await sleep(50); // the server sees the old socket close; that must not unlist the new one
     expect(hub.connections().map((c) => c.device)).toEqual(['second']);
+  });
+
+  it('says when a device comes online and when it goes, but not when the same device reconnects over itself', async () => {
+    const { hub, url } = await hubOnPort();
+    const changes: PresenceChange[] = [];
+    hub.onPresence((e) => changes.push(e));
+    const { user, token } = await device();
+    const first = await TestCli.online(url, token.raw);
+    const second = await TestCli.online(url, token.raw);
+    await first.closed;
+    second.close();
+    await vi.waitFor(() => expect(changes.map((c) => c.change)).toEqual(['connected', 'disconnected']));
+    expect(changes[0]).toEqual({ userId: user.id, tokenId: token.id, change: 'connected' });
+
+    // A CLI that went silent is dropped, and that's a disconnect too.
+    await TestCli.online(url, token.raw);
+    await vi.waitFor(() => expect(changes).toHaveLength(3));
+    hub.dropSilent(new Date(Date.now() + 1_000));
+    expect(changes.map((c) => c.change)).toEqual(['connected', 'disconnected', 'connected', 'disconnected']);
   });
 
   it('hands hello and every later message to the listeners, one at a time, in order', async () => {

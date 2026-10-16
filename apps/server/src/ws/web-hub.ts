@@ -111,11 +111,23 @@ export class WebHub {
     }
   }
 
+  /** Whether this person has a tab open right now. */
+  connected(userId: string): boolean {
+    return [...this.clients].some((c) => c.user.id === userId);
+  }
+
   /** Who follows this chat right now, once each. */
   subscribers(chatId: string): SessionUser[] {
     const users = new Map<string, SessionUser>();
     for (const client of this.clients) if (client.subs.has(chatId)) users.set(client.user.id, client.user);
     return [...users.values()];
+  }
+
+  /** Every chat someone follows right now, once each. */
+  followedChats(): string[] {
+    const chats = new Set<string>();
+    for (const client of this.clients) for (const chatId of client.subs.keys()) chats.add(chatId);
+    return [...chats];
   }
 
   /** Resolves once everything queued so far for every socket has run. Tests use it. */

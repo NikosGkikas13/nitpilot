@@ -134,6 +134,24 @@ describe('startDaemon', () => {
     expect(executor).not.toHaveBeenCalled();
   });
 
+  it('sends a change of stage at once, and the same stage at most every 2 s (spec §10)', async () => {
+    const finish = deferred<JobOutcome>();
+    const { hub } = await setup({
+      executor: async (_bundle, io) => {
+        io.progress('preparing', 'Checking out the PR');
+        io.progress('running_agent', 'Running fake');
+        io.progress('running_agent', 'calling add_point');
+        return finish.promise;
+      },
+    });
+    const { conn } = await welcomed(hub);
+    conn.send(assign());
+    expect((await conn.next('job.progress')).d).toMatchObject({ ...JOB, stage: 'preparing', text: 'Checking out the PR' });
+    expect((await conn.next('job.progress')).d).toMatchObject({ stage: 'running_agent', text: 'Running fake' });
+    await conn.nothing('job.progress');
+    finish.resolve(done);
+  });
+
   it('stops a job the server cancels, and sends nothing for it', async () => {
     let signal: AbortSignal | undefined;
     const executor: JobExecutor = (_bundle, io) =>
