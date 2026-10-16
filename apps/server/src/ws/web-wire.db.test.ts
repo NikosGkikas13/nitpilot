@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import type { TimelineItem } from '@nitpilot/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../test/db';
 import { fakeFetch } from '../../test/fake-fetch';
 import { sessionCookieFor } from '../../test/http';
@@ -15,18 +16,19 @@ import { wireWebHub } from './web-wire';
 const DEBOUNCE_MS = 30;
 const stops: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const stop of stops.splice(0).reverse()) await stop();
 });
 
 /** The server's live side, wired as main.ts wires it: a dispatcher, a CLI hub and a web hub. maya's PR, leo asked to review. */
-async function setup() {
+async function setup(wiring: { loadItems?: (chatId: string, afterSeq: number) => Promise<TimelineItem[]> } = {}) {
   const repo = await makeRepo();
   const access = new RepoAccess(new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: () => ({ id: 1 }) })));
   const dispatcher = new Dispatcher();
   const cliHub = new CliHub();
   const cliServer = await listen(cliHub);
   const web = await startWebHub({ access, loadItems: loadItemsAfter });
-  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS });
+  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS, ...wiring });
   stops.push(() => cliServer.close(), () => web.close(), () => live.stop());
 
   const [maya, leo, reader] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' }), await makeUser({ login: 'rae' })];
@@ -75,6 +77,29 @@ describe('wireWebHub: after a commit (spec §10)', () => {
     await sleep(DEBOUNCE_MS * 3);
     expect(mayaTab.seqs(chat.id)).toEqual([1, 2, 3]);
     expect(mayaTab.log.filter((t) => t === 'chat.state')).toHaveLength(1);
+  });
+});
+
+describe('wireWebHub: when the new items cannot be read', () => {
+  it('asks the open tabs to resume instead of skipping the items, and the next try gets them', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let broken = true;
+    const { chat, maya, tab, open } = await setup({
+      loadItems: async (chatId, afterSeq) => {
+        if (broken) throw new Error('database went away');
+        return loadItemsAfter(chatId, afterSeq);
+      },
+    });
+    const mayaTab = await tab(maya);
+    await open();
+    expect((await mayaTab.next('chat.error')).d).toEqual({ chatId: chat.id, code: 'unavailable' });
+    expect(mayaTab.seqs(chat.id)).toEqual([]);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(chat.id), expect.any(Error));
+
+    // The tab asks again from the newest seq it has (none yet), and the database fills the gap.
+    broken = false;
+    mayaTab.subscribe(chat.id, 0);
+    await expect.poll(() => mayaTab.seqs(chat.id)).toEqual([1, 2]);
   });
 });
 

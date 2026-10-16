@@ -321,6 +321,70 @@ describe('WebHub: when it cannot check or read', () => {
   });
 });
 
+describe('WebHub: dropChat', () => {
+  it("ends that chat's subscriptions with \"unavailable\", once per following socket, and leaves the socket's other chats alone", async () => {
+    const { url, origin } = await start();
+    const [a, b] = [await chatWith(0), await chatWith(0)];
+    const { cookie } = await person();
+    const [one, two, bystander] = [await TestTab.open(url, { cookie, origin }), await TestTab.open(url, { cookie, origin }), await TestTab.open(url, { cookie: (await person()).cookie, origin })];
+    for (const t of [one, two]) {
+      t.subscribe(a.chat.id);
+      t.subscribe(b.chat.id);
+      await t.next('chat.items');
+      await t.next('chat.items');
+    }
+    bystander.subscribe(b.chat.id);
+    await bystander.next('chat.items');
+
+    server!.hub.dropChat(a.chat.id);
+    for (const t of [one, two]) expect((await t.next('chat.error')).d).toEqual({ chatId: a.chat.id, code: 'unavailable' });
+    await server!.hub.idle();
+    expect(server!.hub.subscribers(a.chat.id)).toEqual([]);
+    expect(server!.hub.subscribers(b.chat.id)).toHaveLength(2);
+    await one.nothing('chat.error');
+    await bystander.nothing('chat.error');
+
+    // The other chat keeps receiving; the dropped one does not.
+    await commitItem(b.chat.id);
+    expect((await one.next('chat.items')).d.chatId).toBe(b.chat.id);
+    await commitItem(a.chat.id);
+    await one.nothing('chat.items');
+  });
+
+  it('does not drop a subscription the tab made again before the drop reached its turn', async () => {
+    let reachedB!: () => void;
+    const loadingB = new Promise<void>((resolve) => (reachedB = resolve));
+    let releaseB!: () => void;
+    const gateB = new Promise<void>((resolve) => (releaseB = resolve));
+    let chatB = '';
+    const { url, origin } = await start(async (chatId, afterSeq) => {
+      if (chatId === chatB) {
+        reachedB();
+        await gateB;
+      }
+      return loadItemsAfter(chatId, afterSeq);
+    });
+    const [a, b] = [await chatWith(0), await chatWith(0)];
+    chatB = b.chat.id;
+    const tab = await TestTab.open(url, { cookie: (await person()).cookie, origin });
+    tab.subscribe(a.chat.id);
+    await tab.next('chat.items');
+    // The socket's queue is busy reading chat B's catch-up; a fresh subscribe to A waits behind it…
+    tab.subscribe(b.chat.id);
+    await loadingB;
+    tab.subscribe(a.chat.id);
+    await sleep(100);
+    // …and the drop (of the subscription A has now) is queued after that.
+    server!.hub.dropChat(a.chat.id);
+    releaseB();
+    await server!.hub.idle();
+    await tab.next('chat.items');
+    await tab.next('chat.items');
+    await tab.nothing('chat.error');
+    expect(server!.hub.subscribers(a.chat.id)).toHaveLength(1);
+  });
+});
+
 describe('WebHub: subscriptions', () => {
   it('stops sending after an unsubscribe, and forgets a closed socket', async () => {
     const { url, origin } = await start();

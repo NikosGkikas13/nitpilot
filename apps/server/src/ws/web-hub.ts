@@ -94,6 +94,24 @@ export class WebHub {
     }
   }
 
+  /**
+   * End every subscription to this chat and tell its tabs `unavailable`, for when the server could not read the
+   * items it meant to send. A tab then asks again a few seconds later from its newest seq, so the database fills in
+   * what it missed. Anything already queued for a socket goes first, and a subscription the tab has made again
+   * since is left alone.
+   */
+  dropChat(chatId: string): void {
+    for (const client of this.clients) {
+      const sub = client.subs.get(chatId);
+      if (!sub) continue;
+      client.queue.push(async () => {
+        if (client.subs.get(chatId) !== sub) return;
+        this.dropSubscription(client, sub);
+        send(client.ws, chatError(chatId, 'unavailable'));
+      });
+    }
+  }
+
   /** A message for everyone following this chat (the live progress line, say). */
   sendToChat(chatId: string, msg: ServerToWeb): void {
     for (const client of this.clients) this.sendIfSubscribed(client, chatId, msg);

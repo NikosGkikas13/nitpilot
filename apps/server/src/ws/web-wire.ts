@@ -1,4 +1,4 @@
-import type { InboxRow, JobType } from '@nitpilot/protocol';
+import type { InboxRow, JobType, TimelineItem } from '@nitpilot/protocol';
 import type { RepoAccess } from '../auth/repo-access';
 import { loadWebMe } from '../auth/users';
 import type { Dispatcher } from '../chats/dispatch';
@@ -18,15 +18,24 @@ export const STATE_DEBOUNCE_MS = 100;
 /** What a progress line needs to know about a job: its chat, whose it is, and what kind of work. */
 type JobInfo = { chatId: string; userId: string; login: string; action: 'reviewing' | 'fixing' };
 
-export type WebWiring = { webHub: WebHub; dispatcher: Dispatcher; cliHub: CliHub; access: RepoAccess; debounceMs?: number };
+export type WebWiring = {
+  webHub: WebHub;
+  dispatcher: Dispatcher;
+  cliHub: CliHub;
+  access: RepoAccess;
+  debounceMs?: number;
+  /** Reads a chat's items after a seq (chats/timeline.ts). Tests pass one that fails. */
+  loadItems?: (chatId: string, afterSeq: number) => Promise<TimelineItem[]>;
+};
 
 /**
  * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
  * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
  * gets `me.update`, and the chats where their agent has work or shows its presence are sent again. A CLI's progress
- * lines go to the chat's followers. main.ts and the tests call this, so the tests run what production runs.
+ * lines go to the chat's followers. A failure is logged and never reaches the dispatcher; if a chat's new items
+ * can't be read, its open tabs are told to resume. main.ts and the tests call this, so the tests run what production runs.
  */
-export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS }: WebWiring): { stop(): void } {
+export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
   // Everything about one chat goes out in order: its items before the state that follows them.
   const perChat = new KeyedLock();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -49,9 +58,21 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
     );
   }
 
+  /**
+   * Send the items a commit added. If they can't be read, the tabs following the chat are told to resume (each asks
+   * again from its newest seq and the database fills the gap): sending the next commit's items instead would
+   * make them skip these.
+   */
   async function publishItems(chatId: string, range: SeqRange): Promise<void> {
     if (webHub.subscribers(chatId).length === 0) return;
-    const items = (await loadItemsAfter(chatId, range.fromSeq - 1)).filter((item) => item.seq <= range.toSeq);
+    let items: TimelineItem[];
+    try {
+      items = (await loadItems(chatId, range.fromSeq - 1)).filter((item) => item.seq <= range.toSeq);
+    } catch (err) {
+      console.error(`[web-wire] could not read the new items of chat ${chatId}; asking its open tabs to resume:`, err);
+      webHub.dropChat(chatId);
+      return;
+    }
     webHub.publishItems(chatId, items);
   }
 
