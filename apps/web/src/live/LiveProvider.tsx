@@ -1,3 +1,4 @@
+import type { ChatResponse } from '@nitpilot/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useEffectEvent, useState, type ReactNode } from 'react';
 import { applyServerMessage } from './apply';
@@ -22,6 +23,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         open,
         onMessage: (msg) => applyServerMessage(queryClient, msg),
         onSignedOut: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+        // The socket only brings back missed items: read the chats' views again (REST merges, so no item is lost).
+        onResume: (chatIds) =>
+          void queryClient.invalidateQueries({ queryKey: ['chat'], predicate: (q) => chatIds.includes((q.state.data as ChatResponse | undefined)?.view.id ?? '') }),
       }),
   );
   useEffect(() => {

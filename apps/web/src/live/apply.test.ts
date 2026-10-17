@@ -1,6 +1,6 @@
 import type { ChatResponse, InboxRow, WebMe } from '@nitpilot/protocol';
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { chatResponse, chatView, item } from '../test/chat';
 import { applyServerMessage, mergeItems } from './apply';
 import { progressKey } from './progress';
@@ -34,6 +34,16 @@ describe('applyServerMessage', () => {
     applyServerMessage(queryClient, { v: 1, t: 'chat.state', d: { chatId: 'chat_142', view: chatView({ phase: 'ready', lastSeq: 2 }) } });
     expect(queryClient.getQueryData<ChatResponse>(key)!.view.phase).toBe('ready');
     expect(queryClient.getQueryData(progressKey('chat_142'))).toBeNull();
+  });
+
+  it('asks the server again about a chat the socket lost, but not for one GitHub could not check right now', () => {
+    const queryClient = cache();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    applyServerMessage(queryClient, { v: 1, t: 'chat.error', d: { chatId: 'chat_142', code: 'unavailable' } });
+    expect(invalidate).not.toHaveBeenCalled();
+    applyServerMessage(queryClient, { v: 1, t: 'chat.error', d: { chatId: 'chat_142', code: 'not_found' } });
+    applyServerMessage(queryClient, { v: 1, t: 'chat.error', d: { chatId: 'chat_142', code: 'reauth' } });
+    expect(invalidate).toHaveBeenCalledTimes(2);
   });
 
   it("replaces a chat's inbox rows, and who you are", () => {

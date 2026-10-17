@@ -27,7 +27,9 @@ export function applyServerMessage(queryClient: QueryClient, msg: ServerToWeb): 
       if (msg.d.view.activity.kind !== 'agent_working') queryClient.setQueryData(progressKey(msg.d.chatId), null);
       return;
     case 'chat.error':
-      // Ask again over REST, which says what's wrong: a 404 ("Nothing here") or a 401 (sign in with GitHub again).
+      // GitHub couldn't be asked right now: the chat on screen stays, and the socket asks again itself (live/socket.ts).
+      if (msg.d.code === 'unavailable') return;
+      // Otherwise ask again over REST, which says what's wrong: a 404 ("Nothing here") or a 401 (sign in with GitHub again).
       void queryClient.invalidateQueries({ queryKey: ['chat'], predicate: (q) => (q.state.data as ChatResponse | undefined)?.view.id === msg.d.chatId });
       return;
     case 'job.progress':

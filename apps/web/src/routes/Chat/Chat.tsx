@@ -30,8 +30,14 @@ export function Chat() {
       </Pane>
     );
   }
-  if (chat.isError) return <ChatUnavailable error={chat.error} onRetry={() => void chat.refetch()} />;
+  // A failed refetch keeps the data it had: only a chat that is gone or needs a new sign-in replaces a working screen.
+  if (chat.isError && (!chat.data || isFatal(chat.error))) return <ChatUnavailable error={chat.error} onRetry={() => void chat.refetch()} />;
   return <ChatScreen key={chat.data.view.id} me={me} data={chat.data} cacheKey={chatKey(owner, repo, number)} />;
+}
+
+/** An error that ends the chat screen even when it has data: the chat is gone (404) or its viewer must sign in again. */
+function isFatal(error: Error): boolean {
+  return error instanceof ApiError && (error.status === 404 || error.code === 'reauth');
 }
 
 /** "No such chat" and "you can't see it" alike (spec §16); a GitHub sign-in to renew; anything else, with a way to try again. */
@@ -98,7 +104,7 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
         )}
         {/* On a phone the header shrinks to one line once the feed has scrolled 48 px (handoff "App shell and layout").
             It takes focus when clicked or tabbed to, so ↑/↓ scroll it (lib/keys.ts leaves them alone inside <main>). */}
-        <div className={styles.scroll} tabIndex={0} onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
+        <div className={styles.scroll} tabIndex={0} role="region" aria-label="Timeline" onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
           <Timeline view={view} items={items} hasOlder={hasOlder} you={me.login} loadingEarlier={loadingEarlier} onLoadEarlier={() => void loadEarlier()} />
         </div>
       </section>

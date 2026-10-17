@@ -47,7 +47,10 @@ export function ChatHeader(props: { view: ChatView; you: string; desktop: boolea
         <h1 className={styles.title}>{view.title}</h1>
         {role && <span className={styles.roleChip}>{ROLE[role]}</span>}
         <a className={styles.button} href={view.url} target="_blank" rel="noreferrer">
-          Open on GitHub <span className={styles.arrow}>↗</span>
+          Open on GitHub{' '}
+          <span className={styles.arrow} aria-hidden="true">
+            ↗
+          </span>
         </a>
         {props.details.available && (
           <button type="button" className={`${styles.iconButton} ${props.details.open ? styles.pressed : ''}`} onClick={props.details.toggle} aria-pressed={props.details.open} aria-label="PR details" title="PR details">

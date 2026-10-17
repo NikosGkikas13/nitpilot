@@ -16,6 +16,12 @@ export type LiveSocketOptions = {
   onMessage(msg: ServerToWeb): void;
   /** The server closed with 4401: the session ended. */
   onSignedOut?(): void;
+  /**
+   * Called right after the socket subscribed again to these chats following a gap (a reconnect, or the 5 s retry of
+   * a chat GitHub couldn't check). Subscribing sends the missed items but not the chat's view, so a screen that
+   * wants its phase, points and banner current should ask for them again.
+   */
+  onResume?(chatIds: string[]): void;
   open?: (url: string) => SocketLike;
   /** Reconnect waits: 1 s, doubling up to 30 s, each nudged up to 20% either way (docs/why/websockets.md). */
   backoff?: { startMs: number; maxMs: number; random: () => number };
@@ -41,6 +47,10 @@ export class LiveSocket {
   private delayMs: number;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
+  /** True once a socket of this LiveSocket has opened: the next open is a re-open. */
+  private hasOpened = false;
+  /** Pending 5 s re-subscribes, so stop() can cancel them. */
+  private readonly retries = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(private readonly opts: LiveSocketOptions) {
     this.backoff = opts.backoff ?? { startMs: 1_000, maxMs: 30_000, random: Math.random };
@@ -56,6 +66,8 @@ export class LiveSocket {
     this.running = false;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    for (const retry of this.retries) clearTimeout(retry);
+    this.retries.clear();
     const ws = this.ws;
     this.ws = null;
     ws?.close(1000);
@@ -78,6 +90,9 @@ export class LiveSocket {
     ws.onopen = () => {
       this.delayMs = this.backoff.startMs;
       for (const [chatId, afterSeq] of this.chats) this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+      const reopened = this.hasOpened;
+      this.hasOpened = true;
+      if (reopened && this.chats.size > 0) this.opts.onResume?.([...this.chats.keys()]);
     };
     ws.onmessage = (event) => this.receive(event.data);
     ws.onclose = (event) => {
@@ -109,10 +124,14 @@ export class LiveSocket {
       this.chats.delete(chatId);
       return;
     }
-    setTimeout(() => {
+    const retry = setTimeout(() => {
+      this.retries.delete(retry);
       const afterSeq = this.chats.get(chatId);
-      if (afterSeq !== undefined) this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+      if (afterSeq === undefined || this.ws?.readyState !== 1) return;
+      this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
+      this.opts.onResume?.([chatId]);
     }, RESUBSCRIBE_MS);
+    this.retries.add(retry);
   }
 
   private reconnectLater(): void {

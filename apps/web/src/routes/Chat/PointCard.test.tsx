@@ -49,6 +49,15 @@ describe('PointCard (handoff §3)', () => {
     expect(screen.queryByRole('article')).not.toBeInTheDocument();
   });
 
+  it('keeps the focus on the point when it opens or closes, but never takes it on the first render', async () => {
+    card(point({ status: 'resolved', authorResolution: 'fixed' }));
+    expect(document.body).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: /P1, Major bug point, Resolved/ }));
+    expect(screen.getByRole('button', { name: 'Collapse point' })).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse point' }));
+    expect(screen.getByRole('button', { name: /P1, Major bug point, Resolved/ })).toHaveFocus();
+  });
+
   it('shows the thread: whose agent said what, the outcome, and the commit that fixed it', () => {
     const thread = [
       item(6, { kind: 'point_reply', author: maya, pointNumber: 1, body: 'Return null for empty cursors.', data: { resolution: 'fixed', commit: 'a1b2c3d4e5f6' } }),

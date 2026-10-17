@@ -1,5 +1,5 @@
 import type { PointView, Severity, TimelineItem } from '@nitpilot/protocol';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
 import { Avatar } from '../../components/Avatar/Avatar';
 import { agentName, personName } from '../../lib/names';
@@ -25,12 +25,25 @@ export type People = ReadonlyMap<string, { avatarUrl: string }>;
  */
 export function PointCard({ point, thread, you, people, repoUrl }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string }) {
   const [open, setOpen] = useState(point.status !== 'resolved');
+  // Opening or closing swaps one button for the other, so the focused one disappears: hand the focus to its successor.
+  // Only after the person toggled it, never on the first render.
+  const toggled = useRef(false);
+  const collapsedButton = useRef<HTMLButtonElement>(null);
+  const collapseButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!toggled.current) return;
+    (open ? collapseButton : collapsedButton).current?.focus();
+  }, [open]);
+  function toggle(next: boolean): void {
+    toggled.current = true;
+    setOpen(next);
+  }
   const severity = SEVERITY[point.severity];
   const label = `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;
 
   if (!open) {
     return (
-      <button type="button" className={styles.collapsed} onClick={() => setOpen(true)} aria-expanded="false" aria-label={label}>
+      <button ref={collapsedButton} type="button" className={styles.collapsed} onClick={() => toggle(true)} aria-expanded="false" aria-label={label}>
         <span className={styles.checkSmall} aria-hidden="true">
           ✓
         </span>
@@ -66,7 +79,7 @@ export function PointCard({ point, thread, you, people, repoUrl }: { point: Poin
             {STATUS[point.status]}
           </span>
           {point.status === 'resolved' && (
-            <button type="button" className={styles.collapse} onClick={() => setOpen(false)} aria-expanded="true" aria-label="Collapse point">
+            <button ref={collapseButton} type="button" className={styles.collapse} onClick={() => toggle(false)} aria-expanded="true" aria-label="Collapse point">
               ▴
             </button>
           )}

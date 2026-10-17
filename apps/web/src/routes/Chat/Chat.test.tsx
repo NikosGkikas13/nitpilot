@@ -64,6 +64,8 @@ describe('Chat (handoff §2)', () => {
     expect(within(chat).getByRole('article', { name: /P1, Blocker security point, Escalated/ })).toBeInTheDocument();
     expect(within(chat).getByRole('article', { name: /P2, Nit bug point, Open/ })).toBeInTheDocument();
     expect(chat).toHaveTextContent('Youto the agents');
+    // The feed scrolls with ↑/↓ once focused, so it is a named, focusable region.
+    expect(within(chat).getByRole('region', { name: 'Timeline' })).toHaveAttribute('tabindex', '0');
 
     const details = screen.getByRole('complementary', { name: 'PR details' });
     expect(await within(details).findByText('src/orders/list.ts')).toBeInTheDocument();
@@ -160,6 +162,36 @@ describe('Chat (handoff §2)', () => {
     renderApp(PATH);
     await screen.findByRole('region', { name: /PR chat/ });
     expect(screen.getByRole('link', { name: 'Back to inbox' })).toHaveAttribute('href', '/');
+  });
+});
+
+describe('Chat: a GitHub blip does not replace a working chat', () => {
+  const chatGets = (fetch: ReturnType<typeof serve>) => fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/api/chats/acme/shop-api/142') && (init?.method ?? 'GET') === 'GET').length;
+
+  it('makes no new request when the socket says GitHub could not be asked (it asks again itself)', async () => {
+    const fetch = serve();
+    const { sockets } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    const before = chatGets(fetch);
+    act(() => sockets.last().receive({ v: 1, t: 'chat.error', d: { chatId: 'chat_142', code: 'unavailable' } }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(chatGets(fetch)).toBe(before);
+    expect(screen.getByRole('region', { name: /PR chat/ })).toBeInTheDocument();
+  });
+
+  it('keeps the chat on screen when a background refetch answers 502', async () => {
+    let down = false;
+    serve(() => (down ? [502, { error: { code: 'unavailable', message: 'GitHub is not answering.' } }] : [200, CHAT]));
+    const { queryClient } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    down = true;
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['chat'] });
+    });
+    await waitFor(() => expect(queryClient.getQueryState(['chat', 'acme', 'shop-api', '142'])?.status).toBe('error'));
+    expect(screen.getByRole('heading', { level: 1, name: 'Add cursor pagination to /orders' })).toBeInTheDocument();
+    expect(screen.getByText('Keep the old endpoint working')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 });
 
