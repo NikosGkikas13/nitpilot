@@ -62,6 +62,38 @@ describe('connecting to /ws/cli', () => {
     expect((await cli.next('welcome')).d.settings).toEqual({ autoReview: false, autoAddress: true, dailyJobCap: 15 });
   });
 
+  it('sends a settings change that landed while the welcome was being prepared, right after the welcome', async () => {
+    const { url } = await hubOnPort();
+    const { user, token } = await device('maya');
+    // The first read of the user (the hub's, for the welcome) returns the old settings; then, before the hub goes on,
+    // the settings change in the database, as a PUT /api/me/settings would. Its sendSettings reaches nobody: this CLI
+    // isn't registered yet.
+    const realRead = prisma.user.findUniqueOrThrow.bind(prisma.user);
+    const spy = vi.spyOn(prisma.user, 'findUniqueOrThrow') as unknown as { mockImplementationOnce(fn: (args: unknown) => Promise<unknown>): void };
+    spy.mockImplementationOnce(async (args) => {
+      const old = await realRead(args as never);
+      await prisma.user.update({ where: { id: user.id }, data: { dailyJobCap: 90 } });
+      return old;
+    });
+    try {
+      const cli = await TestCli.connect(url, token.raw);
+      cli.send(hello());
+      expect((await cli.next('welcome')).d.settings.dailyJobCap).toBe(40);
+      expect((await cli.next('settings')).d).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 90 });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('sends no settings after the welcome when nothing changed meanwhile', async () => {
+    const { url } = await hubOnPort();
+    const { token } = await device('maya');
+    const cli = await TestCli.connect(url, token.raw);
+    cli.send(hello());
+    await cli.next('welcome');
+    await cli.nothing('settings', 150);
+  });
+
   it('closes with 4426 when the CLI speaks another protocol version: a Plan 1 CLI, with its old hello, is told to upgrade', async () => {
     const { hub, url } = await hubOnPort();
     const { token } = await device();

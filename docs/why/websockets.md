@@ -25,6 +25,8 @@ A person's Auto defaults and daily job cap are columns on `User` (spec §8), edi
 
 The cap itself is still enforced by each CLI, counting from its own midnight (`apps/cli/src/state.ts`), because the CLI is what spends the agent quota. Every `ping` reports the count as `usedToday`, and `GET /api/me` adds up the person's connected CLIs for the Settings page's usage bar.
 
+One race is covered: the hub reads the settings, then registers the connection and sends `welcome`. If the person saves new settings during that read, the push finds no connection yet and the welcome carries the old ones. So right after the welcome the hub reads the settings once more and, if they differ, sends a `settings` message (`sendSettingsIfChanged` in `ws/cli-hub.ts`). It's like refetching after a mutation that may have landed while your first fetch was in flight.
+
 ## One connection per device
 
 Each `nitpilot login` creates one token per device, and the hub keeps one connection per token. A second connection with the same token is either the same laptop back from sleep (its old socket is dead anyway) or a second `nitpilot start` in another terminal. Either way the newest wins and the old one is closed with `4409`, so two daemons never fight over the same jobs.

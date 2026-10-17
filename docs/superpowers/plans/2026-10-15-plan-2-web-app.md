@@ -209,6 +209,7 @@ W5 was written at step level on 2026-10-18, against branch `plan-2-web-app` at `
 - `Settings.dailyJobCap` is any whole number from 5 to 200; steps of 5 belong to the Settings page's stepper. Old `auto` / `dailyJobCap` keys in `config.json` are dropped before the strict schema runs, whatever their value.
 - `usedToday` is read where pings are handled (`jobs/leases.ts`), not in `handlers.ts`. No `me.update` after a settings change and no live `usedToday` yet: W7's Settings page decides.
 - The e2e harness and the Playwright server run the real daemon, so they needed no change; `test/ws.ts` and `scripts/fake-cli.ts` move to protocol 2.
+- Fix round 1 (review): the welcome re-reads the settings after the connection is registered and sends `settings` if a change landed in between; the settings route tests gain a malformed-JSON case and check that valid PUTs after a refused one reach the CLI.
 
 **Task 15 (engine)**
 - **Ruling: "has a waiting draft" means a draft in `chat.drafts`, not `attention === 'drafts'`.** Attention can be overwritten while a draft waits (`write_failed`), and spec §9 says "while a person has a draft waiting". So `loadChat` fills `drafts` in this task (one more query), which the task-level text left to Task 16.

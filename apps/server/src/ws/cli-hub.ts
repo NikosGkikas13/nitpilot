@@ -229,7 +229,19 @@ export class CliHub {
     conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC, settings: settingsOf(user) } });
     // The same device again (back from sleep) was online all along, as far as anyone watching can tell.
     if (!replaced) this.presenceChanged(conn, 'connected');
+    await this.sendSettingsIfChanged(conn, settingsOf(user));
     return conn;
+  }
+
+  /**
+   * A settings change that was saved while the welcome was being prepared (`sendSettings` reached nobody: this CLI wasn't
+   * registered yet) is missing from the welcome. Read the settings once more, and if they differ from what the welcome
+   * carried, send the new ones the way `sendSettings` does.
+   */
+  private async sendSettingsIfChanged(conn: CliConnection, welcomed: Settings): Promise<void> {
+    const now = settingsOf(await prisma.user.findUniqueOrThrow({ where: { id: conn.userId }, select: SETTINGS_COLUMNS }));
+    const same = now.autoReview === welcomed.autoReview && now.autoAddress === welcomed.autoAddress && now.dailyJobCap === welcomed.dailyJobCap;
+    if (!same) conn.send({ v: 1, t: 'settings', d: now });
   }
 
   private presenceChanged(conn: CliConnection, change: PresenceChange['change']): void {

@@ -56,8 +56,19 @@ describe('PUT /api/me/settings', () => {
     expect((await put({ autoReview: true, dailyJobCap: 40 })).status).toBe(400);
     expect(await savedSettings(maya.id)).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 40 });
     await laptop.nothing('settings');
+    // The refused ones left nothing behind: valid ones after them are saved and sent.
     expect((await put({ autoReview: true, autoAddress: true, dailyJobCap: 5 })).status).toBe(200);
+    expect((await laptop.next('settings')).d).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 5 });
     expect((await put({ autoReview: true, autoAddress: true, dailyJobCap: 200 })).status).toBe(200);
+    expect((await laptop.next('settings')).d).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 200 });
+  });
+
+  it('refuses a body that is not JSON with a 400, saving and sending nothing', async () => {
+    const { maya, laptop, app, cookie } = await scene();
+    const res = await app.request('/api/me/settings', { method: 'PUT', headers: { cookie, origin: ORIGIN, 'content-type': 'application/json' }, body: '{ not json' });
+    expect(res.status).toBe(400);
+    expect(await savedSettings(maya.id)).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 40 });
+    await laptop.nothing('settings');
   });
 
   it("refuses a request from another site's page with a 403, and one without a session with a 401", async () => {
