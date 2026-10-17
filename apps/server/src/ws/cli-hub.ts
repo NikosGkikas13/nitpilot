@@ -165,7 +165,12 @@ export class CliHub {
           }
           clearTimeout(helloTimer);
           try {
-            conn = await this.register(ws, auth, msg);
+            const registered = await this.register(ws, auth, msg);
+            if (!registered) return;
+            conn = registered.conn;
+            // Only now, with `conn` set: if the socket closes or this read fails while we wait, the close handler
+            // below finds the connection and removes it. Inside register() it would stay behind as a ghost.
+            await this.sendSettingsIfChanged(conn, registered.welcomed);
           } catch (err) {
             // The hello was fine but we failed (a database hiccup, say). Without this the socket would stay
             // open and silent for good, with no timer left to close it: hang up so the CLI tries again.
@@ -194,8 +199,12 @@ export class CliHub {
     ws.on('error', (err) => console.warn('[cli-hub] socket error:', err.message));
   }
 
-  /** Check the hello, make this socket the device's connection, and answer welcome. */
-  private async register(ws: WebSocket, auth: CliAuth, hello: Hello): Promise<CliConnection | null> {
+  /**
+   * Check the hello, make this socket the device's connection, and answer welcome. Returns the connection and the
+   * settings the welcome carried (null when the hello was refused). Nothing is awaited after the connection is
+   * registered, so the caller always learns of it.
+   */
+  private async register(ws: WebSocket, auth: CliAuth, hello: Hello): Promise<{ conn: CliConnection; welcomed: Settings } | null> {
     if (hello.d.protocol !== PROTOCOL_VERSION) {
       ws.close(CLOSE_CODES.upgradeCli, `This server speaks protocol ${PROTOCOL_VERSION}. Upgrade ${BRAND.cli}.`);
       return null;
@@ -229,14 +238,14 @@ export class CliHub {
     conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC, settings: settingsOf(user) } });
     // The same device again (back from sleep) was online all along, as far as anyone watching can tell.
     if (!replaced) this.presenceChanged(conn, 'connected');
-    await this.sendSettingsIfChanged(conn, settingsOf(user));
-    return conn;
+    return { conn, welcomed: settingsOf(user) };
   }
 
   /**
    * A settings change that was saved while the welcome was being prepared (`sendSettings` reached nobody: this CLI wasn't
    * registered yet) is missing from the welcome. Read the settings once more, and if they differ from what the welcome
-   * carried, send the new ones the way `sendSettings` does.
+   * carried, send the new ones the way `sendSettings` does. `accept()` runs this once the connection is assigned, so a
+   * hang-up or a failure during the read still cleans the connection up.
    */
   private async sendSettingsIfChanged(conn: CliConnection, welcomed: Settings): Promise<void> {
     const now = settingsOf(await prisma.user.findUniqueOrThrow({ where: { id: conn.userId }, select: SETTINGS_COLUMNS }));

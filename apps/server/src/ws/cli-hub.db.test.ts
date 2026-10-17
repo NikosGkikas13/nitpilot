@@ -94,6 +94,56 @@ describe('connecting to /ws/cli', () => {
     await cli.nothing('settings', 150);
   });
 
+  /** Make the hub's second read of the user (the re-check after the welcome) run `second` instead. The first read is the real one. */
+  function onSecondUserRead(second: () => Promise<unknown>) {
+    const realRead = prisma.user.findUniqueOrThrow.bind(prisma.user);
+    let calls = 0;
+    const spy = vi.spyOn(prisma.user, 'findUniqueOrThrow') as unknown as { mockImplementation(fn: (args: unknown) => Promise<unknown>): void };
+    spy.mockImplementation((args) => (++calls === 2 ? second() : realRead(args as never)));
+  }
+
+  it('leaves no connection behind when the CLI hangs up while its settings are re-checked', async () => {
+    const { hub, url } = await hubOnPort();
+    const changes: string[] = [];
+    hub.onPresence((e) => changes.push(e.change));
+    const { token } = await device('maya');
+    const cli = await TestCli.connect(url, token.raw);
+    onSecondUserRead(async () => {
+      cli.close();
+      await cli.closed;
+      await sleep(100); // the hub's own close handler runs about now
+      return { autoReview: true, autoAddress: true, dailyJobCap: 40 };
+    });
+    try {
+      cli.send(hello());
+      await vi.waitFor(() => expect(changes).toEqual(['connected', 'disconnected']));
+      expect(hub.connections()).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('hangs up with a server error, and keeps no connection, when the settings re-check fails', async () => {
+    const { hub, url } = await hubOnPort();
+    const changes: string[] = [];
+    hub.onPresence((e) => changes.push(e.change));
+    const { token } = await device('maya');
+    const cli = await TestCli.connect(url, token.raw);
+    onSecondUserRead(async () => {
+      throw new Error('database hiccup');
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      cli.send(hello());
+      expect((await cli.closed).code).toBe(1011); // CLOSE_SERVER_ERROR: the CLI reconnects and gets a fresh welcome
+      await vi.waitFor(() => expect(changes).toEqual(['connected', 'disconnected']));
+      expect(hub.connections()).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(logged).toHaveBeenCalled();
+  });
+
   it('closes with 4426 when the CLI speaks another protocol version: a Plan 1 CLI, with its old hello, is told to upgrade', async () => {
     const { hub, url } = await hubOnPort();
     const { token } = await device();
