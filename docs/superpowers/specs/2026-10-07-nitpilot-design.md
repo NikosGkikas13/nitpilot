@@ -225,10 +225,12 @@ decide(input: { chat: ChatState; rules: TeamRules; event: DomainEvent; now: Date
 | `addressed` | The reviewer keeps it open after `declined` | `escalated(disagreement)` (fires immediately) |
 | `open`/`addressed` | The next address pass would go over `max_rounds` | `escalated(round_limit)` |
 | `escalated` | The reviewer who raised it presses Resolve in the web app (Plan 2; a GitHub point is resolved on GitHub, by resolving its thread), or that reviewer approves on GitHub | `resolved` |
-| `escalated` | The author or the reviewer who raised it presses Continue (Plan 2). At the round limit this also grants the chat one more address pass (`extraRounds` + 1). It works for every escalation reason, `always_escalate` categories included: a person handing a point back to the agents is different from agents settling it alone | `open` |
+| `escalated` | The author or the reviewer who raised it presses Continue (Plan 2). At the round limit this also grants the chat one more address pass (`extraRounds` + 1), when the author is on Nitpilot; an author who isn't fixes it by hand, and no limit applies to that. It works for every escalation reason, `always_escalate` categories included: a person handing a point back to the agents is different from agents settling it alone | `open` |
 | an unresolved agent point | Its reviewer is removed from the PR | `resolved(withdrawn)` |
 | GitHub point | Its thread is resolved, or the comment is deleted | `resolved` |
 | GitHub point, `addressed` | The reviewer replies in the thread | `open` |
+
+Resolve and Continue that no longer apply (the point was resolved or handed back a moment earlier, or the PR closed) change nothing; the route says why (§10).
 
 ### 9.3 Rounds and escalation
 

@@ -123,6 +123,8 @@ model PrChat {
   phase            String    @default("idle")
   round            Int       @default(1)
   addressPasses    Int       @default(0)
+  /// Address passes people granted beyond max_rounds by pressing Continue at the limit (spec §9.2, §9.3)
+  extraRounds      Int       @default(0)
   headSha          String
   baseSha          String
   baseRef          String

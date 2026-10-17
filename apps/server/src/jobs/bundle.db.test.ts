@@ -57,6 +57,12 @@ describe('buildJobBundle', () => {
     });
   });
 
+  it('tells the agent the round limit with the rounds people granted with Continue', async () => {
+    const { chat, review } = await scene({ rulesJson: { max_rounds: 2 } });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
+    expect((await buildJobBundle(review.id, platform)).maxRounds).toBe(3);
+  });
+
   it('gives a re-review the points with their threads, the human notes, and the commit to start from', async () => {
     const { maya, chat, dispatcher, review } = await scene();
     await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, attempt: 1, result: samples.jobResult() });

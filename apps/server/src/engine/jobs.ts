@@ -71,6 +71,7 @@ export function startReview(ctx: Ctx, reviewer: ParticipantState, opts: { manual
   const jobType = reviewer.lastReviewedSha ? 're_review' : 'review';
   if (!enqueueJob(ctx, reviewer, jobType, reviewer.lastReviewedSha)) return false;
   chat.phase = 'reviewing';
-  system(ctx, `Round ${chat.round}: ${reviewer.login}'s agent is reviewing`, { reviewer: reviewer.login });
+  // "will": the job is queued, and its CLI may be offline. The banner says whether it runs.
+  system(ctx, `Round ${chat.round}: ${reviewer.login}'s agent will review`, { reviewer: reviewer.login });
   return true;
 }

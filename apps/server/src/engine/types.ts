@@ -70,6 +70,8 @@ export type ChatState = {
   phase: Phase;
   round: number;
   addressPasses: number;
+  /** Address passes people granted beyond the team's max_rounds, by pressing Continue at the limit (spec §9.2). */
+  extraRounds: number;
   headSha: string;
   isDraft: boolean;
   /** The PR author is trusted (OWNER, MEMBER, COLLABORATOR or a trusted bot). */
@@ -131,7 +133,11 @@ export type DomainEvent =
   /** The PR now targets another branch. `trusted` is the author's trust, checked again. */
   | { type: 'pr_retargeted'; baseRef: string; trusted: boolean }
   /** Someone flagged by write_failed signed in again, in these roles (the ones whose flag came from a failed write). */
-  | { type: 'signed_in_again'; who: Person; roles: Role[] };
+  | { type: 'signed_in_again'; who: Person; roles: Role[] }
+  /** Resolve on an escalated point, from the web app (spec §9.2): only the reviewer who raised it. */
+  | { type: 'point_resolve'; who: Person; point: number }
+  /** Continue on an escalated point, from the web app: the author or the reviewer who raised it. */
+  | { type: 'point_continue'; who: Person; point: number };
 
 export type ParticipantKey = { githubId: string; role: Role };
 

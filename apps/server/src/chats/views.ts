@@ -65,7 +65,8 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     baseRef: chat.baseRef,
     phase: chat.phase as Phase,
     round: chat.round,
-    maxRounds: rules.max_rounds,
+    // The limit with the rounds people granted with Continue (spec §9.3); `rules.maxRounds` is the team's own.
+    maxRounds: rules.max_rounds + chat.extraRounds,
     merged: chat.merged,
     closed: chat.closedAt !== null,
     trusted: chat.trusted,

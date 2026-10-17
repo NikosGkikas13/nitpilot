@@ -26,6 +26,7 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
     phase: row.phase as Phase,
     round: row.round,
     addressPasses: row.addressPasses,
+    extraRounds: row.extraRounds,
     headSha: row.headSha,
     isDraft: row.isDraft,
     trusted: row.trusted,

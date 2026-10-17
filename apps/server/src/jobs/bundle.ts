@@ -39,7 +39,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
     attempt: job.attempt,
     type: job.type,
     round: job.round,
-    maxRounds: rules.max_rounds,
+    maxRounds: rules.max_rounds + chat.extraRounds,
     apply: job.applyState === 'draft' ? 'draft' : 'auto',
     you: { login: job.participant.login, role: job.participant.role },
     pr: {

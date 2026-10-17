@@ -31,6 +31,14 @@ async function scene() {
 }
 
 describe('loadChatView (spec §10, handoff §2)', () => {
+  it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
+    const { chat, leo, clis } = await scene();
+    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
+    const view = await loadChatView(chat.id, leo, clis);
+    expect(view.maxRounds).toBe(5);
+    expect(view.rules.maxRounds).toBe(4);
+  });
+
   it('shows the PR, the rules and the points, with links to their lines on GitHub', async () => {
     const { repo, chat, leo, clis } = await scene();
     const view = ChatView.parse(await loadChatView(chat.id, leo, clis));

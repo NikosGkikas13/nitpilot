@@ -36,6 +36,7 @@ export function chatState(over: Partial<ChatState> = {}): ChatState {
     phase: 'idle',
     round: 1,
     addressPasses: 0,
+    extraRounds: 0,
     headSha: 'head1',
     isDraft: false,
     trusted: true,

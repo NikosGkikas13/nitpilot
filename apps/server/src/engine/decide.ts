@@ -6,6 +6,7 @@ import {
   onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrRetargeted, onPrToDraft,
   onReviewRequestRemoved, onReviewRequested,
 } from './lifecycle';
+import { onPointContinue, onPointResolve } from './human';
 import { onJobCompleted, onJobFailed, onRetryRequested } from './results';
 import { author, onNitpilot } from './state';
 import type { DecideInput, DecideOutput } from './types';
@@ -48,6 +49,8 @@ export function decide(input: DecideInput): DecideOutput {
     case 'write_failed': onWriteFailed(ctx, event); break;
     case 'pr_retargeted': onPrRetargeted(ctx, event); break;
     case 'signed_in_again': onSignedInAgain(ctx, event); break;
+    case 'point_resolve': onPointResolve(ctx, event); break;
+    case 'point_continue': onPointContinue(ctx, event); break;
     default: {
       // If a new DomainEvent type is added without a case, this line stops compiling.
       const unhandled: never = event;

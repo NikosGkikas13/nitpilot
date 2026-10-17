@@ -150,7 +150,7 @@ describe('signing in again (spec §15)', () => {
     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'none' });
     expect(await prisma.job.findFirst({ where: { chatId: chat.id, status: 'queued' } })).toMatchObject({ type: 'address' });
     const last = await prisma.message.findFirstOrThrow({ where: { chatId: chat.id }, orderBy: { seq: 'desc' } });
-    expect(last.body).toBe("maya's agent is working on 1 point");
+    expect(last.body).toBe("maya's agent will work on 1 point");
   });
 
   it("leaves a flag from a failed job: that's for `nitpilot retry`", async () => {

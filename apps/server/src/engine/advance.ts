@@ -1,7 +1,7 @@
 import { emit, system, type Ctx } from './context';
 import { enqueueJob, startReview } from './jobs';
 import { escalatePoints } from './points';
-import { activeJobs, author, isActionable, onNitpilot, reviewers } from './state';
+import { activeJobs, author, isActionable, onNitpilot, reviewers, roundLimit } from './state';
 import type { ChatState, ParticipantState } from './types';
 
 /**
@@ -60,7 +60,7 @@ export function advance(ctx: Ctx): void {
     chat.phase = 'addressing'; // the human author's turn
     return;
   }
-  if (chat.addressPasses >= ctx.rules.max_rounds) {
+  if (chat.addressPasses >= roundLimit(ctx)) {
     const stuck = chat.points.filter((p) => p.trusted && (p.status === 'open' || p.status === 'addressed'));
     escalatePoints(ctx, stuck, 'round_limit');
     enterEscalated(ctx);
@@ -72,8 +72,9 @@ export function advance(ctx: Ctx): void {
     return;
   }
   if (enqueueJob(ctx, a, 'address', null)) {
+    // "will": the job is queued, and its CLI may be offline. The banner says whether it runs.
     const n = actionable.length;
-    system(ctx, `${a.login}'s agent is working on ${n} point${n === 1 ? '' : 's'}`);
+    system(ctx, `${a.login}'s agent will work on ${n} point${n === 1 ? '' : 's'}`);
   }
   chat.phase = 'addressing';
 }

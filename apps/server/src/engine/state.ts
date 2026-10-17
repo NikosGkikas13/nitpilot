@@ -1,4 +1,4 @@
-import type { JobStatus, Role } from '@nitpilot/protocol';
+import type { JobStatus, Role, TeamRules } from '@nitpilot/protocol';
 import type { ChatState, JobView, ParticipantState, Person, PointState } from './types';
 
 const ACTIVE: readonly JobStatus[] = ['queued', 'running'];
@@ -49,6 +49,11 @@ export function activeJobs(chat: ChatState): JobView[] {
 
 export function activeJobFor(chat: ChatState, p: ParticipantState): JobView | undefined {
   return activeJobs(chat).find((j) => j.participantGithubId === p.githubId && j.role === p.role);
+}
+
+/** How many address passes this chat may have: the team's max_rounds plus the ones people granted with Continue (spec §9.3). */
+export function roundLimit(ctx: { chat: ChatState; rules: TeamRules }): number {
+  return ctx.rules.max_rounds + ctx.chat.extraRounds;
 }
 
 /** A point the author's side should work on now (spec §9.3). */

@@ -95,7 +95,7 @@ async function buildRows(user: InboxViewer, mine: Mine[], clis: LiveClis, now: D
         : null,
       status,
       round: chat.round,
-      maxRounds: rulesFromJson(chat.repo.rulesJson).max_rounds,
+      maxRounds: rulesFromJson(chat.repo.rulesJson).max_rounds + chat.extraRounds,
       lastActivity: oneLine(lastItems.get(chat.id) ?? ''),
       updatedAt: chat.updatedAt.toISOString(),
       unread: unread.get(chat.id) ?? 0,

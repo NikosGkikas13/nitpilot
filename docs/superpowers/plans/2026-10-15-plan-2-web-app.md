@@ -14105,7 +14105,7 @@ No new packages.
 - `refreshAttention` already clears `decision` once no escalated point is left.
 - **M2:** `saveChatState` writes a point (and a participant) with only the fields whose value changed between the loaded and the new state, so a field another write saved meanwhile (the review task's GitHub comment id) stays.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 Create `apps/server/src/engine/human.test.ts`:
 
@@ -14280,12 +14280,12 @@ describe('the lines an agent gets when work is queued', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/human.test.ts`
 Expected: FAIL, 22 tests: `decide` throws `Unhandled event` for `point_resolve` and `point_continue`, the round-limit test escalates (no `extraRounds`), and the review line still says "is reviewing".
 
-- [ ] **Step 3: The engine learns Resolve, Continue and the extra round**
+- [x] **Step 3: The engine learns Resolve, Continue and the extra round**
 
 Create `apps/server/src/engine/human.ts`:
 
@@ -14464,12 +14464,12 @@ Then the event types, the round limit, the dispatch in `decide`, and the two que
      trusted: true,
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: PASS, 131 tests (the 22 new ones and every older engine test; none of them quoted the review line). The server doesn't typecheck yet: `loadChat` doesn't fill `extraRounds` (Step 7).
 
-- [ ] **Step 5: Write the failing tests for saving**
+- [x] **Step 5: Write the failing tests for saving**
 
 Create `apps/server/src/chats/save.db.test.ts`:
 
@@ -14578,12 +14578,12 @@ and add a test each where the round limit is shown (the chat, the inbox, the age
      await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, attempt: 1, result: samples.jobResult() });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/save.db.test.ts src/chats/views.db.test.ts src/chats/inbox.db.test.ts src/jobs/bundle.db.test.ts`
 Expected: FAIL, 5 tests: `extraRounds` isn't a column yet (Prisma's validation error in the three limit tests), `loadChat` has no `extraRounds`, and the M2 test finds the thread link written back to `null`.
 
-- [ ] **Step 7: The column, and saving only what changed**
+- [x] **Step 7: The column, and saving only what changed**
 
 In `apps/server/prisma/schema.prisma`:
 
@@ -14719,12 +14719,12 @@ Then load and save it, write only changed fields (M2), and count it in the limit
      pr: {
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/save.db.test.ts src/chats/views.db.test.ts src/chats/inbox.db.test.ts src/jobs/bundle.db.test.ts`
 Expected: PASS, 27 tests.
 
-- [ ] **Step 9: The one test that quotes the address line, and the explainer**
+- [x] **Step 9: The one test that quotes the address line, and the explainer**
 
 ```diff
 --- a/apps/server/src/http/routes/auth.db.test.ts
@@ -14771,16 +14771,16 @@ It works because the engine never touches the comment id on a point it didn't ju
 It's the difference between `setUser(loadedUser)` and `setUser((u) => ({ ...u, name }))`. The first overwrites everything with the copy you had when you started; the second changes only the field you meant to change and keeps whatever else happened meanwhile.
 ```
 
-- [ ] **Step 10: The spec**
+- [x] **Step 10: The spec**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §9.2, the `escalated` → `open` row's second sentence ("At the round limit this also grants the chat one more address pass (`extraRounds` + 1).") becomes: "At the round limit this also grants the chat one more address pass (`extraRounds` + 1), when the author is on Nitpilot; an author who isn't fixes it by hand, and no limit applies to that." After the table, add: "Resolve and Continue that no longer apply (the point was resolved or handed back a moment earlier, or the PR closed) change nothing; the route says why (§10)."
 
-- [ ] **Step 11: Run the full suite**
+- [x] **Step 11: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 49, CLI 294 passed + 14 skipped, server 752, web 126; end to end 5; Playwright 5; typecheck and lint clean.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add apps/server/prisma apps/server/src docs/why/lost-updates.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

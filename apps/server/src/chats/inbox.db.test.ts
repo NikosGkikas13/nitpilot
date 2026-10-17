@@ -37,6 +37,13 @@ describe('loadInboxRows (spec §16 "Inbox")', () => {
     expect(review).toMatchObject({ chatId: chat.id, role: 'reviewer', other: { login: 'maya', avatarUrl: `https://avatars.githubusercontent.com/u/${maya.githubId}` } });
   });
 
+  it('counts the rounds people granted with Continue in the limit', async () => {
+    const { maya, chat } = await scene();
+    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 2 } });
+    const [mine] = await loadInboxRows(viewer(maya), noClis);
+    expect(mine!.maxRounds).toBe(5);
+  });
+
   it('gives a person who is both author and reviewer one row per role', async () => {
     const { maya, chat } = await scene();
     await makeParticipant(chat.id, maya, 'reviewer');

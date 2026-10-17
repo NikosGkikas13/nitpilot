@@ -12,8 +12,13 @@ function pick<T, K extends keyof T>(obj: T, fields: readonly K[]): Pick<T, K> {
   return Object.fromEntries(fields.map((f) => [f, obj[f]])) as Pick<T, K>;
 }
 
-function changed<T>(a: T, b: T, fields: readonly (keyof T)[]): boolean {
-  return fields.some((f) => a[f] !== b[f]);
+/**
+ * The fields whose value differs between what was loaded and what the engine returned. Only those are written: a
+ * field the engine didn't touch keeps whatever another write saved meanwhile (the review task saves a point's
+ * GitHub comment id without the chat's lock). docs/why/lost-updates.md.
+ */
+function changedFields<T, K extends keyof T>(before: T, after: T, fields: readonly K[]): Partial<Pick<T, K>> {
+  return Object.fromEntries(fields.filter((f) => before[f] !== after[f]).map((f) => [f, after[f]])) as Partial<Pick<T, K>>;
 }
 
 export async function saveChatState(tx: Tx, chatId: string, before: ChatState, after: ChatState, now: Date): Promise<void> {
@@ -23,6 +28,7 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
       phase: after.phase,
       round: after.round,
       addressPasses: after.addressPasses,
+      extraRounds: after.extraRounds,
       headSha: after.headSha,
       isDraft: after.isDraft,
       trusted: after.trusted,
@@ -37,8 +43,9 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
     const old = before.participants.find((b) => b.githubId === p.githubId && b.role === p.role);
     if (!old) {
       await tx.participant.create({ data: { chatId, githubId: p.githubId, role: p.role, ...pick(p, PARTICIPANT_FIELDS) } });
-    } else if (changed<ParticipantState>(old, p, PARTICIPANT_FIELDS)) {
-      await tx.participant.update({ where: { chatId_githubId_role: { chatId, githubId: p.githubId, role: p.role } }, data: pick(p, PARTICIPANT_FIELDS) });
+    } else {
+      const data = changedFields<ParticipantState, (typeof PARTICIPANT_FIELDS)[number]>(old, p, PARTICIPANT_FIELDS);
+      if (Object.keys(data).length > 0) await tx.participant.update({ where: { chatId_githubId_role: { chatId, githubId: p.githubId, role: p.role } }, data });
     }
   }
 
@@ -70,8 +77,9 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
           round: pt.round,
         },
       });
-    } else if (changed<PointState>(old, pt, POINT_FIELDS)) {
-      await tx.point.update({ where: { chatId_number: { chatId, number: pt.number } }, data: pick(pt, POINT_FIELDS) });
+    } else {
+      const data = changedFields<PointState, (typeof POINT_FIELDS)[number]>(old, pt, POINT_FIELDS);
+      if (Object.keys(data).length > 0) await tx.point.update({ where: { chatId_number: { chatId, number: pt.number } }, data });
     }
   }
 }
