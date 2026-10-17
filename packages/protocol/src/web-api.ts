@@ -133,6 +133,22 @@ export const PointView = z.object({
 export type PointView = z.infer<typeof PointView>;
 
 /**
+ * What the person reading a chat may do in it right now (spec §16 "Who can act in a chat"), worked out on the
+ * server (`apps/server/src/chats/permissions.ts`). `resolve` and `continue` list escalated points by number. The
+ * server checks again on every write; this only decides which buttons to show.
+ */
+export const Permissions = z.object({
+  note: z.boolean(),
+  resolve: z.array(z.number().int().positive()),
+  continue: z.array(z.number().int().positive()),
+  /** Start the review of an outside contributor's PR (the untrusted card's Review). */
+  review: z.boolean(),
+  /** Run your failed job again. */
+  retry: z.boolean(),
+});
+export type Permissions = z.infer<typeof Permissions>;
+
+/**
  * A chat as the person reading it sees it (spec §10, handoff §2): the PR, the people and their agents, the
  * points, the team rules, and the reader's own place in it (`viewer`). `/ws/web` sends it again (`chat.state`)
  * whenever it changes. The timeline items travel separately: in `ChatResponse`, then in `chat.items`.
@@ -174,6 +190,7 @@ export const ChatView = z.object({
     /** Why `.nitpilot.yml` couldn't be used, so the defaults apply; null when it's fine or missing. */
     error: z.string().nullable(),
   }),
+  permissions: Permissions,
   /** Nitpilot's summary comment on GitHub, once it's posted. */
   summaryUrl: z.string().nullable(),
   /** The newest timeline item's seq (0 for none). */
@@ -184,6 +201,14 @@ export type ChatView = z.infer<typeof ChatView>;
 /** `GET /api/chats/:owner/:repo/:number`: the chat, and its newest 200 timeline items, oldest first. */
 export const ChatResponse = z.object({ view: ChatView, items: z.array(TimelineItem), hasOlder: z.boolean() });
 export type ChatResponse = z.infer<typeof ChatResponse>;
+
+/** `POST /api/chats/:id/notes`: a note to the agents, 1 to 4,000 characters once trimmed. */
+export const NoteRequest = z.object({ body: z.string().trim().min(1).max(4000) });
+export type NoteRequest = z.infer<typeof NoteRequest>;
+
+/** What a chat write answers when it worked (notes, Resolve, Continue, Review). The change itself arrives on `/ws/web`. */
+export const ActionResponse = z.object({ ok: z.literal(true) });
+export type ActionResponse = z.infer<typeof ActionResponse>;
 
 /** One changed file of the PR (spec §10 `GET /api/chats/:id/files`). */
 export const PrFile = z.object({

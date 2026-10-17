@@ -26,6 +26,7 @@ export function chatView(over: Partial<ChatView> = {}): ChatView {
     activity: { kind: 'none', who: null, why: null, offlineSince: null },
     points: [],
     rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
+    permissions: { note: true, resolve: [], continue: [], review: false, retry: false },
     summaryUrl: null, lastSeq: 0, ...over,
   };
 }

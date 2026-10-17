@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
-import { ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, WebMe, type ChatView, type InboxRow } from './web-api';
+import { ActionResponse, ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, WebMe, type ChatView, type InboxRow } from './web-api';
 
 describe('web API bodies', () => {
   const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
@@ -43,6 +43,7 @@ describe('web API bodies', () => {
         status: 'escalated', authorResolution: null, escalationReason: 'category', trusted: true, round: 1,
       }],
       rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
+      permissions: { note: true, resolve: [1], continue: [1], review: false, retry: false },
       summaryUrl: null, lastSeq: 7,
     };
     const body = { view, items: [], hasOlder: false };
@@ -50,5 +51,13 @@ describe('web API bodies', () => {
     expect(() => ChatResponse.parse({ ...body, view: { ...view, phase: 'waiting' } })).toThrow();
     const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
     expect(FilesResponse.parse(files)).toEqual(files);
+  });
+
+  it('takes a note of 1 to 4,000 characters, trimmed, and answers a change with ok', () => {
+    expect(NoteRequest.parse({ body: '  Keep the old endpoint  ' })).toEqual({ body: 'Keep the old endpoint' });
+    expect(NoteRequest.parse({ body: 'x'.repeat(4000) }).body).toHaveLength(4000);
+    expect(() => NoteRequest.parse({ body: 'x'.repeat(4001) })).toThrow();
+    expect(() => NoteRequest.parse({ body: ' \n ' })).toThrow();
+    expect(ActionResponse.parse({ ok: true })).toEqual({ ok: true });
   });
 });

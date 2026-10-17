@@ -40,7 +40,20 @@ Asking GitHub on every read would make each chat open wait on GitHub, and spend 
 
 ## Who can *do* what
 
-Reading is the only thing W3 allows. From W4 every change (a note, Resolve, Continue, Retry, Auto, drafts) also passes one pure function that knows the roles: notes for the author and the reviewers on Nitpilot, Resolve only for the reviewer who raised the point, and so on (spec §16 "Who can act in a chat"). Someone who can read the repo but isn't in the chat reads along, and can't act.
+Every change also passes one pure function that knows the roles, `can` (`chats/permissions.ts`, spec §16 "Who can act in a chat"). The write routes ask it after the read check (`http/routes/chat-actions.ts`), and the chat view uses the same rules to say which buttons to show (`ChatView.permissions`, so the web app never shows a button the server would refuse):
+
+| Change | Who | Otherwise |
+|---|---|---|
+| Send a note to the agents | the author and the reviewers (anyone in the chat; being signed in means being on Nitpilot) | 403 |
+| Resolve an escalated point | only the reviewer who raised it, and only an agent's point (a GitHub comment is resolved by resolving its thread on GitHub) | 403 |
+| Continue an escalated point | the author, or the reviewer who raised it | 403 |
+| Review an outside contributor's PR | a requested reviewer | 403 |
+| Retry a failed job | only the person whose job failed | 409 "Nothing of yours failed on this PR." (Plan 1's answer) |
+| Anything, on a closed PR | nobody | 409 "This PR is closed, so its chat is read-only." |
+
+Someone who can read the repo but isn't in the chat reads along, and can't act. `can` looks only at who you are, not at a point's status: if the point was resolved a moment ago, that's a race the engine notices, and the answer is a 409 that says what happened (`races-and-conflicts.md`), not a 403.
+
+**Retry from the CLI keeps Plan 1's rule.** `nitpilot retry` sends the CLI token, and the route doesn't ask GitHub about the repo for it: the only thing it can do is run your own failed job again, and a CLI whose owner's GitHub sign-in expired could otherwise never retry. From the browser, Retry is checked like every other write.
 
 ## The React analogy
 

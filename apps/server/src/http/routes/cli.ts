@@ -1,14 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 import {
-  BRAND, CliLoginPollRequest, CliLoginStartRequest,
-  type Attention, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
+  CliLoginPollRequest, CliLoginStartRequest,
+  type Attention, type MyChat, type MyChatsResponse, type Phase, type Role,
 } from '@nitpilot/protocol';
 import { Hono, type Context } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
 import { requireCliToken, type CliAuth } from '../../auth/cli-token';
-import type { Dispatch } from '../../chats/dispatch';
-import { failureKind } from '../../chats/failed-flags';
-import type { Person } from '../../engine/types';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
 import { RateLimiter } from '../../lib/rate-limit';
@@ -18,7 +15,7 @@ import { HttpError } from '../errors';
 /** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
 export const LOGIN_STARTS_PER_MINUTE = 10;
 
-export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli: CliAuth } }> {
+export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
   const app = new Hono<{ Variables: { cli: CliAuth } }>();
   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
 
@@ -67,35 +64,6 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
   app.delete('/api/cli/token', requireCliToken, async (c) => {
     await prisma.cliToken.update({ where: { id: c.get('cli').tokenId }, data: { revokedAt: new Date() } });
     return c.body(null, 204);
-  });
-
-  // `nitpilot retry` (spec §10): run my failed job on this PR again. Plan 2's Retry button uses it too.
-  app.post('/api/chats/:id/retry', requireCliToken, async (c) => {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
-    const chatId = c.req.param('id');
-    const failure = await failureKind(chatId, user.githubId);
-    if (failure === null) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
-    if (failure === 'github_post') {
-      throw new HttpError(
-        'conflict',
-        `Your agent didn't fail on this PR: posting its review or replies to GitHub did, and running the agent again won't fix that. If \`${BRAND.cli} status\` says GitHub access expired, sign in again at ${getEnv().PUBLIC_URL}.`,
-      );
-    }
-    const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
-    const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
-    // The job is queued now.
-    if (out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId)) {
-      const body: RetryResponse = { status: 'queued' };
-      return c.json(body);
-    }
-    // The engine cleared the failure but the job can't start yet (the author's agent is fixing, or the PR is a draft).
-    // It starts by itself once that step is done.
-    if (!out.chat.participants.some((p) => p.githubId === user.githubId && p.attention === 'failed')) {
-      const body: RetryResponse = { status: 'waiting' };
-      return c.json(body);
-    }
-    // The engine changed nothing.
-    throw new HttpError('conflict', "Nothing to retry: the PR is closed, or you're no longer a reviewer on it.");
   });
 
   return app;

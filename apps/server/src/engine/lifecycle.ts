@@ -86,6 +86,8 @@ export function onManualReview(ctx: Ctx, e: Ev<'manual_review'>): void {
 }
 
 export function onHumanNote(ctx: Ctx, e: Ev<'human_note'>): void {
+  // A closed PR's chat is read-only (spec §16). The route checks too; this covers a close that lands in between.
+  if (ctx.chat.phase === 'closed') return;
   // Notes go into the agents' next job bundle; they don't change the workflow.
   say(ctx, { kind: 'human', author: who(e.author), body: e.body });
 }

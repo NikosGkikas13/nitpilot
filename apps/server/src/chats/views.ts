@@ -5,6 +5,7 @@ import type { Point, PrChat } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import { loadActivity, type Activity, type LiveClis } from './activity';
 import { failureKind } from './failed-flags';
+import { permissionFacts, permissionsFor } from './permissions';
 import { githubAvatar } from './inbox';
 import { rulesFromJson } from './rules';
 import { loadItemsBefore } from './timeline';
@@ -80,6 +81,7 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     activity: activityView(activity),
     points: chat.points.map((p) => pointView(chat, p, loginOf(p.raisedByGithubId))),
     rules: { maxRounds: rules.max_rounds, alwaysEscalate: rules.always_escalate, autoReview: rules.auto.review, autoAddress: rules.auto.address, error: chat.repo.rulesError },
+    permissions: permissionsFor(viewer, permissionFacts(chat)),
     summaryUrl: chat.summaryCommentId ? `${chat.url}#issuecomment-${chat.summaryCommentId}` : null,
     lastSeq: chat.lastSeq,
   };

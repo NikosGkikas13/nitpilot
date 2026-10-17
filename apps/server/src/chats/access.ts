@@ -15,7 +15,8 @@ export const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !== 
  */
 export async function chatAccess(user: { id: string }, chatId: string, access: RepoAccess): Promise<ChatAccess> {
   const chat = await prisma.prChat.findUnique({ where: { id: chatId }, select: { id: true, repo: { select: { fullName: true } } } });
-  if (!chat) return { kind: 'none' };
+  // No chat to ask GitHub about: an expired sign-in still hears "sign in again", as it would for one that exists.
+  if (!chat) return (await githubSignInOk(user.id)) ? { kind: 'none' } : { kind: 'reauth' };
   const answer = await access.check(user.id, chat.repo.fullName);
   return answer === 'read' ? { kind: 'read', chat: { id: chat.id, repoFullName: chat.repo.fullName } } : { kind: answer };
 }
@@ -26,11 +27,18 @@ export async function chatAccess(user: { id: string }, chatId: string, access: R
  * exists.
  */
 export async function chatAccessByPath(user: { id: string }, path: { owner: string; repo: string; number: string }, access: RepoAccess): Promise<ChatAccess> {
-  const number = Number(path.number);
+  // Plain digits only: Number() would also take "1e2", "0x2a" or " 42".
+  const number = /^\d+$/.test(path.number) ? Number(path.number) : NaN;
   if (!isGithubName(path.owner) || !isGithubName(path.repo) || !Number.isSafeInteger(number) || number <= 0) return { kind: 'none' };
   const fullName = `${path.owner}/${path.repo}`;
   const answer = await access.check(user.id, fullName);
   if (answer !== 'read') return { kind: answer };
   const chat = await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, select: { id: true } });
   return chat ? { kind: 'read', chat: { id: chat.id, repoFullName: fullName } } : { kind: 'none' };
+}
+
+/** The stored GitHub sign-in is usable: present and not marked expired (what `getUserToken` checks first). */
+async function githubSignInOk(userId: string): Promise<boolean> {
+  const auth = await prisma.githubAuth.findUnique({ where: { userId }, select: { status: true } });
+  return auth?.status === 'ok';
 }

@@ -14809,7 +14809,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **Review Focus 3:** two presses at once (Resolve, Continue, Retry, Review) have exactly one effect; the other gets the 409.
 - Two Task 8 minors in the files this task touches: `chatAccessByPath` takes only plain digits for the PR number, and `chatAccess` answers `reauth` for a chat that doesn't exist when your GitHub sign-in expired (so an expired sign-in can't tell which ids exist).
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 ```diff
 --- a/packages/protocol/src/web-api.test.ts
@@ -14845,7 +14845,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
  });
 ```
 
-- [ ] **Step 2: Run it to see it fail, then add the schemas**
+- [x] **Step 2: Run it to see it fail, then add the schemas**
 
 Run: `npm test -w packages/protocol -- src/web-api.test.ts`
 Expected: FAIL, 2 tests: `NoteRequest` and `ActionResponse` don't exist, and `ChatResponse.parse` drops `permissions`.
@@ -14904,7 +14904,7 @@ Expected: FAIL, 2 tests: `NoteRequest` and `ActionResponse` don't exist, and `Ch
 Run: `npm test -w packages/protocol`
 Expected: PASS, 50 tests.
 
-- [ ] **Step 3: Write the failing tests for the rules**
+- [x] **Step 3: Write the failing tests for the rules**
 
 Create `apps/server/src/chats/permissions.test.ts`:
 
@@ -15029,7 +15029,7 @@ and, in the engine, a note on a closed PR adds nothing (a close can land between
  describe('decide()', () => {
 ```
 
-- [ ] **Step 4: Run them to see them fail, then write the rules**
+- [x] **Step 4: Run them to see them fail, then write the rules**
 
 Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts src/engine/lifecycle.test.ts`
 Expected: FAIL: `./permissions` doesn't exist, and the closed-PR note test gets a `human` item.
@@ -15131,7 +15131,7 @@ export function permissionFacts(chat: {
 Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts src/engine/lifecycle.test.ts`
 Expected: PASS, 50 tests (29 and 21).
 
-- [ ] **Step 5: Write the failing route tests**
+- [x] **Step 5: Write the failing route tests**
 
 Create `apps/server/src/http/routes/chat-actions.db.test.ts`:
 
@@ -15445,12 +15445,12 @@ and the access minors and the view's permissions:
      await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/chat-actions.db.test.ts src/chats/access.db.test.ts src/chats/views.db.test.ts`
 Expected: FAIL, 22 tests: the 19 route tests (no such routes: JSON 404s, and the CLI retry still lives in `cli.ts` behind `requireCliToken`), the 2 access tests, and the view's `permissions`.
 
-- [ ] **Step 7: The routes**
+- [x] **Step 7: The routes**
 
 Create `apps/server/src/http/routes/chat-actions.ts`:
 
@@ -15807,12 +15807,12 @@ The web app's test fixture needs the new field to keep typechecking:
  }
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/chat-actions.db.test.ts src/chats/access.db.test.ts src/chats/views.db.test.ts src/http/routes/cli.db.test.ts`
 Expected: PASS, 43 tests: the CLI's retry tests in `cli.db.test.ts` pass against the moved route, unchanged.
 
-- [ ] **Step 9: The explainers**
+- [x] **Step 9: The explainers**
 
 ```diff
 --- a/docs/why/chat-access-rules.md
@@ -15876,16 +15876,16 @@ Retry works the same way: the second of two Retry presses finds nothing failed a
 It's like guarding a submit handler with `if (isSubmitting) return;`, except the guard lives on the server, so it also works for two browsers, and the second click is told what happened instead of being ignored silently.
 ```
 
-- [ ] **Step 10: The spec**
+- [x] **Step 10: The spec**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "REST endpoints in Plan 2", add after the "Chat writes" item: "- Answers of the chat writes: 200 (`{ok: true}`; Retry keeps `{status: queued|waiting}`) when the change became an engine event that changed the chat; 403 when the access rules say no (§16); 404 for a chat or a point you can't see; 409 with a plain sentence when the chat moved on first (the point was resolved or handed back meanwhile, the PR closed, your agent is already on it), so a double click, or two people pressing at once, has exactly one effect. A note is 1 to 4,000 characters. `nitpilot retry` (the CLI token) keeps Plan 1's rule: it isn't asked about read access, since it only runs your own failed job." In §16 "Who can act in a chat", the last item becomes "**Auto, drafts and Retry:** only your own. On a closed PR, nobody can act."
 
-- [ ] **Step 11: Run the full suite**
+- [x] **Step 11: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 50, CLI 294 passed + 14 skipped, server 804, web 126; end to end 5; Playwright 5; typecheck and lint clean.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add packages/protocol/src apps/server/src apps/web/src/test/chat.ts docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

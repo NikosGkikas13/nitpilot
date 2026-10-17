@@ -31,6 +31,14 @@ async function scene() {
 }
 
 describe('loadChatView (spec §10, handoff §2)', () => {
+  it('says what the reader may do: leo resolves and continues his escalated point, maya only continues it', async () => {
+    const { chat, maya, leo, clis } = await scene();
+    expect((await loadChatView(chat.id, leo, clis)).permissions).toEqual({ note: true, resolve: [1], continue: [1], review: false, retry: false });
+    expect((await loadChatView(chat.id, maya, clis)).permissions).toEqual({ note: true, resolve: [], continue: [1], review: false, retry: false });
+    const reader = await makeUser();
+    expect((await loadChatView(chat.id, reader, clis)).permissions).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
+  });
+
   it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
     const { chat, leo, clis } = await scene();
     await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });

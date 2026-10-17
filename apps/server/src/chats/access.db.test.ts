@@ -3,7 +3,7 @@ import { makeChat, makeGithubSignIn, makeRepo, makeUser } from '../../test/db';
 import { fakeFetch, json } from '../../test/fake-fetch';
 import { RepoAccess } from '../auth/repo-access';
 import { GithubClient } from '../platform/github/client';
-import { chatAccess } from './access';
+import { chatAccess, chatAccessByPath } from './access';
 
 async function viewer(status: 'ok' | 'needs_reauth' = 'ok') {
   const user = await makeUser();
@@ -30,5 +30,22 @@ describe('chatAccess (spec §16 "Who can see a chat")', () => {
     const chat = await makeChat(repo.id);
     const access = new RepoAccess(new GithubClient(fakeFetch({})));
     expect(await chatAccess(await viewer('needs_reauth'), chat.id, access)).toEqual({ kind: 'reauth' });
+  });
+
+  it("says reauth for a chat that doesn't exist too, so an expired sign-in can't tell which ids exist", async () => {
+    const access = new RepoAccess(new GithubClient(fakeFetch({})));
+    expect(await chatAccess(await viewer('needs_reauth'), 'no-such-chat', access)).toEqual({ kind: 'reauth' });
+  });
+});
+
+describe('chatAccessByPath', () => {
+  it('takes only plain digits for the PR number, without asking GitHub', async () => {
+    const fetch = fakeFetch({});
+    const access = new RepoAccess(new GithubClient(fetch));
+    const user = await viewer();
+    for (const number of ['1e2', '0x2a', ' 42', '42.0', '-1', '0', '']) {
+      expect(await chatAccessByPath(user, { owner: 'octo', repo: 'sandbox', number }, access)).toEqual({ kind: 'none' });
+    }
+    expect(fetch.calls).toEqual([]);
   });
 });

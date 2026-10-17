@@ -11,6 +11,7 @@ import type { PlatformReads } from '../platform/types';
 import { SERVER_VERSION } from '../version';
 import { errorBody, onError } from './errors';
 import { authRoutes } from './routes/auth';
+import { chatActionRoutes } from './routes/chat-actions';
 import { chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
@@ -48,7 +49,8 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', meRoutes(deps));
   app.route('/', inboxRoutes(deps));
   app.route('/', chatRoutes(deps));
-  app.route('/', cliRoutes(deps));
+  app.route('/', chatActionRoutes(deps));
+  app.route('/', cliRoutes());
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));

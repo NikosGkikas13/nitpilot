@@ -61,14 +61,14 @@ export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; 
 }
 
 /** The chat you may read, or the answer for one you can't: the same 404 for "no such chat" and "not yours to see". */
-function readable(access: ChatAccess): { id: string; repoFullName: string } {
+export function readable(access: ChatAccess): { id: string; repoFullName: string } {
   if (access.kind === 'reauth') throw new HttpError('reauth', 'Sign in with GitHub again to see this chat.');
   if (access.kind === 'none') throw new HttpError('not_found', 'No such chat.');
   return access.chat;
 }
 
 /** GitHub down, slow or rate limiting us is a 502 that says so, not a bare 500. */
-async function askingGithub<T>(call: () => Promise<T>): Promise<T> {
+export async function askingGithub<T>(call: () => Promise<T>): Promise<T> {
   try {
     return await call();
   } catch (err) {

@@ -133,6 +133,11 @@ describe('human_note', () => {
     expect(out.timeline).toEqual([{ kind: 'human', author: { githubId: maya.githubId, login: 'maya' }, pointNumber: null, jobId: null, body: 'Keep the public API stable.', data: null }]);
     expect(out.chat).toEqual(chat);
   });
+
+  it('adds nothing on a closed PR: its chat is read-only', () => {
+    const out = run(agentToAgent({ phase: 'closed', closed: true }), { type: 'human_note', author: maya, body: 'Too late?' });
+    expect(out.timeline).toEqual([]);
+  });
 });
 
 describe('decide()', () => {
