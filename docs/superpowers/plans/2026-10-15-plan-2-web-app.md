@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1, W2 and W3 at step level; W4–W8 at task level.** W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1, W2, W3 and W4 at step level; W5–W8 at task level.** W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -43,7 +43,7 @@ Spec-implied conditions no single test naturally covers, most likely first. Each
 
 1. **The browser's socket drops while the agents are writing, then reconnects.** The chat must show every timeline item exactly once, in order: items committed while the server reads the catch-up from the database are neither lost nor doubled, and the client re-subscribes from its own `lastSeq`. → Task 7 (hub: an item committed between subscribe and catch-up arrives once), Task 10 (client: a duplicate and an out-of-order batch merge to one ordered list).
 2. **Someone loses access while a tab is open:** removed from the repo, or their GitHub sign-in expired. Within the 5-minute window reads and writes are refused (404, or 401 "sign in again"); an open subscription is re-checked when its cached answer expires and gets `chat.error`; the screen shows the reconnect or not-found state, never a blank page or a stale chat that still accepts clicks. → Task 7 (re-check on expiry), Task 8 (401 vs 404), Task 12 (writes), Task 10 (UI states).
-3. **Double clicks and races on actions:** Send pressed twice, two people pressing Resolve, Discard while a publish job is queued, Send on a draft that is no longer waiting, Continue on a point someone just resolved. Exactly one effect; the other request gets a 409 with a plain message, and the button shows it as a toast. → Task 15 (engine ignores the second), Task 12 and Task 16 (routes answer 409).
+3. **Double clicks and races on actions:** Send pressed twice, two people pressing Resolve, Discard while a publish job is queued, Send on a draft that is no longer waiting, Continue on a point someone just resolved. Exactly one effect; the other request gets a 409 with a plain message, and the button shows it as a toast. → Task 15 (engine ignores the second), Task 12 and Task 16 (routes answer 409), Task 13 (the button waits for the answer and shows the 409 as a toast).
 4. **The laptop that holds an author's draft is offline, re-cloned or gone.** The publish job shows "waiting: offline since…" for that device only (another device of the same person being online doesn't count); a draft ref that is missing or moved fails it `setup_failed`, not retryable; the draft is marked out of date and the chat carries on. → Task 16 (activity and assigner pin the device), Task 17 (CLI refuses a moved ref).
 5. **A push subscription goes stale** (site data cleared, permission revoked, the push service answers 410): the row is deleted, and that same notification still reaches the person through the CLI fallback: never zero pings for a person with a CLI online, never two. → Task 19.
 
@@ -156,6 +156,44 @@ W3 was written at step level on 2026-10-16, against branch `plan-2-web-app` at `
 - **The spec catches up in each task** (CLAUDE.md: if the code differs, update the spec in the same change): §10's socket messages (`job.progress` with `action`, `inbox.upsert {chatId, rows}`, `chat.error`, the 200-item catch-up) and §16's re-check in Task 7; the chat read's answer, the 300-file list and the 15 s timeout in Task 8; which chats a presence change re-sends, and inbox rows only for readers, in Task 9.
 - **Noticed, not changed:** the engine's system line "maya's agent is working on 2 points" is written when the address job is queued, so it says "working" while maya's CLI is offline and the banner says "Waiting for your agent" (Plan 1's text; Task 11 is the next task to touch the engine). `useMarkRead` skips a hidden tab and tries again only when a new item arrives, so a chat opened in a background tab stays unread until then.
 - **Launching the look:** the Playwright server (`nitpilot-e2e-web`) uses the same test database as `npm test`, so it must be stopped before the suites run; with it running, the task runner's and the end-to-end tests fail.
+
+## Checked against the code (W4)
+
+W4 was written at step level on 2026-10-17, against branch `plan-2-web-app` at `d3863bc` (W3 done, with its fix rounds). Its code was built and run in a scratch worktree first, on a database of its own (protocol 49 → 50, server 725 → 752 → 804, web 126 → 152, CLI 294 passed + 14 skipped unchanged, end to end 5, Playwright 5 → 6; typecheck, lint and build clean), and every code block below was generated from those tested files by a script: whole files for new ones, `git diff` for changed ones. The chat was looked at in a real browser at 1280 px and 375 px, light and dark, through a whole escalation: maya sends a note and presses Continue with her agent offline, both agents run a round, and leo resolves what escalates next. Where W4 differs from the task-level text, and why:
+
+**Task 11 (engine)**
+- **`summary.ts` is unchanged.** The summary comment shows the rounds done, never the limit, so there was nothing to update. The limit with extra rounds shows where a limit is shown: the chat header (`ChatView.maxRounds`), the inbox row and the agent's job bundle. `ChatView.rules.maxRounds` stays the team's own number, for the details panel.
+- **The new lines are system items without a `pointNumber`** (the point is in `data`): the web app puts every item that names a point inside that point's card, and "leo resolved P1" belongs in the feed, as in the handoff.
+- **Continue grants an extra round only when the author is on Nitpilot.** Otherwise no agent pass would run and the round limit doesn't apply (§9.3); the task-level text granted it regardless. The spec says so (Step 10).
+- **Resolve, Continue and a note change nothing on a closed PR.** The routes refuse first; the engine covers a close that lands between the route's check and the event.
+- **The W3 note is fixed: the queue-time lines say "will".** "Round 1: leo's agent will review" and "maya's agent will work on 2 points" are written when the job is queued, while the agent may be offline; the banner and the presence dot say whether it runs. Both lines had the problem, so both changed; one server test quoted the old text, and no web code reads it.
+- **M2 covers participants too:** `saveChatState` writes only the fields that changed, for points and participants alike. New explainer `docs/why/lost-updates.md`.
+
+**Task 12 (routes and rules)**
+- **`can` looks only at who you are, not at a point's status.** A press that arrives after someone else's is then a 409 that says what happened, never a confusing 403. `permissionsFor` is what adds the status: it offers Resolve and Continue only on escalated points, and Review only while that reviewer's manual review waits.
+- **`ChatAction` has no `auto` or `draft`, and `PermissionFacts` no drafts, yet** (YAGNI): W5 adds them with the code that uses them (Tasks 15, 16, 18).
+- **Review is for a requested reviewer on an outside contributor's PR** (spec §16's wording); on a trusted PR it's a 403, since agents start there by themselves and a manual review would only start a re-review.
+- **A closed PR is a 409, not a 403**: it's the chat's state, not the person's role.
+- **No `people.ts` change:** the routes build the `Person` from the signed-in user (who has a `userId` by definition), as Plan 1's retry route did; `withPeople` is for people that arrive from GitHub.
+- **Ruling: a CLI's retry keeps Plan 1's rule** and isn't asked about read access, while a browser's is. A CLI can only rerun its owner's own failed job, and with the check, a person whose GitHub sign-in expired could never retry from the CLI again. The CLI's retry tests stay in `cli.db.test.ts`, unchanged, and pass against the moved route; the browser's are in `chat-actions.db.test.ts`.
+- **Two retries at once answer 200 and 409 "Your agent is already on it."** (the Plan 1b deferred minor where the second answered `waiting`): a retry that changed nothing is now a 409.
+- **Two Task 8 minors are fixed here** because the write routes share them: plain digits only for the PR number in an address, and `reauth` (not 404) for a chat id that doesn't exist when the GitHub sign-in expired. The rest stay deferred: `truncated` at exactly 300 files, the repo link built from a regex on the PR's URL, and the shared-refresh test that is deterministic in practice, not by construction.
+- `readable` and `askingGithub` are exported from `routes/chats.ts` and shared, not copied. New explainer `docs/why/races-and-conflicts.md`; `chat-access-rules.md` gains the table of who may do what.
+
+**Task 13 (web)**
+- **No separate banner or card files.** W3 built every banner in `ChatBanner.tsx` and the untrusted card inside `Timeline.tsx`; W4 adds the buttons there. The ready, waiting, cap and repo-not-linked banners already existed (W3), so `ChatBanner.test.tsx` covers the escalated and failed ones, and Review is tested in `Chat.test.tsx`.
+- **Ruling: the phone inbox's state and the composer's drafts live in a context above `Shell`'s layout (`UiStateProvider`), not in URL parameters.** A draft doesn't belong in a URL, the phone's back is `navigate('/')`, which would drop parameters, and losing them on a reload is fine (the inbox opens on the tab that needs you). The cursor and the filter menu's open state stay in the inbox.
+- **Toasts:** one provider in `Shell`, and `<Toasts />` placed by the page (the chat's column, so it centres over the composer). No action variant ("Undo") yet: nothing in W4 needs one. Long server sentences wrap instead of being cut, unlike the prototype's single line.
+- **The failed banner says "The timeline says why."**, not the reason: `ChatView` carries no failure reason, and the timeline's line names it. Retry replaces W3's `nitpilot retry` chip.
+- **A write that answers 404 or `reauth` refreshes the chat and `me`**, so the screen becomes "Nothing here" or "Sign in with GitHub again" (Review Focus 2). A send that's pressed again while on its way does nothing, and a draft is cleared only if it's still what was sent.
+- **The point card follows its point** (the W3 deferred minor): its open state is kept per status, so a card collapses when its point is resolved and opens when it's reopened; focus moves only after the person's own toggle, never on a socket update.
+- **Two Task 10 minors:** a failed "Load earlier" is an error toast (no unhandled rejection), and a first answer that failed shows "Still trying…" during the retries. `stopCli` throws on a failed answer.
+- **Playwright found a test-setup gap.** The pretend GitHub moved only `refs/pull/42/head` on a push, so after an author's agent pushed to a Playwright PR's branch, the re-review fetched the old head forever (`stale_head`). `addPull(number, branch)` now lists the PR for the hook, which keeps every PR's ref on its branch, as GitHub does.
+
+**Deferred**
+- Task 10 minors in files W4 didn't touch: a session that expired while the socket was down reconnects every 30 s forever (`live/socket.ts`); `useMediaQuery` subscribes again on every render (`lib/viewport.ts`).
+- The failure reason in the failed banner (it needs a field on `ChatView`).
+- The reviewer who presses Resolve is notified "Ready for your approval" for the chat they're looking at (`enterReady` notifies every requested reviewer, Plan 1's rule).
 
 ## How to work in this repo
 
@@ -14021,87 +14059,3407 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Milestone W4: Actions
 
-W4 lets people drive a chat from the browser: notes to the agents, Resolve and Continue on escalated points (with the extra round), Retry, and Review on an outside contributor's PR.
+W4 lets people drive a chat from the browser: notes to the agents, Resolve and Continue on escalated points (with the extra round), Retry, and Review on an outside contributor's PR. Every button waits for the server's answer and says how it went in a toast; what changes on screen still comes from `/ws/web`.
 
 **Files at the end of W4:**
 ```
-apps/server/src/
-  engine/{types,decide,points,advance,state}.ts   point_resolve, point_continue, extraRounds, roundLimit
-  chats/{load,save}.ts                            extraRounds; save writes only changed point fields (M2)
-  chats/permissions.ts                            write rules
-  http/routes/chat-actions.ts                     notes, resolve, continue, review, retry (cookie)
-  prisma: PrChat.extraRounds
-apps/web/src/
-  routes/Chat/{Composer,EscalatedBanner,FailedBanner,…}.tsx
-  api/actions.ts                                  useNote, useResolve, useContinue, useReview, useRetry
-  components/Toast/…                              useToast
+packages/protocol/src/web-api.ts                Permissions, ChatView.permissions, NoteRequest, ActionResponse
+apps/server/
+  prisma/schema.prisma, a migration             PrChat.extraRounds
+  src/engine/{types,state,decide,advance,jobs,lifecycle}.ts   point_resolve, point_continue, extraRounds, roundLimit; "will" lines
+  src/engine/human.ts                           onPointResolve, onPointContinue
+  src/chats/{load,save}.ts                      extraRounds; save writes only the fields that changed (M2)
+  src/chats/{views,inbox}.ts, src/jobs/bundle.ts   the limit counts extra rounds; ChatView.permissions
+  src/chats/permissions.ts                      can, permissionsFor, permissionFacts (spec §16 "Who can act")
+  src/chats/access.ts                           plain-digit PR numbers; reauth for a missing chat too
+  src/http/routes/chat-actions.ts               notes, resolve, continue, review, retry (cookie or CLI token)
+  src/http/routes/{chats,cli}.ts, src/http/app.ts   shared guards; retry moved out of cli.ts
+  test/e2e/{github,web-server}.ts               addPull(number, branch): a PR's ref follows its branch
+apps/cli/src/agents/fake/scenarios/escalation.json
+apps/web/
+  src/components/Toast/Toast.tsx (+ .module.css)   ToastProvider, useToast, Toasts
+  src/routes/Shell/UiState.tsx                  the inbox's tab, search and filters, and drafts, above Shell
+  src/api/actions.ts                            useNote, useResolve, useContinue, useReview, useRetry
+  src/routes/Chat/Composer.tsx (+ .module.css)
+  src/routes/Chat/{Chat,ChatBanner,Timeline,PointCard}.tsx, src/lib/timeline.ts, src/routes/{Shell/Shell,Inbox/Inbox}.tsx
+  e2e/escalation.spec.ts, e2e/control.ts
+docs/why/lost-updates.md, docs/why/races-and-conflicts.md, docs/why/chat-access-rules.md
 ```
+
+No new packages.
 
 ### Task 11: Engine: Resolve, Continue and the extra round
 
 **Files:**
-- Create: `apps/server/src/engine/human.ts` and `human.test.ts`, a migration (`PrChat.extraRounds Int @default(0)`).
-- Modify: `apps/server/src/engine/{types.ts,decide.ts,advance.ts,state.ts,summary.ts}`, `apps/server/src/engine/test-builders.ts`, `apps/server/src/chats/load.ts`, `apps/server/src/chats/save.ts` (**M2**), `apps/server/src/chats/{inbox.ts,views.ts}` (`maxRounds` now adds `extraRounds`) and their tests, `apps/server/prisma/schema.prisma`.
+- Create: `apps/server/src/engine/human.ts`, `apps/server/src/engine/human.test.ts`, `apps/server/src/chats/save.db.test.ts`, a migration (`PrChat.extraRounds Int @default(0)`), `docs/why/lost-updates.md`.
+- Modify: `apps/server/src/engine/{types,state,decide,advance,jobs,test-builders}.ts`, `apps/server/prisma/schema.prisma`, `apps/server/src/chats/{load,save,views,inbox}.ts`, `apps/server/src/jobs/bundle.ts`, `apps/server/src/chats/{views,inbox}.db.test.ts`, `apps/server/src/jobs/bundle.db.test.ts`, `apps/server/src/http/routes/auth.db.test.ts` (it quotes the address line), `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§9.2).
 
 **Interfaces:**
-- Produces: `DomainEvent` gains `{ type: 'point_resolve'; who: Person; point: number }` and `{ type: 'point_continue'; who: Person; point: number }`. `ChatState.extraRounds: number`. `roundLimit(ctx): number` = `ctx.rules.max_rounds + ctx.chat.extraRounds` (`engine/state.ts`), used by `advance` and wherever `max_rounds` was read for the limit.
+- Consumes: `advance`, `escalatePoints`, `enqueueJob`, `startReview`, `system`, `pointByNumber`, `author`, `onNitpilot`; the engine's test builders (`agentToAgent`, `participantOf`, `pointOf`, `jobOf`, `result`, `run`, `commandsOf`, `person`).
+- Produces: `DomainEvent` gains `{ type: 'point_resolve'; who: Person; point: number }` and `{ type: 'point_continue'; who: Person; point: number }`. `ChatState.extraRounds: number` (and `chatState()` defaults it to 0). `roundLimit(ctx: { chat: ChatState; rules: TeamRules }): number` = `rules.max_rounds + chat.extraRounds` (`engine/state.ts`), used by `advance`. `onPointResolve(ctx, e)`, `onPointContinue(ctx, e)` (`engine/human.ts`). The prisma column `PrChat.extraRounds`. `ChatView.maxRounds`, `InboxRow.maxRounds` and `JobBundle.maxRounds` are `max_rounds + extraRounds`; `ChatView.rules.maxRounds` stays the team's own number.
+- Timeline lines (system items, `pointNumber: null` so the web app keeps them in the feed, not in a point's card): `"<login> resolved P<n>"` with `data: { point }`; `"<login> let the agents continue on P<n>"`, plus `" · one more round"` when it granted one, with `data: { point, extraRound }`; and the two queue-time lines now say what is queued, not that it runs: `"Round <n>: <login>'s agent will review"` and `"<login>'s agent will work on <n> point(s)"`.
 
 **Behavior:**
-- `point_resolve`: only an `escalated` point raised by `who` with origin `agent` changes: → `resolved`, escalation reason cleared, system line "maya resolved P1"; then `advance` (which can reach Ready, notifying reviewers as today). Anything else changes nothing (no line, no commands): the route turns "nothing changed" into a 409 (Task 12).
-- `point_continue`: an `escalated` point, by the author or its raiser: → `open`, reason cleared, system line "maya let the agents continue on P1"; if `chat.addressPasses >= roundLimit` before the change, `extraRounds += 1` and the line says "· one more round"; then `advance` (which queues the address job, as auto or draft per the author's switch). A reopened `always_escalate` point stays open (the category check only runs when a point is raised).
-- Attention: `refreshAttention` already clears `decision` when no escalated points remain.
-- The summary comment shows the limit with extra rounds ("round 4 of 4").
-- **M2:** `saveChatState` updates a point row only with the fields that changed between the loaded and the new state, so a field nothing touched (a thread link written by another path) is never overwritten with a stale value.
+- `point_resolve`: only an `escalated` agent point raised by `who`, on an open PR: → `resolved`, reason cleared, the line, then `advance` (Ready when nothing else is open, notifying the requested reviewers as today). Anything else changes nothing: no line, no command, the state as it was. The route turns "nothing changed" into a 409 (Task 12).
+- `point_continue`: an `escalated` point (agent or GitHub), by the author or its raiser, on an open PR: → `open`, reason cleared; if the author is on Nitpilot and `addressPasses >= roundLimit` before the change, `extraRounds += 1` and the line says "· one more round"; then `advance` (which queues the address job, a draft when the author's Auto is off). An author who isn't on Nitpilot gets their turn back and no round (no agent pass would run). A reopened `always_escalate` point stays open: the category check only runs when a point is raised.
+- `refreshAttention` already clears `decision` once no escalated point is left.
+- **M2:** `saveChatState` writes a point (and a participant) with only the fields whose value changed between the loaded and the new state, so a field another write saved meanwhile (the review task's GitHub comment id) stays.
 
-**Tests this task must include:**
-- Resolve: by the raiser → resolved and Ready when nothing else is open; by the author, by another reviewer, on an open point, on a GitHub point → no change.
-- Continue: below the limit → open, an address job queued, no extra round; at the limit (`addressPasses == max_rounds`) → `extraRounds` 1 and the address job queued instead of re-escalating at once; a security point continued is not re-escalated by the next address pass; the author's Auto off → the queued job is a draft.
-- A disagreement continued and declined again escalates again (`disagreement`), and a second Continue grants another round only if the limit is reached again.
-- `save.db.test.ts` (**M2**): a point whose `githubThreadRootId` was set by another write between load and save keeps it after an unrelated event.
+- [ ] **Step 1: Write the failing engine tests**
+
+Create `apps/server/src/engine/human.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import {
+  agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, person, pointOf, result, run,
+} from './test-builders';
+import type { ChatState } from './types';
+
+const nina = person('nina'); // a second reviewer, on Nitpilot
+
+/**
+ * maya's PR, reviewed by leo and nina, with P1 from leo's agent escalated. Both reviewers have reviewed the current
+ * head. maya and leo are flagged "needs a decision" while a point is escalated, as the engine leaves them.
+ */
+function escalated(over: Partial<ChatState> = {}): ChatState {
+  const points = over.points ?? [pointOf(1, leo, { status: 'escalated', escalationReason: 'category', category: 'security', severity: 'blocker' })];
+  const attention = points.some((p) => p.status === 'escalated') ? 'decision' : 'none';
+  return agentToAgent({
+    phase: 'escalated',
+    participants: [
+      participantOf(maya, 'author', { attention }),
+      participantOf(leo, 'reviewer', { lastReviewedSha: 'head1', attention }),
+      participantOf(nina, 'reviewer', { lastReviewedSha: 'head1' }),
+    ],
+    ...over,
+    points,
+  });
+}
+
+describe('point_resolve', () => {
+  it('resolves an escalated point for the reviewer who raised it, and the chat is ready when nothing else is open', () => {
+    const out = run(escalated(), { type: 'point_resolve', who: leo, point: 1 });
+    expect(out.chat.points[0]).toMatchObject({ status: 'resolved', escalationReason: null });
+    expect(out.timeline.map((i) => i.body)).toEqual(['leo resolved P1', 'Ready for approval']);
+    expect(out.timeline[0]).toMatchObject({ kind: 'system', pointNumber: null, data: { point: 1 } });
+    expect(out.chat.phase).toBe('ready');
+    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo', 'user-nina'], kind: 'ready', pointNumbers: [] }]);
+    // Nobody needs to decide anything any more.
+    expect(out.chat.participants.map((p) => p.attention)).toEqual(['none', 'none', 'none']);
+  });
+
+  it('stays escalated while another point still needs a person', () => {
+    const chat = escalated();
+    chat.points.push(pointOf(2, leo, { status: 'escalated', escalationReason: 'disagreement' }));
+    const out = run(chat, { type: 'point_resolve', who: leo, point: 1 });
+    expect(out.timeline.map((i) => i.body)).toEqual(['leo resolved P1']);
+    expect(out.chat.phase).toBe('escalated');
+  });
+
+  it.each([
+    ['the author', maya, escalated()],
+    ['another reviewer', nina, escalated()],
+    ['the raiser, on an open point', leo, escalated({ points: [pointOf(1, leo)] })],
+    ['the raiser, on a resolved point', leo, escalated({ points: [pointOf(1, leo, { status: 'resolved' })] })],
+    ['the raiser, on a GitHub point (resolved on GitHub)', leo, escalated({ points: [pointOf(1, leo, { origin: 'github', status: 'escalated', escalationReason: 'round_limit' })] })],
+    ['the raiser, on a point that does not exist', leo, escalated({ points: [] })],
+  ])('changes nothing when asked by %s', (_who, who, chat) => {
+    const out = run(chat, { type: 'point_resolve', who, point: 1 });
+    expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
+    expect(out.chat).toEqual(chat);
+  });
+
+  it('changes nothing on a closed PR', () => {
+    const chat = escalated({ phase: 'closed', closed: true });
+    const out = run(chat, { type: 'point_resolve', who: leo, point: 1 });
+    expect(out.timeline).toEqual([]);
+    expect(out.chat).toEqual(chat);
+  });
+});
+
+describe('point_continue', () => {
+  it("hands the point back to the agents below the round limit: open again, and the author's agent gets an address job", () => {
+    const out = run(escalated(), { type: 'point_continue', who: maya, point: 1 });
+    expect(out.chat.points[0]).toMatchObject({ status: 'open', escalationReason: null });
+    expect(out.chat.extraRounds).toBe(0);
+    expect(out.timeline.map((i) => i.body)).toEqual(['maya let the agents continue on P1', "maya's agent will work on 1 point"]);
+    expect(out.timeline[0]).toMatchObject({ kind: 'system', pointNumber: null, data: { point: 1, extraRound: false } });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+    ]);
+    expect(out.chat.phase).toBe('addressing');
+    expect(out.chat.participants.map((p) => p.attention)).toEqual(['none', 'none', 'none']);
+  });
+
+  it('works for the reviewer who raised it too', () => {
+    const out = run(escalated(), { type: 'point_continue', who: leo, point: 1 });
+    expect(out.chat.points[0]!.status).toBe('open');
+    expect(out.timeline[0]!.body).toBe('leo let the agents continue on P1');
+  });
+
+  it('at the round limit grants one more round, and queues the address job instead of escalating again', () => {
+    const chat = escalated({ addressPasses: 3, round: 4, points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'round_limit' })] });
+    const out = run(chat, { type: 'point_continue', who: maya, point: 1 });
+    expect(out.chat.extraRounds).toBe(1);
+    expect(out.chat.points[0]!.status).toBe('open');
+    expect(out.timeline.map((i) => i.body)).toEqual(['maya let the agents continue on P1 · one more round', "maya's agent will work on 1 point"]);
+    expect(out.timeline[0]!.data).toMatchObject({ extraRound: true });
+    expect(commandsOf(out, 'enqueue_job')).toHaveLength(1);
+  });
+
+  it('grants no round when the author is not on Nitpilot: it is their own turn, and no agent pass counts', () => {
+    const chat = escalated({ addressPasses: 3, participants: [participantOf(person('sam', { userId: null }), 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })] });
+    const out = run({ ...chat, authorGithubId: 'gh-sam' }, { type: 'point_continue', who: leo, point: 1 });
+    expect(out.chat.extraRounds).toBe(0);
+    expect(out.chat.phase).toBe('addressing');
+    expect(commandsOf(out, 'enqueue_job')).toEqual([]);
+  });
+
+  it("queues a draft when the author's Auto is off", () => {
+    const chat = escalated();
+    chat.participants[0]!.auto = false;
+    const out = run(chat, { type: 'point_continue', who: maya, point: 1 });
+    expect(commandsOf(out, 'enqueue_job')[0]!.applyState).toBe('draft');
+  });
+
+  it('is not undone by the next address pass: a continued security point is answered, then re-reviewed', () => {
+    const continued = run(escalated(), { type: 'point_continue', who: maya, point: 1 }).chat;
+    continued.jobs = [jobOf('job-a', maya, 'author', 'address')];
+    const out = run(continued, { type: 'job_completed', jobId: 'job-a', attempt: 1, result: result({ replies: [{ point: 1, resolution: 'fixed', comment: 'Checked now.' }] }) });
+    expect(out.chat.points[0]).toMatchObject({ status: 'addressed', escalationReason: null });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review' })]);
+  });
+
+  it('escalates again when the agents still disagree, and a second Continue grants a round only at the limit', () => {
+    const disagree = (over: Partial<ChatState>) => escalated({ points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'disagreement', authorResolution: 'declined' })], ...over });
+    // Below the limit: no extra round.
+    let chat = run(disagree({ addressPasses: 1 }), { type: 'point_continue', who: maya, point: 1 }).chat;
+    expect(chat.extraRounds).toBe(0);
+    // maya's agent declines again, and leo's agent keeps the point open: the same disagreement.
+    chat.jobs = [jobOf('job-a', maya, 'author', 'address')];
+    chat = run(chat, { type: 'job_completed', jobId: 'job-a', attempt: 1, result: result({ replies: [{ point: 1, resolution: 'declined', comment: 'Still no.' }] }) }).chat;
+    chat.jobs = [jobOf('job-r', leo, 'reviewer', 're_review')];
+    chat = run(chat, { type: 'job_completed', jobId: 'job-r', attempt: 1, result: result({ decisions: [{ point: 1, decision: 'keep_open', comment: 'It matters.' }] }) }).chat;
+    expect(chat.points[0]).toMatchObject({ status: 'escalated', escalationReason: 'disagreement' });
+    expect(chat.addressPasses).toBe(2);
+    // Continue again: still below the limit of 3, so still no extra round.
+    expect(run(chat, { type: 'point_continue', who: maya, point: 1 }).chat.extraRounds).toBe(0);
+    // At the limit, the next Continue grants one.
+    expect(run({ ...chat, addressPasses: 3 }, { type: 'point_continue', who: maya, point: 1 }).chat.extraRounds).toBe(1);
+  });
+
+  it('lets the next address pass run on an extra round, and escalates at the new limit', () => {
+    const chat = agentToAgent({ phase: 'reviewing', addressPasses: 3, extraRounds: 1, points: [pointOf(1, leo)] });
+    const out = run(chat, { type: 'timer', key: 'comments' });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ jobType: 'address' })]);
+    const over = run({ ...chat, addressPasses: 4 }, { type: 'timer', key: 'comments' });
+    expect(over.chat.points[0]).toMatchObject({ status: 'escalated', escalationReason: 'round_limit' });
+  });
+
+  it.each([
+    ['another reviewer', nina, escalated()],
+    ['the author, on an open point', maya, escalated({ points: [pointOf(1, leo)] })],
+    ['the author, on a resolved point', maya, escalated({ points: [pointOf(1, leo, { status: 'resolved' })] })],
+    ['the author, on a closed PR', maya, escalated({ phase: 'closed', closed: true })],
+  ])('changes nothing when asked by %s', (_who, who, chat) => {
+    const out = run(chat, { type: 'point_continue', who, point: 1 });
+    expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
+    expect(out.chat).toEqual(chat);
+  });
+});
+
+describe('the lines an agent gets when work is queued', () => {
+  // Its CLI may be offline: the line says the work was handed over, and the banner says whether it runs.
+  it('say the agent will review or work, not that it is doing so', () => {
+    const opened = run(chatState(), { type: 'pr_opened', author: maya, reviewers: [leo] });
+    expect(opened.timeline.map((i) => i.body)).toContain("Round 1: leo's agent will review");
+  });
+});
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/engine/human.test.ts`
+Expected: FAIL, 22 tests: `decide` throws `Unhandled event` for `point_resolve` and `point_continue`, the round-limit test escalates (no `extraRounds`), and the review line still says "is reviewing".
+
+- [ ] **Step 3: The engine learns Resolve, Continue and the extra round**
+
+Create `apps/server/src/engine/human.ts`:
+
+```ts
+import { advance } from './advance';
+import { system, type Ctx, type Ev } from './context';
+import { author, onNitpilot, pointByNumber, roundLimit } from './state';
+
+// What people decide in the web app about an escalated point (spec §9.2). Anything that doesn't apply changes
+// nothing: no line, no command. The route turns "nothing changed" into a 409 (http/routes/chat-actions.ts).
+
+/** Resolve: only the reviewer who raised the point, and only an agent's point (a GitHub point is resolved on GitHub). */
+export function onPointResolve(ctx: Ctx, e: Ev<'point_resolve'>): void {
+  const chat = ctx.chat;
+  const pt = pointByNumber(chat, e.point);
+  if (chat.phase === 'closed' || !pt || pt.status !== 'escalated') return;
+  if (pt.origin !== 'agent' || pt.raisedBy !== e.who.githubId) return;
+  pt.status = 'resolved';
+  pt.escalationReason = null;
+  system(ctx, `${e.who.login} resolved P${pt.number}`, { point: pt.number });
+  advance(ctx);
+}
+
+/**
+ * Continue: the author or the reviewer who raised the point hands it back to the agents. At the round limit that
+ * also grants one more address pass, when the author's agent is the one who would run it. A reopened point stays
+ * open even in an always-escalate category: that check runs only when a point is raised (points.ts).
+ */
+export function onPointContinue(ctx: Ctx, e: Ev<'point_continue'>): void {
+  const chat = ctx.chat;
+  const pt = pointByNumber(chat, e.point);
+  if (chat.phase === 'closed' || !pt || pt.status !== 'escalated') return;
+  if (e.who.githubId !== chat.authorGithubId && e.who.githubId !== pt.raisedBy) return;
+  const a = author(chat);
+  const extraRound = !!a && onNitpilot(a) && chat.addressPasses >= roundLimit(ctx);
+  if (extraRound) chat.extraRounds += 1;
+  pt.status = 'open';
+  pt.escalationReason = null;
+  system(ctx, `${e.who.login} let the agents continue on P${pt.number}${extraRound ? ' · one more round' : ''}`, { point: pt.number, extraRound });
+  advance(ctx);
+}
+```
+
+Then the event types, the round limit, the dispatch in `decide`, and the two queue-time lines:
+
+```diff
+--- a/apps/server/src/engine/types.ts
++++ b/apps/server/src/engine/types.ts
+@@ -70,6 +70,8 @@ export type ChatState = {
+   phase: Phase;
+   round: number;
+   addressPasses: number;
++  /** Address passes people granted beyond the team's max_rounds, by pressing Continue at the limit (spec §9.2). */
++  extraRounds: number;
+   headSha: string;
+   isDraft: boolean;
+   /** The PR author is trusted (OWNER, MEMBER, COLLABORATOR or a trusted bot). */
+@@ -131,7 +133,11 @@ export type DomainEvent =
+   /** The PR now targets another branch. `trusted` is the author's trust, checked again. */
+   | { type: 'pr_retargeted'; baseRef: string; trusted: boolean }
+   /** Someone flagged by write_failed signed in again, in these roles (the ones whose flag came from a failed write). */
+-  | { type: 'signed_in_again'; who: Person; roles: Role[] };
++  | { type: 'signed_in_again'; who: Person; roles: Role[] }
++  /** Resolve on an escalated point, from the web app (spec §9.2): only the reviewer who raised it. */
++  | { type: 'point_resolve'; who: Person; point: number }
++  /** Continue on an escalated point, from the web app: the author or the reviewer who raised it. */
++  | { type: 'point_continue'; who: Person; point: number };
+ 
+ export type ParticipantKey = { githubId: string; role: Role };
+ 
+```
+
+```diff
+--- a/apps/server/src/engine/state.ts
++++ b/apps/server/src/engine/state.ts
+@@ -1,4 +1,4 @@
+-import type { JobStatus, Role } from '@nitpilot/protocol';
++import type { JobStatus, Role, TeamRules } from '@nitpilot/protocol';
+ import type { ChatState, JobView, ParticipantState, Person, PointState } from './types';
+ 
+ const ACTIVE: readonly JobStatus[] = ['queued', 'running'];
+@@ -51,6 +51,11 @@ export function activeJobFor(chat: ChatState, p: ParticipantState): JobView | un
+   return activeJobs(chat).find((j) => j.participantGithubId === p.githubId && j.role === p.role);
+ }
+ 
++/** How many address passes this chat may have: the team's max_rounds plus the ones people granted with Continue (spec §9.3). */
++export function roundLimit(ctx: { chat: ChatState; rules: TeamRules }): number {
++  return ctx.rules.max_rounds + ctx.chat.extraRounds;
++}
++
+ /** A point the author's side should work on now (spec §9.3). */
+ export function isActionable(pt: PointState): boolean {
+   return pt.status === 'open' && pt.trusted;
+```
+
+```diff
+--- a/apps/server/src/engine/decide.ts
++++ b/apps/server/src/engine/decide.ts
+@@ -6,6 +6,7 @@ import {
+   onHumanNote, onManualReview, onPrClosed, onPrOpened, onPrReady, onPrReopened, onPrRetargeted, onPrToDraft,
+   onReviewRequestRemoved, onReviewRequested,
+ } from './lifecycle';
++import { onPointContinue, onPointResolve } from './human';
+ import { onJobCompleted, onJobFailed, onRetryRequested } from './results';
+ import { author, onNitpilot } from './state';
+ import type { DecideInput, DecideOutput } from './types';
+@@ -48,6 +49,8 @@ export function decide(input: DecideInput): DecideOutput {
+     case 'write_failed': onWriteFailed(ctx, event); break;
+     case 'pr_retargeted': onPrRetargeted(ctx, event); break;
+     case 'signed_in_again': onSignedInAgain(ctx, event); break;
++    case 'point_resolve': onPointResolve(ctx, event); break;
++    case 'point_continue': onPointContinue(ctx, event); break;
+     default: {
+       // If a new DomainEvent type is added without a case, this line stops compiling.
+       const unhandled: never = event;
+```
+
+```diff
+--- a/apps/server/src/engine/advance.ts
++++ b/apps/server/src/engine/advance.ts
+@@ -1,7 +1,7 @@
+ import { emit, system, type Ctx } from './context';
+ import { enqueueJob, startReview } from './jobs';
+ import { escalatePoints } from './points';
+-import { activeJobs, author, isActionable, onNitpilot, reviewers } from './state';
++import { activeJobs, author, isActionable, onNitpilot, reviewers, roundLimit } from './state';
+ import type { ChatState, ParticipantState } from './types';
+ 
+ /**
+@@ -60,7 +60,7 @@ export function advance(ctx: Ctx): void {
+     chat.phase = 'addressing'; // the human author's turn
+     return;
+   }
+-  if (chat.addressPasses >= ctx.rules.max_rounds) {
++  if (chat.addressPasses >= roundLimit(ctx)) {
+     const stuck = chat.points.filter((p) => p.trusted && (p.status === 'open' || p.status === 'addressed'));
+     escalatePoints(ctx, stuck, 'round_limit');
+     enterEscalated(ctx);
+@@ -72,8 +72,9 @@ export function advance(ctx: Ctx): void {
+     return;
+   }
+   if (enqueueJob(ctx, a, 'address', null)) {
++    // "will": the job is queued, and its CLI may be offline. The banner says whether it runs.
+     const n = actionable.length;
+-    system(ctx, `${a.login}'s agent is working on ${n} point${n === 1 ? '' : 's'}`);
++    system(ctx, `${a.login}'s agent will work on ${n} point${n === 1 ? '' : 's'}`);
+   }
+   chat.phase = 'addressing';
+ }
+```
+
+```diff
+--- a/apps/server/src/engine/jobs.ts
++++ b/apps/server/src/engine/jobs.ts
+@@ -71,6 +71,7 @@ export function startReview(ctx: Ctx, reviewer: ParticipantState, opts: { manual
+   const jobType = reviewer.lastReviewedSha ? 're_review' : 'review';
+   if (!enqueueJob(ctx, reviewer, jobType, reviewer.lastReviewedSha)) return false;
+   chat.phase = 'reviewing';
+-  system(ctx, `Round ${chat.round}: ${reviewer.login}'s agent is reviewing`, { reviewer: reviewer.login });
++  // "will": the job is queued, and its CLI may be offline. The banner says whether it runs.
++  system(ctx, `Round ${chat.round}: ${reviewer.login}'s agent will review`, { reviewer: reviewer.login });
+   return true;
+ }
+```
+
+```diff
+--- a/apps/server/src/engine/test-builders.ts
++++ b/apps/server/src/engine/test-builders.ts
+@@ -36,6 +36,7 @@ export function chatState(over: Partial<ChatState> = {}): ChatState {
+     phase: 'idle',
+     round: 1,
+     addressPasses: 0,
++    extraRounds: 0,
+     headSha: 'head1',
+     isDraft: false,
+     trusted: true,
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/engine`
+Expected: PASS, 131 tests (the 22 new ones and every older engine test; none of them quoted the review line). The server doesn't typecheck yet: `loadChat` doesn't fill `extraRounds` (Step 7).
+
+- [ ] **Step 5: Write the failing tests for saving**
+
+Create `apps/server/src/chats/save.db.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { makeChat, makeRepo, makeUser, personOf } from '../../test/db';
+import { prisma } from '../lib/prisma';
+import { Dispatcher } from './dispatch';
+import { loadChat } from './load';
+import { saveChatState } from './save';
+
+/** maya's PR, reviewed by leo, with P1 from leo's agent, open and not on GitHub yet. */
+async function scene() {
+  const maya = await makeUser({ login: 'maya' });
+  const leo = await makeUser({ login: 'leo' });
+  const chat = await makeChat((await makeRepo()).id, { authorGithubId: maya.githubId });
+  await new Dispatcher().dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+  await prisma.point.create({
+    data: { chatId: chat.id, number: 1, raisedByGithubId: leo.githubId, origin: 'agent', severity: 'major', category: 'bug', title: 'Off by one', body: 'The last page is lost.', round: 1 },
+  });
+  return { chat };
+}
+
+describe('saveChatState', () => {
+  it('writes only the fields that changed, so a thread link saved meanwhile by another write stays (M2)', async () => {
+    const { chat } = await scene();
+    const loaded = await loadChat(chat.id);
+    // The review task posts P1 to GitHub and saves its comment id without the chat's lock (tasks/handlers/review.ts).
+    await prisma.point.update({ where: { chatId_number: { chatId: chat.id, number: 1 } }, data: { githubCommentId: 'c-1', githubThreadRootId: 'c-1' } });
+    const after = structuredClone(loaded.state);
+    after.points[0]!.status = 'resolved';
+    await prisma.$transaction((tx) => saveChatState(tx, chat.id, loaded.state, after, new Date()));
+    expect(await prisma.point.findUniqueOrThrow({ where: { chatId_number: { chatId: chat.id, number: 1 } } })).toMatchObject({
+      status: 'resolved',
+      githubCommentId: 'c-1',
+      githubThreadRootId: 'c-1',
+    });
+  });
+
+  it('saves the rounds people granted with Continue, and reads them back', async () => {
+    const { chat } = await scene();
+    const loaded = await loadChat(chat.id);
+    expect(loaded.state.extraRounds).toBe(0);
+    await prisma.$transaction((tx) => saveChatState(tx, chat.id, loaded.state, { ...loaded.state, extraRounds: 1 }, new Date()));
+    expect((await loadChat(chat.id)).state.extraRounds).toBe(1);
+  });
+});
+```
+
+and add a test each where the round limit is shown (the chat, the inbox, the agent's job):
+
+```diff
+--- a/apps/server/src/chats/views.db.test.ts
++++ b/apps/server/src/chats/views.db.test.ts
+@@ -31,6 +31,14 @@ async function scene() {
+ }
+ 
+ describe('loadChatView (spec §10, handoff §2)', () => {
++  it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
++    const { chat, leo, clis } = await scene();
++    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
++    const view = await loadChatView(chat.id, leo, clis);
++    expect(view.maxRounds).toBe(5);
++    expect(view.rules.maxRounds).toBe(4);
++  });
++
+   it('shows the PR, the rules and the points, with links to their lines on GitHub', async () => {
+     const { repo, chat, leo, clis } = await scene();
+     const view = ChatView.parse(await loadChatView(chat.id, leo, clis));
+```
+
+```diff
+--- a/apps/server/src/chats/inbox.db.test.ts
++++ b/apps/server/src/chats/inbox.db.test.ts
+@@ -37,6 +37,13 @@ describe('loadInboxRows (spec §16 "Inbox")', () => {
+     expect(review).toMatchObject({ chatId: chat.id, role: 'reviewer', other: { login: 'maya', avatarUrl: `https://avatars.githubusercontent.com/u/${maya.githubId}` } });
+   });
+ 
++  it('counts the rounds people granted with Continue in the limit', async () => {
++    const { maya, chat } = await scene();
++    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 2 } });
++    const [mine] = await loadInboxRows(viewer(maya), noClis);
++    expect(mine!.maxRounds).toBe(5);
++  });
++
+   it('gives a person who is both author and reviewer one row per role', async () => {
+     const { maya, chat } = await scene();
+     await makeParticipant(chat.id, maya, 'reviewer');
+```
+
+```diff
+--- a/apps/server/src/jobs/bundle.db.test.ts
++++ b/apps/server/src/jobs/bundle.db.test.ts
+@@ -57,6 +57,12 @@ describe('buildJobBundle', () => {
+     });
+   });
+ 
++  it('tells the agent the round limit with the rounds people granted with Continue', async () => {
++    const { chat, review } = await scene({ rulesJson: { max_rounds: 2 } });
++    await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
++    expect((await buildJobBundle(review.id, platform)).maxRounds).toBe(3);
++  });
++
+   it('gives a re-review the points with their threads, the human notes, and the commit to start from', async () => {
+     const { maya, chat, dispatcher, review } = await scene();
+     await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, attempt: 1, result: samples.jobResult() });
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/chats/save.db.test.ts src/chats/views.db.test.ts src/chats/inbox.db.test.ts src/jobs/bundle.db.test.ts`
+Expected: FAIL, 5 tests: `extraRounds` isn't a column yet (Prisma's validation error in the three limit tests), `loadChat` has no `extraRounds`, and the M2 test finds the thread link written back to `null`.
+
+- [ ] **Step 7: The column, and saving only what changed**
+
+In `apps/server/prisma/schema.prisma`:
+
+```diff
+--- a/apps/server/prisma/schema.prisma
++++ b/apps/server/prisma/schema.prisma
+@@ -123,6 +123,8 @@ model PrChat {
+   phase            String    @default("idle")
+   round            Int       @default(1)
+   addressPasses    Int       @default(0)
++  /// Address passes people granted beyond max_rounds by pressing Continue at the limit (spec §9.2, §9.3)
++  extraRounds      Int       @default(0)
+   headSha          String
+   baseSha          String
+   baseRef          String
+```
+
+Run `npm run db:migrate -w apps/server -- --name pr_chat_extra_rounds`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client). The new `prisma/migrations/<timestamp>_pr_chat_extra_rounds/migration.sql` is:
+
+```sql
+-- AlterTable
+ALTER TABLE "PrChat" ADD COLUMN     "extraRounds" INTEGER NOT NULL DEFAULT 0;
+```
+
+Then load and save it, write only changed fields (M2), and count it in the limit wherever the limit is shown:
+
+```diff
+--- a/apps/server/src/chats/load.ts
++++ b/apps/server/src/chats/load.ts
+@@ -26,6 +26,7 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
+     phase: row.phase as Phase,
+     round: row.round,
+     addressPasses: row.addressPasses,
++    extraRounds: row.extraRounds,
+     headSha: row.headSha,
+     isDraft: row.isDraft,
+     trusted: row.trusted,
+```
+
+```diff
+--- a/apps/server/src/chats/save.ts
++++ b/apps/server/src/chats/save.ts
+@@ -12,8 +12,13 @@ function pick<T, K extends keyof T>(obj: T, fields: readonly K[]): Pick<T, K> {
+   return Object.fromEntries(fields.map((f) => [f, obj[f]])) as Pick<T, K>;
+ }
+ 
+-function changed<T>(a: T, b: T, fields: readonly (keyof T)[]): boolean {
+-  return fields.some((f) => a[f] !== b[f]);
++/**
++ * The fields whose value differs between what was loaded and what the engine returned. Only those are written: a
++ * field the engine didn't touch keeps whatever another write saved meanwhile (the review task saves a point's
++ * GitHub comment id without the chat's lock). docs/why/lost-updates.md.
++ */
++function changedFields<T, K extends keyof T>(before: T, after: T, fields: readonly K[]): Partial<Pick<T, K>> {
++  return Object.fromEntries(fields.filter((f) => before[f] !== after[f]).map((f) => [f, after[f]])) as Partial<Pick<T, K>>;
+ }
+ 
+ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, after: ChatState, now: Date): Promise<void> {
+@@ -23,6 +28,7 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
+       phase: after.phase,
+       round: after.round,
+       addressPasses: after.addressPasses,
++      extraRounds: after.extraRounds,
+       headSha: after.headSha,
+       isDraft: after.isDraft,
+       trusted: after.trusted,
+@@ -37,8 +43,9 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
+     const old = before.participants.find((b) => b.githubId === p.githubId && b.role === p.role);
+     if (!old) {
+       await tx.participant.create({ data: { chatId, githubId: p.githubId, role: p.role, ...pick(p, PARTICIPANT_FIELDS) } });
+-    } else if (changed<ParticipantState>(old, p, PARTICIPANT_FIELDS)) {
+-      await tx.participant.update({ where: { chatId_githubId_role: { chatId, githubId: p.githubId, role: p.role } }, data: pick(p, PARTICIPANT_FIELDS) });
++    } else {
++      const data = changedFields<ParticipantState, (typeof PARTICIPANT_FIELDS)[number]>(old, p, PARTICIPANT_FIELDS);
++      if (Object.keys(data).length > 0) await tx.participant.update({ where: { chatId_githubId_role: { chatId, githubId: p.githubId, role: p.role } }, data });
+     }
+   }
+ 
+@@ -70,8 +77,9 @@ export async function saveChatState(tx: Tx, chatId: string, before: ChatState, a
+           round: pt.round,
+         },
+       });
+-    } else if (changed<PointState>(old, pt, POINT_FIELDS)) {
+-      await tx.point.update({ where: { chatId_number: { chatId, number: pt.number } }, data: pick(pt, POINT_FIELDS) });
++    } else {
++      const data = changedFields<PointState, (typeof POINT_FIELDS)[number]>(old, pt, POINT_FIELDS);
++      if (Object.keys(data).length > 0) await tx.point.update({ where: { chatId_number: { chatId, number: pt.number } }, data });
+     }
+   }
+ }
+```
+
+```diff
+--- a/apps/server/src/chats/views.ts
++++ b/apps/server/src/chats/views.ts
+@@ -65,7 +65,8 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
+     baseRef: chat.baseRef,
+     phase: chat.phase as Phase,
+     round: chat.round,
+-    maxRounds: rules.max_rounds,
++    // The limit with the rounds people granted with Continue (spec §9.3); `rules.maxRounds` is the team's own.
++    maxRounds: rules.max_rounds + chat.extraRounds,
+     merged: chat.merged,
+     closed: chat.closedAt !== null,
+     trusted: chat.trusted,
+```
+
+```diff
+--- a/apps/server/src/chats/inbox.ts
++++ b/apps/server/src/chats/inbox.ts
+@@ -95,7 +95,7 @@ async function buildRows(user: InboxViewer, mine: Mine[], clis: LiveClis, now: D
+         : null,
+       status,
+       round: chat.round,
+-      maxRounds: rulesFromJson(chat.repo.rulesJson).max_rounds,
++      maxRounds: rulesFromJson(chat.repo.rulesJson).max_rounds + chat.extraRounds,
+       lastActivity: oneLine(lastItems.get(chat.id) ?? ''),
+       updatedAt: chat.updatedAt.toISOString(),
+       unread: unread.get(chat.id) ?? 0,
+```
+
+```diff
+--- a/apps/server/src/jobs/bundle.ts
++++ b/apps/server/src/jobs/bundle.ts
+@@ -39,7 +39,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
+     attempt: job.attempt,
+     type: job.type,
+     round: job.round,
+-    maxRounds: rules.max_rounds,
++    maxRounds: rules.max_rounds + chat.extraRounds,
+     apply: job.applyState === 'draft' ? 'draft' : 'auto',
+     you: { login: job.participant.login, role: job.participant.role },
+     pr: {
+```
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/chats/save.db.test.ts src/chats/views.db.test.ts src/chats/inbox.db.test.ts src/jobs/bundle.db.test.ts`
+Expected: PASS, 27 tests.
+
+- [ ] **Step 9: The one test that quotes the address line, and the explainer**
+
+```diff
+--- a/apps/server/src/http/routes/auth.db.test.ts
++++ b/apps/server/src/http/routes/auth.db.test.ts
+@@ -150,7 +150,7 @@ describe('signing in again (spec §15)', () => {
+     expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'none' });
+     expect(await prisma.job.findFirst({ where: { chatId: chat.id, status: 'queued' } })).toMatchObject({ type: 'address' });
+     const last = await prisma.message.findFirstOrThrow({ where: { chatId: chat.id }, orderBy: { seq: 'desc' } });
+-    expect(last.body).toBe("maya's agent is working on 1 point");
++    expect(last.body).toBe("maya's agent will work on 1 point");
+   });
+ 
+   it("leaves a flag from a failed job: that's for `nitpilot retry`", async () => {
+```
+
+Create `docs/why/lost-updates.md` (M2 is the first lost update the code guards against):
+
+```markdown
+# Lost updates: write back only what you changed
+
+**In one sentence:** when the dispatcher saves a chat, it writes only the fields the engine changed, so a field that another part of the server saved in the meantime is never put back to the old value.
+
+## The problem
+
+Saving a chat is "read, decide, write": the dispatcher loads the chat, the engine works out the new state, and the dispatcher writes it back (`chats/dispatch.ts`, [dispatcher.md](dispatcher.md)). The chat's lock makes sure two events for one chat never do that at the same time.
+
+But not every write goes through the dispatcher. When a reviewer's agent posts its points to GitHub, the review task (`tasks/handlers/review.ts`) saves each point's GitHub comment id straight into the `Point` row, without the chat's lock, because GitHub calls never happen under it. So this can happen:
+
+1. The dispatcher loads P1: no comment id yet.
+2. The review task posts P1 to GitHub and saves its comment id.
+3. The engine, working on the copy from step 1, marks P1 resolved.
+4. The dispatcher writes P1 back: status `resolved`, and comment id `null`, the value it loaded.
+
+Step 4 throws away step 2's write. That's a **lost update**: nobody did anything wrong, but a value someone saved disappears. Here it would cut P1 off from its GitHub thread, so a reply there would no longer find its point.
+
+## The fix
+
+`saveChatState` (`chats/save.ts`) compares each point and participant as loaded with what the engine returned, and writes only the fields that differ (`changedFields`). In step 4 only `status` changed, so only `status` is written, and the comment id from step 2 stays. `chats/save.db.test.ts` plays the four steps above.
+
+It works because the engine never touches the comment id on a point it didn't just create: if it did change a field, its value is the newer one and should win.
+
+## The React analogy
+
+It's the difference between `setUser(loadedUser)` and `setUser((u) => ({ ...u, name }))`. The first overwrites everything with the copy you had when you started; the second changes only the field you meant to change and keeps whatever else happened meanwhile.
+```
+
+- [ ] **Step 10: The spec**
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §9.2, the `escalated` → `open` row's second sentence ("At the round limit this also grants the chat one more address pass (`extraRounds` + 1).") becomes: "At the round limit this also grants the chat one more address pass (`extraRounds` + 1), when the author is on Nitpilot; an author who isn't fixes it by hand, and no limit applies to that." After the table, add: "Resolve and Continue that no longer apply (the point was resolved or handed back a moment earlier, or the PR closed) change nothing; the route says why (§10)."
+
+- [ ] **Step 11: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 49, CLI 294 passed + 14 skipped, server 752, web 126; end to end 5; Playwright 5; typecheck and lint clean.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add apps/server/prisma apps/server/src docs/why/lost-updates.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): Resolve, Continue and the extra round in the engine; saving writes only what changed
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 12: Write routes and the access rules for actions
 
 **Files:**
-- Create: `apps/server/src/http/routes/chat-actions.ts` and `chat-actions.db.test.ts`.
-- Modify: `apps/server/src/chats/permissions.ts` and `permissions.test.ts` (write rules), `apps/server/src/chats/people.ts` (people in the new events), `apps/server/src/http/routes/cli.ts` (the retry route moves to `chat-actions.ts` behind `requireUser`, keeping the CLI's answers), `apps/server/src/http/app.ts`, `packages/protocol/src/web-api.ts` (`NoteRequest`, `ActionResponse`), `apps/server/src/chats/views.ts` (`permissionsFor` fills `Permissions`).
+- Create: `apps/server/src/chats/permissions.ts`, `apps/server/src/chats/permissions.test.ts`, `apps/server/src/http/routes/chat-actions.ts`, `apps/server/src/http/routes/chat-actions.db.test.ts`, `docs/why/races-and-conflicts.md`.
+- Modify: `packages/protocol/src/web-api.ts` and `web-api.test.ts`, `apps/server/src/engine/lifecycle.ts` and `lifecycle.test.ts` (no notes on a closed PR), `apps/server/src/chats/access.ts` and `access.db.test.ts` (two Task 8 minors), `apps/server/src/chats/views.ts` and `views.db.test.ts` (`permissions`), `apps/server/src/http/routes/chats.ts` (export `readable`, `askingGithub`), `apps/server/src/http/routes/cli.ts` (retry moves out), `apps/server/src/http/app.ts`, `apps/web/src/test/chat.ts` (the fixture's `permissions`), `docs/why/chat-access-rules.md`, `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§10, §16).
 
 **Interfaces:**
-- Consumes: `requireUser`, `requireSameOrigin` (Task 3), `readAccess` (Task 7), `failureKind`, the engine events (Task 11).
-- Produces: `type ChatAction = { kind: 'note' } | { kind: 'resolve'; point: number } | { kind: 'continue'; point: number } | { kind: 'review' } | { kind: 'retry' } | { kind: 'auto'; role: Role } | { kind: 'draft'; jobId: string }`. `can(viewer: { githubId: string; userId: string }, facts: PermissionFacts, action: ChatAction): boolean` where `PermissionFacts = { participants: { githubId; role; userId: string | null; requested: boolean; attention: Attention }[]; points: { number; raisedBy; origin; status }[]; drafts: { jobId; participantGithubId }[]; closed: boolean }`. `permissionsFor(viewer, facts): Permissions`. Routes (all `requireUser` + `requireSameOrigin` + `readAccess` + `can`, then `withPeople` and `dispatch`): `POST /api/chats/:id/notes { body }` (1–4 000 characters) → `human_note`; `POST /api/chats/:id/points/:n/resolve`; `POST /api/chats/:id/points/:n/continue`; `POST /api/chats/:id/review` → `manual_review`; `POST /api/chats/:id/retry` (cookie or CLI token). Each answers 200 `{ ok: true }`, 403 `{ code: 'forbidden', message }` when `can` says no, and 409 `{ code: 'conflict', message }` when the engine changed nothing (the message says why in plain words: "P1 isn't escalated any more.", "Someone already resolved P1.").
+- Consumes: `requireUser`, `requireSameOrigin` (Task 3); `chatAccess` (Task 7, Task 8); `failureKind` (Plan 1b); the engine events of Task 11 and `human_note`, `manual_review`, `retry_requested`; `Dispatch`, whose `DecideOutput` (timeline, commands, the new state) tells a route whether anything changed.
+- Produces (protocol): `Permissions = { note: boolean; resolve: number[]; continue: number[]; review: boolean; retry: boolean }` and `ChatView.permissions`; `NoteRequest = { body }` (trimmed, 1 to 4,000 characters); `ActionResponse = { ok: true }`. Retry keeps Plan 1's `RetryResponse { status: 'queued' | 'waiting' }`.
+- Produces (server): `type ChatAction = { kind: 'note' } | { kind: 'resolve'; point } | { kind: 'continue'; point } | { kind: 'review' } | { kind: 'retry' }`; `PermissionFacts = { closed; trusted; authorGithubId; participants: { githubId; role; requested; attention }[]; points: { number; raisedBy; origin; status }[] }`; `can(viewer: { githubId }, facts, action): boolean`; `permissionsFor(viewer, facts): Permissions`; `permissionFacts(chatRow)` from a Prisma `PrChat` with its participants and points (`chats/permissions.ts`). `chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch })`; `readable(access)` and `askingGithub(call)` exported from `routes/chats.ts`; `cliRoutes()` takes no deps.
 
 **Behavior:**
-- `can` is the spec §16 list, nothing more; a closed chat allows nothing.
-- Retry: a `github_post` failure → 409 with "Reconnect GitHub" wording (the CLI text stays as Plan 1b had it for the CLI); a retry while that person's job is already queued → 409 "Your agent is already on it." (the deferred concurrent-retries minor).
-- `docs/why/chat-access-rules.md` gains the write table.
+- Routes, each `requireUser` + `requireSameOrigin`, then read access (`chatAccess`: 404 for a chat that doesn't exist or you can't see, 401 `reauth`, 502 when GitHub doesn't answer), then the role check, then one engine event under the chat's lock:
+  - `POST /api/chats/:id/notes { body }` → `human_note`; `POST /api/chats/:id/points/:n/resolve` → `point_resolve`; `POST /api/chats/:id/points/:n/continue` → `point_continue`; `POST /api/chats/:id/review` → `manual_review`. Each answers 200 `{ ok: true }`.
+  - `POST /api/chats/:id/retry` → `retry_requested`, with Plan 1's answers (`queued` / `waiting`, and its 409s). A browser is asked about read access like every other write; a CLI token isn't, as in Plan 1.
+- `can` is spec §16's list and looks only at who you are: notes for anyone in the chat; Resolve only for the reviewer who raised the point, and only an agent's point; Continue for the author or the raiser; Review for a requested reviewer on an outside contributor's PR; Retry for the person flagged failed. A closed PR allows nothing. `permissionsFor` offers Resolve and Continue only on escalated points, and Review only while that reviewer's manual review waits.
+- Answers: a point number that isn't plain digits or isn't in the chat → 404 "No such point."; a closed PR → 409 "This PR is closed, so its chat is read-only."; `can` says no → 403 with a sentence per action ("Only the reviewer who raised P1 can resolve it.", "P1 came from a GitHub comment: resolve its thread on GitHub.", …); the engine changed nothing → 409 with what happened ("P1 is already resolved.", "P1 isn't escalated any more: the agents have it.", "Your agent is already on it.").
+- **Review Focus 3:** two presses at once (Resolve, Continue, Retry, Review) have exactly one effect; the other gets the 409.
+- Two Task 8 minors in the files this task touches: `chatAccessByPath` takes only plain digits for the PR number, and `chatAccess` answers `reauth` for a chat that doesn't exist when your GitHub sign-in expired (so an expired sign-in can't tell which ids exist).
 
-**Tests this task must include:**
-- `permissions.test.ts`: the §16 table as rows (note by author / reviewer / reviewer not on Nitpilot / non-participant; resolve by raiser / author / other reviewer / on a GitHub point; continue by author / raiser / other; review by requested / unrequested reviewer; retry/auto/draft only your own; anything on a closed chat).
-- `chat-actions.db.test.ts`: each route's happy path dispatches the right event and the item appears in the timeline; a non-participant with read access → 403; no read access → 404; another Origin → 403; **Review Focus 3:** two Resolve requests for the same point → one 200 and one 409; Continue on a point resolved meanwhile → 409; a note of 4 001 characters → 400.
-- The CLI's `retry` tests keep passing against the moved route.
+- [ ] **Step 1: Write the failing protocol test**
+
+```diff
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from 'vitest';
+ import { MeResponse } from './api';
+-import { ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, WebMe, type ChatView, type InboxRow } from './web-api';
++import { ActionResponse, ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, WebMe, type ChatView, type InboxRow } from './web-api';
+ 
+ describe('web API bodies', () => {
+   const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+@@ -43,6 +43,7 @@ describe('web API bodies', () => {
+         status: 'escalated', authorResolution: null, escalationReason: 'category', trusted: true, round: 1,
+       }],
+       rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
++      permissions: { note: true, resolve: [1], continue: [1], review: false, retry: false },
+       summaryUrl: null, lastSeq: 7,
+     };
+     const body = { view, items: [], hasOlder: false };
+@@ -51,4 +52,12 @@ describe('web API bodies', () => {
+     const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
+     expect(FilesResponse.parse(files)).toEqual(files);
+   });
++
++  it('takes a note of 1 to 4,000 characters, trimmed, and answers a change with ok', () => {
++    expect(NoteRequest.parse({ body: '  Keep the old endpoint  ' })).toEqual({ body: 'Keep the old endpoint' });
++    expect(NoteRequest.parse({ body: 'x'.repeat(4000) }).body).toHaveLength(4000);
++    expect(() => NoteRequest.parse({ body: 'x'.repeat(4001) })).toThrow();
++    expect(() => NoteRequest.parse({ body: ' \n ' })).toThrow();
++    expect(ActionResponse.parse({ ok: true })).toEqual({ ok: true });
++  });
+ });
+```
+
+- [ ] **Step 2: Run it to see it fail, then add the schemas**
+
+Run: `npm test -w packages/protocol -- src/web-api.test.ts`
+Expected: FAIL, 2 tests: `NoteRequest` and `ActionResponse` don't exist, and `ChatResponse.parse` drops `permissions`.
+
+```diff
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -132,6 +132,22 @@ export const PointView = z.object({
+ });
+ export type PointView = z.infer<typeof PointView>;
+ 
++/**
++ * What the person reading a chat may do in it right now (spec §16 "Who can act in a chat"), worked out on the
++ * server (`apps/server/src/chats/permissions.ts`). `resolve` and `continue` list escalated points by number. The
++ * server checks again on every write; this only decides which buttons to show.
++ */
++export const Permissions = z.object({
++  note: z.boolean(),
++  resolve: z.array(z.number().int().positive()),
++  continue: z.array(z.number().int().positive()),
++  /** Start the review of an outside contributor's PR (the untrusted card's Review). */
++  review: z.boolean(),
++  /** Run your failed job again. */
++  retry: z.boolean(),
++});
++export type Permissions = z.infer<typeof Permissions>;
++
+ /**
+  * A chat as the person reading it sees it (spec §10, handoff §2): the PR, the people and their agents, the
+  * points, the team rules, and the reader's own place in it (`viewer`). `/ws/web` sends it again (`chat.state`)
+@@ -174,6 +190,7 @@ export const ChatView = z.object({
+     /** Why `.nitpilot.yml` couldn't be used, so the defaults apply; null when it's fine or missing. */
+     error: z.string().nullable(),
+   }),
++  permissions: Permissions,
+   /** Nitpilot's summary comment on GitHub, once it's posted. */
+   summaryUrl: z.string().nullable(),
+   /** The newest timeline item's seq (0 for none). */
+@@ -185,6 +202,14 @@ export type ChatView = z.infer<typeof ChatView>;
+ export const ChatResponse = z.object({ view: ChatView, items: z.array(TimelineItem), hasOlder: z.boolean() });
+ export type ChatResponse = z.infer<typeof ChatResponse>;
+ 
++/** `POST /api/chats/:id/notes`: a note to the agents, 1 to 4,000 characters once trimmed. */
++export const NoteRequest = z.object({ body: z.string().trim().min(1).max(4000) });
++export type NoteRequest = z.infer<typeof NoteRequest>;
++
++/** What a chat write answers when it worked (notes, Resolve, Continue, Review). The change itself arrives on `/ws/web`. */
++export const ActionResponse = z.object({ ok: z.literal(true) });
++export type ActionResponse = z.infer<typeof ActionResponse>;
++
+ /** One changed file of the PR (spec §10 `GET /api/chats/:id/files`). */
+ export const PrFile = z.object({
+   path: z.string(),
+```
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 50 tests.
+
+- [ ] **Step 3: Write the failing tests for the rules**
+
+Create `apps/server/src/chats/permissions.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { can, permissionsFor, type ChatAction, type PermissionFacts } from './permissions';
+
+// maya's PR, reviewed by leo (requested) and nina (no longer requested). P1 is leo's agent's point, P2 a GitHub
+// comment of leo's, both escalated. sam can read the repo but isn't in the chat.
+const maya = { githubId: 'gh-maya' };
+const leo = { githubId: 'gh-leo' };
+const nina = { githubId: 'gh-nina' };
+const sam = { githubId: 'gh-sam' };
+
+function facts(over: Partial<PermissionFacts> = {}): PermissionFacts {
+  return {
+    closed: false,
+    trusted: true,
+    authorGithubId: maya.githubId,
+    participants: [
+      { githubId: maya.githubId, role: 'author', requested: false, attention: 'decision' },
+      { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'decision' },
+      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none' },
+    ],
+    points: [
+      { number: 1, raisedBy: leo.githubId, origin: 'agent', status: 'escalated' },
+      { number: 2, raisedBy: leo.githubId, origin: 'github', status: 'escalated' },
+      { number: 3, raisedBy: leo.githubId, origin: 'agent', status: 'open' },
+    ],
+    ...over,
+  };
+}
+
+const untrusted = (attention: 'manual_review' | 'none' = 'manual_review') =>
+  facts({
+    trusted: false,
+    participants: [
+      { githubId: maya.githubId, role: 'author', requested: false, attention: 'none' },
+      { githubId: leo.githubId, role: 'reviewer', requested: true, attention },
+      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none' },
+    ],
+  });
+
+const failed = facts({
+  participants: [
+    { githubId: maya.githubId, role: 'author', requested: false, attention: 'none' },
+    { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'failed' },
+  ],
+});
+
+// Spec §16 "Who can act in a chat", one row per case.
+const rows: [string, { githubId: string }, PermissionFacts, ChatAction, boolean][] = [
+  ['the author sends a note', maya, facts(), { kind: 'note' }, true],
+  ['a requested reviewer sends a note', leo, facts(), { kind: 'note' }, true],
+  ['a reviewer who is no longer requested sends a note', nina, facts(), { kind: 'note' }, true],
+  ['someone who only reads along sends a note', sam, facts(), { kind: 'note' }, false],
+  ['the reviewer who raised it resolves P1', leo, facts(), { kind: 'resolve', point: 1 }, true],
+  ['the author resolves P1', maya, facts(), { kind: 'resolve', point: 1 }, false],
+  ['another reviewer resolves P1', nina, facts(), { kind: 'resolve', point: 1 }, false],
+  ['the raiser resolves a GitHub point (resolved on GitHub)', leo, facts(), { kind: 'resolve', point: 2 }, false],
+  ['anyone resolves a point that does not exist', leo, facts(), { kind: 'resolve', point: 9 }, false],
+  ['the author continues P1', maya, facts(), { kind: 'continue', point: 1 }, true],
+  ['the reviewer who raised it continues P1', leo, facts(), { kind: 'continue', point: 1 }, true],
+  ['the author continues a GitHub point', maya, facts(), { kind: 'continue', point: 2 }, true],
+  ['another reviewer continues P1', nina, facts(), { kind: 'continue', point: 1 }, false],
+  ['someone who only reads along continues P1', sam, facts(), { kind: 'continue', point: 1 }, false],
+  ["a requested reviewer starts the review of an outside contributor's PR", leo, untrusted(), { kind: 'review' }, true],
+  ['a reviewer who is no longer requested starts it', nina, untrusted(), { kind: 'review' }, false],
+  ['the author starts it', maya, untrusted(), { kind: 'review' }, false],
+  ['a requested reviewer starts a review on a trusted PR (agents start there by themselves)', leo, facts(), { kind: 'review' }, false],
+  ['the person whose job failed retries', leo, failed, { kind: 'retry' }, true],
+  ['someone else retries their job', maya, failed, { kind: 'retry' }, false],
+  ['someone with nothing failed retries', leo, facts(), { kind: 'retry' }, false],
+  ['the author sends a note on a closed PR', maya, facts({ closed: true }), { kind: 'note' }, false],
+  ['the raiser resolves P1 on a closed PR', leo, facts({ closed: true }), { kind: 'resolve', point: 1 }, false],
+  ['the author continues P1 on a closed PR', maya, facts({ closed: true }), { kind: 'continue', point: 1 }, false],
+  ['a requested reviewer starts a review on a closed PR', leo, { ...untrusted(), closed: true }, { kind: 'review' }, false],
+  ['the person whose job failed retries on a closed PR', leo, { ...failed, closed: true }, { kind: 'retry' }, false],
+];
+
+describe('can (spec §16 "Who can act in a chat")', () => {
+  it.each(rows)('%s: %s', (_case, viewer, f, action, allowed) => {
+    expect(can(viewer, f, action)).toBe(allowed);
+  });
+});
+
+describe('permissionsFor', () => {
+  it('lists what each person may do now: Resolve and Continue only on escalated points', () => {
+    expect(permissionsFor(leo, facts())).toEqual({ note: true, resolve: [1], continue: [1, 2], review: false, retry: false });
+    expect(permissionsFor(maya, facts())).toEqual({ note: true, resolve: [], continue: [1, 2], review: false, retry: false });
+    expect(permissionsFor(sam, facts())).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
+  });
+
+  it('offers Review while the reviewer still has to start it, and Retry to the person whose job failed', () => {
+    expect(permissionsFor(leo, untrusted()).review).toBe(true);
+    expect(permissionsFor(leo, untrusted('none')).review).toBe(false);
+    expect(permissionsFor(leo, failed).retry).toBe(true);
+  });
+
+  it('offers nothing on a closed PR', () => {
+    expect(permissionsFor(leo, facts({ closed: true }))).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
+  });
+});
+```
+
+and, in the engine, a note on a closed PR adds nothing (a close can land between the route's check and the event):
+
+```diff
+--- a/apps/server/src/engine/lifecycle.test.ts
++++ b/apps/server/src/engine/lifecycle.test.ts
+@@ -133,6 +133,11 @@ describe('human_note', () => {
+     expect(out.timeline).toEqual([{ kind: 'human', author: { githubId: maya.githubId, login: 'maya' }, pointNumber: null, jobId: null, body: 'Keep the public API stable.', data: null }]);
+     expect(out.chat).toEqual(chat);
+   });
++
++  it('adds nothing on a closed PR: its chat is read-only', () => {
++    const out = run(agentToAgent({ phase: 'closed', closed: true }), { type: 'human_note', author: maya, body: 'Too late?' });
++    expect(out.timeline).toEqual([]);
++  });
+ });
+ 
+ describe('decide()', () => {
+```
+
+- [ ] **Step 4: Run them to see them fail, then write the rules**
+
+Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts src/engine/lifecycle.test.ts`
+Expected: FAIL: `./permissions` doesn't exist, and the closed-PR note test gets a `human` item.
+
+Create `apps/server/src/chats/permissions.ts`:
+
+```ts
+import type { Attention, Permissions, PointOrigin, PointStatus, Role } from '@nitpilot/protocol';
+
+// Who can act in a chat (spec §16): one pure function, table-tested in permissions.test.ts. Every write route
+// asks it after the read-access check (http/routes/chat-actions.ts), and the chat view uses it to say which
+// buttons to show (chats/views.ts). docs/why/chat-access-rules.md has the table.
+
+/** A change someone asks for in a chat. */
+export type ChatAction = { kind: 'note' } | { kind: 'resolve'; point: number } | { kind: 'continue'; point: number } | { kind: 'review' } | { kind: 'retry' };
+
+/** What the rules look at: the chat's people in their roles and its points. */
+export type PermissionFacts = {
+  closed: boolean;
+  /** False for a PR from an outside contributor (spec §6.1). */
+  trusted: boolean;
+  authorGithubId: string;
+  participants: { githubId: string; role: Role; requested: boolean; attention: Attention }[];
+  points: { number: number; raisedBy: string; origin: PointOrigin; status: PointStatus }[];
+};
+
+/**
+ * May this person do this now? Only who they are counts here, not the point's status: a point resolved a moment
+ * ago is the engine's to notice, and the route answers 409 for it, not 403. The person is signed in, so they're
+ * on Nitpilot. A closed PR allows nothing.
+ */
+export function can(viewer: { githubId: string }, facts: PermissionFacts, action: ChatAction): boolean {
+  if (facts.closed) return false;
+  const yours = facts.participants.filter((p) => p.githubId === viewer.githubId);
+  switch (action.kind) {
+    case 'note':
+      return yours.length > 0;
+    case 'resolve': {
+      // A point from a GitHub comment is resolved on GitHub, by resolving its thread.
+      const point = facts.points.find((p) => p.number === action.point);
+      return !!point && point.origin === 'agent' && point.raisedBy === viewer.githubId;
+    }
+    case 'continue': {
+      const point = facts.points.find((p) => p.number === action.point);
+      return !!point && (viewer.githubId === facts.authorGithubId || point.raisedBy === viewer.githubId);
+    }
+    case 'review':
+      return !facts.trusted && yours.some((p) => p.role === 'reviewer' && p.requested);
+    case 'retry':
+      return yours.some((p) => p.attention === 'failed');
+  }
+}
+
+/** What to offer this person now: Resolve and Continue on escalated points, Review while theirs waits to be started. */
+export function permissionsFor(viewer: { githubId: string }, facts: PermissionFacts): Permissions {
+  const escalated = facts.points.filter((p) => p.status === 'escalated').map((p) => p.number);
+  const waitsForYou = facts.participants.some((p) => p.githubId === viewer.githubId && p.attention === 'manual_review');
+  return {
+    note: can(viewer, facts, { kind: 'note' }),
+    resolve: escalated.filter((point) => can(viewer, facts, { kind: 'resolve', point })),
+    continue: escalated.filter((point) => can(viewer, facts, { kind: 'continue', point })),
+    review: waitsForYou && can(viewer, facts, { kind: 'review' }),
+    retry: can(viewer, facts, { kind: 'retry' }),
+  };
+}
+
+/** The facts, from a chat row with its participants and points as Prisma reads them. */
+export function permissionFacts(chat: {
+  closedAt: Date | null;
+  trusted: boolean;
+  authorGithubId: string;
+  participants: { githubId: string; role: string; requested: boolean; attention: string }[];
+  points: { number: number; raisedByGithubId: string; origin: string; status: string }[];
+}): PermissionFacts {
+  return {
+    closed: chat.closedAt !== null,
+    trusted: chat.trusted,
+    authorGithubId: chat.authorGithubId,
+    participants: chat.participants.map((p) => ({ githubId: p.githubId, role: p.role as Role, requested: p.requested, attention: p.attention as Attention })),
+    points: chat.points.map((p) => ({ number: p.number, raisedBy: p.raisedByGithubId, origin: p.origin as PointOrigin, status: p.status as PointStatus })),
+  };
+}
+```
+
+```diff
+--- a/apps/server/src/engine/lifecycle.ts
++++ b/apps/server/src/engine/lifecycle.ts
+@@ -86,6 +86,8 @@ export function onManualReview(ctx: Ctx, e: Ev<'manual_review'>): void {
+ }
+ 
+ export function onHumanNote(ctx: Ctx, e: Ev<'human_note'>): void {
++  // A closed PR's chat is read-only (spec §16). The route checks too; this covers a close that lands in between.
++  if (ctx.chat.phase === 'closed') return;
+   // Notes go into the agents' next job bundle; they don't change the workflow.
+   say(ctx, { kind: 'human', author: who(e.author), body: e.body });
+ }
+```
+
+Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts src/engine/lifecycle.test.ts`
+Expected: PASS, 50 tests (29 and 21).
+
+- [ ] **Step 5: Write the failing route tests**
+
+Create `apps/server/src/http/routes/chat-actions.db.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeChat, makeCliToken, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../../test/db';
+import { fakeFetch, json } from '../../../test/fake-fetch';
+import { sessionCookieFor } from '../../../test/http';
+import { Dispatcher } from '../../chats/dispatch';
+import { prisma } from '../../lib/prisma';
+import { GithubClient } from '../../platform/github/client';
+
+afterEach(() => vi.restoreAllMocks());
+
+const ORIGIN = 'http://localhost:8787';
+
+/**
+ * maya's PR, reviewed by leo (requested) and nina (in the chat, no longer requested). P1 is leo's agent's security
+ * point, escalated. sam can read the repo but isn't in the chat; zoe can't read it; kai's GitHub sign-in expired.
+ * Everyone is signed in to Nitpilot in a browser.
+ */
+async function scene(opts: { trusted?: boolean } = {}) {
+  const repo = await makeRepo();
+  const [maya, leo, nina, sam, zoe, kai] = await Promise.all(['maya', 'leo', 'nina', 'sam', 'zoe', 'kai'].map((login) => makeUser({ login })));
+  for (const u of [maya, leo, nina, sam, zoe]) await makeGithubSignIn(u!.id);
+  await makeGithubSignIn(kai!.id, 'needs_reauth');
+  const chat = await makeChat(repo.id, { authorGithubId: maya!.githubId, trusted: opts.trusted ?? true });
+  const dispatcher = new Dispatcher();
+  await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya!), reviewers: [personOf(leo!), personOf(nina!)] });
+  await dispatcher.dispatch(chat.id, { type: 'review_request_removed', reviewer: personOf(nina!) });
+  // GitHub shows the repo to everyone but zoe (tokens are `ghu_<user id>`, test/db.ts).
+  const github = new GithubClient(
+    fakeFetch({ [`GET /repos/${repo.fullName}`]: ({ headers }) => (headers.get('authorization')?.includes(zoe!.id) ? json({ message: 'Not Found' }, 404) : { id: 1 }) }),
+  );
+  const app = testApp({ github, dispatch: dispatcher.dispatch });
+  const cookies = new Map(await Promise.all([maya, leo, nina, sam, zoe, kai].map(async (u) => [u!.login, await sessionCookieFor(u!.id)] as const)));
+  const post = (login: string, path: string, body?: unknown, origin = ORIGIN) =>
+    app.request(path, {
+      method: 'POST',
+      headers: { cookie: cookies.get(login)!, origin, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  return { repo, chat, dispatcher, app, post, users: { maya: maya!, leo: leo!, nina: nina!, sam: sam!, zoe: zoe!, kai: kai! } };
+}
+
+/** leo's agent's P1, escalated as a security point; the chat waits for a person. */
+async function escalateP1(chatId: string, raisedBy: { githubId: string }, over: { origin?: string } = {}) {
+  await prisma.job.updateMany({ where: { chatId }, data: { status: 'done', activeFor: null } });
+  await prisma.point.create({
+    data: {
+      chatId, number: 1, raisedByGithubId: raisedBy.githubId, origin: over.origin ?? 'agent', severity: 'blocker', category: 'security',
+      title: 'SQL built from input', body: 'Use a parameter.', status: 'escalated', escalationReason: 'category', round: 1,
+    },
+  });
+  await prisma.prChat.update({ where: { id: chatId }, data: { phase: 'escalated' } });
+  await prisma.participant.updateMany({ where: { chatId, role: 'author' }, data: { lastReviewedSha: null } });
+  await prisma.participant.updateMany({ where: { chatId, role: 'reviewer' }, data: { lastReviewedSha: 'a'.repeat(40) } });
+}
+
+const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
+const lastItem = (chatId: string) => prisma.message.findFirstOrThrow({ where: { chatId }, orderBy: { seq: 'desc' } });
+
+describe('POST /api/chats/:id/notes', () => {
+  it('adds a note from the author or a reviewer to the timeline', async () => {
+    const { chat, post } = await scene();
+    for (const login of ['maya', 'leo', 'nina']) {
+      const res = await post(login, `/api/chats/${chat.id}/notes`, { body: `  Keep the old endpoint, ${login}  ` });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+      expect(await lastItem(chat.id)).toMatchObject({ kind: 'human', authorLogin: login, body: `Keep the old endpoint, ${login}` });
+    }
+  });
+
+  it('refuses someone who only reads along (403), and hides the chat from someone who cannot read the repo (404)', async () => {
+    const { chat, post } = await scene();
+    const reader = await post('sam', `/api/chats/${chat.id}/notes`, { body: 'Hello' });
+    expect(reader.status).toBe(403);
+    expect(await errorOf(reader)).toEqual({ code: 'forbidden', message: 'Only the author and the reviewers can message the agents.' });
+    const outsider = await post('zoe', `/api/chats/${chat.id}/notes`, { body: 'Hello' });
+    expect(outsider.status).toBe(404);
+    expect(await errorOf(outsider)).toEqual(await errorOf(await post('zoe', '/api/chats/no-such-chat/notes', { body: 'Hello' })));
+  });
+
+  it('asks someone whose GitHub sign-in expired to sign in again, whether or not the chat exists', async () => {
+    const { chat, post } = await scene();
+    for (const id of [chat.id, 'no-such-chat']) {
+      const res = await post('kai', `/api/chats/${id}/notes`, { body: 'Hello' });
+      expect(res.status).toBe(401);
+      expect((await errorOf(res)).code).toBe('reauth');
+    }
+  });
+
+  it('takes 1 to 4,000 characters', async () => {
+    const { chat, post } = await scene();
+    expect((await post('maya', `/api/chats/${chat.id}/notes`, { body: 'x'.repeat(4000) })).status).toBe(200);
+    expect((await post('maya', `/api/chats/${chat.id}/notes`, { body: 'x'.repeat(4001) })).status).toBe(400);
+    expect((await post('maya', `/api/chats/${chat.id}/notes`, { body: '   ' })).status).toBe(400);
+  });
+
+  it('refuses a request from another site (the Origin check)', async () => {
+    const { chat, post } = await scene();
+    const res = await post('maya', `/api/chats/${chat.id}/notes`, { body: 'Hello' }, 'https://evil.example');
+    expect(res.status).toBe(403);
+    expect(await errorOf(res)).toEqual({ code: 'forbidden', message: 'Request did not come from Nitpilot.' });
+  });
+
+  it('answers 409 on a closed PR: its chat is read-only', async () => {
+    const { chat, dispatcher, post } = await scene();
+    await dispatcher.dispatch(chat.id, { type: 'pr_closed', merged: true });
+    const res = await post('maya', `/api/chats/${chat.id}/notes`, { body: 'Hello' });
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', message: 'This PR is closed, so its chat is read-only.' });
+  });
+});
+
+describe('POST /api/chats/:id/points/:n/resolve', () => {
+  it('resolves P1 for the reviewer who raised it, and the chat is ready', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const res = await post('leo', `/api/chats/${chat.id}/points/1/resolve`);
+    expect(res.status).toBe(200);
+    expect(await prisma.point.findFirstOrThrow({ where: { chatId: chat.id, number: 1 } })).toMatchObject({ status: 'resolved' });
+    expect((await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id } })).phase).toBe('ready');
+    const items = await prisma.message.findMany({ where: { chatId: chat.id }, orderBy: { seq: 'asc' } });
+    expect(items.slice(-2).map((m) => m.body)).toEqual(['leo resolved P1', 'Ready for approval']);
+  });
+
+  it('says who may resolve instead: the author, and a GitHub point', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const asAuthor = await post('maya', `/api/chats/${chat.id}/points/1/resolve`);
+    expect(asAuthor.status).toBe(403);
+    expect((await errorOf(asAuthor)).message).toBe('Only the reviewer who raised P1 can resolve it.');
+    await prisma.point.updateMany({ where: { chatId: chat.id }, data: { origin: 'github' } });
+    const onGithub = await post('leo', `/api/chats/${chat.id}/points/1/resolve`);
+    expect(onGithub.status).toBe(403);
+    expect((await errorOf(onGithub)).message).toBe('P1 came from a GitHub comment: resolve its thread on GitHub.');
+  });
+
+  it('gives exactly one effect for two presses at once: one 200, one 409 that says why (Review Focus 3)', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const answers = await Promise.all([post('leo', `/api/chats/${chat.id}/points/1/resolve`), post('leo', `/api/chats/${chat.id}/points/1/resolve`)]);
+    expect(answers.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await errorOf(answers.find((r) => r.status === 409)!)).toEqual({ code: 'conflict', message: 'P1 is already resolved.' });
+    expect(await prisma.message.count({ where: { chatId: chat.id, body: 'leo resolved P1' } })).toBe(1);
+  });
+
+  it("is a 404 for a point that doesn't exist, or a number that isn't one", async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    for (const n of ['9', '1e0', '01x']) {
+      const res = await post('leo', `/api/chats/${chat.id}/points/${n}/resolve`);
+      expect(res.status).toBe(404);
+      expect(await errorOf(res)).toEqual({ code: 'not_found', message: 'No such point.' });
+    }
+  });
+});
+
+describe('POST /api/chats/:id/points/:n/continue', () => {
+  it("hands P1 back to the agents for the author: an address job is queued for maya's agent", async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const res = await post('maya', `/api/chats/${chat.id}/points/1/continue`);
+    expect(res.status).toBe(200);
+    expect(await prisma.point.findFirstOrThrow({ where: { chatId: chat.id, number: 1 } })).toMatchObject({ status: 'open' });
+    expect(await prisma.job.findFirst({ where: { chatId: chat.id, status: 'queued' } })).toMatchObject({ type: 'address', userId: users.maya.id });
+    expect((await prisma.message.findMany({ where: { chatId: chat.id }, orderBy: { seq: 'asc' } })).map((m) => m.body)).toContain('maya let the agents continue on P1');
+  });
+
+  it('refuses another reviewer (403)', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const res = await post('nina', `/api/chats/${chat.id}/points/1/continue`);
+    expect(res.status).toBe(403);
+    expect((await errorOf(res)).message).toBe('Only the author or the reviewer who raised P1 can let the agents continue on it.');
+  });
+
+  it('answers 409 when P1 was resolved meanwhile (Review Focus 3)', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    expect((await post('leo', `/api/chats/${chat.id}/points/1/resolve`)).status).toBe(200);
+    const res = await post('maya', `/api/chats/${chat.id}/points/1/continue`);
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', message: 'P1 is already resolved.' });
+  });
+
+  it('answers 409 when someone continued it first', async () => {
+    const { chat, post, users } = await scene();
+    await escalateP1(chat.id, users.leo);
+    const answers = await Promise.all([post('maya', `/api/chats/${chat.id}/points/1/continue`), post('leo', `/api/chats/${chat.id}/points/1/continue`)]);
+    expect(answers.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect((await errorOf(answers.find((r) => r.status === 409)!)).message).toBe("P1 isn't escalated any more: the agents have it.");
+    expect(await prisma.job.count({ where: { chatId: chat.id, type: 'address' } })).toBe(1);
+  });
+});
+
+describe('POST /api/chats/:id/review', () => {
+  it("starts the review of an outside contributor's PR for the requested reviewer, once", async () => {
+    const { chat, post, users } = await scene({ trusted: false });
+    expect(await prisma.job.count({ where: { chatId: chat.id } })).toBe(0);
+    const res = await post('leo', `/api/chats/${chat.id}/review`);
+    expect(res.status).toBe(200);
+    expect(await prisma.job.findFirst({ where: { chatId: chat.id } })).toMatchObject({ type: 'review', status: 'queued', userId: users.leo.id });
+    const again = await post('leo', `/api/chats/${chat.id}/review`);
+    expect(again.status).toBe(409);
+    expect(await errorOf(again)).toEqual({ code: 'conflict', message: 'Your agent is already on it.' });
+  });
+
+  it('refuses a reviewer who is no longer requested, and anyone on a trusted PR', async () => {
+    const untrusted = await scene({ trusted: false });
+    expect((await untrusted.post('nina', `/api/chats/${untrusted.chat.id}/review`)).status).toBe(403);
+    const trusted = await scene();
+    const res = await trusted.post('leo', `/api/chats/${trusted.chat.id}/review`);
+    expect(res.status).toBe(403);
+    expect((await errorOf(res)).message).toBe("Only a requested reviewer can start the review, and only on a PR from an outside contributor.");
+  });
+});
+
+describe('POST /api/chats/:id/retry with the session cookie', () => {
+  /** leo's review failed for good. */
+  async function failedReview() {
+    const s = await scene();
+    const review = await prisma.job.findFirstOrThrow({ where: { chatId: s.chat.id, type: 'review', participant: { githubId: s.users.leo.githubId } } });
+    await prisma.job.update({ where: { id: review.id }, data: { status: 'running', attempt: 1 } });
+    await s.dispatcher.dispatch(s.chat.id, { type: 'job_failed', jobId: review.id, attempt: 1, reason: 'crash', retryable: false });
+    return s;
+  }
+
+  it("queues leo's failed review again", async () => {
+    const { chat, post } = await failedReview();
+    const res = await post('leo', `/api/chats/${chat.id}/retry`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'queued' });
+  });
+
+  it('gives exactly one effect for two presses at once: one 200, one 409 (Review Focus 3)', async () => {
+    const { chat, post } = await failedReview();
+    const answers = await Promise.all([post('leo', `/api/chats/${chat.id}/retry`), post('leo', `/api/chats/${chat.id}/retry`)]);
+    expect(answers.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await prisma.job.count({ where: { chatId: chat.id, status: 'queued' } })).toBe(1);
+  });
+
+  it('checks the Origin and read access for a browser, and not for a CLI', async () => {
+    const { chat, post, app, users } = await failedReview();
+    expect((await post('leo', `/api/chats/${chat.id}/retry`, undefined, 'https://evil.example')).status).toBe(403);
+    // GitHub isn't asked for a CLI's retry (Plan 1's rule): the failed flag is the person's own.
+    await prisma.githubAuth.update({ where: { userId: users.leo.id }, data: { status: 'needs_reauth' } });
+    const cli = await app.request(`/api/chats/${chat.id}/retry`, { method: 'POST', headers: { authorization: `Bearer ${(await makeCliToken(users.leo.id)).raw}` } });
+    expect(cli.status).toBe(200);
+  });
+});
+```
+
+and the access minors and the view's permissions:
+
+```diff
+--- a/apps/server/src/chats/access.db.test.ts
++++ b/apps/server/src/chats/access.db.test.ts
+@@ -3,7 +3,7 @@ import { makeChat, makeGithubSignIn, makeRepo, makeUser } from '../../test/db';
+ import { fakeFetch, json } from '../../test/fake-fetch';
+ import { RepoAccess } from '../auth/repo-access';
+ import { GithubClient } from '../platform/github/client';
+-import { chatAccess } from './access';
++import { chatAccess, chatAccessByPath } from './access';
+ 
+ async function viewer(status: 'ok' | 'needs_reauth' = 'ok') {
+   const user = await makeUser();
+@@ -31,4 +31,21 @@ describe('chatAccess (spec §16 "Who can see a chat")', () => {
+     const access = new RepoAccess(new GithubClient(fakeFetch({})));
+     expect(await chatAccess(await viewer('needs_reauth'), chat.id, access)).toEqual({ kind: 'reauth' });
+   });
++
++  it("says reauth for a chat that doesn't exist too, so an expired sign-in can't tell which ids exist", async () => {
++    const access = new RepoAccess(new GithubClient(fakeFetch({})));
++    expect(await chatAccess(await viewer('needs_reauth'), 'no-such-chat', access)).toEqual({ kind: 'reauth' });
++  });
++});
++
++describe('chatAccessByPath', () => {
++  it('takes only plain digits for the PR number, without asking GitHub', async () => {
++    const fetch = fakeFetch({});
++    const access = new RepoAccess(new GithubClient(fetch));
++    const user = await viewer();
++    for (const number of ['1e2', '0x2a', ' 42', '42.0', '-1', '0', '']) {
++      expect(await chatAccessByPath(user, { owner: 'octo', repo: 'sandbox', number }, access)).toEqual({ kind: 'none' });
++    }
++    expect(fetch.calls).toEqual([]);
++  });
+ });
+```
+
+```diff
+--- a/apps/server/src/chats/views.db.test.ts
++++ b/apps/server/src/chats/views.db.test.ts
+@@ -31,6 +31,14 @@ async function scene() {
+ }
+ 
+ describe('loadChatView (spec §10, handoff §2)', () => {
++  it('says what the reader may do: leo resolves and continues his escalated point, maya only continues it', async () => {
++    const { chat, maya, leo, clis } = await scene();
++    expect((await loadChatView(chat.id, leo, clis)).permissions).toEqual({ note: true, resolve: [1], continue: [1], review: false, retry: false });
++    expect((await loadChatView(chat.id, maya, clis)).permissions).toEqual({ note: true, resolve: [], continue: [1], review: false, retry: false });
++    const reader = await makeUser();
++    expect((await loadChatView(chat.id, reader, clis)).permissions).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
++  });
++
+   it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
+     const { chat, leo, clis } = await scene();
+     await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/chat-actions.db.test.ts src/chats/access.db.test.ts src/chats/views.db.test.ts`
+Expected: FAIL, 22 tests: the 19 route tests (no such routes: JSON 404s, and the CLI retry still lives in `cli.ts` behind `requireCliToken`), the 2 access tests, and the view's `permissions`.
+
+- [ ] **Step 7: The routes**
+
+Create `apps/server/src/http/routes/chat-actions.ts`:
+
+```ts
+import { BRAND, NoteRequest, type ActionResponse, type RetryResponse } from '@nitpilot/protocol';
+import { Hono, type Context } from 'hono';
+import type { RepoAccess } from '../../auth/repo-access';
+import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import type { SessionUser } from '../../auth/session';
+import { chatAccess } from '../../chats/access';
+import type { Dispatch } from '../../chats/dispatch';
+import { failureKind } from '../../chats/failed-flags';
+import { can, permissionFacts, type ChatAction, type PermissionFacts } from '../../chats/permissions';
+import type { ChatState, DecideOutput, Person } from '../../engine/types';
+import { getEnv } from '../../lib/env';
+import { prisma } from '../../lib/prisma';
+import { HttpError } from '../errors';
+import { askingGithub, readable } from './chats';
+
+type Ctx = Context<{ Variables: UserVariables }>;
+
+/**
+ * The chat's writes (spec §10 "Chat writes"): notes, Resolve, Continue, Review and Retry. Each one, in order: who
+ * you are (`requireUser`), that the request came from our own pages (`requireSameOrigin`), that GitHub shows you
+ * the repo (`chatAccess`), that your role allows it (`can`), then one engine event under the chat's lock. An event
+ * that changes nothing (someone was faster) is a 409 that says why (docs/why/races-and-conflicts.md).
+ */
+export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  /** The chat, if this person may do this in it now; otherwise the error that says why not. */
+  async function allowed(c: Ctx, action: ChatAction): Promise<{ chatId: string; who: Person }> {
+    const user = c.get('user');
+    const chatId = c.req.param('id')!;
+    readable(await askingGithub(() => chatAccess(user, chatId, deps.access)));
+    const chat = await prisma.prChat.findUnique({ where: { id: chatId }, include: { participants: true, points: true } });
+    if (!chat) throw new HttpError('not_found', 'No such chat.');
+    const facts = permissionFacts(chat);
+    if ((action.kind === 'resolve' || action.kind === 'continue') && !facts.points.some((p) => p.number === action.point)) {
+      throw new HttpError('not_found', 'No such point.');
+    }
+    if (facts.closed) throw new HttpError('conflict', CLOSED);
+    if (!can(user, facts, action)) throw new HttpError('forbidden', forbidden(action, facts));
+    return { chatId, who: personOf(user) };
+  }
+
+  app.post('/api/chats/:id/notes', requireUser, requireSameOrigin, async (c) => {
+    const { body } = NoteRequest.parse(await c.req.json());
+    const { chatId, who } = await allowed(c, { kind: 'note' });
+    const out = await deps.dispatch(chatId, { type: 'human_note', author: who, body });
+    if (out.timeline.length === 0) throw new HttpError('conflict', CLOSED);
+    return ok(c);
+  });
+
+  app.post('/api/chats/:id/points/:n/resolve', requireUser, requireSameOrigin, async (c) => {
+    const point = pointNumber(c);
+    const { chatId, who } = await allowed(c, { kind: 'resolve', point });
+    const out = await deps.dispatch(chatId, { type: 'point_resolve', who, point });
+    if (out.timeline.length === 0) throw new HttpError('conflict', notEscalated(out.chat, point));
+    return ok(c);
+  });
+
+  app.post('/api/chats/:id/points/:n/continue', requireUser, requireSameOrigin, async (c) => {
+    const point = pointNumber(c);
+    const { chatId, who } = await allowed(c, { kind: 'continue', point });
+    const out = await deps.dispatch(chatId, { type: 'point_continue', who, point });
+    if (out.timeline.length === 0) throw new HttpError('conflict', notEscalated(out.chat, point));
+    return ok(c);
+  });
+
+  // An outside contributor's PR: the requested reviewer starts the review by hand (spec §6.1).
+  app.post('/api/chats/:id/review', requireUser, requireSameOrigin, async (c) => {
+    const { chatId, who } = await allowed(c, { kind: 'review' });
+    const out = await deps.dispatch(chatId, { type: 'manual_review', reviewer: who });
+    if (!queuedFor(out, who)) {
+      if (out.chat.closed) throw new HttpError('conflict', CLOSED);
+      if (out.chat.isDraft) throw new HttpError('conflict', "This PR is a draft. Your agent starts once it's ready for review.");
+      throw new HttpError('conflict', 'Your agent is already on it.');
+    }
+    return ok(c);
+  });
+
+  // `nitpilot retry` (spec §10), and the web app's Retry button: run my failed job on this PR again. Only your own
+  // failed job (that's the role check), with Plan 1's answers. A browser is asked about read access like every other
+  // write; a CLI isn't, as in Plan 1 (docs/why/chat-access-rules.md).
+  app.post('/api/chats/:id/retry', requireUser, requireSameOrigin, async (c) => {
+    const user = c.get('user');
+    const chatId = c.req.param('id');
+    if (c.get('via') === 'session') readable(await askingGithub(() => chatAccess(user, chatId, deps.access)));
+    const failure = await failureKind(chatId, user.githubId);
+    if (failure === null) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    if (failure === 'github_post') {
+      throw new HttpError(
+        'conflict',
+        `Your agent didn't fail on this PR: posting its review or replies to GitHub did, and running the agent again won't fix that. If \`${BRAND.cli} status\` says GitHub access expired, sign in again at ${getEnv().PUBLIC_URL}.`,
+      );
+    }
+    const who = personOf(user);
+    const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
+    if (out.timeline.length === 0) {
+      // The engine changed nothing: still flagged means it won't run here any more; not flagged means a retry
+      // that was a moment faster already cleared it.
+      if (stillFailed(out.chat, who)) throw new HttpError('conflict', "Nothing to retry: the PR is closed, or you're no longer a reviewer on it.");
+      throw new HttpError('conflict', 'Your agent is already on it.');
+    }
+    // The job is queued now, or it starts by itself once the step before it is done (the author's agent is
+    // fixing, or the PR is a draft).
+    const body: RetryResponse = { status: queuedFor(out, who) ? 'queued' : 'waiting' };
+    return c.json(body);
+  });
+
+  return app;
+}
+
+const CLOSED = 'This PR is closed, so its chat is read-only.';
+
+function ok(c: Ctx): Response {
+  const body: ActionResponse = { ok: true };
+  return c.json(body);
+}
+
+function personOf(user: SessionUser): Person {
+  return { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
+}
+
+/** `:n` in the path: plain digits, or the point doesn't exist. */
+function pointNumber(c: Ctx): number {
+  const raw = c.req.param('n') ?? '';
+  const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(n) || n <= 0) throw new HttpError('not_found', 'No such point.');
+  return n;
+}
+
+/** Why someone may not do this, in a sentence they can act on. */
+function forbidden(action: ChatAction, facts: PermissionFacts): string {
+  switch (action.kind) {
+    case 'note':
+      return 'Only the author and the reviewers can message the agents.';
+    case 'resolve': {
+      const point = facts.points.find((p) => p.number === action.point);
+      if (point?.origin === 'github') return `P${action.point} came from a GitHub comment: resolve its thread on GitHub.`;
+      return `Only the reviewer who raised P${action.point} can resolve it.`;
+    }
+    case 'continue':
+      return `Only the author or the reviewer who raised P${action.point} can let the agents continue on it.`;
+    case 'review':
+      return 'Only a requested reviewer can start the review, and only on a PR from an outside contributor.';
+    case 'retry':
+      return 'Nothing of yours failed on this PR.';
+  }
+}
+
+/** Why Resolve or Continue changed nothing: the point moved on while the request was on its way. */
+function notEscalated(chat: ChatState, point: number): string {
+  if (chat.closed) return CLOSED;
+  const status = chat.points.find((p) => p.number === point)?.status;
+  if (status === 'resolved') return `P${point} is already resolved.`;
+  return `P${point} isn't escalated any more: the agents have it.`;
+}
+
+function queuedFor(out: DecideOutput, who: Person): boolean {
+  return out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === who.githubId);
+}
+
+function stillFailed(chat: ChatState, who: Person): boolean {
+  return chat.participants.some((p) => p.githubId === who.githubId && p.attention === 'failed');
+}
+```
+
+Share the read routes' guards, take retry out of the CLI routes, and mount the new ones:
+
+```diff
+--- a/apps/server/src/http/routes/chats.ts
++++ b/apps/server/src/http/routes/chats.ts
+@@ -61,14 +61,14 @@ export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads;
+ }
+ 
+ /** The chat you may read, or the answer for one you can't: the same 404 for "no such chat" and "not yours to see". */
+-function readable(access: ChatAccess): { id: string; repoFullName: string } {
++export function readable(access: ChatAccess): { id: string; repoFullName: string } {
+   if (access.kind === 'reauth') throw new HttpError('reauth', 'Sign in with GitHub again to see this chat.');
+   if (access.kind === 'none') throw new HttpError('not_found', 'No such chat.');
+   return access.chat;
+ }
+ 
+ /** GitHub down, slow or rate limiting us is a 502 that says so, not a bare 500. */
+-async function askingGithub<T>(call: () => Promise<T>): Promise<T> {
++export async function askingGithub<T>(call: () => Promise<T>): Promise<T> {
+   try {
+     return await call();
+   } catch (err) {
+```
+
+```diff
+--- a/apps/server/src/http/routes/cli.ts
++++ b/apps/server/src/http/routes/cli.ts
+@@ -1,14 +1,11 @@
+ import type { IncomingMessage } from 'node:http';
+ import {
+-  BRAND, CliLoginPollRequest, CliLoginStartRequest,
+-  type Attention, type MyChat, type MyChatsResponse, type Phase, type RetryResponse, type Role,
++  CliLoginPollRequest, CliLoginStartRequest,
++  type Attention, type MyChat, type MyChatsResponse, type Phase, type Role,
+ } from '@nitpilot/protocol';
+ import { Hono, type Context } from 'hono';
+ import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
+ import { requireCliToken, type CliAuth } from '../../auth/cli-token';
+-import type { Dispatch } from '../../chats/dispatch';
+-import { failureKind } from '../../chats/failed-flags';
+-import type { Person } from '../../engine/types';
+ import { getEnv } from '../../lib/env';
+ import { prisma } from '../../lib/prisma';
+ import { RateLimiter } from '../../lib/rate-limit';
+@@ -18,7 +15,7 @@ import { HttpError } from '../errors';
+ /** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
+ export const LOGIN_STARTS_PER_MINUTE = 10;
+ 
+-export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli: CliAuth } }> {
++export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
+   const app = new Hono<{ Variables: { cli: CliAuth } }>();
+   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
+ 
+@@ -69,35 +66,6 @@ export function cliRoutes(deps: { dispatch: Dispatch }): Hono<{ Variables: { cli
+     return c.body(null, 204);
+   });
+ 
+-  // `nitpilot retry` (spec §10): run my failed job on this PR again. Plan 2's Retry button uses it too.
+-  app.post('/api/chats/:id/retry', requireCliToken, async (c) => {
+-    const user = await prisma.user.findUniqueOrThrow({ where: { id: c.get('cli').userId } });
+-    const chatId = c.req.param('id');
+-    const failure = await failureKind(chatId, user.githubId);
+-    if (failure === null) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+-    if (failure === 'github_post') {
+-      throw new HttpError(
+-        'conflict',
+-        `Your agent didn't fail on this PR: posting its review or replies to GitHub did, and running the agent again won't fix that. If \`${BRAND.cli} status\` says GitHub access expired, sign in again at ${getEnv().PUBLIC_URL}.`,
+-      );
+-    }
+-    const who: Person = { githubId: user.githubId, login: user.login, isBot: false, userId: user.id };
+-    const out = await deps.dispatch(chatId, { type: 'retry_requested', who });
+-    // The job is queued now.
+-    if (out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === user.githubId)) {
+-      const body: RetryResponse = { status: 'queued' };
+-      return c.json(body);
+-    }
+-    // The engine cleared the failure but the job can't start yet (the author's agent is fixing, or the PR is a draft).
+-    // It starts by itself once that step is done.
+-    if (!out.chat.participants.some((p) => p.githubId === user.githubId && p.attention === 'failed')) {
+-      const body: RetryResponse = { status: 'waiting' };
+-      return c.json(body);
+-    }
+-    // The engine changed nothing.
+-    throw new HttpError('conflict', "Nothing to retry: the PR is closed, or you're no longer a reviewer on it.");
+-  });
+-
+   return app;
+ }
+ 
+```
+
+```diff
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -11,6 +11,7 @@ import type { PlatformReads } from '../platform/types';
+ import { SERVER_VERSION } from '../version';
+ import { errorBody, onError } from './errors';
+ import { authRoutes } from './routes/auth';
++import { chatActionRoutes } from './routes/chat-actions';
+ import { chatRoutes } from './routes/chats';
+ import { cliRoutes } from './routes/cli';
+ import { cliApproveRoutes } from './routes/cli-approve';
+@@ -48,7 +49,8 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', meRoutes(deps));
+   app.route('/', inboxRoutes(deps));
+   app.route('/', chatRoutes(deps));
+-  app.route('/', cliRoutes(deps));
++  app.route('/', chatActionRoutes(deps));
++  app.route('/', cliRoutes());
+   app.route('/', cliApproveRoutes());
+   app.route('/', setupRoutes(deps));
+   app.route('/', webhookRoutes(deps));
+```
+
+The access minors, and the view's permissions:
+
+```diff
+--- a/apps/server/src/chats/access.ts
++++ b/apps/server/src/chats/access.ts
+@@ -15,7 +15,8 @@ export const isGithubName = (s: string) => /^[A-Za-z0-9_.-]+$/.test(s) && s !==
+  */
+ export async function chatAccess(user: { id: string }, chatId: string, access: RepoAccess): Promise<ChatAccess> {
+   const chat = await prisma.prChat.findUnique({ where: { id: chatId }, select: { id: true, repo: { select: { fullName: true } } } });
+-  if (!chat) return { kind: 'none' };
++  // No chat to ask GitHub about: an expired sign-in still hears "sign in again", as it would for one that exists.
++  if (!chat) return (await githubSignInOk(user.id)) ? { kind: 'none' } : { kind: 'reauth' };
+   const answer = await access.check(user.id, chat.repo.fullName);
+   return answer === 'read' ? { kind: 'read', chat: { id: chat.id, repoFullName: chat.repo.fullName } } : { kind: answer };
+ }
+@@ -26,7 +27,8 @@ export async function chatAccess(user: { id: string }, chatId: string, access: R
+  * exists.
+  */
+ export async function chatAccessByPath(user: { id: string }, path: { owner: string; repo: string; number: string }, access: RepoAccess): Promise<ChatAccess> {
+-  const number = Number(path.number);
++  // Plain digits only: Number() would also take "1e2", "0x2a" or " 42".
++  const number = /^\d+$/.test(path.number) ? Number(path.number) : NaN;
+   if (!isGithubName(path.owner) || !isGithubName(path.repo) || !Number.isSafeInteger(number) || number <= 0) return { kind: 'none' };
+   const fullName = `${path.owner}/${path.repo}`;
+   const answer = await access.check(user.id, fullName);
+@@ -34,3 +36,9 @@ export async function chatAccessByPath(user: { id: string }, path: { owner: stri
+   const chat = await prisma.prChat.findFirst({ where: { number, repo: { fullName } }, select: { id: true } });
+   return chat ? { kind: 'read', chat: { id: chat.id, repoFullName: fullName } } : { kind: 'none' };
+ }
++
++/** The stored GitHub sign-in is usable: present and not marked expired (what `getUserToken` checks first). */
++async function githubSignInOk(userId: string): Promise<boolean> {
++  const auth = await prisma.githubAuth.findUnique({ where: { userId }, select: { status: true } });
++  return auth?.status === 'ok';
++}
+```
+
+```diff
+--- a/apps/server/src/chats/views.ts
++++ b/apps/server/src/chats/views.ts
+@@ -5,6 +5,7 @@ import type { Point, PrChat } from '../generated/prisma/client';
+ import { prisma } from '../lib/prisma';
+ import { loadActivity, type Activity, type LiveClis } from './activity';
+ import { failureKind } from './failed-flags';
++import { permissionFacts, permissionsFor } from './permissions';
+ import { githubAvatar } from './inbox';
+ import { rulesFromJson } from './rules';
+ import { loadItemsBefore } from './timeline';
+@@ -80,6 +81,7 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
+     activity: activityView(activity),
+     points: chat.points.map((p) => pointView(chat, p, loginOf(p.raisedByGithubId))),
+     rules: { maxRounds: rules.max_rounds, alwaysEscalate: rules.always_escalate, autoReview: rules.auto.review, autoAddress: rules.auto.address, error: chat.repo.rulesError },
++    permissions: permissionsFor(viewer, permissionFacts(chat)),
+     summaryUrl: chat.summaryCommentId ? `${chat.url}#issuecomment-${chat.summaryCommentId}` : null,
+     lastSeq: chat.lastSeq,
+   };
+```
+
+The web app's test fixture needs the new field to keep typechecking:
+
+```diff
+--- a/apps/web/src/test/chat.ts
++++ b/apps/web/src/test/chat.ts
+@@ -26,6 +26,7 @@ export function chatView(over: Partial<ChatView> = {}): ChatView {
+     activity: { kind: 'none', who: null, why: null, offlineSince: null },
+     points: [],
+     rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
++    permissions: { note: true, resolve: [], continue: [], review: false, retry: false },
+     summaryUrl: null, lastSeq: 0, ...over,
+   };
+ }
+```
+
+- [ ] **Step 8: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/chat-actions.db.test.ts src/chats/access.db.test.ts src/chats/views.db.test.ts src/http/routes/cli.db.test.ts`
+Expected: PASS, 43 tests: the CLI's retry tests in `cli.db.test.ts` pass against the moved route, unchanged.
+
+- [ ] **Step 9: The explainers**
+
+```diff
+--- a/docs/why/chat-access-rules.md
++++ b/docs/why/chat-access-rules.md
+@@ -40,7 +40,20 @@ Asking GitHub on every read would make each chat open wait on GitHub, and spend
+ 
+ ## Who can *do* what
+ 
+-Reading is the only thing W3 allows. From W4 every change (a note, Resolve, Continue, Retry, Auto, drafts) also passes one pure function that knows the roles: notes for the author and the reviewers on Nitpilot, Resolve only for the reviewer who raised the point, and so on (spec §16 "Who can act in a chat"). Someone who can read the repo but isn't in the chat reads along, and can't act.
++Every change also passes one pure function that knows the roles, `can` (`chats/permissions.ts`, spec §16 "Who can act in a chat"). The write routes ask it after the read check (`http/routes/chat-actions.ts`), and the chat view uses the same rules to say which buttons to show (`ChatView.permissions`, so the web app never shows a button the server would refuse):
++
++| Change | Who | Otherwise |
++|---|---|---|
++| Send a note to the agents | the author and the reviewers (anyone in the chat; being signed in means being on Nitpilot) | 403 |
++| Resolve an escalated point | only the reviewer who raised it, and only an agent's point (a GitHub comment is resolved by resolving its thread on GitHub) | 403 |
++| Continue an escalated point | the author, or the reviewer who raised it | 403 |
++| Review an outside contributor's PR | a requested reviewer | 403 |
++| Retry a failed job | only the person whose job failed | 409 "Nothing of yours failed on this PR." (Plan 1's answer) |
++| Anything, on a closed PR | nobody | 409 "This PR is closed, so its chat is read-only." |
++
++Someone who can read the repo but isn't in the chat reads along, and can't act. `can` looks only at who you are, not at a point's status: if the point was resolved a moment ago, that's a race the engine notices, and the answer is a 409 that says what happened (`races-and-conflicts.md`), not a 403.
++
++**Retry from the CLI keeps Plan 1's rule.** `nitpilot retry` sends the CLI token, and the route doesn't ask GitHub about the repo for it: the only thing it can do is run your own failed job again, and a CLI whose owner's GitHub sign-in expired could otherwise never retry. From the browser, Retry is checked like every other write.
+ 
+ ## The React analogy
+ 
+```
+
+Create `docs/why/races-and-conflicts.md` (the first time two requests racing is a thing the code answers):
+
+```markdown
+# Two clicks at once: exactly one effect, and a 409 for the other
+
+**In one sentence:** when two requests try to change the same thing at the same moment (Resolve pressed twice, two people pressing Continue), the chat's lock lets them through one at a time, the first one changes the chat, and the second finds there's nothing left to do and is answered `409 Conflict` with a sentence that says why.
+
+## The problem
+
+A double click sends two requests. So do two people looking at the same chat. Both requests are checked ("may leo resolve P1?" yes, twice) before either has changed anything. If both then went on and did their thing, P1 would be resolved twice: two "leo resolved P1" lines, two "Ready" notifications.
+
+## How Nitpilot handles it
+
+Every chat write becomes one engine event (`point_resolve`, `point_continue`, …) that goes through the dispatcher, and the dispatcher runs one event per chat at a time under the chat's lock (`chats/dispatch.ts`, [dispatcher.md](dispatcher.md)). Inside the lock, the engine looks at the chat **as it is now**:
+
+1. The first Resolve finds P1 escalated: it resolves it, writes the line, and the chat may become ready.
+2. The second Resolve finds P1 already resolved. The engine changes nothing: no line, no command (`engine/human.ts`).
+
+The route sees that the event changed nothing (no timeline item) and answers `409 conflict` with what happened: "P1 is already resolved." or "P1 isn't escalated any more: the agents have it." (`http/routes/chat-actions.ts`). The web app shows that sentence as a toast. Nothing on screen changes from the click itself: the real change arrives on `/ws/web` like any other.
+
+Retry works the same way: the second of two Retry presses finds nothing failed any more, and gets "Your agent is already on it."
+
+## Why 409 and not 403
+
+`403 Forbidden` means "you may never do this here" (you didn't raise P1, so you can't resolve it). `409 Conflict` means "you could have, but the chat moved on". The role check (`chats/permissions.ts`) deliberately doesn't look at a point's status, so a late click is always a 409 with an explanation, never a confusing "you're not allowed".
+
+## Where it's tested
+
+`chat-actions.db.test.ts` sends two Resolves, two Continues and two Retries with `Promise.all`, and checks that exactly one is a 200, the other a 409, and that the chat changed once.
+
+## The React analogy
+
+It's like guarding a submit handler with `if (isSubmitting) return;`, except the guard lives on the server, so it also works for two browsers, and the second click is told what happened instead of being ignored silently.
+```
+
+- [ ] **Step 10: The spec**
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md` §10 "REST endpoints in Plan 2", add after the "Chat writes" item: "- Answers of the chat writes: 200 (`{ok: true}`; Retry keeps `{status: queued|waiting}`) when the change became an engine event that changed the chat; 403 when the access rules say no (§16); 404 for a chat or a point you can't see; 409 with a plain sentence when the chat moved on first (the point was resolved or handed back meanwhile, the PR closed, your agent is already on it), so a double click, or two people pressing at once, has exactly one effect. A note is 1 to 4,000 characters. `nitpilot retry` (the CLI token) keeps Plan 1's rule: it isn't asked about read access, since it only runs your own failed job." In §16 "Who can act in a chat", the last item becomes "**Auto, drafts and Retry:** only your own. On a closed PR, nobody can act."
+
+- [ ] **Step 11: Run the full suite**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 50, CLI 294 passed + 14 skipped, server 804, web 126; end to end 5; Playwright 5; typecheck and lint clean.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add packages/protocol/src apps/server/src apps/web/src/test/chat.ts docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(server): the chat's write routes, and who may act
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 13: Composer, actions and toasts in the chat
 
 **Files:**
-- Create: `apps/web/src/routes/Chat/{Composer.tsx,EscalatedBanner.tsx,FailedBanner.tsx,ReadyBanner.tsx,WaitingBanner.tsx,EdgeBanners.tsx,*.module.css,*.test.tsx}`, `apps/web/src/api/actions.ts`, `apps/web/src/components/Toast/{Toast.tsx,useToast.ts}`, `apps/web/e2e/escalation.spec.ts`.
-- Modify: `apps/web/src/routes/Chat/{Banners.tsx,UntrustedCard.tsx,Chat.tsx}`.
+- Create: `apps/web/src/components/Toast/{Toast.tsx,Toast.module.css,Toast.test.tsx}`, `apps/web/src/routes/Shell/UiState.tsx`, `apps/web/src/api/actions.ts`, `apps/web/src/routes/Chat/{Composer.tsx,Composer.module.css,Composer.test.tsx,ChatBanner.test.tsx}`, `apps/web/e2e/escalation.spec.ts`, `apps/cli/src/agents/fake/scenarios/escalation.json`.
+- Modify: `apps/web/src/routes/Chat/{Chat,ChatBanner,Timeline,PointCard}.tsx` (+ `Chat`, `ChatBanner`, `Timeline` `.module.css`), `apps/web/src/routes/Chat/{Chat,PointCard}.test.tsx`, `apps/web/src/lib/timeline.ts` and its test, `apps/web/src/routes/Shell/Shell.tsx`, `apps/web/src/routes/Inbox/Inbox.tsx` and its test, `apps/web/src/test/render.tsx` (an answer can wait), `apps/web/e2e/control.ts`, `apps/server/test/e2e/{github,web-server}.ts`.
 
 **Interfaces:**
-- Consumes: `Permissions`, `ChatView`, `chatBanner` (Task 10), the routes (Task 12).
-- Produces: `useNote(chatId)`, `useResolve(chatId)`, `useContinue(chatId)`, `useReview(chatId)`, `useRetry(chatId)`: TanStack mutations that resolve when the server answers; a 409/403 becomes an error toast with the server's message. `useToast() → { show(text, opts?: { action?: { label; onClick }; error?: boolean }) }`.
+- Consumes: `ChatView.permissions`, `NoteRequest`, `ActionResponse`, `RetryResponse` and the routes of Task 12; `chatBanner` (Task 10); `api.send`, `ApiError`; the `['chat', …]` and `['me']` caches.
+- Produces: `TOAST_MS = 2600`; `ToastProvider`, `useToast(): { show(text: string, opts?: { error?: boolean }): void }`, `Toasts` (where a page draws the toast; `components/Toast/Toast.tsx`). `InboxUi = { tab: Tab | null; query; repos; statuses }`, `UiStateProvider`, `useInboxUi(): [InboxUi, set(change | (ui) => change)]`, `useDraft(chatId): [string, set(text | (current) => text)]` (`routes/Shell/UiState.tsx`). `useNote(chatId)` (`mutate(body)`), `useResolve(chatId)` and `useContinue(chatId)` (`mutate(point)`), `useReview(chatId)` and `useRetry(chatId)` (`mutate()`), TanStack mutations that toast their outcome (`api/actions.ts`). `Composer({ view, me })`. `fakeApi` routes may answer with a promise. `localGithub().addPull(number, branch)`.
 
-**Behavior** (handoff §2 banners and composer, toasts):
-- Composer: placeholder "Message the agents…", Send muted when empty and accent with text, ↵ sends and ⇧↵ adds a line, the hint "Notes are included in the agents' next round", toast "Sent. Included in the agents' next round." Read-only (centered `--fg3` text) when `permissions.note` is false: merged/closed PR, not a participant, or GitHub expired ("Reconnect GitHub to send notes as yourself.").
-- Escalated banner: one row per escalated point with **Resolve** (only if in `permissions.resolve`) and **Continue** (only if in `permissions.continue`); buttons show pending, then the chat updates through the socket.
-- Failed banner: `viewer.failure === 'job'` → "Your agent couldn't finish" with the reason and **Retry**; `'github_post'` → "Posting to GitHub failed" with **Reconnect GitHub**, never Retry.
-- Ready banners: author "Waiting for Leo's approval" with "View on GitHub ↗"; reviewer "Ready for your approval" with the primary "Approve on GitHub ↗" (links to the PR's files view). Waiting banner with the copyable `nitpilot start` chip; cap and repo-not-linked banners from the handoff's edge states.
-- Untrusted card: **Review** when `permissions.review`; when the viewer's agent is offline it still queues (the system line plus a "Waiting" pill come back through the socket).
-- No optimistic updates: what changes on screen comes from the server.
+**Behavior** (handoff §2 "Banners", "Composer", "Toasts"; §10 "github"):
+- Composer: placeholder "Message the agents…", Send muted when empty and accent with text, the field's border accent on focus, ↵ sends, ⇧↵ adds a line, the field grows to 160 px; the hint "Notes are included in the agents' next round"; toast "Sent. Included in the agents' next round." Pressing again while a send is on its way does nothing. A failed send keeps the text and shows the server's words. Read-only (centred `--fg3` line) for a merged or closed PR ("This PR was merged. The chat is read-only." / "…closed…"), an expired GitHub sign-in ("Reconnect GitHub to send notes as yourself."), and someone reading along ("You're reading along. Only the author and the reviewers can message the agents.").
+- A half-written note is kept per chat while you look at another, and the inbox's tab, search and filters are kept while a chat is open on a phone (the W3 ruling): both live in `UiStateProvider`, above `Shell`'s layout.
+- Escalation banner: per escalated point, **Resolve** (dark) if `permissions.resolve` has it, **Continue** (outlined, titled "Let the agents keep going on this point") if `permissions.continue` has it; while one is on its way both are disabled and it reads "Resolving…" / "Continuing…". Toasts: "P1 resolved.", "Agents will keep going on P1.".
+- Failed banner: `failure === 'agent'` → "Your agent couldn't finish" / "The timeline says why." with **Retry** ("Your agent will try again." or "…once the step before it is done."); `'github_post'` → Reconnect GitHub, never Retry (W3's banner).
+- Untrusted card: primary **Review** when `permissions.review` ("Your agent will start the review."); with the agent offline it still queues.
+- Every refusal (403, 409, 5xx) is an error toast (red diamond) with the server's sentence (**Review Focus 3**). A write answering 404 or `reauth` also refreshes the chat and `me`, so the screen shows "Nothing here" or "Sign in with GitHub again" instead of buttons that can't work (**Review Focus 2**). No optimistic updates: the chat changes when `/ws/web` says so.
+- Toasts: one at a time, inverted, 13 px, 8 px 12 px, centred 96 px above the composer, 2.6 s, `role=status`; long server sentences wrap.
+- A point card follows its point: it collapses when the point is resolved and opens when it's reopened, unless you toggled it since; focus moves only after your own toggle. "leo resolved P1" gets the ✓ glyph.
+- Two Task 10 minors: a failed "Load earlier" is an error toast with the server's words (no unhandled rejection), and a first load whose first answer failed says "Still trying…" instead of "Loading…".
 
-**Tests this task must include:**
-- `Composer.test.tsx`: Enter sends, Shift+Enter makes a new line, empty can't send, read-only states show their text.
-- `EscalatedBanner.test.tsx`: Resolve only for points in `permissions.resolve`; a 409 shows the server's message as an error toast (**Review Focus 3**).
-- `FailedBanner.test.tsx`: Retry for a job failure, Reconnect for a GitHub post failure.
-- Playwright `escalation.spec.ts`: the fake agent's security scenario escalates P1; Continue → a round starts; on the next escalation Resolve → the "Ready for your approval" banner.
+- [ ] **Step 1: Write the failing tests**
+
+Let a pretend answer wait, to see a button's pending state:
+
+```diff
+--- a/apps/web/src/test/render.tsx
++++ b/apps/web/src/test/render.tsx
+@@ -11,12 +11,13 @@ export type Answer = [status: number, body: unknown];
+ 
+ /**
+  * A pretend Nitpilot server for component tests: answers each request by its method and path ('GET /api/me').
+- * A request it has no answer for gets the server's JSON 404. Returns the fetch mock, to check what was sent.
++ * An answer can be a promise, to keep a request waiting. A request it has no answer for gets the server's JSON 404.
++ * Returns the fetch mock, to check what was sent.
+  */
+-export function fakeApi(routes: Record<string, () => Answer>) {
++export function fakeApi(routes: Record<string, () => Answer | Promise<Answer>>) {
+   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+     const key = `${init?.method ?? 'GET'} ${new URL(String(input), 'http://localhost').pathname}`;
+-    const [status, body] = routes[key]?.() ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
++    const [status, body] = (await routes[key]?.()) ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
+     return new Response(status === 204 ? null : JSON.stringify(body), { status });
+   });
+   vi.stubGlobal('fetch', fetch);
+```
+
+Create `apps/web/src/components/Toast/Toast.test.tsx`:
+
+```tsx
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ToastProvider, Toasts, TOAST_MS, useToast } from './Toast';
+
+/** A page with the toast's place and two buttons that show one. */
+function Page() {
+  const toast = useToast();
+  return (
+    <>
+      <button type="button" onClick={() => toast.show("Sent. Included in the agents' next round.")}>
+        plain
+      </button>
+      <button type="button" onClick={() => toast.show('P1 is already resolved.', { error: true })}>
+        error
+      </button>
+      <Toasts />
+    </>
+  );
+}
+
+afterEach(() => vi.useRealTimers());
+
+describe('Toast (handoff "Toasts")', () => {
+  it('says what happened in a status line, and goes after 2.6 s', () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider>
+        <Page />
+      </ToastProvider>,
+    );
+    act(() => screen.getByRole('button', { name: 'plain' }).click());
+    expect(screen.getByRole('status')).toHaveTextContent("Sent. Included in the agents' next round.");
+    expect(TOAST_MS).toBe(2600);
+    act(() => vi.advanceTimersByTime(TOAST_MS - 1));
+    expect(screen.getByRole('status')).toHaveTextContent('Sent.');
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('shows an error with the red diamond, and a new toast replaces the old one with a full 2.6 s of its own', () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider>
+        <Page />
+      </ToastProvider>,
+    );
+    act(() => screen.getByRole('button', { name: 'plain' }).click());
+    act(() => vi.advanceTimersByTime(2000));
+    act(() => screen.getByRole('button', { name: 'error' }).click());
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('P1 is already resolved.');
+    expect(status).not.toHaveTextContent('Sent.');
+    expect(status.querySelector('[data-error]')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(status).toHaveTextContent('P1 is already resolved.');
+    act(() => vi.advanceTimersByTime(600));
+    expect(status).toBeEmptyDOMElement();
+  });
+});
+```
+
+Create `apps/web/src/routes/Chat/Composer.test.tsx`:
+
+```tsx
+import type { InboxRow, WebMe } from '@nitpilot/protocol';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatResponse, chatView } from '../../test/chat';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const PATH = '/c/acme/shop-api/142';
+const SENT = "Sent. Included in the agents' next round.";
+
+function row(number: number, title: string): InboxRow {
+  return {
+    chatId: `chat_${number}`, repo: 'acme/shop-api', number, title, url: `https://github.com/acme/shop-api/pull/${number}`, role: 'author',
+    other: null, status: { kind: 'quiet', who: null, reason: null }, round: 1, maxRounds: 3, lastActivity: '', updatedAt: '2026-10-16T10:00:00.000Z', unread: 0, needsYou: false,
+  };
+}
+
+/** maya's PRs #142 and #143; `notes` answers a note sent in #142. */
+function serve(opts: { me?: Partial<WebMe>; view?: Parameters<typeof chatView>[0]; notes?: () => Answer | Promise<Answer>; chat?: () => Answer } = {}) {
+  return fakeApi({
+    'GET /api/me': (): Answer => [200, { ...me, ...opts.me }],
+    'GET /api/inbox': (): Answer => [200, { rows: [row(142, 'Add cursor pagination'), row(143, 'Retry webhooks')] }],
+    'GET /api/chats/acme/shop-api/142': opts.chat ?? ((): Answer => [200, chatResponse({ view: { title: 'Add cursor pagination', ...opts.view } })]),
+    'GET /api/chats/acme/shop-api/143': (): Answer => [200, chatResponse({ view: { id: 'chat_143', number: 143, title: 'Retry webhooks' } })],
+    'POST /api/chats/chat_142/notes': opts.notes ?? ((): Answer => [200, { ok: true }]),
+  });
+}
+
+const field = () => screen.findByRole('textbox', { name: 'Message the agents' });
+const sentNotes = (fetch: ReturnType<typeof serve>) =>
+  fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/notes') && init?.method === 'POST').map(([, init]) => JSON.parse(String(init!.body)));
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('Composer (handoff §2 "Composer")', () => {
+  it('sends with Enter, makes a new line with Shift+Enter, and says it was sent', async () => {
+    const fetch = serve();
+    renderApp(PATH);
+    const box = await field();
+    expect(box).toHaveAttribute('placeholder', 'Message the agents…');
+    expect(screen.getByText('Notes are included in the agents\' next round')).toBeInTheDocument();
+    await userEvent.type(box, 'Keep the old endpoint{Shift>}{Enter}{/Shift}for a release');
+    expect(box).toHaveValue('Keep the old endpoint\nfor a release');
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByText(SENT)).toBeInTheDocument();
+    expect(sentNotes(fetch)).toEqual([{ body: 'Keep the old endpoint\nfor a release' }]);
+    expect(box).toHaveValue('');
+    expect(box).toHaveFocus();
+  });
+
+  it("can't send an empty note: Send waits for text, and Enter does nothing", async () => {
+    const fetch = serve();
+    renderApp(PATH);
+    const box = await field();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    await userEvent.type(box, '   {Enter}');
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    await userEvent.type(box, 'x');
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+    expect(sentNotes(fetch)).toEqual([]);
+  });
+
+  it('sends once while the first send is on its way, however often you press', async () => {
+    let answer: (a: Answer) => void = () => {};
+    const fetch = serve({ notes: () => new Promise<Answer>((resolve) => (answer = resolve)) });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Once{Enter}');
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(sentNotes(fetch)).toHaveLength(1);
+    answer([200, { ok: true }]);
+    expect(await screen.findByText(SENT)).toBeInTheDocument();
+  });
+
+  it("keeps what you wrote when sending fails, and shows the server's words", async () => {
+    serve({ notes: () => [409, { error: { code: 'conflict', message: 'This PR is closed, so its chat is read-only.' } }] });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Too late{Enter}');
+    expect(await screen.findByText('This PR is closed, so its chat is read-only.')).toBeInTheDocument();
+    expect(await field()).toHaveValue('Too late');
+  });
+
+  it.each([
+    ['a merged PR', { view: { closed: true, merged: true, permissions: { note: false, resolve: [], continue: [], review: false, retry: false } } }, 'This PR was merged. The chat is read-only.'],
+    ['a PR closed without merging', { view: { closed: true, merged: false, permissions: { note: false, resolve: [], continue: [], review: false, retry: false } } }, 'This PR was closed. The chat is read-only.'],
+    ['an expired GitHub sign-in', { me: { githubAuth: 'needs_reauth' as const } }, 'Reconnect GitHub to send notes as yourself.'],
+    ['someone reading along', { view: { viewer: { role: null, attention: 'none' as const, failure: null }, permissions: { note: false, resolve: [], continue: [], review: false, retry: false } } }, "You're reading along. Only the author and the reviewers can message the agents."],
+  ])('is read-only for %s', async (_case, opts, text) => {
+    serve(opts);
+    renderApp(PATH);
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Message the agents' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a half-written note for each chat while you look at another', async () => {
+    fakeViewport(true);
+    serve();
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Half a thought');
+    await userEvent.click(screen.getByRole('option', { name: /Retry webhooks/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Retry webhooks' })).toBeInTheDocument();
+    expect(await field()).toHaveValue('');
+    await userEvent.click(screen.getByRole('option', { name: /Add cursor pagination/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Add cursor pagination' })).toBeInTheDocument();
+    expect(await field()).toHaveValue('Half a thought');
+  });
+
+  it('shows "Nothing here" when a send finds the chat gone (Review Focus 2)', async () => {
+    let gone = false;
+    serve({
+      chat: () => (gone ? [404, { error: { code: 'not_found', message: 'No such chat.' } }] : [200, chatResponse({ view: { title: 'Add cursor pagination' } })]),
+      notes: () => {
+        gone = true;
+        return [404, { error: { code: 'not_found', message: 'No such chat.' } }];
+      },
+    });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Hello{Enter}');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Nothing here' })).toBeInTheDocument());
+  });
+});
+```
+
+Create `apps/web/src/routes/Chat/ChatBanner.test.tsx`:
+
+```tsx
+import type { ChatView, Permissions, WebMe } from '@nitpilot/protocol';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatResponse, point } from '../../test/chat';
+import { fakeApi, renderApp, type Answer } from '../../test/render';
+
+const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const PATH = '/c/acme/shop-api/142';
+const none: Permissions = { note: true, resolve: [], continue: [], review: false, retry: false };
+
+/** maya's PR, read by leo: P1 (leo's agent's security point) and P2 (a disagreement) need a person. */
+function escalatedView(permissions: Partial<Permissions>): Partial<ChatView> {
+  return {
+    phase: 'escalated',
+    viewer: { role: 'reviewer', attention: 'decision', failure: null },
+    points: [
+      point({ number: 1, status: 'escalated', escalationReason: 'category', category: 'security', severity: 'blocker', title: 'SQL built from input' }),
+      point({ number: 2, status: 'escalated', escalationReason: 'disagreement', title: 'Keep the cursor opaque' }),
+    ],
+    permissions: { ...none, ...permissions },
+  };
+}
+
+function serve(view: Partial<ChatView>, routes: Record<string, () => Answer | Promise<Answer>> = {}) {
+  return fakeApi({
+    'GET /api/me': (): Answer => [200, leoMe],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    'GET /api/chats/acme/shop-api/142': (): Answer => [200, chatResponse({ view })],
+    ...routes,
+  });
+}
+
+const rowOf = async (id: string) => {
+  const banner = await screen.findByRole('alert');
+  return within(within(banner).getByText(id).closest('li')!);
+};
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('the escalation banner (handoff §2 "Escalated")', () => {
+  it('offers Resolve and Continue only on the points the server says you may', async () => {
+    serve(escalatedView({ resolve: [1], continue: [1, 2] }));
+    renderApp(PATH);
+    const p1 = await rowOf('P1');
+    expect(p1.getByRole('button', { name: 'Resolve' })).toBeInTheDocument();
+    expect(p1.getByRole('button', { name: 'Continue' })).toHaveAttribute('title', 'Let the agents keep going on this point');
+    const p2 = await rowOf('P2');
+    expect(p2.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument();
+    expect(p2.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+  });
+
+  it('shows no buttons to someone who may do neither', async () => {
+    serve(escalatedView({}));
+    renderApp(PATH);
+    const banner = await screen.findByRole('alert');
+    expect(within(banner).queryAllByRole('button')).toEqual([]);
+  });
+
+  it('waits while Resolve is on its way, then says it worked; the chat changes when the server says so', async () => {
+    let answer: (a: Answer) => void = () => {};
+    const fetch = serve(escalatedView({ resolve: [1] }), { 'POST /api/chats/chat_142/points/1/resolve': () => new Promise<Answer>((resolve) => (answer = resolve)) });
+    renderApp(PATH);
+    await userEvent.click((await rowOf('P1')).getByRole('button', { name: 'Resolve' }));
+    const pending = (await rowOf('P1')).getByRole('button', { name: 'Resolving…' });
+    expect(pending).toBeDisabled();
+    await userEvent.click(pending);
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/resolve'))).toHaveLength(1);
+    answer([200, { ok: true }]);
+    expect(await screen.findByText('P1 resolved.')).toBeInTheDocument();
+    // No optimistic update: P1 stays in the banner until the socket's chat.state says otherwise.
+    expect((await rowOf('P1')).getByRole('button', { name: 'Resolve' })).toBeEnabled();
+  });
+
+  it("shows a 409's words as an error toast (Review Focus 3)", async () => {
+    serve(escalatedView({ resolve: [1] }), { 'POST /api/chats/chat_142/points/1/resolve': (): Answer => [409, { error: { code: 'conflict', message: 'P1 is already resolved.' } }] });
+    renderApp(PATH);
+    await userEvent.click((await rowOf('P1')).getByRole('button', { name: 'Resolve' }));
+    const toast = await screen.findByText('P1 is already resolved.');
+    expect(toast.closest('[data-error]')).not.toBeNull();
+  });
+
+  it('lets the agents continue, and says so', async () => {
+    serve(escalatedView({ continue: [2] }), { 'POST /api/chats/chat_142/points/2/continue': (): Answer => [200, { ok: true }] });
+    renderApp(PATH);
+    await userEvent.click((await rowOf('P2')).getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText('Agents will keep going on P2.')).toBeInTheDocument();
+  });
+});
+
+describe('the failure banners (handoff §2 "Failed")', () => {
+  it('offers Retry when your agent failed, and says it will try again', async () => {
+    const fetch = serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent' }, permissions: { ...none, retry: true } }, {
+      'POST /api/chats/chat_142/retry': (): Answer => [200, { status: 'queued' }],
+    });
+    renderApp(PATH);
+    expect(await screen.findByText("Your agent couldn't finish")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Your agent will try again.')).toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/chats/chat_142/retry') && init?.method === 'POST')).toBe(true);
+  });
+
+  it('says when the retry waits for the step before it', async () => {
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent' }, permissions: { ...none, retry: true } }, {
+      'POST /api/chats/chat_142/retry': (): Answer => [200, { status: 'waiting' }],
+    });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Your agent will try again once the step before it is done.')).toBeInTheDocument();
+  });
+
+  it('sends you to reconnect GitHub, never to Retry, when a post in your name failed', async () => {
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'github_post' }, permissions: { ...none, retry: true } });
+    renderApp(PATH);
+    expect(await screen.findByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute('href', `/auth/github/login?next=${encodeURIComponent(PATH)}`);
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+});
+```
+
+And in the existing tests: Review, "Load earlier" failing, "Still trying…", the card following its point, the phone inbox keeping its state, and the ✓:
+
+```diff
+--- a/apps/web/src/routes/Chat/Chat.test.tsx
++++ b/apps/web/src/routes/Chat/Chat.test.tsx
+@@ -27,7 +27,7 @@ const CHAT: ChatResponse = chatResponse({
+   ],
+ });
+ 
+-function serve(answer: () => Answer = () => [200, CHAT], extra: Record<string, () => Answer> = {}) {
++function serve(answer: () => Answer | Promise<Answer> = () => [200, CHAT], extra: Record<string, () => Answer> = {}) {
+   return fakeApi({
+     'GET /api/me': (): Answer => [200, me],
+     'GET /api/inbox': (): Answer => [200, { rows: [] }],
+@@ -147,6 +147,35 @@ describe('Chat (handoff §2)', () => {
+     expect(screen.queryByRole('button', { name: 'Load earlier' })).not.toBeInTheDocument();
+   });
+ 
++  it('says so when "Load earlier" fails, and lets you ask again', async () => {
++    serve(() => [200, chatResponse({ items: [item(201, { body: 'newer' })], hasOlder: true })], {
++      'GET /api/chats/chat_142/messages': (): Answer => [502, { error: { code: 'github_unavailable', message: "GitHub didn't answer. Try again in a minute." } }],
++    });
++    renderApp(PATH);
++    await userEvent.click(await screen.findByRole('button', { name: 'Load earlier' }));
++    expect(await screen.findByText("GitHub didn't answer. Try again in a minute.")).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: 'Load earlier' })).toBeEnabled();
++  });
++
++  it('says it is still trying after a first answer that failed, instead of only "Loading…"', async () => {
++    let calls = 0;
++    serve(() => (++calls === 1 ? [502, { error: { code: 'github_unavailable', message: "GitHub didn't answer." } }] : new Promise<Answer>(() => {})));
++    renderApp(PATH);
++    expect(await screen.findByText('Loading…')).toBeInTheDocument();
++    expect(await screen.findByText('Still trying…')).toBeInTheDocument();
++  });
++
++  it("starts the review of an outside contributor's PR from its card", async () => {
++    const fetch = serve(() => [200, chatResponse({ view: { trusted: false, viewer: { role: 'reviewer', attention: 'manual_review', failure: null }, permissions: { note: true, resolve: [], continue: [], review: true, retry: false } } })], {
++      'POST /api/chats/chat_142/review': (): Answer => [200, { ok: true }],
++    });
++    renderApp(PATH);
++    const card = await screen.findByRole('region', { name: 'First-time contributor' });
++    await userEvent.click(within(card).getByRole('button', { name: 'Review' }));
++    expect(await screen.findByText('Your agent will start the review.')).toBeInTheDocument();
++    expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/chats/chat_142/review') && init?.method === 'POST')).toBe(true);
++  });
++
+   it('marks the chat read up to its newest item, for someone in it', async () => {
+     const fetch = serve();
+     renderApp(PATH);
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/PointCard.test.tsx
++++ b/apps/web/src/routes/Chat/PointCard.test.tsx
+@@ -37,6 +37,17 @@ describe('PointCard (handoff §3)', () => {
+     }
+   });
+ 
++  it('follows its point: it collapses once the point is resolved, and opens again if the point is reopened', () => {
++    const { rerender } = card(point({ status: 'escalated' }));
++    expect(screen.getByRole('article', { name: /Escalated:/ })).toBeInTheDocument();
++    const show = (p: PointView) => rerender(<PointCard point={p} thread={[]} you="maya" people={people} repoUrl="https://github.com/acme/shop-api" />);
++    show(point({ status: 'resolved' }));
++    expect(screen.queryByRole('article')).not.toBeInTheDocument();
++    expect(screen.getByRole('button', { name: /Resolved:/, expanded: false })).toBeInTheDocument();
++    show(point({ status: 'open' }));
++    expect(screen.getByRole('article', { name: /Open:/ })).toBeInTheDocument();
++  });
++
+   it('starts collapsed when resolved, with how it ended, and opens and closes on click', async () => {
+     const thread = [item(6, { kind: 'point_reply', author: maya, pointNumber: 1, body: 'Return null for empty cursors.', data: { resolution: 'fixed', commit: 'a1b2c3d4e5f6' } })];
+     card(point({ status: 'resolved', authorResolution: 'fixed' }), thread);
+```
+
+```diff
+--- a/apps/web/src/routes/Inbox/Inbox.test.tsx
++++ b/apps/web/src/routes/Inbox/Inbox.test.tsx
+@@ -3,7 +3,7 @@ import { act, screen, within } from '@testing-library/react';
+ import userEvent from '@testing-library/user-event';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatRoutes } from '../../test/chat';
+-import { fakeApi, renderApp, type Answer } from '../../test/render';
++import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+ const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+ 
+@@ -158,6 +158,21 @@ describe('Inbox (handoff §1)', () => {
+     expect(screen.getByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
+   });
+ 
++  it('keeps its tab and search on a phone while a chat is open (W3 ruling)', async () => {
++    fakeViewport(false);
++    serve();
++    renderApp('/');
++    await userEvent.click(await screen.findByRole('tab', { name: /Mine/ }));
++    await userEvent.type(screen.getByRole('textbox', { name: 'Search pull requests' }), 'Prisma');
++    await userEvent.click((await list()).getByRole('option', { name: /Bump Prisma/ }));
++    expect(await screen.findByRole('heading', { level: 1, name: 'Bump Prisma to 7.2' })).toBeInTheDocument();
++    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
++    await userEvent.click(screen.getByRole('link', { name: 'Back to inbox' }));
++    expect(await screen.findByRole('tab', { name: /Mine/, selected: true })).toBeInTheDocument();
++    expect(screen.getByRole('textbox', { name: 'Search pull requests' })).toHaveValue('Prisma');
++    expect(await titles()).toEqual(['Bump Prisma to 7.2']);
++  });
++
+   it('puts the focus back on Filter when Esc closes the menu', async () => {
+     serve();
+     renderApp('/');
+```
+
+```diff
+--- a/apps/web/src/lib/timeline.test.ts
++++ b/apps/web/src/lib/timeline.test.ts
+@@ -41,6 +41,11 @@ describe('systemGlyph', () => {
+     expect(systemGlyph("leo's agent is waiting (daily cap) and will try again later")).toBe('ring');
+     expect(systemGlyph('Pull request opened by maya')).toBe('dot');
+   });
++
++  it('gives a point a person resolved the ✓, like one resolved on GitHub', () => {
++    expect(systemGlyph('leo resolved P1')).toBe('check');
++    expect(systemGlyph('maya let the agents continue on P1 · one more round')).toBe('dot');
++  });
+ });
+ 
+ describe('severityCounts', () => {
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/web`
+Expected: FAIL: `Toast.test.tsx` can't load `./Toast`, and 22 of the new tests fail (no composer, no buttons, no toasts, the card keeps its first open state, the inbox forgets its search, "leo resolved P1" gets a dot); the other 128 pass.
+
+- [ ] **Step 3: Toasts**
+
+Create `apps/web/src/components/Toast/Toast.tsx`:
+
+```tsx
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import styles from './Toast.module.css';
+
+/** How long a toast stays (handoff "Toasts"). */
+export const TOAST_MS = 2600;
+
+type Shown = { id: number; text: string; error: boolean };
+type ToastApi = { show: (text: string, opts?: { error?: boolean }) => void };
+
+const ShowContext = createContext<ToastApi | null>(null);
+const ShownContext = createContext<Shown | null>(null);
+
+/**
+ * One toast at a time for the pages inside it (routes/Shell/Shell.tsx): a newer one replaces the one showing, with
+ * its own 2.6 s. A page draws it where it wants with `<Toasts />`.
+ */
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState<Shown | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const nextId = useRef(0);
+  const show = useCallback((text: string, opts: { error?: boolean } = {}) => {
+    clearTimeout(timer.current);
+    nextId.current += 1;
+    setShown({ id: nextId.current, text, error: opts.error ?? false });
+    timer.current = setTimeout(() => setShown(null), TOAST_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const api = useMemo(() => ({ show }), [show]);
+  return (
+    <ShowContext.Provider value={api}>
+      <ShownContext.Provider value={shown}>{children}</ShownContext.Provider>
+    </ShowContext.Provider>
+  );
+}
+
+/** `show(text)` for what worked, `show(text, { error: true })` for what didn't, in the server's words. */
+export function useToast(): ToastApi {
+  const api = useContext(ShowContext);
+  if (!api) throw new Error('useToast needs a <ToastProvider> above it');
+  return api;
+}
+
+/**
+ * Where the toast appears: centred 96 px above the bottom of the nearest positioned box (the chat's column, so above
+ * the composer). The status line is always there, empty between toasts, so screen readers hear each new one.
+ */
+export function Toasts() {
+  const shown = useContext(ShownContext);
+  return (
+    <div className={styles.place} role="status" aria-live="polite">
+      {shown && (
+        <div key={shown.id} className={styles.toast} data-error={shown.error || undefined}>
+          {shown.error && <span className={styles.diamond} aria-hidden="true" />}
+          {shown.text}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/components/Toast/Toast.module.css`:
+
+```css
+/* handoff "Toasts": inverted, 13px, 8px 12px padding, centred 96px above the composer. Server sentences can be
+   long, so they wrap instead of being cut. */
+.place {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(480px, calc(100% - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-toast);
+}
+
+/* An error: the red diamond, then the text (handoff). */
+.diamond {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+```
+
+- [ ] **Step 4: What the inbox and the composer remember, above Shell**
+
+Create `apps/web/src/routes/Shell/UiState.tsx`:
+
+```tsx
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import type { StatusFilter, Tab } from '../../lib/inbox';
+
+/** The inbox's choices: its tab (null until you pick one, so it opens on the one that needs you), search and filters. */
+export type InboxUi = { tab: Tab | null; query: string; repos: ReadonlySet<string>; statuses: ReadonlySet<StatusFilter> };
+
+type Change<T> = Partial<T> | ((current: T) => Partial<T>);
+type UiState = {
+  inbox: InboxUi;
+  setInbox: (change: Change<InboxUi>) => void;
+  drafts: ReadonlyMap<string, string>;
+  setDraft: (chatId: string, text: string | ((current: string) => string)) => void;
+};
+
+const Context = createContext<UiState | null>(null);
+const FRESH: InboxUi = { tab: null, query: '', repos: new Set(), statuses: new Set() };
+
+/**
+ * What the signed-in app remembers while you move around in it (routes/Shell/Shell.tsx): the inbox's tab, search
+ * and filters, and a half-written note per chat. On a phone the inbox and the chat take turns on screen, so
+ * neither can keep this in its own state: it would go each time the other opens. Gone on a reload, like any
+ * other state in the page.
+ */
+export function UiStateProvider({ children }: { children: ReactNode }) {
+  const [inbox, setInboxState] = useState<InboxUi>(FRESH);
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
+  const setInbox = useCallback((change: Change<InboxUi>) => setInboxState((ui) => ({ ...ui, ...(typeof change === 'function' ? change(ui) : change) })), []);
+  const setDraft = useCallback(
+    (chatId: string, text: string | ((current: string) => string)) =>
+      setDrafts((all) => {
+        const next = new Map(all);
+        const value = typeof text === 'function' ? text(all.get(chatId) ?? '') : text;
+        if (value === '') next.delete(chatId);
+        else next.set(chatId, value);
+        return next;
+      }),
+    [],
+  );
+  const value = useMemo(() => ({ inbox, setInbox, drafts, setDraft }), [inbox, setInbox, drafts, setDraft]);
+  return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+
+function useUiState(): UiState {
+  const state = useContext(Context);
+  if (!state) throw new Error('needs a <UiStateProvider> above it (routes/Shell/Shell.tsx)');
+  return state;
+}
+
+/** The inbox's tab, search and filters, kept while a chat is open. */
+export function useInboxUi(): [InboxUi, UiState['setInbox']] {
+  const { inbox, setInbox } = useUiState();
+  return [inbox, setInbox];
+}
+
+/** The note you're writing in this chat, kept while you look at another. */
+export function useDraft(chatId: string): [string, (text: string | ((current: string) => string)) => void] {
+  const { drafts, setDraft } = useUiState();
+  const set = useCallback((text: string | ((current: string) => string)) => setDraft(chatId, text), [chatId, setDraft]);
+  return [drafts.get(chatId) ?? '', set];
+}
+```
+
+```diff
+--- a/apps/web/src/routes/Shell/Shell.tsx
++++ b/apps/web/src/routes/Shell/Shell.tsx
+@@ -1,20 +1,27 @@
+ import type { WebMe } from '@nitpilot/protocol';
+ import { Outlet, useMatch, useNavigate } from 'react-router';
++import { ToastProvider } from '../../components/Toast/Toast';
+ import { LiveProvider } from '../../live/LiveProvider';
+ import { useEscapeBack } from '../../lib/keys';
+ import { useIsDesktop } from '../../lib/viewport';
+ import { Inbox } from '../Inbox/Inbox';
+ import styles from './Shell.module.css';
++import { UiStateProvider } from './UiState';
+ 
+ /**
+  * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
+  * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
+- * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet.
++ * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
++ * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts.
+  */
+ export function Shell({ me }: { me: WebMe }) {
+   return (
+     <LiveProvider>
+-      <Layout me={me} />
++      <UiStateProvider>
++        <ToastProvider>
++          <Layout me={me} />
++        </ToastProvider>
++      </UiStateProvider>
+     </LiveProvider>
+   );
+ }
+```
+
+The inbox reads and writes its choices there. Settling the first tab moves into an effect, because it now sets state that lives above the inbox:
+
+```diff
+--- a/apps/web/src/routes/Inbox/Inbox.tsx
++++ b/apps/web/src/routes/Inbox/Inbox.tsx
+@@ -1,13 +1,14 @@
+ import type { InboxRow, WebMe } from '@nitpilot/protocol';
+-import { useRef, useState } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { useMatch, useNavigate } from 'react-router';
+ import { ApiError } from '../../api/client';
+ import { useInbox } from '../../api/inbox';
+ import { ErrorState } from '../../components/ErrorState/ErrorState';
+ import { Kbd } from '../../components/Kbd/Kbd';
+-import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type StatusFilter, type Tab } from '../../lib/inbox';
++import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type Tab } from '../../lib/inbox';
+ import { useInboxKeys } from '../../lib/keys';
+ import { useNow } from '../../lib/time';
++import { useInboxUi } from '../Shell/UiState';
+ import { EmptyState } from './EmptyState';
+ import styles from './Inbox.module.css';
+ import { ExpiredStrip, OfflineBanner } from './InboxBanners';
+@@ -23,18 +24,18 @@ export function Inbox({ me }: { me: WebMe }) {
+   const open = useMatch('/c/:owner/:repo/:number')?.params;
+   const search = useRef<HTMLInputElement>(null);
+ 
++  // The tab, search and filters live above the inbox, so a phone keeps them while a chat is open (routes/Shell/UiState.tsx).
+   // Until you pick a tab, the inbox shows the one that needs you.
+-  const [chosenTab, setChosenTab] = useState<Tab | null>(null);
+-  const [query, setQuery] = useState('');
+-  const [repos, setRepos] = useState<ReadonlySet<string>>(new Set());
+-  const [statuses, setStatuses] = useState<ReadonlySet<StatusFilter>>(new Set());
++  const [{ tab: chosenTab, query, repos, statuses }, setUi] = useInboxUi();
+   const [filterOpen, setFilterOpen] = useState(false);
+   const [cursor, setCursor] = useState<string | null>(null);
+   const now = useNow();
+ 
+   const all = inbox.data ?? [];
+   // Settle the opening tab once, when the first data arrives: a later refetch must not flip the tab under you.
+-  if (chosenTab === null && inbox.data) setChosenTab(defaultTab(inbox.data));
++  useEffect(() => {
++    if (chosenTab === null && inbox.data) setUi({ tab: defaultTab(inbox.data) });
++  }, [chosenTab, inbox.data, setUi]);
+   const tab = chosenTab ?? defaultTab(all);
+   const rows = sortRows(filterRows(all, { tab, query, repos, statuses }));
+   const allRepos = [...new Set(all.map((r) => r.repo))].sort();
+@@ -55,7 +56,7 @@ export function Inbox({ me }: { me: WebMe }) {
+   });
+ 
+   function pickTab(next: Tab) {
+-    setChosenTab(next);
++    setUi({ tab: next });
+     setCursor(null);
+   }
+ 
+@@ -76,7 +77,7 @@ export function Inbox({ me }: { me: WebMe }) {
+             className={styles.searchInput}
+             value={query}
+             onChange={(e) => {
+-              setQuery(e.target.value);
++              setUi({ query: e.target.value });
+               setCursor(null);
+             }}
+             placeholder="Search pull requests"
+@@ -94,8 +95,8 @@ export function Inbox({ me }: { me: WebMe }) {
+           repos={allRepos}
+           chosenRepos={repos}
+           chosenStatuses={statuses}
+-          toggleRepo={(repo) => setRepos((set) => toggled(set, repo))}
+-          toggleStatus={(status) => setStatuses((set) => toggled(set, status))}
++          toggleRepo={(repo) => setUi((ui) => ({ repos: toggled(ui.repos, repo) }))}
++          toggleStatus={(status) => setUi((ui) => ({ statuses: toggled(ui.statuses, status) }))}
+         />
+       </div>
+ 
+```
+
+- [ ] **Step 5: The writes, and the composer**
+
+Create `apps/web/src/api/actions.ts`:
+
+```ts
+import { ActionResponse, RetryResponse } from '@nitpilot/protocol';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../components/Toast/Toast';
+import { api, ApiError } from './client';
+
+/**
+ * One chat write (spec §10 "Chat writes"): it resolves when the server answers, and says how it went in a toast. No
+ * optimistic update: what changes on screen comes from the server, over `/ws/web`. A refusal (403, 409) shows the
+ * server's words as an error toast (docs/why/races-and-conflicts.md); a chat that turned out to be gone, or a GitHub
+ * sign-in that expired, also refreshes the chat and you, so the screen shows that instead of buttons that can't work.
+ */
+function useChatWrite<V, R>(send: (vars: V) => Promise<R>, done: (answer: R, vars: V) => string) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: send,
+    onSuccess: (answer, vars) => toast.show(done(answer, vars)),
+    onError: (err) => {
+      toast.show(err.message, { error: true });
+      if (err instanceof ApiError && (err.status === 404 || err.code === 'reauth')) {
+        void queryClient.invalidateQueries({ queryKey: ['chat'] });
+        void queryClient.invalidateQueries({ queryKey: ['me'] });
+      }
+    },
+  });
+}
+
+/** A note to the agents. */
+export function useNote(chatId: string) {
+  return useChatWrite(
+    (body: string) => api.send('POST', `/api/chats/${chatId}/notes`, { body }, ActionResponse),
+    () => "Sent. Included in the agents' next round.",
+  );
+}
+
+/** Resolve an escalated point (only the reviewer who raised it). */
+export function useResolve(chatId: string) {
+  return useChatWrite(
+    (point: number) => api.send('POST', `/api/chats/${chatId}/points/${point}/resolve`, undefined, ActionResponse),
+    (_answer, point) => `P${point} resolved.`,
+  );
+}
+
+/** Hand an escalated point back to the agents (the author, or the reviewer who raised it). */
+export function useContinue(chatId: string) {
+  return useChatWrite(
+    (point: number) => api.send('POST', `/api/chats/${chatId}/points/${point}/continue`, undefined, ActionResponse),
+    (_answer, point) => `Agents will keep going on P${point}.`,
+  );
+}
+
+/** Start the review of an outside contributor's PR (a requested reviewer). */
+export function useReview(chatId: string) {
+  return useChatWrite<void, ActionResponse>(
+    () => api.send('POST', `/api/chats/${chatId}/review`, undefined, ActionResponse),
+    () => 'Your agent will start the review.',
+  );
+}
+
+/** Run your failed job again. */
+export function useRetry(chatId: string) {
+  return useChatWrite<void, RetryResponse>(
+    () => api.send('POST', `/api/chats/${chatId}/retry`, undefined, RetryResponse),
+    (answer) => (answer.status === 'queued' ? 'Your agent will try again.' : 'Your agent will try again once the step before it is done.'),
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/Composer.tsx`:
+
+```tsx
+import type { ChatView, WebMe } from '@nitpilot/protocol';
+import { useLayoutEffect, useRef, type KeyboardEvent } from 'react';
+import { useNote } from '../../api/actions';
+import { useDraft } from '../Shell/UiState';
+import styles from './Composer.module.css';
+
+/** The tallest the field grows as you add lines, before it scrolls. */
+const MAX_HEIGHT = 160;
+
+/**
+ * Notes to the agents (handoff §2 "Composer"): ↵ sends, ⇧↵ adds a line, and the note goes into the agents' next
+ * round. Read-only, with a line saying why, for a closed PR, an expired GitHub sign-in (a note is sent as you), and
+ * someone who only reads along.
+ */
+export function Composer({ view, me }: { view: ChatView; me: WebMe }) {
+  const why = readOnly(view, me);
+  return <div className={styles.composer}>{why ? <p className={styles.readOnly}>{why}</p> : <Field chatId={view.id} />}</div>;
+}
+
+function readOnly(view: ChatView, me: WebMe): string | null {
+  if (view.closed) return view.merged ? 'This PR was merged. The chat is read-only.' : 'This PR was closed. The chat is read-only.';
+  if (me.githubAuth === 'needs_reauth') return 'Reconnect GitHub to send notes as yourself.';
+  if (!view.permissions.note) return "You're reading along. Only the author and the reviewers can message the agents.";
+  return null;
+}
+
+function Field({ chatId }: { chatId: string }) {
+  const [draft, setDraft] = useDraft(chatId);
+  const note = useNote(chatId);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const text = draft.trim();
+  const canSend = text !== '' && !note.isPending;
+
+  // The field grows with its lines, up to MAX_HEIGHT.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 32), MAX_HEIGHT)}px`;
+  }, [draft]);
+
+  function send(): void {
+    if (!canSend) return;
+    // The draft goes once the server took it, even if you opened another chat meanwhile; not if you kept typing.
+    note.mutateAsync(text).then(
+      () => setDraft((current) => (current.trim() === text ? '' : current)),
+      () => {}, // the toast already says why, and the text stays
+    );
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    send();
+  }
+
+  return (
+    <div className={styles.inner}>
+      <div className={styles.field}>
+        <textarea
+          ref={box}
+          className={styles.input}
+          rows={1}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder="Message the agents…"
+          aria-label="Message the agents"
+        />
+        <button type="button" className={`${styles.send} ${text ? styles.ready : ''}`} onClick={send} disabled={!canSend}>
+          Send
+        </button>
+      </div>
+      <p className={styles.hint}>Notes are included in the agents' next round</p>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Chat/Composer.module.css`:
+
+```css
+/* handoff §2 "Composer": surface, a top border, the field centred under the feed. */
+.composer {
+  flex: none;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--b1);
+  background: var(--surface);
+}
+
+@media (max-width: 759px) {
+  .composer {
+    padding: 8px 10px 14px;
+  }
+}
+
+.inner {
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+.field {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 5px 5px 5px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-input);
+  background: var(--bg);
+  transition: border-color 150ms;
+}
+
+/* The field's border turns accent on focus; the textarea itself draws no outline. */
+.field:focus-within {
+  border-color: var(--acc);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--fg1);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: var(--fg3);
+}
+
+/* Muted while there's nothing to send, accent once there is. */
+.send {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--muted);
+  color: var(--fg3);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.send.ready {
+  background: var(--acc);
+  color: var(--on-acc);
+  cursor: pointer;
+}
+
+.send.ready:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.hint {
+  margin: 6px 0 0;
+  padding: 0 2px;
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.readOnly {
+  margin: 0;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+```
+
+The chat screen gets the composer and the toasts' place, says "Still trying…", and turns a failed "Load earlier" into a toast:
+
+```diff
+--- a/apps/web/src/routes/Chat/Chat.tsx
++++ b/apps/web/src/routes/Chat/Chat.tsx
+@@ -5,6 +5,7 @@ import { useLocation, useOutletContext, useParams } from 'react-router';
+ import { chatKey, fetchOlderItems, useChat, useMarkRead } from '../../api/chat';
+ import { ApiError } from '../../api/client';
+ import { ErrorState } from '../../components/ErrorState/ErrorState';
++import { Toasts, useToast } from '../../components/Toast/Toast';
+ import { useLiveChat } from '../../live/LiveProvider';
+ import { mergeItems } from '../../live/apply';
+ import { chatBanner } from '../../lib/banner';
+@@ -12,11 +13,12 @@ import { useIsDesktop, useIsWide } from '../../lib/viewport';
+ import { EmptyPane, Pane } from '../Shell/Pane';
+ import { ChatBanner } from './ChatBanner';
+ import { ChatHeader } from './ChatHeader';
++import { Composer } from './Composer';
+ import { DetailsPanel } from './DetailsPanel';
+ import { Timeline } from './Timeline';
+ import styles from './Chat.module.css';
+ 
+-/** `/c/:owner/:repo/:number`: one PR's chat (handoff §2), read-only in W3, kept live over `/ws/web`. */
++/** `/c/:owner/:repo/:number`: one PR's chat (handoff §2), kept live over `/ws/web`, with the composer and the banners' actions. */
+ export function Chat() {
+   const me = useOutletContext<WebMe>();
+   const { owner = '', repo = '', number = '' } = useParams();
+@@ -24,8 +26,9 @@ export function Chat() {
+   if (chat.isPending) {
+     return (
+       <Pane>
++        {/* A first answer that failed (GitHub slow, a 502) is asked again a few times before it's an error. */}
+         <p className={styles.loading} role="status">
+-          Loading…
++          {chat.failureCount > 0 ? 'Still trying…' : 'Loading…'}
+         </p>
+       </Pane>
+     );
+@@ -66,6 +69,7 @@ function ChatUnavailable({ error, onRetry }: { error: Error; onRetry: () => void
+ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cacheKey: readonly unknown[] }) {
+   const { view, items, hasOlder } = data;
+   const queryClient = useQueryClient();
++  const toast = useToast();
+   const desktop = useIsDesktop();
+   const wide = useIsWide();
+   const [detailsOpen, setDetailsOpen] = useState(true);
+@@ -82,6 +86,8 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
+     try {
+       const page = await fetchOlderItems(view.id, first.seq);
+       queryClient.setQueryData<ChatResponse>(cacheKey, (chat) => chat && { ...chat, items: mergeItems(page.items, chat.items), hasOlder: page.hasOlder });
++    } catch (err) {
++      toast.show(err instanceof Error ? err.message : "Couldn't load earlier items.", { error: true });
+     } finally {
+       setLoadingEarlier(false);
+     }
+@@ -107,6 +113,8 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
+         <div className={styles.scroll} tabIndex={0} role="region" aria-label="Timeline" onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
+           <Timeline view={view} items={items} hasOlder={hasOlder} you={me.login} loadingEarlier={loadingEarlier} onLoadEarlier={() => void loadEarlier()} />
+         </div>
++        <Composer view={view} me={me} />
++        <Toasts />
+       </section>
+       {wide && detailsOpen && <DetailsPanel view={view} />}
+     </div>
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/Chat.module.css
++++ b/apps/web/src/routes/Chat/Chat.module.css
+@@ -6,6 +6,8 @@
+ }
+ 
+ .column {
++  /* The toasts sit 96 px above its bottom, over the composer (components/Toast). */
++  position: relative;
+   flex: 1;
+   min-width: 0;
+   display: flex;
+```
+
+- [ ] **Step 6: The banners' buttons, Review, the card, the ✓**
+
+```diff
+--- a/apps/web/src/routes/Chat/ChatBanner.tsx
++++ b/apps/web/src/routes/Chat/ChatBanner.tsx
+@@ -1,15 +1,16 @@
+-import { BRAND, type ChatView } from '@nitpilot/protocol';
++import { BRAND, type ChatView, type PointView } from '@nitpilot/protocol';
+ import type { ReactNode } from 'react';
+ import { Link, useLocation } from 'react-router';
++import { useContinue, useResolve, useRetry } from '../../api/actions';
+ import type { Banner } from '../../lib/banner';
+ import { useCopy } from '../../lib/clipboard';
+ import { itemTime } from '../../lib/time';
+ import styles from './ChatBanner.module.css';
+ 
+ /**
+- * The banner under the header (handoff §2 "Banners", §10). Only text and links in W3: the buttons that change the
+- * chat (Resolve, Continue, Retry) arrive with the other actions in Task 13. An escalation is an alert; the rest
+- * are statuses.
++ * The banner under the header (handoff §2 "Banners", §10). Its buttons (Resolve, Continue, Retry) show only what
++ * `view.permissions` allows, and wait for the server's answer; the chat itself changes when `/ws/web` says so. An
++ * escalation is an alert; the rest are statuses.
+  */
+ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView }) {
+   const here = useLocation();
+@@ -40,6 +41,7 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
+               <li key={p.number} className={styles.point}>
+                 <span className={styles.pointId}>P{p.number}</span>
+                 <span className={styles.pointTitle}>{p.title}</span>
++                <PointActions view={view} point={p} />
+               </li>
+             ))}
+           </ul>
+@@ -47,8 +49,8 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
+       );
+     case 'failed_job':
+       return (
+-        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why. To run it again:">
+-          <CopyCommand command={`${BRAND.cli} retry ${view.url}`} />
++        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why.">
++          {view.permissions.retry && <RetryButton chatId={view.id} />}
+         </Strip>
+       );
+     case 'failed_post':
+@@ -104,6 +106,42 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
+   }
+ }
+ 
++/**
++ * Resolve (dark) and Continue (outlined) for one escalated point, each only if you may. While one is on its way,
++ * both wait: the two would contradict each other.
++ */
++function PointActions({ view, point }: { view: ChatView; point: PointView }) {
++  const resolve = useResolve(view.id);
++  const cont = useContinue(view.id);
++  const mayResolve = view.permissions.resolve.includes(point.number);
++  const mayContinue = view.permissions.continue.includes(point.number);
++  if (!mayResolve && !mayContinue) return null;
++  const busy = resolve.isPending || cont.isPending;
++  return (
++    <div className={styles.pointActions}>
++      {mayResolve && (
++        <button type="button" className={`${styles.button} ${styles.dark}`} disabled={busy} onClick={() => resolve.mutate(point.number)}>
++          {resolve.isPending ? 'Resolving…' : 'Resolve'}
++        </button>
++      )}
++      {mayContinue && (
++        <button type="button" className={`${styles.button} ${styles.secondary}`} disabled={busy} onClick={() => cont.mutate(point.number)} title="Let the agents keep going on this point">
++          {cont.isPending ? 'Continuing…' : 'Continue'}
++        </button>
++      )}
++    </div>
++  );
++}
++
++function RetryButton({ chatId }: { chatId: string }) {
++  const retry = useRetry(chatId);
++  return (
++    <button type="button" className={`${styles.button} ${styles.dark}`} disabled={retry.isPending} onClick={() => retry.mutate()}>
++      {retry.isPending ? 'Retrying…' : 'Retry'}
++    </button>
++  );
++}
++
+ /** One banner line: a glyph, a title and a line under it, then what you can do. */
+ function Strip(props: { tone: 'ok' | 'warn' | 'muted'; glyph?: '!' | 'ring' | 'check'; title: string; body: string; children: ReactNode }) {
+   return (
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/ChatBanner.module.css
++++ b/apps/web/src/routes/Chat/ChatBanner.module.css
+@@ -178,6 +178,7 @@
+ 
+ .point {
+   display: flex;
++  flex-wrap: wrap;
+   align-items: center;
+   gap: 10px;
+   padding: 8px 10px;
+@@ -195,7 +196,28 @@
+ 
+ .pointTitle {
+   flex: 1;
+-  min-width: 0;
++  min-width: 160px;
+   font-size: 13px;
+   line-height: 1.35;
+ }
++
++/* The banners' own buttons (Resolve, Continue, Retry): the link styles above, as buttons. */
++.button {
++  border: 0;
++  font-family: inherit;
++  cursor: pointer;
++}
++
++.button.secondary {
++  border: 1px solid var(--b1);
++}
++
++.button:disabled {
++  opacity: 0.6;
++  cursor: progress;
++}
++
++.pointActions {
++  display: flex;
++  gap: 6px;
++}
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/Timeline.tsx
++++ b/apps/web/src/routes/Chat/Timeline.tsx
+@@ -1,4 +1,5 @@
+ import type { ChatView, TimelineItem } from '@nitpilot/protocol';
++import { useReview } from '../../api/actions';
+ import { useFiles } from '../../api/chat';
+ import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
+ import { Avatar } from '../../components/Avatar/Avatar';
+@@ -136,10 +137,12 @@ function ProgressLine({ chatId, you }: { chatId: string; you: string }) {
+ 
+ /**
+  * A PR from an outside contributor (handoff §2 "Untrusted PR card"): agents don't start on it by themselves, so the
+- * requested reviewer skims the diff first. Its Review button arrives with the other actions (Task 13).
++ * requested reviewer skims the diff, then presses Review. With their agent offline it still queues: the "waiting"
++ * line and pill come back through the socket.
+  */
+ function UntrustedCard({ view }: { view: ChatView }) {
+   const files = useFiles(view.id).data;
++  const review = useReview(view.id);
+   const biggest = files?.files.toSorted((a, b) => b.adds + b.dels - (a.adds + a.dels))[0];
+   return (
+     <section className={styles.untrusted} aria-label="First-time contributor">
+@@ -155,7 +158,12 @@ function UntrustedCard({ view }: { view: ChatView }) {
+           {biggest ? ` · ${biggest.path}` : ''}
+         </p>
+       )}
+-      <div>
++      <div className={styles.untrustedActions}>
++        {view.permissions.review && (
++          <button type="button" className={styles.primaryButton} disabled={review.isPending} onClick={() => review.mutate()}>
++            {review.isPending ? 'Starting…' : 'Review'}
++          </button>
++        )}
+         <a className={styles.button} href={`${view.url}/files`} target="_blank" rel="noreferrer">
+           View diff on GitHub <span aria-hidden="true">↗</span>
+         </a>
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/Timeline.module.css
++++ b/apps/web/src/routes/Chat/Timeline.module.css
+@@ -257,3 +257,28 @@
+   font-weight: 500;
+   text-decoration: none;
+ }
++
++.untrustedActions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++}
++
++/* handoff §2: the untrusted card's primary Review. */
++.primaryButton {
++  height: 34px;
++  padding: 0 16px;
++  border: 0;
++  border-radius: var(--radius-control);
++  background: var(--acc);
++  color: var(--on-acc);
++  font: inherit;
++  font-size: 13.5px;
++  font-weight: 600;
++  cursor: pointer;
++}
++
++.primaryButton:disabled {
++  opacity: 0.7;
++  cursor: progress;
++}
+```
+
+```diff
+--- a/apps/web/src/routes/Chat/PointCard.tsx
++++ b/apps/web/src/routes/Chat/PointCard.tsx
+@@ -24,19 +24,23 @@ export type People = ReadonlyMap<string, { avatarUrl: string }>;
+  * around it, and the thread of replies and decisions. A resolved point starts collapsed to one line.
+  */
+ export function PointCard({ point, thread, you, people, repoUrl }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string }) {
+-  const [open, setOpen] = useState(point.status !== 'resolved');
++  // Open unless resolved, until you toggle it. When the point's status changes (resolved by a person, reopened on
++  // GitHub), the card follows the new status again.
++  const [chosen, setChosen] = useState<{ status: PointView['status']; open: boolean } | null>(null);
++  const open = chosen?.status === point.status ? chosen.open : point.status !== 'resolved';
+   // Opening or closing swaps one button for the other, so the focused one disappears: hand the focus to its successor.
+-  // Only after the person toggled it, never on the first render.
+-  const toggled = useRef(false);
++  // Only right after the person toggled it: never on the first render, nor when the status changes the card.
++  const moveFocus = useRef(false);
+   const collapsedButton = useRef<HTMLButtonElement>(null);
+   const collapseButton = useRef<HTMLButtonElement>(null);
+   useEffect(() => {
+-    if (!toggled.current) return;
++    if (!moveFocus.current) return;
++    moveFocus.current = false;
+     (open ? collapseButton : collapsedButton).current?.focus();
+   }, [open]);
+   function toggle(next: boolean): void {
+-    toggled.current = true;
+-    setOpen(next);
++    moveFocus.current = true;
++    setChosen({ status: point.status, open: next });
+   }
+   const severity = SEVERITY[point.severity];
+   const label = `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;
+```
+
+```diff
+--- a/apps/web/src/lib/timeline.ts
++++ b/apps/web/src/lib/timeline.ts
+@@ -42,10 +42,10 @@ export function timelineRows(items: TimelineItem[], points: PointView[]): Timeli
+   return rows;
+ }
+ 
+-/** The glyph for a system line, from what the engine says (apps/server/src/engine: "Ready for approval", "… a human decision", "… is waiting"). */
++/** The glyph for a system line, from what the engine says (apps/server/src/engine: "Ready for approval", "leo resolved P1", "… a human decision", "… is waiting"). */
+ export function systemGlyph(body: string): Glyph {
+   if (/a human decision/.test(body)) return 'diamond';
+-  if (/^(Ready for approval|Merged)$|approved on GitHub$|resolved on GitHub$/.test(body)) return 'check';
++  if (/^(Ready for approval|Merged)$|approved on GitHub$|resolved on GitHub$| resolved P\d+$/.test(body)) return 'check';
+   if (/is waiting|^Waiting for|offline/.test(body)) return 'ring';
+   return 'dot';
+ }
+```
+
+- [ ] **Step 7: Run the web tests to see them pass**
+
+Run: `npm test -w apps/web && npm run typecheck && npm run lint`
+Expected: PASS, 152 tests (23 files); typecheck and lint clean.
+
+- [ ] **Step 8: An escalation in a real browser (Playwright)**
+
+A fake-agent scenario where the review raises a security point, the address pass fixes it, and the re-review settles it and raises another. Create `apps/cli/src/agents/fake/scenarios/escalation.json`:
+
+```json
+{
+  "review": [
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "blocker", "category": "security", "title": "The page size comes from the query string unchecked", "body": "A huge value loads every order at once." } },
+    { "finish": "One security point." }
+  ],
+  "address": [
+    { "edit": { "path": "src/orders.ts", "content": "export const pageSize = (asked: number) => Math.min(asked, 100);\n" } },
+    { "reply": { "point": 1, "resolution": "fixed", "comment": "Capped at 100." } },
+    { "finish": "Capped the page size." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Capped now." } },
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "major", "category": "security", "title": "Read the cap from the config", "body": "A cap written into the code is one operators can't see." } },
+    { "finish": "P1 is settled; one more security point." }
+  ]
+}
+```
+
+The pretend GitHub only moved `refs/pull/42/head` when a branch was pushed, so after an author's agent pushed to a Playwright PR's branch, its re-review kept fetching the old head (`stale_head`, again and again). Each PR's ref now follows its own branch:
+
+```diff
+--- a/apps/server/test/e2e/github.ts
++++ b/apps/server/test/e2e/github.ts
+@@ -1,5 +1,5 @@
+ import { execFileSync } from 'node:child_process';
+-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
++import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { dirname, join } from 'node:path';
+ import { pull } from '../fixtures/github';
+@@ -11,7 +11,6 @@ import { pull } from '../fixtures/github';
+ export type Who = 'maya' | 'leo';
+ 
+ const BRANCH = pull().head.ref;
+-const PULL_REF = `refs/pull/${pull().number}/head`;
+ 
+ export function localGithub() {
+   const root = mkdtempSync(join(tmpdir(), 'nitpilot-e2e-'));
+@@ -26,11 +25,18 @@ export function localGithub() {
+   }
+   const git = (cwd: string, env: Record<string, string>, ...args: string[]) => execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
+ 
+-  // GitHub keeps refs/pull/42/head on the PR's branch tip: a hook does the same here.
++  // GitHub keeps refs/pull/<number>/head on each PR's branch tip: a hook does the same here, for the PRs listed in
++  // nitpilot-pulls ("<branch> <number>" per line; #42 on its branch, and each addPull).
+   mkdirSync(dirname(bare), { recursive: true });
+   const setup = home('github');
+   git(root, setup, 'init', '-q', '--bare', bare);
+-  writeFileSync(join(bare, 'hooks', 'post-receive'), `#!/bin/sh\nwhile read old new ref; do\n  if [ "$ref" = "refs/heads/${BRANCH}" ]; then git update-ref ${PULL_REF} "$new"; fi\ndone\n`, { mode: 0o755 });
++  const pulls = join(bare, 'nitpilot-pulls');
++  writeFileSync(pulls, `${BRANCH} ${pull().number}\n`);
++  writeFileSync(
++    join(bare, 'hooks', 'post-receive'),
++    `#!/bin/sh\nwhile read old new ref; do\n  while read branch number; do\n    if [ "$ref" = "refs/heads/$branch" ]; then git update-ref "refs/pull/$number/head" "$new"; fi\n  done < '${pulls}'\ndone\n`,
++    { mode: 0o755 },
++  );
+ 
+   // The author's own working folder, where the PR was made (and where a human pushes from).
+   const work = join(root, 'work');
+@@ -68,11 +74,14 @@ export function localGithub() {
+       return { clone, env };
+     },
+     /**
+-     * Another PR on the same repo, at the same head as #42: GitHub keeps refs/pull/<number>/head for every PR,
+-     * and that is what a CLI fetches (the Playwright tests open PRs with other numbers).
++     * Another PR on the same repo, on its own branch at the same head as #42. A CLI fetches refs/pull/<number>/head and
++     * an author's agent pushes to the branch, so the hook keeps the two together, as for #42 (the Playwright tests
++     * open PRs with other numbers, and one of them runs a fix).
+      */
+-    addPull(number: number): void {
++    addPull(number: number, branch: string): void {
++      git(root, setup, '--git-dir', bare, 'update-ref', `refs/heads/${branch}`, headSha);
+       git(root, setup, '--git-dir', bare, 'update-ref', `refs/pull/${number}/head`, headSha);
++      appendFileSync(pulls, `${branch} ${number}\n`);
+     },
+     /** Someone pushes to the PR's branch by hand, from the PR's old head (Review Focus #2). Returns the new head. */
+     pushAsHuman(files: Record<string, string>): string {
+```
+
+```diff
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -57,7 +57,7 @@ control.post('/signin', async (c) => {
+ control.post('/pr', async (c) => {
+   const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
+   const base = pull();
+-  e2e.github.addPull(number);
++  e2e.github.addPull(number, `feature-${number}`);
+   await e2e.deliver(
+     'pull_request',
+     prEvent('opened', {
+```
+
+`stopCli` says so when it fails (a Task 10 minor):
+
+```diff
+--- a/apps/web/e2e/control.ts
++++ b/apps/web/e2e/control.ts
+@@ -28,7 +28,8 @@ export async function startCli(login: 'maya' | 'leo', scenario: string): Promise
+ }
+ 
+ export async function stopCli(login: 'maya' | 'leo'): Promise<void> {
+-  await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
++  const res = await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
++  if (!res.ok) throw new Error(`stopping ${login}'s CLI failed: ${res.status} ${await res.text()}`);
+ }
+ 
+ /**
+```
+
+Create `apps/web/e2e/escalation.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { openPr, pageProblems, resetChats, signIn, startCli, stopCli } from './control';
+
+test.beforeEach(resetChats);
+
+test('an escalation: the author lets the agents continue, a round runs, and the reviewer resolves what escalates next', async ({ page, context }) => {
+  await openPr({ number: 61, title: 'Cap the page size', author: 'maya', reviewer: 'leo' });
+  const errors = pageProblems(page);
+  await startCli('leo', 'escalation.json');
+  await startCli('maya', 'escalation.json');
+  try {
+    // leo's agent raises a security point: it goes to a person.
+    await signIn(context, 'maya');
+    await page.goto('/c/octo/sandbox/61');
+    const banner = page.getByRole('alert');
+    await expect(banner).toContainText('Needs a human decision', { timeout: 15_000 });
+    // maya wrote the PR: she may hand the point back, but only leo, who raised it, may resolve it.
+    await expect(banner.getByRole('button', { name: 'Resolve' })).toHaveCount(0);
+    await banner.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByText('Agents will keep going on P1.')).toBeVisible();
+    await expect(page.getByText('maya let the agents continue on P1')).toBeVisible();
+
+    // A round runs: maya's agent fixes P1, leo's agent settles it and raises another security point.
+    await expect(page.getByRole('article', { name: /P2, Major security point, Escalated/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /P1, Blocker security point, Resolved/ })).toBeVisible();
+
+    // leo resolves it, and the chat is ready for his approval.
+    await signIn(context, 'leo');
+    await page.reload();
+    await page.getByRole('alert').getByRole('button', { name: 'Resolve' }).click();
+    await expect(page.getByText('P2 resolved.')).toBeVisible();
+    await expect(page.getByText('Ready for your approval')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  } finally {
+    await stopCli('maya');
+    await stopCli('leo');
+  }
+  expect(errors).toEqual([]);
+});
+```
+
+- [ ] **Step 9: Run Playwright**
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 6 tests. Run it twice more: the escalation test takes about 3 s, and must pass every time.
+
+- [ ] **Step 10: Look at it (controller, in the in-app browser)**
+
+Start the Playwright server (launch config `nitpilot-e2e-web`), then seed maya's #61 with leo's agent raising a security point, and sign in as maya (set the cookie in the tab with `document.cookie`):
+
+```bash
+C=http://127.0.0.1:4320
+curl -s -X POST $C/reset
+curl -s -X POST $C/pr -d '{"number":61,"title":"Cap the page size","author":"maya","reviewer":"leo"}'
+curl -s -X POST $C/cli -d '{"login":"leo","scenario":"escalation.json"}'; sleep 6; curl -s -X DELETE $C/cli -d '{"login":"leo"}'
+curl -s -X POST $C/signin -d '{"login":"maya"}'
+```
+
+At 1280 px, light: the escalation banner offers maya only Continue; the composer sits under the feed with its hint, its border turns accent on focus, ⇧↵ grows it to two lines and Send turns accent; ↵ sends: the note arrives as "You · to the agents" and the toast sits above the composer, the field empty and still focused. Press Continue: toast, "maya let the agents continue on P1", "maya's agent will work on 1 point", and the banner becomes "Waiting for your agent" (her CLI is offline). Then start both CLIs (`curl -s -X POST $C/cli -d '{"login":"maya","scenario":"escalation.json"}'`, the same for leo): in dark, P1's card collapses by itself to "Resolved" when leo's agent settles it, and P2 escalates. Sign in as leo and reload: P2 offers Resolve and Continue; Resolve → "P2 resolved." and the "Ready for your approval" banner, and "leo resolved P2" has the ✓. Seed #62 the same way and look at 375 px, light and dark: the point row wraps its buttons under the title, the composer keeps its phone padding, the toast fits. For the error toast, make the tab's next Resolve answer 409 (`window.fetch` stubbed in the console for `/resolve`) and press it: the red diamond and "P1 is already resolved.". On the phone inbox, search, open a chat, press ‹: the search is still there. Stop the server afterwards: it shares the test database with `npm test`. Screenshots in the task report.
+
+- [ ] **Step 11: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 50, CLI 294 passed + 14 skipped, server 804, web 152; end to end 5; Playwright 6; typecheck and lint clean.
+
+```bash
+git add apps/web apps/server/test/e2e apps/cli/src/agents/fake/scenarios/escalation.json docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): the composer, Resolve, Continue, Retry and Review in the chat, with toasts
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
