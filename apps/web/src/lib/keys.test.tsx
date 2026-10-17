@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,9 @@ function Harness({ open = vi.fn(), escape = vi.fn() }: { open?: (id: string) => 
     <>
       <input ref={search} aria-label="Search pull requests" />
       <output aria-label="cursor">{cursor ?? 'none'}</output>
+      <main>
+        <div tabIndex={0} aria-label="feed" />
+      </main>
     </>
   );
 }
@@ -59,6 +62,17 @@ describe('useInboxKeys (handoff "Keyboard")', () => {
     expect(escape).not.toHaveBeenCalled();
     await userEvent.keyboard('{Escape}');
     expect(escape).toHaveBeenCalledOnce();
+  });
+
+  it('leaves ↑/↓ to the page beside the inbox, so its feed scrolls, while j/k still move the cursor', async () => {
+    render(<Harness />);
+    const feed = screen.getByLabelText('feed');
+    feed.focus();
+    // fireEvent answers false when the key's default action (scrolling) was cancelled.
+    expect(fireEvent.keyDown(feed, { key: 'ArrowDown' })).toBe(true);
+    expect(cursor()).toBe('none');
+    await userEvent.keyboard('j');
+    expect(cursor()).toBe('a');
   });
 
   it('leaves shortcuts with a modifier (⌘J, Ctrl+K) to the browser', async () => {

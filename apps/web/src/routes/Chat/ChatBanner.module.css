@@ -1,0 +1,201 @@
+/* handoff §2 "Banners": pinned under the header, full width. */
+.strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--b1);
+}
+
+.ok {
+  background: var(--ok-tint);
+}
+
+.warn {
+  background: var(--warn-tint);
+}
+
+.muted {
+  background: var(--muted);
+}
+
+.text {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.body {
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+.bang {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--warn);
+  color: #1a1205;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0 3px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--fg3);
+}
+
+.primary,
+.secondary,
+.dark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.secondary {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.dark {
+  height: 30px;
+  padding: 0 12px;
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 12.5px;
+}
+
+.command {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dollar,
+.copy {
+  color: var(--fg3);
+}
+
+.copy {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+}
+
+/* The one red banner: red-tint with a red-line border. */
+.escalated {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--red-tint);
+  border-bottom: 1px solid var(--red-line);
+}
+
+.escalatedHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.diamond {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin: 0 4px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.pointId {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red-fg);
+}
+
+.pointTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}

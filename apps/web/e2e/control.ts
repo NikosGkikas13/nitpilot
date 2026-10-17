@@ -9,10 +9,26 @@ export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Pr
   await context.addCookies([{ ...cookie, url: BASE_URL }]);
 }
 
+/** Forget every PR the earlier tests opened (they share one server and database). People stay signed up. */
+export async function resetChats(): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/reset`, { method: 'POST' });
+  if (!res.ok) throw new Error(`resetting failed: ${res.status} ${await res.text()}`);
+}
+
 /** Open a pull request on the test repo (octo/sandbox), as GitHub's webhook would. */
 export async function openPr(pr: { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' }): Promise<void> {
   const res = await fetch(`${CONTROL_URL}/pr`, { method: 'POST', body: JSON.stringify(pr) });
   if (!res.ok) throw new Error(`opening PR #${pr.number} failed: ${res.status} ${await res.text()}`);
+}
+
+/** Start someone's CLI on the fake agent, running a scenario from apps/cli/src/agents/fake/scenarios. */
+export async function startCli(login: 'maya' | 'leo', scenario: string): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/cli`, { method: 'POST', body: JSON.stringify({ login, scenario }) });
+  if (!res.ok) throw new Error(`starting ${login}'s CLI failed: ${res.status} ${await res.text()}`);
+}
+
+export async function stopCli(login: 'maya' | 'leo'): Promise<void> {
+  await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
 }
 
 /**

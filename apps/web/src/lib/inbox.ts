@@ -69,7 +69,7 @@ export function defaultTab(rows: readonly InboxRow[]): Tab {
   return mine && !reviews ? 'mine' : 'review';
 }
 
-/** A chat's address in the app: the same URL as its transcript (spec §10). */
+/** A chat's address in the app: the same URL the summary comment links to (spec §10). */
 export function chatPath(row: Pick<InboxRow, 'repo' | 'number'>): string {
   return `/c/${row.repo}/${row.number}`;
 }

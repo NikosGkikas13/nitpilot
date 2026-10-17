@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { openPr, pageProblems, signIn } from './control';
+import { openPr, pageProblems, resetChats, signIn } from './control';
+
+test.beforeEach(resetChats);
 
 test('the inbox lists the PRs you review and your own, each under its tab', async ({ page, context }) => {
   await openPr({ number: 42, title: 'Cursor pagination for orders', author: 'maya', reviewer: 'leo' });

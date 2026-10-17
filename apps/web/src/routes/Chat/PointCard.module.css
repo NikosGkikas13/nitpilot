@@ -1,0 +1,427 @@
+/* handoff §3, PointCard.dc.html */
+.card {
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.escalatedCard {
+  border-color: var(--red-line);
+}
+
+.head {
+  padding: 12px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A point without a snippet (a GitHub comment on the whole PR) keeps the 14px the snippet's margin gives below its text. */
+.head:last-child {
+  padding-bottom: 14px;
+}
+
+.head + .thread {
+  margin-top: 14px;
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.blocker {
+  background: var(--red-tint);
+  color: var(--red-fg);
+  --bar: var(--red);
+}
+
+.major {
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  --bar: var(--warn);
+}
+
+.minor {
+  --bar: var(--fg2);
+}
+
+.nit {
+  --bar: var(--fg3);
+}
+
+.bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+
+.bar {
+  width: 2.5px;
+  border-radius: 1px;
+  background: var(--b1);
+}
+
+.filled {
+  background: var(--bar);
+}
+
+.category {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--b1);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg2);
+}
+
+.id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+  padding: 0 2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.open {
+  color: var(--fg2);
+}
+
+.addressed {
+  color: var(--acc-text);
+}
+
+.resolved {
+  color: var(--ok-fg);
+}
+
+.escalated {
+  color: var(--red-fg);
+}
+
+.openGlyph {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.addressedGlyph {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--acc);
+  background: linear-gradient(90deg, var(--acc) 50%, transparent 50%);
+}
+
+.escalatedGlyph {
+  width: 8px;
+  height: 8px;
+  margin: 0 1px;
+  background: var(--red);
+  transform: rotate(45deg);
+}
+
+.checkSmall {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.collapse {
+  border: 0;
+  background: transparent;
+  color: var(--fg3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.collapse:hover {
+  color: var(--fg1);
+}
+
+.file {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--acc-text);
+  text-decoration: none;
+}
+
+.title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+.body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.snippet {
+  margin: 12px 14px 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--code);
+}
+
+.snippetHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--b1);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+  background: var(--surface);
+}
+
+.snippetPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code {
+  margin: 0;
+  overflow-x: auto;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.line {
+  display: flex;
+  min-width: max-content;
+}
+
+.highlighted {
+  background: var(--hl);
+}
+
+/* --fg4 is decoration only: these numbers repeat the L47–49 in the snippet's header. */
+.lineNumber {
+  flex: none;
+  position: relative;
+  width: 46px;
+  padding-right: 12px;
+  text-align: right;
+  color: var(--fg4);
+  user-select: none;
+}
+
+.highlighted .lineNumber {
+  color: var(--acc-text);
+}
+
+.gutterDiamond {
+  position: absolute;
+  left: 9px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  background: var(--acc);
+  transform: rotate(45deg);
+}
+
+.lineText {
+  white-space: pre;
+  padding-right: 16px;
+  font-family: inherit;
+}
+
+.plain {
+  color: var(--fg1);
+}
+
+.keyword {
+  color: var(--acc-text);
+}
+
+.string {
+  color: var(--ok-fg);
+}
+
+.number {
+  color: var(--warn-fg);
+}
+
+.comment {
+  color: var(--fg3);
+}
+
+.thread {
+  list-style: none;
+  margin: 0;
+  border-top: 1px solid var(--b2);
+  background: var(--bg);
+  padding: 4px 14px 6px;
+  display: flex;
+  flex-direction: column;
+  --badge-ring: var(--bg);
+}
+
+.reply {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.replyMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.replyHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
+.replyName {
+  font-weight: 600;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.ok {
+  color: var(--ok-fg);
+}
+
+.plain.tag {
+  color: var(--fg2);
+}
+
+.warn {
+  color: var(--warn-fg);
+}
+
+.accent {
+  color: var(--acc-text);
+}
+
+.commit {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--acc-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.replyTime {
+  color: var(--fg3);
+  font-size: 11.5px;
+}
+
+.replyText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.collapsed {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--fg2);
+  text-align: left;
+}
+
+.collapsed:hover {
+  background: var(--hover);
+}
+
+.collapsedTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg1);
+}
+
+.resolvedWord {
+  flex: none;
+  font-size: 12px;
+  color: var(--ok-fg);
+  font-weight: 500;
+}
+
+.caret {
+  flex: none;
+  color: var(--fg3);
+  font-size: 12px;
+}

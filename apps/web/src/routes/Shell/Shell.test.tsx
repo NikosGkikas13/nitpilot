@@ -2,12 +2,17 @@ import type { WebMe } from '@nitpilot/protocol';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatRoutes } from '../../test/chat';
 import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
 
 function serve() {
-  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
+  fakeApi({
+    'GET /api/me': (): Answer => [200, me],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    ...chatRoutes([{ repo: 'acme/shop-api', number: 139, title: 'Fix race in session refresh' }]),
+  });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -25,11 +30,11 @@ describe('Shell (handoff "App shell and layout")', () => {
     fakeViewport(false);
     serve();
     renderApp('/c/acme/shop-api/139');
-    expect(await screen.findByRole('heading', { name: 'Pull request #139' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Fix race in session refresh' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Pull request #139' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Fix race in session refresh' })).not.toBeInTheDocument();
   });
 
   it('keeps Sign out on the Settings page, reached from your avatar', async () => {

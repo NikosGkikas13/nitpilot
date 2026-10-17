@@ -1,0 +1,90 @@
+/* The chat fills the page beside the inbox: a column (header, banner, the feed scrolling) and the details panel. */
+.chat {
+  height: 100%;
+  display: flex;
+  min-height: 0;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.loading {
+  margin: 40px auto;
+  color: var(--fg3);
+  font-size: 13px;
+}
+
+/* handoff §10 `rules`: a centred warn chip under the header. */
+.rulesChip {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 10px 16px 0;
+}
+
+.rulesChip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.bang {
+  font-weight: 700;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.reauth {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 40px;
+}
+
+.reauthTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.reauthBody {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg2);
+}
+
+.reauthButton {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}

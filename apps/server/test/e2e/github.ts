@@ -67,6 +67,13 @@ export function localGithub() {
       git(clone, env, 'remote', 'set-url', 'origin', `git@github-test:${pull().base.repo.full_name}.git`);
       return { clone, env };
     },
+    /**
+     * Another PR on the same repo, at the same head as #42: GitHub keeps refs/pull/<number>/head for every PR,
+     * and that is what a CLI fetches (the Playwright tests open PRs with other numbers).
+     */
+    addPull(number: number): void {
+      git(root, setup, '--git-dir', bare, 'update-ref', `refs/pull/${number}/head`, headSha);
+    },
     /** Someone pushes to the PR's branch by hand, from the PR's old head (Review Focus #2). Returns the new head. */
     pushAsHuman(files: Record<string, string>): string {
       const sha = commit(files, 'a human pushed');

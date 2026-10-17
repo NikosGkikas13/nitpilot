@@ -57,6 +57,7 @@ control.post('/signin', async (c) => {
 control.post('/pr', async (c) => {
   const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
   const base = pull();
+  e2e.github.addPull(number);
   await e2e.deliver(
     'pull_request',
     prEvent('opened', {
@@ -71,6 +72,29 @@ control.post('/pr', async (c) => {
       },
     }),
   );
+  return c.body(null, 204);
+});
+/**
+ * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
+ * People, their sign-ins and the installation stay.
+ */
+control.post('/reset', async (c) => {
+  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat" CASCADE');
+  return c.body(null, 204);
+});
+/** Each person's running CLI, started by a test. */
+const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
+/** Start someone's `nitpilot start` on the fake agent, with a scenario from apps/cli/src/agents/fake/scenarios. */
+control.post('/cli', async (c) => {
+  const { login, scenario } = (await c.req.json()) as { login: 'maya' | 'leo'; scenario?: string };
+  if (!clis.has(login)) clis.set(login, await e2e.startCli(login, scenario));
+  return c.body(null, 204);
+});
+/** Stop it again, so the next test finds that person's agent offline. */
+control.delete('/cli', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  await clis.get(login)?.stop();
+  clis.delete(login);
   return c.body(null, 204);
 });
 serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });

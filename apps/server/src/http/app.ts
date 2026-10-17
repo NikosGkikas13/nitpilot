@@ -17,7 +17,6 @@ import { cliApproveRoutes } from './routes/cli-approve';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
 import { setupRoutes } from './routes/setup';
-import { transcriptRoutes } from './routes/transcript';
 import { webhookRoutes } from './routes/webhooks';
 import { DEFAULT_WEB_DIST, spaRoutes } from './spa';
 
@@ -52,7 +51,6 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', cliRoutes(deps));
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));
-  app.route('/', transcriptRoutes(deps));
   app.route('/', webhookRoutes(deps));
   // Last: everything else is the web app's (spec §7).
   const env = getEnv();

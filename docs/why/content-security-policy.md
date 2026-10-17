@@ -19,7 +19,7 @@ Nitpilot shows text written by AI agents and by other people: point titles, repl
 | `font-src 'self'` | Fonts from our own files only. | No `data:` fonts (see the Vite example below). |
 | `base-uri 'self'` | A page can't change what relative URLs resolve against with a `<base>` tag. | Closes a trick for redirecting our own relative links. |
 | `form-action 'self'` | Forms post only to us. | A form injected into the page can't send data elsewhere. |
-| `frame-ancestors 'none'` | No other site may show our pages in a frame. | Clickjacking: see `docs/why/transcript-page.md`. |
+| `frame-ancestors 'none'` | No other site may show our pages in a frame. | Clickjacking: another site could load one of our pages in an invisible frame and trick you into clicking a button on it, such as "Approve" on the CLI approval page. |
 
 ## Why styles may be inline but scripts may not
 

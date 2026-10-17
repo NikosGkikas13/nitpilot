@@ -3,6 +3,8 @@ import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import { AppRoutes, makeQueryClient } from '../app';
+import { SocketFactory } from '../live/LiveProvider';
+import { fakeSockets } from './socket';
 
 /** One answer: the status and the JSON body. */
 export type Answer = [status: number, body: unknown];
@@ -21,23 +23,33 @@ export function fakeApi(routes: Record<string, () => Answer>) {
   return fetch;
 }
 
-/** The app's routes at `path`, with a fresh data cache that doesn't wait between retries. Also returns that cache. */
+/**
+ * The app's routes at `path`, with a fresh data cache that doesn't wait between retries, and pretend sockets
+ * for `/ws/web`. Also returns that cache and the sockets the page opened.
+ */
 export function renderApp(path = '/') {
   const queryClient = makeQueryClient({ retryDelay: 0 });
+  const sockets = fakeSockets();
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppRoutes />
-      </MemoryRouter>
+      <SocketFactory.Provider value={sockets.open}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+        </MemoryRouter>
+      </SocketFactory.Provider>
     </QueryClientProvider>,
   );
-  return { ...result, queryClient };
+  return { ...result, queryClient, sockets };
 }
 
-/** A stand-in for the browser's media queries: a phone (below 760 px) or a desktop, in the light theme. */
-export function fakeViewport(desktop: boolean) {
+/**
+ * A stand-in for the browser's media queries, in the light theme: a window this many pixels wide, or `true` for
+ * a wide desktop and `false` for a phone.
+ */
+export function fakeViewport(width: boolean | number) {
+  const px = width === true ? 1440 : width === false ? 375 : width;
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query.includes('min-width') ? desktop : false,
+    matches: px >= Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity),
     addEventListener: () => {},
     removeEventListener: () => {},
   }));

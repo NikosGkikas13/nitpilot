@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { retryUnlessClientError } from './api/client';
-import { ChatPlaceholder } from './routes/Chat/ChatPlaceholder';
+import { Chat } from './routes/Chat/Chat';
 import { Home } from './routes/Home/Home';
 import { SettingsPlaceholder } from './routes/Settings/SettingsPlaceholder';
 import { EmptyPane } from './routes/Shell/Pane';
@@ -34,7 +34,7 @@ export function AppRoutes() {
     <Routes>
       <Route element={<Home />}>
         <Route index element={<EmptyPane title="Pick a pull request" body="Its chat opens here." />} />
-        <Route path="c/:owner/:repo/:number" element={<ChatPlaceholder />} />
+        <Route path="c/:owner/:repo/:number" element={<Chat />} />
         <Route path="settings" element={<SettingsPlaceholder />} />
         <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
       </Route>

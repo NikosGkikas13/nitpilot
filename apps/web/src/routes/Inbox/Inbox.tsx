@@ -7,6 +7,7 @@ import { ErrorState } from '../../components/ErrorState/ErrorState';
 import { Kbd } from '../../components/Kbd/Kbd';
 import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type StatusFilter, type Tab } from '../../lib/inbox';
 import { useInboxKeys } from '../../lib/keys';
+import { useNow } from '../../lib/time';
 import { EmptyState } from './EmptyState';
 import styles from './Inbox.module.css';
 import { ExpiredStrip, OfflineBanner } from './InboxBanners';
@@ -29,6 +30,7 @@ export function Inbox({ me }: { me: WebMe }) {
   const [statuses, setStatuses] = useState<ReadonlySet<StatusFilter>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
+  const now = useNow();
 
   const all = inbox.data ?? [];
   // Settle the opening tab once, when the first data arrives: a later refetch must not flip the tab under you.
@@ -119,6 +121,7 @@ export function Inbox({ me }: { me: WebMe }) {
                 viewerLogin={me.login}
                 selected={isOpen(row)}
                 cursor={row.chatId === cursor}
+                now={now}
                 onOpen={() => {
                   setCursor(null);
                   void navigate(chatPath(row));

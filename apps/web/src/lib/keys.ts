@@ -34,6 +34,8 @@ export function useInboxKeys(keys: InboxKeys): void {
       if (e.key === 'Escape' && e.target instanceof HTMLElement) e.target.blur();
       return;
     }
+    // ↑/↓ inside the page beside the inbox scroll that page (the chat's feed); j/k still move the cursor.
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target instanceof Element && e.target.closest('main')) return;
     const at = keys.cursor === null ? -1 : keys.rows.findIndex((r) => r.chatId === keys.cursor);
     const last = keys.rows.length - 1;
     if (e.key === 'j' || e.key === 'ArrowDown') {

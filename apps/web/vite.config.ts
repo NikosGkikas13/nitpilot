@@ -19,8 +19,7 @@ export default defineConfig({
       '/auth': SERVER,
       '/github': SERVER,
       '/ws': { target: SERVER, ws: true },
-      // Still rendered by the server: the transcript until Task 10, device approval until Task 23.
-      '/c/': SERVER,
+      // Still rendered by the server: device approval, until Task 23.
       '/cli/': SERVER,
     },
   },

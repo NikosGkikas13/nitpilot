@@ -1,6 +1,6 @@
 import { getEnv } from './env';
 
-/** The read-only chat transcript (Plan 1b) and, later, the web app's chat page. */
+/** A chat's page in the web app, which the summary comment and the notifications link to (spec §10). */
 export function transcriptUrl(repoFullName: string, number: number): string {
   return `${getEnv().PUBLIC_URL}/c/${repoFullName}/${number}`;
 }

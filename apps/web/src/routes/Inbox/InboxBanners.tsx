@@ -1,26 +1,13 @@
 import { BRAND } from '@nitpilot/protocol';
-import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
+import { useCopy } from '../../lib/clipboard';
 import styles from './InboxBanners.module.css';
 
 const START = `${BRAND.cli} start`;
 
 /** None of your CLIs is connected, so your agent can't pick anything up (handoff §1, item 2). */
 export function OfflineBanner() {
-  const [copied, setCopied] = useState(false);
-
-  // "Copied" for 1.6 s, then back to "Copy".
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1600);
-    return () => clearTimeout(timer);
-  }, [copied]);
-
-  function copy() {
-    // The clipboard can be missing or refused (an insecure origin); the command is on screen either way.
-    navigator.clipboard?.writeText(START).catch(() => {});
-    setCopied(true);
-  }
+  const { copied, copy } = useCopy(START);
 
   return (
     <div className={styles.offline} role="status">

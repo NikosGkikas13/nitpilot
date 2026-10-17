@@ -22,7 +22,7 @@ export async function chatAccess(user: { id: string }, chatId: string, access: R
 
 /**
  * The same, for the chat screen's address, `/c/:owner/:repo/:number`. GitHub is asked about the repo before the
- * chat is looked up, as the transcript page did: someone whose GitHub sign-in expired is asked to sign in again,
+ * chat is looked up: someone whose GitHub sign-in expired is asked to sign in again,
  * whether or not that chat exists.
  */
 export async function chatAccessByPath(user: { id: string }, path: { owner: string; repo: string; number: string }, access: RepoAccess): Promise<ChatAccess> {

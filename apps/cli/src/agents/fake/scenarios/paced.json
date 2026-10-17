@@ -1,0 +1,8 @@
+{
+  "review": [
+    { "sleep": 1500 },
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "major", "category": "bug", "title": "Page size is too big", "body": "Use 25, like the other endpoints." } },
+    { "sleep": 500 },
+    { "finish": "One point: the page size." }
+  ]
+}

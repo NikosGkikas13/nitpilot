@@ -13,11 +13,13 @@ type Props = {
   selected: boolean;
   /** The keyboard cursor is on this row: it takes the focus, so Enter opens it and a screen reader reads it. */
   cursor: boolean;
+  /** The time now, moving on every minute (lib/time.ts `useNow`). */
+  now: Date;
   onOpen(): void;
 };
 
 /** One pull request in the list (handoff §1, item 6). */
-export function InboxRowItem({ row, viewerLogin, selected, cursor, onOpen }: Props) {
+export function InboxRowItem({ row, viewerLogin, selected, cursor, now, onOpen }: Props) {
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (cursor) button.current?.focus();
@@ -34,7 +36,7 @@ export function InboxRowItem({ row, viewerLogin, selected, cursor, onOpen }: Pro
           <span className={styles.ref}>
             {row.repo} #{row.number}
           </span>
-          <span className={styles.time}>{rowTime(row.updatedAt)}</span>
+          <span className={styles.time}>{rowTime(row.updatedAt, now)}</span>
         </span>
         <span className={styles.middle}>
           <span className={row.unread > 0 ? `${styles.title} ${styles.unread}` : styles.title} data-testid="title">

@@ -2,6 +2,7 @@ import type { InboxRow, WebMe } from '@nitpilot/protocol';
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chatRoutes } from '../../test/chat';
 import { fakeApi, renderApp, type Answer } from '../../test/render';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
@@ -24,6 +25,7 @@ function serve(opts: { me?: Partial<WebMe>; rows?: InboxRow[] } = {}) {
   return fakeApi({
     'GET /api/me': (): Answer => [200, { ...me, ...opts.me }],
     'GET /api/inbox': (): Answer => [200, { rows: opts.rows ?? ROWS }],
+    ...chatRoutes(ROWS),
   });
 }
 

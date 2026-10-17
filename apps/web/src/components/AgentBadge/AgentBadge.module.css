@@ -1,20 +1,46 @@
+/* The ring around the badge is the colour of what's behind the avatar: --side in the sidebar, set to --bg in the chat. */
 .badge {
   position: absolute;
   right: -3px;
   bottom: -3px;
-  width: 15px;
-  height: 15px;
   border-radius: 4px;
   background: var(--fg1);
-  box-shadow: 0 0 0 2px var(--side);
+  box-shadow: 0 0 0 2px var(--badge-ring, var(--side));
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+.large {
+  width: 15px;
+  height: 15px;
+}
+
+.small {
+  width: 13px;
+  height: 13px;
+}
+
+.tiny {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1.5px var(--badge-ring, var(--side));
+}
+
 .diamond {
   width: 5px;
   height: 5px;
-  background: var(--side);
+  background: var(--badge-ring, var(--side));
   transform: rotate(45deg);
+}
+
+.small .diamond {
+  width: 4px;
+  height: 4px;
+}
+
+.tiny .diamond {
+  width: 3.5px;
+  height: 3.5px;
 }

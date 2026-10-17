@@ -9679,7 +9679,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Opening a chat marks it read up to its newest item a second later, while the tab is visible, for someone in it (the inbox row's unread count goes to 0).
 - The inbox's ↑/↓ leave the page beside it alone (the chat's feed scrolls; j/k still move the cursor), and the inbox's times move on every minute (`useNow`), both W2 carry-forwards.
 
-- [ ] **Step 1: Write the failing tests for the feed's logic**
+- [x] **Step 1: Write the failing tests for the feed's logic**
 
 A fixture for every chat test. Create `apps/web/src/test/chat.ts`:
 
@@ -9947,12 +9947,12 @@ describe('useNow (the clock the inbox rows read)', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/lib`
 Expected: FAIL: `Failed to resolve import "./timeline"`, `"./banner"` and `"./snippet"`, and `itemTime`/`useNow` aren't functions yet.
 
-- [ ] **Step 3: The feed, the banner, the snippet, and time**
+- [x] **Step 3: The feed, the banner, the snippet, and time**
 
 Create `apps/web/src/lib/timeline.ts`:
 
@@ -10195,12 +10195,12 @@ function pad(n: number): string {
 }
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm test -w apps/web -- src/lib`
 Expected: PASS: timeline 5, banner 7, snippet 3, time 5, and W2's lib tests unchanged.
 
-- [ ] **Step 5: Write the failing tests for the socket and the cache**
+- [x] **Step 5: Write the failing tests for the socket and the cache**
 
 A pretend browser socket. Create `apps/web/src/test/socket.ts`:
 
@@ -10417,12 +10417,12 @@ describe('applyServerMessage', () => {
 });
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/live`
 Expected: FAIL: `Failed to resolve import "./socket"` and `"./apply"`.
 
-- [ ] **Step 7: The tab's socket, and what it writes into the cache**
+- [x] **Step 7: The tab's socket, and what it writes into the cache**
 
 Create `apps/web/src/live/socket.ts`:
 
@@ -10632,12 +10632,12 @@ function updateChat(queryClient: QueryClient, chatId: string, update: (chat: Cha
 }
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm test -w apps/web -- src/live`
 Expected: PASS, 6 and 4 tests.
 
-- [ ] **Step 9: ↑/↓ belong to the page beside the inbox (W2 carry-forward)**
+- [x] **Step 9: ↑/↓ belong to the page beside the inbox (W2 carry-forward)**
 
 W2's inbox takes ↑/↓ on the whole window, which would stop the chat's feed from scrolling with the arrow keys. Replace `apps/web/src/lib/keys.test.tsx` with (the harness gains a `<main>` holding a focusable feed, and one test):
 
@@ -10740,7 +10740,7 @@ In `apps/web/src/lib/keys.ts`, in `useInboxKeys`'s handler, add before `const at
 Run: `npm test -w apps/web -- src/lib/keys.test.tsx`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 10: Write the failing screen tests**
+- [x] **Step 10: Write the failing screen tests**
 
 Create `apps/web/src/routes/Chat/PointCard.test.tsx`:
 
@@ -11102,12 +11102,12 @@ describe('Shell (handoff "App shell and layout")', () => {
 });
 ```
 
-- [ ] **Step 11: Run them to see them fail**
+- [x] **Step 11: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/routes`
 Expected: FAIL: `test/render.tsx` imports `../live/LiveProvider`, which doesn't exist yet, so no screen test loads; `PointCard.test.tsx` can't resolve `./PointCard`.
 
-- [ ] **Step 12: The shared parts: copy, viewport, avatars, the data, and the socket's provider**
+- [x] **Step 12: The shared parts: copy, viewport, avatars, the data, and the socket's provider**
 
 The offline banner's copy button and the chat's command chips are the same, so it moves into a hook. Create `apps/web/src/lib/clipboard.ts`:
 
@@ -11372,7 +11372,7 @@ export function useLiveChat(chatId: string, afterSeq: number): void {
 }
 ```
 
-- [ ] **Step 13: The point card**
+- [x] **Step 13: The point card**
 
 Create `apps/web/src/routes/Chat/PointCard.tsx`:
 
@@ -11998,7 +11998,7 @@ Create `apps/web/src/routes/Chat/PointCard.module.css` (a card without a snippet
 }
 ```
 
-- [ ] **Step 14: The chat screen**
+- [x] **Step 14: The chat screen**
 
 Create `apps/web/src/routes/Chat/ChatHeader.tsx`:
 
@@ -13723,12 +13723,12 @@ after `cursor`; destructure `now`, and the time becomes `{rowTime(row.updatedAt,
 
 In `apps/web/src/lib/inbox.ts`, `chatPath`'s comment becomes `/** A chat's address in the app: the same URL the summary comment links to (spec §10). */`.
 
-- [ ] **Step 15: Run the web tests to see them pass**
+- [x] **Step 15: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web && npm run typecheck && npm run lint`
 Expected: PASS, 115 tests (PointCard 5, Chat 9; Inbox 14 and Shell 3 unchanged in number); typecheck and lint clean.
 
-- [ ] **Step 16: Retire the server's transcript page**
+- [x] **Step 16: Retire the server's transcript page**
 
 The web app now answers `/c/:owner/:repo/:number` (the SPA fallback), so the server's page goes:
 - Delete `apps/server/src/http/routes/transcript.tsx`, `apps/server/src/http/pages/transcript.tsx` and `apps/server/src/http/routes/transcript.db.test.ts`.
@@ -13764,7 +13764,7 @@ Activity is derived state, like a value you compute from props in render instead
 Run: `npm test -w apps/server && npm run test:e2e`
 Expected: server 700 (716 − the transcript's 16); end to end 5 (the summary comment's link is unchanged).
 
-- [ ] **Step 17: A chat that updates in a real browser (Playwright)**
+- [x] **Step 17: A chat that updates in a real browser (Playwright)**
 
 A review slow enough to see the progress line. Create `apps/cli/src/agents/fake/scenarios/paced.json`:
 
@@ -13990,7 +13990,7 @@ test('a chat updates while an agent reviews: its progress line, then its summary
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 5 tests. Run it twice more: the inbox test must pass after the chat test too.
 
-- [ ] **Step 18: Look at it (controller, in the in-app browser)**
+- [x] **Step 18: Look at it (controller, in the in-app browser)**
 
 Start the Playwright server (launch config `nitpilot-e2e-web`), then seed three chats: maya's #52 reviewed by leo's agent with two points, leo's #53 for maya to review, and maya's #54 with a security blocker that escalates:
 
@@ -14005,7 +14005,7 @@ curl -s -X POST $C/cli -d '{"login":"leo","scenario":"security.json"}'; sleep 6;
 
 Sign in with `curl -s -X POST $C/signin -d '{"login":"maya"}'` and set that cookie in the tab (`document.cookie`). Check at 1280 px and 375 px, light and dark: the header (role chip, Open on GitHub, round pips, "leo's agent · offline since …"), the waiting banner with its copy chip on #52 and the red escalation banner on #54, the summary with its counts, the cards (severity bars, category, `path:line`, the snippet with its highlighted line, a card without a snippet ending with room below its text), the details panel at 1280 px (files, people, rules, summary link); on the phone, the back arrow, the header shrinking to one line once the feed scrolls, and the inbox after ‹. Then, with #52 open, start leo's CLI (`curl -s -X POST $C/cli -d '{"login":"leo","scenario":"silent.json"}'`) and stop it: his presence turns online and back to offline without a reload. Click into the feed and press ↓: the feed scrolls and the inbox cursor stays put. Stop the server afterwards: it shares the test database with `npm test`. Screenshots in the task report.
 
-- [ ] **Step 19: Run everything, then commit**
+- [x] **Step 19: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 49, CLI 294 passed + 14 skipped, server 700, web 115; end to end 5; Playwright 5; typecheck and lint clean.

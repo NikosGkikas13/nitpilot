@@ -1,0 +1,182 @@
+/* handoff §2 "Details panel": 300 px of --side beside the chat, 18px 18px 24px, 22 px between sections. */
+.panel {
+  width: 300px;
+  flex: none;
+  min-height: 0;
+  overflow: auto;
+  background: var(--side);
+  border-left: 1px solid var(--b1);
+  padding: 18px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headingRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.headingRow .meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.file + .file {
+  border-top: 1px solid var(--b2);
+}
+
+/* rtl cuts the path from the left, so the file name stays; <bdi> keeps the path itself reading left to right. */
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--fg2);
+}
+
+.adds {
+  flex: none;
+  color: var(--ok-fg);
+}
+
+.dels {
+  flex: none;
+  color: var(--red-fg);
+}
+
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.personMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.personName {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.personStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.online {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--ok);
+}
+
+.offline {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.rules {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  font-size: 12.5px;
+}
+
+.rules dt {
+  color: var(--fg3);
+}
+
+.rules dd {
+  margin: 0;
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.rulesError {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+  font-size: 12px;
+}
+
+.summary {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--acc-text);
+  text-decoration: none;
+}

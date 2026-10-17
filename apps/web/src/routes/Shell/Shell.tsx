@@ -1,5 +1,6 @@
 import type { WebMe } from '@nitpilot/protocol';
 import { Outlet, useMatch, useNavigate } from 'react-router';
+import { LiveProvider } from '../../live/LiveProvider';
 import { useEscapeBack } from '../../lib/keys';
 import { useIsDesktop } from '../../lib/viewport';
 import { Inbox } from '../Inbox/Inbox';
@@ -7,9 +8,18 @@ import styles from './Shell.module.css';
 
 /**
  * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
- * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back.
+ * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
+ * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet.
  */
 export function Shell({ me }: { me: WebMe }) {
+  return (
+    <LiveProvider>
+      <Layout me={me} />
+    </LiveProvider>
+  );
+}
+
+function Layout({ me }: { me: WebMe }) {
   const desktop = useIsDesktop();
   const atInbox = useMatch('/') !== null;
   const navigate = useNavigate();
@@ -22,7 +32,7 @@ export function Shell({ me }: { me: WebMe }) {
       </div>
     ) : (
       <main className={styles.phone}>
-        <Outlet />
+        <Outlet context={me} />
       </main>
     );
   }
@@ -32,7 +42,7 @@ export function Shell({ me }: { me: WebMe }) {
         <Inbox me={me} />
       </div>
       <main className={styles.main}>
-        <Outlet />
+        <Outlet context={me} />
       </main>
     </div>
   );
