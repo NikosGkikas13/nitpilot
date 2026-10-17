@@ -30,7 +30,7 @@ export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch 
     const user = c.get('user');
     const chatId = c.req.param('id')!;
     readable(await askingGithub(() => chatAccess(user, chatId, deps.access)));
-    const chat = await prisma.prChat.findUnique({ where: { id: chatId }, include: { participants: true, points: true } });
+    const chat = await prisma.prChat.findUnique({ where: { id: chatId }, include: { participants: { include: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }, points: true } });
     if (!chat) throw new HttpError('not_found', 'No such chat.');
     const facts = permissionFacts(chat);
     if ((action.kind === 'resolve' || action.kind === 'continue') && !facts.points.some((p) => p.number === action.point)) {
@@ -85,7 +85,11 @@ export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch 
     const chatId = c.req.param('id');
     if (c.get('via') === 'session') readable(await askingGithub(() => chatAccess(user, chatId, deps.access)));
     const failure = await failureKind(chatId, user.githubId);
-    if (failure === null) throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    if (failure === null) {
+      // A press that came a moment after another one: the first cleared the flag and queued the job.
+      if (await hasActiveJob(chatId, user.githubId)) throw new HttpError('conflict', 'Your agent is already on it.');
+      throw new HttpError('conflict', 'Nothing of yours failed on this PR.');
+    }
     if (failure === 'github_post') {
       throw new HttpError(
         'conflict',
@@ -165,6 +169,12 @@ function whyNoReview(chat: ChatState, who: Person): string {
   if (you && activeJobFor(chat, you)) return 'Your agent is already on it.';
   if (you?.attention === 'manual_review') return "The author's agent is fixing the PR first. Press Review again once it's done.";
   return 'Your agent already reviewed the latest commit.';
+}
+
+/** This person's agent has a job in this chat that is queued or running. */
+async function hasActiveJob(chatId: string, githubId: string): Promise<boolean> {
+  const count = await prisma.job.count({ where: { chatId, participant: { githubId }, status: { in: ['queued', 'running'] } } });
+  return count > 0;
 }
 
 function stillFailed(chat: ChatState, who: Person): boolean {

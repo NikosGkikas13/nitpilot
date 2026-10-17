@@ -23,7 +23,7 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     where: { id: chatId },
     include: {
       repo: true,
-      participants: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+      participants: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } },
       points: { orderBy: { number: 'asc' } },
       jobs: { where: { status: 'running' }, select: { participantId: true } },
     },

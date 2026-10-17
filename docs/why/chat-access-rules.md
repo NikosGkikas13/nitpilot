@@ -48,7 +48,7 @@ Every change also passes one pure function that knows the roles, `can` (`chats/p
 | Resolve an escalated point | only the reviewer who raised it, and only an agent's point (a GitHub comment is resolved by resolving its thread on GitHub) | 403 |
 | Continue an escalated point | the author, or the reviewer who raised it | 403 |
 | Review an outside contributor's PR | a requested reviewer | 403 |
-| Retry a failed job | only the person whose job failed | 409 "Nothing of yours failed on this PR." (Plan 1's answer) |
+| Retry a failed job | only the person whose agent's job failed (the author, or a reviewer who is still requested); a failed post to GitHub isn't helped by a retry, so no button | 409 "Nothing of yours failed on this PR." (Plan 1's answer) |
 | Anything, on a closed PR | nobody | 409 "This PR is closed, so its chat is read-only." |
 
 Someone who can read the repo but isn't in the chat reads along, and can't act. `can` looks only at who you are, not at a point's status: if the point was resolved a moment ago, that's a race the engine notices, and the answer is a 409 that says what happened (`races-and-conflicts.md`), not a 403.

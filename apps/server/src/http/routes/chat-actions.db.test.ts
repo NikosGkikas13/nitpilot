@@ -261,14 +261,39 @@ describe('POST /api/chats/:id/retry with the session cookie', () => {
     const { chat, post } = await failedReview();
     const answers = await Promise.all([post('leo', `/api/chats/${chat.id}/retry`), post('leo', `/api/chats/${chat.id}/retry`)]);
     expect(answers.map((r) => r.status).sort()).toEqual([200, 409]);
+    // Whichever press came second hears why: the first one already put the job back to work.
+    expect(await errorOf(answers.find((r) => r.status === 409)!)).toEqual({ code: 'conflict', message: 'Your agent is already on it.' });
     expect(await prisma.job.count({ where: { chatId: chat.id, status: 'queued' } })).toBe(1);
+  });
+
+  it('tells a press that comes after the first one finished that the agent is already on it, and tells someone with nothing failed that nothing failed', async () => {
+    const { chat, post } = await failedReview();
+    expect((await post('leo', `/api/chats/${chat.id}/retry`)).status).toBe(200);
+    // The flag is cleared now; leo's job is queued. This is the order two presses at once can also take.
+    const second = await post('leo', `/api/chats/${chat.id}/retry`);
+    expect(second.status).toBe(409);
+    expect(await errorOf(second)).toEqual({ code: 'conflict', message: 'Your agent is already on it.' });
+    const nothing = await post('nina', `/api/chats/${chat.id}/retry`);
+    expect(nothing.status).toBe(409);
+    expect((await errorOf(nothing)).message).toBe('Nothing of yours failed on this PR.');
+  });
+
+  it("hides the chat from someone who can't read the repo: the same 404 as for a chat that doesn't exist", async () => {
+    const { chat, post } = await failedReview();
+    const outsider = await post('zoe', `/api/chats/${chat.id}/retry`);
+    expect(outsider.status).toBe(404);
+    expect(await errorOf(outsider)).toEqual(await errorOf(await post('zoe', '/api/chats/no-such-chat/retry')));
   });
 
   it('checks the Origin and read access for a browser, and not for a CLI', async () => {
     const { chat, post, app, users } = await failedReview();
     expect((await post('leo', `/api/chats/${chat.id}/retry`, undefined, 'https://evil.example')).status).toBe(403);
-    // GitHub isn't asked for a CLI's retry (Plan 1's rule): the failed flag is the person's own.
+    // Leo's GitHub sign-in expires. His browser is asked about the repo and has to sign in again; nothing is retried.
     await prisma.githubAuth.update({ where: { userId: users.leo.id }, data: { status: 'needs_reauth' } });
+    const browser = await post('leo', `/api/chats/${chat.id}/retry`);
+    expect(browser.status).toBe(401);
+    expect((await errorOf(browser)).code).toBe('reauth');
+    // GitHub isn't asked for a CLI's retry (Plan 1's rule): the failed flag is the person's own.
     const cli = await app.request(`/api/chats/${chat.id}/retry`, { method: 'POST', headers: { authorization: `Bearer ${(await makeCliToken(users.leo.id)).raw}` } });
     expect(cli.status).toBe(200);
   });

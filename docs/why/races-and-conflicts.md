@@ -15,7 +15,7 @@ Every chat write becomes one engine event (`point_resolve`, `point_continue`, â€
 
 The route sees that the event changed nothing (no timeline item) and answers `409 conflict` with what happened: "P1 is already resolved." or "P1 isn't escalated any more: the agents have it." (`http/routes/chat-actions.ts`). The web app shows that sentence as a toast. Nothing on screen changes from the click itself: the real change arrives on `/ws/web` like any other.
 
-Retry works the same way: the second of two Retry presses finds nothing failed any more, and gets "Your agent is already on it."
+Retry works the same way: the second of two Retry presses finds nothing failed any more, and since its job is already queued or running, gets "Your agent is already on it."
 
 ## Why 409 and not 403
 

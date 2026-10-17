@@ -14,9 +14,9 @@ function facts(over: Partial<PermissionFacts> = {}): PermissionFacts {
     trusted: true,
     authorGithubId: maya.githubId,
     participants: [
-      { githubId: maya.githubId, role: 'author', requested: false, attention: 'decision' },
-      { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'decision' },
-      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none' },
+      { githubId: maya.githubId, role: 'author', requested: false, attention: 'decision', agentFailed: false },
+      { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'decision', agentFailed: false },
+      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none', agentFailed: false },
     ],
     points: [
       { number: 1, raisedBy: leo.githubId, origin: 'agent', status: 'escalated' },
@@ -31,16 +31,38 @@ const untrusted = (attention: 'manual_review' | 'none' = 'manual_review') =>
   facts({
     trusted: false,
     participants: [
-      { githubId: maya.githubId, role: 'author', requested: false, attention: 'none' },
-      { githubId: leo.githubId, role: 'reviewer', requested: true, attention },
-      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none' },
+      { githubId: maya.githubId, role: 'author', requested: false, attention: 'none', agentFailed: false },
+      { githubId: leo.githubId, role: 'reviewer', requested: true, attention, agentFailed: false },
+      { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'none', agentFailed: false },
     ],
   });
 
 const failed = facts({
   participants: [
-    { githubId: maya.githubId, role: 'author', requested: false, attention: 'none' },
-    { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'failed' },
+    { githubId: maya.githubId, role: 'author', requested: false, attention: 'none', agentFailed: false },
+    { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'failed', agentFailed: true },
+  ],
+});
+
+// A flagged person whose agent didn't fail: posting to GitHub did (Retry can't help; signing in again does).
+const failedPosting = facts({
+  participants: [
+    { githubId: maya.githubId, role: 'author', requested: false, attention: 'none', agentFailed: false },
+    { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'failed', agentFailed: false },
+  ],
+});
+// nina's review failed, then she was removed from the reviewers: the engine no longer runs it.
+const failedAndRemoved = facts({
+  participants: [
+    { githubId: maya.githubId, role: 'author', requested: false, attention: 'none', agentFailed: false },
+    { githubId: nina.githubId, role: 'reviewer', requested: false, attention: 'failed', agentFailed: true },
+  ],
+});
+// maya's own agent failed while fixing.
+const authorFailed = facts({
+  participants: [
+    { githubId: maya.githubId, role: 'author', requested: false, attention: 'failed', agentFailed: true },
+    { githubId: leo.githubId, role: 'reviewer', requested: true, attention: 'none', agentFailed: false },
   ],
 });
 
@@ -65,7 +87,10 @@ const rows: [string, { githubId: string }, PermissionFacts, ChatAction, boolean]
   ['the author starts it', maya, untrusted(), { kind: 'review' }, false],
   ['a requested reviewer starts a review on a trusted PR (agents start there by themselves)', leo, facts(), { kind: 'review' }, false],
   ['the person whose job failed retries', leo, failed, { kind: 'retry' }, true],
+  ['the author whose agent failed retries', maya, authorFailed, { kind: 'retry' }, true],
   ['someone else retries their job', maya, failed, { kind: 'retry' }, false],
+  ["the person whose GitHub post failed (not their agent) retries: it wouldn't help", leo, failedPosting, { kind: 'retry' }, false],
+  ['a reviewer who is no longer requested retries their failed job: the engine would not run it', nina, failedAndRemoved, { kind: 'retry' }, false],
   ['someone with nothing failed retries', leo, facts(), { kind: 'retry' }, false],
   ['the author sends a note on a closed PR', maya, facts({ closed: true }), { kind: 'note' }, false],
   ['the raiser resolves P1 on a closed PR', leo, facts({ closed: true }), { kind: 'resolve', point: 1 }, false],
@@ -91,6 +116,8 @@ describe('permissionsFor', () => {
     expect(permissionsFor(leo, untrusted()).review).toBe(true);
     expect(permissionsFor(leo, untrusted('none')).review).toBe(false);
     expect(permissionsFor(leo, failed).retry).toBe(true);
+    expect(permissionsFor(leo, failedPosting).retry).toBe(false);
+    expect(permissionsFor(nina, failedAndRemoved).retry).toBe(false);
   });
 
   it('offers nothing on a closed PR', () => {

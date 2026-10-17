@@ -13,7 +13,14 @@ export type PermissionFacts = {
   /** False for a PR from an outside contributor (spec §6.1). */
   trusted: boolean;
   authorGithubId: string;
-  participants: { githubId: string; role: Role; requested: boolean; attention: Attention }[];
+  participants: {
+    githubId: string;
+    role: Role;
+    requested: boolean;
+    attention: Attention;
+    /** The newest job of this participant (in this role) failed: their agent did, not a post to GitHub (chats/failed-flags.ts). */
+    agentFailed: boolean;
+  }[];
   points: { number: number; raisedBy: string; origin: PointOrigin; status: PointStatus }[];
 };
 
@@ -40,7 +47,8 @@ export function can(viewer: { githubId: string }, facts: PermissionFacts, action
     case 'review':
       return !facts.trusted && yours.some((p) => p.role === 'reviewer' && p.requested);
     case 'retry':
-      return yours.some((p) => p.attention === 'failed');
+      // The same checks as the retry route and the engine make, so the button only shows when Retry would work.
+      return yours.some((p) => p.attention === 'failed' && p.agentFailed && (p.role === 'author' || p.requested));
   }
 }
 
@@ -57,19 +65,19 @@ export function permissionsFor(viewer: { githubId: string }, facts: PermissionFa
   };
 }
 
-/** The facts, from a chat row with its participants and points as Prisma reads them. */
+/** The facts, from a chat row with its participants (each with its newest job: `jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } }`) and points as Prisma reads them. */
 export function permissionFacts(chat: {
   closedAt: Date | null;
   trusted: boolean;
   authorGithubId: string;
-  participants: { githubId: string; role: string; requested: boolean; attention: string }[];
+  participants: { githubId: string; role: string; requested: boolean; attention: string; jobs: { status: string }[] }[];
   points: { number: number; raisedByGithubId: string; origin: string; status: string }[];
 }): PermissionFacts {
   return {
     closed: chat.closedAt !== null,
     trusted: chat.trusted,
     authorGithubId: chat.authorGithubId,
-    participants: chat.participants.map((p) => ({ githubId: p.githubId, role: p.role as Role, requested: p.requested, attention: p.attention as Attention })),
+    participants: chat.participants.map((p) => ({ githubId: p.githubId, role: p.role as Role, requested: p.requested, attention: p.attention as Attention, agentFailed: p.jobs[0]?.status === 'failed' })),
     points: chat.points.map((p) => ({ number: p.number, raisedBy: p.raisedByGithubId, origin: p.origin as PointOrigin, status: p.status as PointStatus })),
   };
 }

@@ -39,6 +39,15 @@ describe('loadChatView (spec §10, handoff §2)', () => {
     expect((await loadChatView(chat.id, reader, clis)).permissions).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
   });
 
+  it("offers Retry only when the person's agent failed, not when posting to GitHub did", async () => {
+    const { chat, leo, leoP, clis } = await scene();
+    await prisma.participant.update({ where: { id: leoP.id }, data: { attention: 'failed' } });
+    // Flagged, but no job of theirs failed: a GitHub post did, and running the agent again wouldn't help.
+    expect((await loadChatView(chat.id, leo, clis)).permissions.retry).toBe(false);
+    await prisma.job.create({ data: { chatId: chat.id, participantId: leoP.id, userId: leo.id, type: 'review', status: 'failed', round: 1, headSha: chat.headSha } });
+    expect((await loadChatView(chat.id, leo, clis)).permissions.retry).toBe(true);
+  });
+
   it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
     const { chat, leo, clis } = await scene();
     await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
