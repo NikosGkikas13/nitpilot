@@ -27,7 +27,7 @@ const CHAT: ChatResponse = chatResponse({
   ],
 });
 
-function serve(answer: () => Answer = () => [200, CHAT], extra: Record<string, () => Answer> = {}) {
+function serve(answer: () => Answer | Promise<Answer> = () => [200, CHAT], extra: Record<string, () => Answer> = {}) {
   return fakeApi({
     'GET /api/me': (): Answer => [200, me],
     'GET /api/inbox': (): Answer => [200, { rows: [] }],
@@ -145,6 +145,35 @@ describe('Chat (handoff §2)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Load earlier' }));
     expect(await screen.findByText('older')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Load earlier' })).not.toBeInTheDocument();
+  });
+
+  it('says so when "Load earlier" fails, and lets you ask again', async () => {
+    serve(() => [200, chatResponse({ items: [item(201, { body: 'newer' })], hasOlder: true })], {
+      'GET /api/chats/chat_142/messages': (): Answer => [502, { error: { code: 'github_unavailable', message: "GitHub didn't answer. Try again in a minute." } }],
+    });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Load earlier' }));
+    expect(await screen.findByText("GitHub didn't answer. Try again in a minute.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load earlier' })).toBeEnabled();
+  });
+
+  it('says it is still trying after a first answer that failed, instead of only "Loading…"', async () => {
+    let calls = 0;
+    serve(() => (++calls === 1 ? [502, { error: { code: 'github_unavailable', message: "GitHub didn't answer." } }] : new Promise<Answer>(() => {})));
+    renderApp(PATH);
+    expect(await screen.findByText('Loading…')).toBeInTheDocument();
+    expect(await screen.findByText('Still trying…')).toBeInTheDocument();
+  });
+
+  it("starts the review of an outside contributor's PR from its card", async () => {
+    const fetch = serve(() => [200, chatResponse({ view: { trusted: false, viewer: { role: 'reviewer', attention: 'manual_review', failure: null }, permissions: { note: true, resolve: [], continue: [], review: true, retry: false } } })], {
+      'POST /api/chats/chat_142/review': (): Answer => [200, { ok: true }],
+    });
+    renderApp(PATH);
+    const card = await screen.findByRole('region', { name: 'First-time contributor' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Review' }));
+    expect(await screen.findByText('Your agent will start the review.')).toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/chats/chat_142/review') && init?.method === 'POST')).toBe(true);
   });
 
   it('marks the chat read up to its newest item, for someone in it', async () => {

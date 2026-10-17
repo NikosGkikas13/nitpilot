@@ -57,7 +57,7 @@ control.post('/signin', async (c) => {
 control.post('/pr', async (c) => {
   const { number, title, author, reviewer } = (await c.req.json()) as { number: number; title: string; author: 'maya' | 'leo'; reviewer: 'maya' | 'leo' };
   const base = pull();
-  e2e.github.addPull(number);
+  e2e.github.addPull(number, `feature-${number}`);
   await e2e.deliver(
     'pull_request',
     prEvent('opened', {

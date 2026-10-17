@@ -1,20 +1,27 @@
 import type { WebMe } from '@nitpilot/protocol';
 import { Outlet, useMatch, useNavigate } from 'react-router';
+import { ToastProvider } from '../../components/Toast/Toast';
 import { LiveProvider } from '../../live/LiveProvider';
 import { useEscapeBack } from '../../lib/keys';
 import { useIsDesktop } from '../../lib/viewport';
 import { Inbox } from '../Inbox/Inbox';
 import styles from './Shell.module.css';
+import { UiStateProvider } from './UiState';
 
 /**
  * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
  * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
- * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet.
+ * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
+ * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts.
  */
 export function Shell({ me }: { me: WebMe }) {
   return (
     <LiveProvider>
-      <Layout me={me} />
+      <UiStateProvider>
+        <ToastProvider>
+          <Layout me={me} />
+        </ToastProvider>
+      </UiStateProvider>
     </LiveProvider>
   );
 }

@@ -37,6 +37,17 @@ describe('PointCard (handoff §3)', () => {
     }
   });
 
+  it('follows its point: it collapses once the point is resolved, and opens again if the point is reopened', () => {
+    const { rerender } = card(point({ status: 'escalated' }));
+    expect(screen.getByRole('article', { name: /Escalated:/ })).toBeInTheDocument();
+    const show = (p: PointView) => rerender(<PointCard point={p} thread={[]} you="maya" people={people} repoUrl="https://github.com/acme/shop-api" />);
+    show(point({ status: 'resolved' }));
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Resolved:/, expanded: false })).toBeInTheDocument();
+    show(point({ status: 'open' }));
+    expect(screen.getByRole('article', { name: /Open:/ })).toBeInTheDocument();
+  });
+
   it('starts collapsed when resolved, with how it ended, and opens and closes on click', async () => {
     const thread = [item(6, { kind: 'point_reply', author: maya, pointNumber: 1, body: 'Return null for empty cursors.', data: { resolution: 'fixed', commit: 'a1b2c3d4e5f6' } })];
     card(point({ status: 'resolved', authorResolution: 'fixed' }), thread);

@@ -15915,7 +15915,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - A point card follows its point: it collapses when the point is resolved and opens when it's reopened, unless you toggled it since; focus moves only after your own toggle. "leo resolved P1" gets the ✓ glyph.
 - Two Task 10 minors: a failed "Load earlier" is an error toast with the server's words (no unhandled rejection), and a first load whose first answer failed says "Still trying…" instead of "Loading…".
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Let a pretend answer wait, to see a button's pending state:
 
@@ -16383,12 +16383,12 @@ And in the existing tests: Review, "Load earlier" failing, "Still trying…", th
  describe('severityCounts', () => {
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/web`
 Expected: FAIL: `Toast.test.tsx` can't load `./Toast`, and 22 of the new tests fail (no composer, no buttons, no toasts, the card keeps its first open state, the inbox forgets its search, "leo resolved P1" gets a dot); the other 128 pass.
 
-- [ ] **Step 3: Toasts**
+- [x] **Step 3: Toasts**
 
 Create `apps/web/src/components/Toast/Toast.tsx`:
 
@@ -16493,7 +16493,7 @@ Create `apps/web/src/components/Toast/Toast.module.css`:
 }
 ```
 
-- [ ] **Step 4: What the inbox and the composer remember, above Shell**
+- [x] **Step 4: What the inbox and the composer remember, above Shell**
 
 Create `apps/web/src/routes/Shell/UiState.tsx`:
 
@@ -16672,7 +16672,7 @@ The inbox reads and writes its choices there. Settling the first tab moves into 
  
 ```
 
-- [ ] **Step 5: The writes, and the composer**
+- [x] **Step 5: The writes, and the composer**
 
 Create `apps/web/src/api/actions.ts`:
 
@@ -17007,7 +17007,7 @@ The chat screen gets the composer and the toasts' place, says "Still trying…",
    display: flex;
 ```
 
-- [ ] **Step 6: The banners' buttons, Review, the card, the ✓**
+- [x] **Step 6: The banners' buttons, Review, the card, the ✓**
 
 ```diff
 --- a/apps/web/src/routes/Chat/ChatBanner.tsx
@@ -17266,12 +17266,12 @@ The chat screen gets the composer and the toasts' place, says "Still trying…",
  }
 ```
 
-- [ ] **Step 7: Run the web tests to see them pass**
+- [x] **Step 7: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web && npm run typecheck && npm run lint`
 Expected: PASS, 152 tests (23 files); typecheck and lint clean.
 
-- [ ] **Step 8: An escalation in a real browser (Playwright)**
+- [x] **Step 8: An escalation in a real browser (Playwright)**
 
 A fake-agent scenario where the review raises a security point, the address pass fixes it, and the re-review settles it and raises another. Create `apps/cli/src/agents/fake/scenarios/escalation.json`:
 
@@ -17430,12 +17430,12 @@ test('an escalation: the author lets the agents continue, a round runs, and the 
 });
 ```
 
-- [ ] **Step 9: Run Playwright**
+- [x] **Step 9: Run Playwright**
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 6 tests. Run it twice more: the escalation test takes about 3 s, and must pass every time.
 
-- [ ] **Step 10: Look at it (controller, in the in-app browser)**
+- [x] **Step 10: Look at it (controller, in the in-app browser)**
 
 Start the Playwright server (launch config `nitpilot-e2e-web`), then seed maya's #61 with leo's agent raising a security point, and sign in as maya (set the cookie in the tab with `document.cookie`):
 
@@ -17449,7 +17449,7 @@ curl -s -X POST $C/signin -d '{"login":"maya"}'
 
 At 1280 px, light: the escalation banner offers maya only Continue; the composer sits under the feed with its hint, its border turns accent on focus, ⇧↵ grows it to two lines and Send turns accent; ↵ sends: the note arrives as "You · to the agents" and the toast sits above the composer, the field empty and still focused. Press Continue: toast, "maya let the agents continue on P1", "maya's agent will work on 1 point", and the banner becomes "Waiting for your agent" (her CLI is offline). Then start both CLIs (`curl -s -X POST $C/cli -d '{"login":"maya","scenario":"escalation.json"}'`, the same for leo): in dark, P1's card collapses by itself to "Resolved" when leo's agent settles it, and P2 escalates. Sign in as leo and reload: P2 offers Resolve and Continue; Resolve → "P2 resolved." and the "Ready for your approval" banner, and "leo resolved P2" has the ✓. Seed #62 the same way and look at 375 px, light and dark: the point row wraps its buttons under the title, the composer keeps its phone padding, the toast fits. For the error toast, make the tab's next Resolve answer 409 (`window.fetch` stubbed in the console for `/resolve`) and press it: the red diamond and "P1 is already resolved.". On the phone inbox, search, open a chat, press ‹: the search is still there. Stop the server afterwards: it shares the test database with `npm test`. Screenshots in the task report.
 
-- [ ] **Step 11: Run everything, then commit**
+- [x] **Step 11: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 50, CLI 294 passed + 14 skipped, server 804, web 152; end to end 5; Playwright 6; typecheck and lint clean.

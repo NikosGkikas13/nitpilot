@@ -1,0 +1,16 @@
+{
+  "review": [
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "blocker", "category": "security", "title": "The page size comes from the query string unchecked", "body": "A huge value loads every order at once." } },
+    { "finish": "One security point." }
+  ],
+  "address": [
+    { "edit": { "path": "src/orders.ts", "content": "export const pageSize = (asked: number) => Math.min(asked, 100);\n" } },
+    { "reply": { "point": 1, "resolution": "fixed", "comment": "Capped at 100." } },
+    { "finish": "Capped the page size." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Capped now." } },
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "major", "category": "security", "title": "Read the cap from the config", "body": "A cap written into the code is one operators can't see." } },
+    { "finish": "P1 is settled; one more security point." }
+  ]
+}

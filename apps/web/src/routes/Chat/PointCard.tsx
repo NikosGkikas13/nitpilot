@@ -24,19 +24,23 @@ export type People = ReadonlyMap<string, { avatarUrl: string }>;
  * around it, and the thread of replies and decisions. A resolved point starts collapsed to one line.
  */
 export function PointCard({ point, thread, you, people, repoUrl }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string }) {
-  const [open, setOpen] = useState(point.status !== 'resolved');
+  // Open unless resolved, until you toggle it. When the point's status changes (resolved by a person, reopened on
+  // GitHub), the card follows the new status again.
+  const [chosen, setChosen] = useState<{ status: PointView['status']; open: boolean } | null>(null);
+  const open = chosen?.status === point.status ? chosen.open : point.status !== 'resolved';
   // Opening or closing swaps one button for the other, so the focused one disappears: hand the focus to its successor.
-  // Only after the person toggled it, never on the first render.
-  const toggled = useRef(false);
+  // Only right after the person toggled it: never on the first render, nor when the status changes the card.
+  const moveFocus = useRef(false);
   const collapsedButton = useRef<HTMLButtonElement>(null);
   const collapseButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (!toggled.current) return;
+    if (!moveFocus.current) return;
+    moveFocus.current = false;
     (open ? collapseButton : collapsedButton).current?.focus();
   }, [open]);
   function toggle(next: boolean): void {
-    toggled.current = true;
-    setOpen(next);
+    moveFocus.current = true;
+    setChosen({ status: point.status, open: next });
   }
   const severity = SEVERITY[point.severity];
   const label = `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;

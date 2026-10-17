@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pull } from '../fixtures/github';
@@ -11,7 +11,6 @@ import { pull } from '../fixtures/github';
 export type Who = 'maya' | 'leo';
 
 const BRANCH = pull().head.ref;
-const PULL_REF = `refs/pull/${pull().number}/head`;
 
 export function localGithub() {
   const root = mkdtempSync(join(tmpdir(), 'nitpilot-e2e-'));
@@ -26,11 +25,18 @@ export function localGithub() {
   }
   const git = (cwd: string, env: Record<string, string>, ...args: string[]) => execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
 
-  // GitHub keeps refs/pull/42/head on the PR's branch tip: a hook does the same here.
+  // GitHub keeps refs/pull/<number>/head on each PR's branch tip: a hook does the same here, for the PRs listed in
+  // nitpilot-pulls ("<branch> <number>" per line; #42 on its branch, and each addPull).
   mkdirSync(dirname(bare), { recursive: true });
   const setup = home('github');
   git(root, setup, 'init', '-q', '--bare', bare);
-  writeFileSync(join(bare, 'hooks', 'post-receive'), `#!/bin/sh\nwhile read old new ref; do\n  if [ "$ref" = "refs/heads/${BRANCH}" ]; then git update-ref ${PULL_REF} "$new"; fi\ndone\n`, { mode: 0o755 });
+  const pulls = join(bare, 'nitpilot-pulls');
+  writeFileSync(pulls, `${BRANCH} ${pull().number}\n`);
+  writeFileSync(
+    join(bare, 'hooks', 'post-receive'),
+    `#!/bin/sh\nwhile read old new ref; do\n  while read branch number; do\n    if [ "$ref" = "refs/heads/$branch" ]; then git update-ref "refs/pull/$number/head" "$new"; fi\n  done < '${pulls}'\ndone\n`,
+    { mode: 0o755 },
+  );
 
   // The author's own working folder, where the PR was made (and where a human pushes from).
   const work = join(root, 'work');
@@ -68,11 +74,14 @@ export function localGithub() {
       return { clone, env };
     },
     /**
-     * Another PR on the same repo, at the same head as #42: GitHub keeps refs/pull/<number>/head for every PR,
-     * and that is what a CLI fetches (the Playwright tests open PRs with other numbers).
+     * Another PR on the same repo, on its own branch at the same head as #42. A CLI fetches refs/pull/<number>/head and
+     * an author's agent pushes to the branch, so the hook keeps the two together, as for #42 (the Playwright tests
+     * open PRs with other numbers, and one of them runs a fix).
      */
-    addPull(number: number): void {
+    addPull(number: number, branch: string): void {
+      git(root, setup, '--git-dir', bare, 'update-ref', `refs/heads/${branch}`, headSha);
       git(root, setup, '--git-dir', bare, 'update-ref', `refs/pull/${number}/head`, headSha);
+      appendFileSync(pulls, `${branch} ${number}\n`);
     },
     /** Someone pushes to the PR's branch by hand, from the PR's old head (Review Focus #2). Returns the new head. */
     pushAsHuman(files: Record<string, string>): string {

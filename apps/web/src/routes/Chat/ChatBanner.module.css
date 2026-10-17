@@ -178,6 +178,7 @@
 
 .point {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -195,7 +196,28 @@
 
 .pointTitle {
   flex: 1;
-  min-width: 0;
+  min-width: 160px;
   font-size: 13px;
   line-height: 1.35;
+}
+
+/* The banners' own buttons (Resolve, Continue, Retry): the link styles above, as buttons. */
+.button {
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.button.secondary {
+  border: 1px solid var(--b1);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.pointActions {
+  display: flex;
+  gap: 6px;
 }

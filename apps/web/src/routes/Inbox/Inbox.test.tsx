@@ -3,7 +3,7 @@ import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatRoutes } from '../../test/chat';
-import { fakeApi, renderApp, type Answer } from '../../test/render';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
 
@@ -156,6 +156,21 @@ describe('Inbox (handoff §1)', () => {
     await act(() => queryClient.invalidateQueries({ queryKey: ['inbox'] }));
     expect(await screen.findByRole('tab', { name: /Mine/ })).toHaveTextContent('1 need you');
     expect(screen.getByRole('tab', { name: /To review/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps its tab and search on a phone while a chat is open (W3 ruling)', async () => {
+    fakeViewport(false);
+    serve();
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('tab', { name: /Mine/ }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search pull requests' }), 'Prisma');
+    await userEvent.click((await list()).getByRole('option', { name: /Bump Prisma/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Bump Prisma to 7.2' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Back to inbox' }));
+    expect(await screen.findByRole('tab', { name: /Mine/, selected: true })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search pull requests' })).toHaveValue('Prisma');
+    expect(await titles()).toEqual(['Bump Prisma to 7.2']);
   });
 
   it('puts the focus back on Filter when Esc closes the menu', async () => {

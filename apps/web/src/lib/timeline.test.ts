@@ -41,6 +41,11 @@ describe('systemGlyph', () => {
     expect(systemGlyph("leo's agent is waiting (daily cap) and will try again later")).toBe('ring');
     expect(systemGlyph('Pull request opened by maya')).toBe('dot');
   });
+
+  it('gives a point a person resolved the ✓, like one resolved on GitHub', () => {
+    expect(systemGlyph('leo resolved P1')).toBe('check');
+    expect(systemGlyph('maya let the agents continue on P1 · one more round')).toBe('dot');
+  });
 });
 
 describe('severityCounts', () => {

@@ -11,12 +11,13 @@ export type Answer = [status: number, body: unknown];
 
 /**
  * A pretend Nitpilot server for component tests: answers each request by its method and path ('GET /api/me').
- * A request it has no answer for gets the server's JSON 404. Returns the fetch mock, to check what was sent.
+ * An answer can be a promise, to keep a request waiting. A request it has no answer for gets the server's JSON 404.
+ * Returns the fetch mock, to check what was sent.
  */
-export function fakeApi(routes: Record<string, () => Answer>) {
+export function fakeApi(routes: Record<string, () => Answer | Promise<Answer>>) {
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const key = `${init?.method ?? 'GET'} ${new URL(String(input), 'http://localhost').pathname}`;
-    const [status, body] = routes[key]?.() ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
+    const [status, body] = (await routes[key]?.()) ?? [404, { error: { code: 'not_found', message: 'no such route' } }];
     return new Response(status === 204 ? null : JSON.stringify(body), { status });
   });
   vi.stubGlobal('fetch', fetch);

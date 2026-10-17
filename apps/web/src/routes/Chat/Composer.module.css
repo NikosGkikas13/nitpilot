@@ -1,0 +1,95 @@
+/* handoff §2 "Composer": surface, a top border, the field centred under the feed. */
+.composer {
+  flex: none;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--b1);
+  background: var(--surface);
+}
+
+@media (max-width: 759px) {
+  .composer {
+    padding: 8px 10px 14px;
+  }
+}
+
+.inner {
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+.field {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 5px 5px 5px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-input);
+  background: var(--bg);
+  transition: border-color 150ms;
+}
+
+/* The field's border turns accent on focus; the textarea itself draws no outline. */
+.field:focus-within {
+  border-color: var(--acc);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--fg1);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: var(--fg3);
+}
+
+/* Muted while there's nothing to send, accent once there is. */
+.send {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--muted);
+  color: var(--fg3);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.send.ready {
+  background: var(--acc);
+  color: var(--on-acc);
+  cursor: pointer;
+}
+
+.send.ready:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.hint {
+  margin: 6px 0 0;
+  padding: 0 2px;
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.readOnly {
+  margin: 0;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--fg3);
+}

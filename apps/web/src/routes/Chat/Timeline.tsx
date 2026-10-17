@@ -1,4 +1,5 @@
 import type { ChatView, TimelineItem } from '@nitpilot/protocol';
+import { useReview } from '../../api/actions';
 import { useFiles } from '../../api/chat';
 import { AgentBadge } from '../../components/AgentBadge/AgentBadge';
 import { Avatar } from '../../components/Avatar/Avatar';
@@ -136,10 +137,12 @@ function ProgressLine({ chatId, you }: { chatId: string; you: string }) {
 
 /**
  * A PR from an outside contributor (handoff §2 "Untrusted PR card"): agents don't start on it by themselves, so the
- * requested reviewer skims the diff first. Its Review button arrives with the other actions (Task 13).
+ * requested reviewer skims the diff, then presses Review. With their agent offline it still queues: the "waiting"
+ * line and pill come back through the socket.
  */
 function UntrustedCard({ view }: { view: ChatView }) {
   const files = useFiles(view.id).data;
+  const review = useReview(view.id);
   const biggest = files?.files.toSorted((a, b) => b.adds + b.dels - (a.adds + a.dels))[0];
   return (
     <section className={styles.untrusted} aria-label="First-time contributor">
@@ -155,7 +158,12 @@ function UntrustedCard({ view }: { view: ChatView }) {
           {biggest ? ` · ${biggest.path}` : ''}
         </p>
       )}
-      <div>
+      <div className={styles.untrustedActions}>
+        {view.permissions.review && (
+          <button type="button" className={styles.primaryButton} disabled={review.isPending} onClick={() => review.mutate()}>
+            {review.isPending ? 'Starting…' : 'Review'}
+          </button>
+        )}
         <a className={styles.button} href={`${view.url}/files`} target="_blank" rel="noreferrer">
           View diff on GitHub <span aria-hidden="true">↗</span>
         </a>

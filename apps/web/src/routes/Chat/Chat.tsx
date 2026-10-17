@@ -5,6 +5,7 @@ import { useLocation, useOutletContext, useParams } from 'react-router';
 import { chatKey, fetchOlderItems, useChat, useMarkRead } from '../../api/chat';
 import { ApiError } from '../../api/client';
 import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Toasts, useToast } from '../../components/Toast/Toast';
 import { useLiveChat } from '../../live/LiveProvider';
 import { mergeItems } from '../../live/apply';
 import { chatBanner } from '../../lib/banner';
@@ -12,11 +13,12 @@ import { useIsDesktop, useIsWide } from '../../lib/viewport';
 import { EmptyPane, Pane } from '../Shell/Pane';
 import { ChatBanner } from './ChatBanner';
 import { ChatHeader } from './ChatHeader';
+import { Composer } from './Composer';
 import { DetailsPanel } from './DetailsPanel';
 import { Timeline } from './Timeline';
 import styles from './Chat.module.css';
 
-/** `/c/:owner/:repo/:number`: one PR's chat (handoff §2), read-only in W3, kept live over `/ws/web`. */
+/** `/c/:owner/:repo/:number`: one PR's chat (handoff §2), kept live over `/ws/web`, with the composer and the banners' actions. */
 export function Chat() {
   const me = useOutletContext<WebMe>();
   const { owner = '', repo = '', number = '' } = useParams();
@@ -24,8 +26,9 @@ export function Chat() {
   if (chat.isPending) {
     return (
       <Pane>
+        {/* A first answer that failed (GitHub slow, a 502) is asked again a few times before it's an error. */}
         <p className={styles.loading} role="status">
-          Loading…
+          {chat.failureCount > 0 ? 'Still trying…' : 'Loading…'}
         </p>
       </Pane>
     );
@@ -66,6 +69,7 @@ function ChatUnavailable({ error, onRetry }: { error: Error; onRetry: () => void
 function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cacheKey: readonly unknown[] }) {
   const { view, items, hasOlder } = data;
   const queryClient = useQueryClient();
+  const toast = useToast();
   const desktop = useIsDesktop();
   const wide = useIsWide();
   const [detailsOpen, setDetailsOpen] = useState(true);
@@ -82,6 +86,8 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
     try {
       const page = await fetchOlderItems(view.id, first.seq);
       queryClient.setQueryData<ChatResponse>(cacheKey, (chat) => chat && { ...chat, items: mergeItems(page.items, chat.items), hasOlder: page.hasOlder });
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Couldn't load earlier items.", { error: true });
     } finally {
       setLoadingEarlier(false);
     }
@@ -107,6 +113,8 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
         <div className={styles.scroll} tabIndex={0} role="region" aria-label="Timeline" onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
           <Timeline view={view} items={items} hasOlder={hasOlder} you={me.login} loadingEarlier={loadingEarlier} onLoadEarlier={() => void loadEarlier()} />
         </div>
+        <Composer view={view} me={me} />
+        <Toasts />
       </section>
       {wide && detailsOpen && <DetailsPanel view={view} />}
     </div>

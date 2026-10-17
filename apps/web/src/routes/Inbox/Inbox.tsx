@@ -1,13 +1,14 @@
 import type { InboxRow, WebMe } from '@nitpilot/protocol';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMatch, useNavigate } from 'react-router';
 import { ApiError } from '../../api/client';
 import { useInbox } from '../../api/inbox';
 import { ErrorState } from '../../components/ErrorState/ErrorState';
 import { Kbd } from '../../components/Kbd/Kbd';
-import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type StatusFilter, type Tab } from '../../lib/inbox';
+import { chatPath, defaultTab, filterRows, sortRows, tabCounts, type Tab } from '../../lib/inbox';
 import { useInboxKeys } from '../../lib/keys';
 import { useNow } from '../../lib/time';
+import { useInboxUi } from '../Shell/UiState';
 import { EmptyState } from './EmptyState';
 import styles from './Inbox.module.css';
 import { ExpiredStrip, OfflineBanner } from './InboxBanners';
@@ -23,18 +24,18 @@ export function Inbox({ me }: { me: WebMe }) {
   const open = useMatch('/c/:owner/:repo/:number')?.params;
   const search = useRef<HTMLInputElement>(null);
 
+  // The tab, search and filters live above the inbox, so a phone keeps them while a chat is open (routes/Shell/UiState.tsx).
   // Until you pick a tab, the inbox shows the one that needs you.
-  const [chosenTab, setChosenTab] = useState<Tab | null>(null);
-  const [query, setQuery] = useState('');
-  const [repos, setRepos] = useState<ReadonlySet<string>>(new Set());
-  const [statuses, setStatuses] = useState<ReadonlySet<StatusFilter>>(new Set());
+  const [{ tab: chosenTab, query, repos, statuses }, setUi] = useInboxUi();
   const [filterOpen, setFilterOpen] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const now = useNow();
 
   const all = inbox.data ?? [];
   // Settle the opening tab once, when the first data arrives: a later refetch must not flip the tab under you.
-  if (chosenTab === null && inbox.data) setChosenTab(defaultTab(inbox.data));
+  useEffect(() => {
+    if (chosenTab === null && inbox.data) setUi({ tab: defaultTab(inbox.data) });
+  }, [chosenTab, inbox.data, setUi]);
   const tab = chosenTab ?? defaultTab(all);
   const rows = sortRows(filterRows(all, { tab, query, repos, statuses }));
   const allRepos = [...new Set(all.map((r) => r.repo))].sort();
@@ -55,7 +56,7 @@ export function Inbox({ me }: { me: WebMe }) {
   });
 
   function pickTab(next: Tab) {
-    setChosenTab(next);
+    setUi({ tab: next });
     setCursor(null);
   }
 
@@ -76,7 +77,7 @@ export function Inbox({ me }: { me: WebMe }) {
             className={styles.searchInput}
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              setUi({ query: e.target.value });
               setCursor(null);
             }}
             placeholder="Search pull requests"
@@ -94,8 +95,8 @@ export function Inbox({ me }: { me: WebMe }) {
           repos={allRepos}
           chosenRepos={repos}
           chosenStatuses={statuses}
-          toggleRepo={(repo) => setRepos((set) => toggled(set, repo))}
-          toggleStatus={(status) => setStatuses((set) => toggled(set, status))}
+          toggleRepo={(repo) => setUi((ui) => ({ repos: toggled(ui.repos, repo) }))}
+          toggleStatus={(status) => setUi((ui) => ({ statuses: toggled(ui.statuses, status) }))}
         />
       </div>
 

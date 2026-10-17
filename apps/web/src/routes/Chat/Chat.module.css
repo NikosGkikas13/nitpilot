@@ -6,6 +6,8 @@
 }
 
 .column {
+  /* The toasts sit 96 px above its bottom, over the composer (components/Toast). */
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;

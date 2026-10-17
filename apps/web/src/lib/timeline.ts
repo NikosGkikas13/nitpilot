@@ -42,10 +42,10 @@ export function timelineRows(items: TimelineItem[], points: PointView[]): Timeli
   return rows;
 }
 
-/** The glyph for a system line, from what the engine says (apps/server/src/engine: "Ready for approval", "… a human decision", "… is waiting"). */
+/** The glyph for a system line, from what the engine says (apps/server/src/engine: "Ready for approval", "leo resolved P1", "… a human decision", "… is waiting"). */
 export function systemGlyph(body: string): Glyph {
   if (/a human decision/.test(body)) return 'diamond';
-  if (/^(Ready for approval|Merged)$|approved on GitHub$|resolved on GitHub$/.test(body)) return 'check';
+  if (/^(Ready for approval|Merged)$|approved on GitHub$|resolved on GitHub$| resolved P\d+$/.test(body)) return 'check';
   if (/is waiting|^Waiting for|offline/.test(body)) return 'ring';
   return 'dot';
 }

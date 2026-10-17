@@ -1,0 +1,34 @@
+/* handoff "Toasts": inverted, 13px, 8px 12px padding, centred 96px above the composer. Server sentences can be
+   long, so they wrap instead of being cut. */
+.place {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(480px, calc(100% - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  background: var(--fg1);
+  color: var(--bg);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-toast);
+}
+
+/* An error: the red diamond, then the text (handoff). */
+.diamond {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--red);
+  transform: rotate(45deg);
+}

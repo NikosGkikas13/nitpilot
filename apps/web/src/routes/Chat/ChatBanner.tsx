@@ -1,15 +1,16 @@
-import { BRAND, type ChatView } from '@nitpilot/protocol';
+import { BRAND, type ChatView, type PointView } from '@nitpilot/protocol';
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
+import { useContinue, useResolve, useRetry } from '../../api/actions';
 import type { Banner } from '../../lib/banner';
 import { useCopy } from '../../lib/clipboard';
 import { itemTime } from '../../lib/time';
 import styles from './ChatBanner.module.css';
 
 /**
- * The banner under the header (handoff §2 "Banners", §10). Only text and links in W3: the buttons that change the
- * chat (Resolve, Continue, Retry) arrive with the other actions in Task 13. An escalation is an alert; the rest
- * are statuses.
+ * The banner under the header (handoff §2 "Banners", §10). Its buttons (Resolve, Continue, Retry) show only what
+ * `view.permissions` allows, and wait for the server's answer; the chat itself changes when `/ws/web` says so. An
+ * escalation is an alert; the rest are statuses.
  */
 export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView }) {
   const here = useLocation();
@@ -40,6 +41,7 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
               <li key={p.number} className={styles.point}>
                 <span className={styles.pointId}>P{p.number}</span>
                 <span className={styles.pointTitle}>{p.title}</span>
+                <PointActions view={view} point={p} />
               </li>
             ))}
           </ul>
@@ -47,8 +49,8 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
       );
     case 'failed_job':
       return (
-        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why. To run it again:">
-          <CopyCommand command={`${BRAND.cli} retry ${view.url}`} />
+        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why.">
+          {view.permissions.retry && <RetryButton chatId={view.id} />}
         </Strip>
       );
     case 'failed_post':
@@ -102,6 +104,42 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
         </Strip>
       );
   }
+}
+
+/**
+ * Resolve (dark) and Continue (outlined) for one escalated point, each only if you may. While one is on its way,
+ * both wait: the two would contradict each other.
+ */
+function PointActions({ view, point }: { view: ChatView; point: PointView }) {
+  const resolve = useResolve(view.id);
+  const cont = useContinue(view.id);
+  const mayResolve = view.permissions.resolve.includes(point.number);
+  const mayContinue = view.permissions.continue.includes(point.number);
+  if (!mayResolve && !mayContinue) return null;
+  const busy = resolve.isPending || cont.isPending;
+  return (
+    <div className={styles.pointActions}>
+      {mayResolve && (
+        <button type="button" className={`${styles.button} ${styles.dark}`} disabled={busy} onClick={() => resolve.mutate(point.number)}>
+          {resolve.isPending ? 'Resolving…' : 'Resolve'}
+        </button>
+      )}
+      {mayContinue && (
+        <button type="button" className={`${styles.button} ${styles.secondary}`} disabled={busy} onClick={() => cont.mutate(point.number)} title="Let the agents keep going on this point">
+          {cont.isPending ? 'Continuing…' : 'Continue'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RetryButton({ chatId }: { chatId: string }) {
+  const retry = useRetry(chatId);
+  return (
+    <button type="button" className={`${styles.button} ${styles.dark}`} disabled={retry.isPending} onClick={() => retry.mutate()}>
+      {retry.isPending ? 'Retrying…' : 'Retry'}
+    </button>
+  );
 }
 
 /** One banner line: a glyph, a title and a line under it, then what you can do. */

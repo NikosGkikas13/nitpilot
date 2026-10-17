@@ -28,7 +28,8 @@ export async function startCli(login: 'maya' | 'leo', scenario: string): Promise
 }
 
 export async function stopCli(login: 'maya' | 'leo'): Promise<void> {
-  await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
+  const res = await fetch(`${CONTROL_URL}/cli`, { method: 'DELETE', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`stopping ${login}'s CLI failed: ${res.status} ${await res.text()}`);
 }
 
 /**
