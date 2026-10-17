@@ -63,6 +63,7 @@ describe('point_resolve', () => {
     const chat = escalated({ phase: 'closed', closed: true });
     const out = run(chat, { type: 'point_resolve', who: leo, point: 1 });
     expect(out.timeline).toEqual([]);
+    expect(out.commands).toEqual([]);
     expect(out.chat).toEqual(chat);
   });
 });
@@ -102,6 +103,25 @@ describe('point_continue', () => {
     const out = run({ ...chat, authorGithubId: 'gh-sam' }, { type: 'point_continue', who: leo, point: 1 });
     expect(out.chat.extraRounds).toBe(0);
     expect(out.chat.phase).toBe('addressing');
+    expect(commandsOf(out, 'enqueue_job')).toEqual([]);
+  });
+
+  it('hands a GitHub point back too (only Resolve is limited to agent points)', () => {
+    const chat = escalated({ points: [pointOf(1, leo, { origin: 'github', status: 'escalated', escalationReason: 'round_limit' })] });
+    for (const who of [leo, maya]) {
+      const out = run(chat, { type: 'point_continue', who, point: 1 });
+      expect(out.chat.points[0]).toMatchObject({ status: 'open', escalationReason: null });
+      expect(out.timeline[0]!.body).toBe(`${who.login} let the agents continue on P1`);
+    }
+  });
+
+  it("grants the extra round even when the author's last pass failed: no job is queued now, the retry uses the round", () => {
+    const chat = escalated({ addressPasses: 3, points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'round_limit' })] });
+    chat.participants[0]!.attention = 'failed';
+    const out = run(chat, { type: 'point_continue', who: maya, point: 1 });
+    expect(out.chat.extraRounds).toBe(1);
+    expect(out.chat.points[0]!.status).toBe('open');
+    expect(out.timeline[0]!.body.endsWith(' · one more round')).toBe(true);
     expect(commandsOf(out, 'enqueue_job')).toEqual([]);
   });
 

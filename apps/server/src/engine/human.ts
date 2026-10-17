@@ -29,6 +29,8 @@ export function onPointContinue(ctx: Ctx, e: Ev<'point_continue'>): void {
   if (e.who.githubId !== chat.authorGithubId && e.who.githubId !== pt.raisedBy) return;
   const a = author(chat);
   const extraRound = !!a && onNitpilot(a) && chat.addressPasses >= roundLimit(ctx);
+  // The round is granted now and used by the next address pass, which may come later: after `nitpilot retry` when the
+  // author's last job failed (advance queues nothing until then), or when a draft PR is marked ready.
   if (extraRound) chat.extraRounds += 1;
   pt.status = 'open';
   pt.escalationReason = null;
