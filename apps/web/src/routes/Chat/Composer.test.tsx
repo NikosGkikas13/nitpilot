@@ -106,6 +106,86 @@ describe('Composer (handoff §2 "Composer")', () => {
     expect(await field()).toHaveValue('Half a thought');
   });
 
+  it('does not send again after you come back to a chat whose note is still on its way, and clears the draft when it lands', async () => {
+    fakeViewport(true);
+    let answer: (a: Answer) => void = () => {};
+    const fetch = serve({ notes: () => new Promise<Answer>((resolve) => (answer = resolve)) });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Still going{Enter}');
+    await userEvent.click(screen.getByRole('option', { name: /Retry webhooks/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Retry webhooks' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: /Add cursor pagination/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Add cursor pagination' })).toBeInTheDocument();
+    const box = await field();
+    expect(box).toHaveValue('Still going');
+    await userEvent.type(box, '{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(sentNotes(fetch)).toHaveLength(1);
+    answer([200, { ok: true }]);
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('refreshes only this chat when a send is refused as forbidden (403), so the screen shows what you may do now', async () => {
+    fakeViewport(true);
+    let refused = false;
+    const fetch = serve({
+      chat: () => [200, chatResponse({ view: { title: 'Add cursor pagination', ...(refused ? { permissions: { note: false, resolve: [], continue: [], review: false, retry: false } } : {}) } })],
+      notes: () => {
+        refused = true;
+        return [403, { error: { code: 'forbidden', message: "You can't message the agents in this chat." } }];
+      },
+    });
+    const { queryClient } = renderApp(PATH);
+    await userEvent.click(await screen.findByRole('option', { name: /Retry webhooks/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Retry webhooks' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: /Add cursor pagination/ }));
+    await userEvent.type(await field(), 'Hello{Enter}');
+    expect(await screen.findByText("You're reading along. Only the author and the reviewers can message the agents.")).toBeInTheDocument();
+    expect(queryClient.getQueryState(['chat', 'acme', 'shop-api', '143'])?.isInvalidated).toBe(false);
+    expect(fetch.mock.calls.filter(([url]) => String(url) === '/api/chats/acme/shop-api/142').length).toBeGreaterThan(1);
+  });
+
+  it("leaves the other cached chats alone when a send finds this chat gone", async () => {
+    fakeViewport(true);
+    let gone = false;
+    serve({
+      chat: () => (gone ? [404, { error: { code: 'not_found', message: 'No such chat.' } }] : [200, chatResponse({ view: { title: 'Add cursor pagination' } })]),
+      notes: () => {
+        gone = true;
+        return [404, { error: { code: 'not_found', message: 'No such chat.' } }];
+      },
+    });
+    const { queryClient } = renderApp(PATH);
+    await userEvent.click(await screen.findByRole('option', { name: /Retry webhooks/ }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Retry webhooks' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: /Add cursor pagination/ }));
+    await userEvent.type(await field(), 'Hello{Enter}');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Nothing here' })).toBeInTheDocument());
+    expect(queryClient.getQueryState(['chat', 'acme', 'shop-api', '143'])?.isInvalidated).toBe(false);
+  });
+
+  it('asks who you are again when a send is refused as signed out (401)', async () => {
+    const fetch = serve({ notes: () => [401, { error: { code: 'unauthorized', message: 'Sign in to continue.' } }] });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Hello{Enter}');
+    expect(await screen.findByText('Sign in to continue.')).toBeInTheDocument();
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url) === '/api/me').length).toBeGreaterThan(1));
+  });
+
+  it('shows "Sign in with GitHub again" when a send finds your GitHub sign-in expired', async () => {
+    let expired = false;
+    serve({
+      chat: () => (expired ? [401, { error: { code: 'reauth', message: 'Your GitHub sign-in expired.' } }] : [200, chatResponse({ view: { title: 'Add cursor pagination' } })]),
+      notes: () => {
+        expired = true;
+        return [401, { error: { code: 'reauth', message: 'Your GitHub sign-in expired.' } }];
+      },
+    });
+    renderApp(PATH);
+    await userEvent.type(await field(), 'Hello{Enter}');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Sign in with GitHub again' })).toBeInTheDocument());
+  });
+
   it('shows "Nothing here" when a send finds the chat gone (Review Focus 2)', async () => {
     let gone = false;
     serve({

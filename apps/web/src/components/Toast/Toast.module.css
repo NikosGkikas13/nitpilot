@@ -1,10 +1,12 @@
-/* handoff "Toasts": inverted, 13px, 8px 12px padding, centred 96px above the composer. Server sentences can be
-   long, so they wrap instead of being cut. */
+/* handoff "Toasts": inverted, 13px, 8px 12px padding, centred above the composer. Server sentences can be long, so
+   they wrap instead of being cut. The place is 8px over the top of its positioned parent (the chat's footer, which
+   holds the composer), so it rises as the field grows: for a one-line field that is where the handoff's 96px from
+   the bottom puts it. */
 .place {
   position: absolute;
   z-index: 7;
   left: 50%;
-  bottom: 96px;
+  bottom: calc(100% + 8px);
   transform: translateX(-50%);
   width: max-content;
   max-width: min(480px, calc(100% - 32px));

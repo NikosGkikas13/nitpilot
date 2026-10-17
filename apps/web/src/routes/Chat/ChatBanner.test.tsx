@@ -1,5 +1,5 @@
 import type { ChatView, Permissions, WebMe } from '@nitpilot/protocol';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatResponse, point } from '../../test/chat';
@@ -78,6 +78,21 @@ describe('the escalation banner (handoff §2 "Escalated")', () => {
     await userEvent.click((await rowOf('P1')).getByRole('button', { name: 'Resolve' }));
     const toast = await screen.findByText('P1 is already resolved.');
     expect(toast.closest('[data-error]')).not.toBeNull();
+  });
+
+  it('refetches the chat when a press is refused as forbidden (403), so a button you may no longer press goes', async () => {
+    let refused = false;
+    serve(escalatedView({ resolve: [1] }), {
+      'GET /api/chats/acme/shop-api/142': (): Answer => [200, chatResponse({ view: escalatedView({ resolve: refused ? [] : [1] }) })],
+      'POST /api/chats/chat_142/points/1/resolve': (): Answer => {
+        refused = true;
+        return [403, { error: { code: 'forbidden', message: 'Only leo, who raised P1, can resolve it.' } }];
+      },
+    });
+    renderApp(PATH);
+    await userEvent.click((await rowOf('P1')).getByRole('button', { name: 'Resolve' }));
+    expect(await screen.findByText('Only leo, who raised P1, can resolve it.')).toBeInTheDocument();
+    await waitFor(() => expect(within(screen.getByRole('alert')).queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument());
   });
 
   it('lets the agents continue, and says so', async () => {

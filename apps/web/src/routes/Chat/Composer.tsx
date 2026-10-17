@@ -1,4 +1,5 @@
 import type { ChatView, WebMe } from '@nitpilot/protocol';
+import { useIsMutating } from '@tanstack/react-query';
 import { useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import { useNote } from '../../api/actions';
 import { useDraft } from '../Shell/UiState';
@@ -27,9 +28,12 @@ function readOnly(view: ChatView, me: WebMe): string | null {
 function Field({ chatId }: { chatId: string }) {
   const [draft, setDraft] = useDraft(chatId);
   const note = useNote(chatId);
+  // Counted by the write's key, not by this field's own state: open another chat and come back while a note is still
+  // on its way, and this new field still waits for it. (The draft is cleared by the write itself, api/actions.ts.)
+  const sending = useIsMutating({ mutationKey: ['note', chatId] }) > 0;
   const box = useRef<HTMLTextAreaElement>(null);
   const text = draft.trim();
-  const canSend = text !== '' && !note.isPending;
+  const canSend = text !== '' && !sending;
 
   // The field grows with its lines, up to MAX_HEIGHT.
   useLayoutEffect(() => {
@@ -41,11 +45,8 @@ function Field({ chatId }: { chatId: string }) {
 
   function send(): void {
     if (!canSend) return;
-    // The draft goes once the server took it, even if you opened another chat meanwhile; not if you kept typing.
-    note.mutateAsync(text).then(
-      () => setDraft((current) => (current.trim() === text ? '' : current)),
-      () => {}, // the toast already says why, and the text stays
-    );
+    // A failure needs no handling here: the toast says why, and the text stays.
+    note.mutate(text);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {

@@ -6,14 +6,18 @@
 }
 
 .column {
-  /* The toasts sit 96 px above its bottom, over the composer (components/Toast). */
-  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--bg);
+}
+
+.footer {
+  /* The composer, and the box the toasts sit on top of (components/Toast): a toast rises with a tall field. */
+  position: relative;
+  flex: none;
 }
 
 .scroll {

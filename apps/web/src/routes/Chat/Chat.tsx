@@ -113,8 +113,10 @@ function ChatScreen({ me, data, cacheKey }: { me: WebMe; data: ChatResponse; cac
         <div className={styles.scroll} tabIndex={0} role="region" aria-label="Timeline" onScroll={(e) => setCollapsed(e.currentTarget.scrollTop > 48)}>
           <Timeline view={view} items={items} hasOlder={hasOlder} you={me.login} loadingEarlier={loadingEarlier} onLoadEarlier={() => void loadEarlier()} />
         </div>
-        <Composer view={view} me={me} />
-        <Toasts />
+        <div className={styles.footer}>
+          <Composer view={view} me={me} />
+          <Toasts />
+        </div>
       </section>
       {wide && detailsOpen && <DetailsPanel view={view} />}
     </div>

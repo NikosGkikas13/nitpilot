@@ -41,8 +41,8 @@ export function useToast(): ToastApi {
 }
 
 /**
- * Where the toast appears: centred 96 px above the bottom of the nearest positioned box (the chat's column, so above
- * the composer). The status line is always there, empty between toasts, so screen readers hear each new one.
+ * Where the toast appears: centred, 8 px above the top of the nearest positioned box (the chat's footer, which holds
+ * the composer, so it clears the field however tall it grows). The status line is always there, empty between toasts, so screen readers hear each new one.
  */
 export function Toasts() {
   const shown = useContext(ShownContext);
