@@ -23,6 +23,13 @@ describe('timelineRows', () => {
     const rows = timelineRows([item(40, { kind: 'human', body: 'hi' }), item(41, { kind: 'point_reply', pointNumber: 3 })], [point({ number: 3 })]);
     expect(rows.map((r) => r.kind)).toEqual(['human', 'point']);
   });
+
+  it("waits for the card of a point it doesn't know yet instead of showing its item as a person's message", () => {
+    // chat.items arrives before chat.state (the server debounces state), so the point isn't in the view yet.
+    const items = [item(1, { kind: 'human', body: 'hi' }), item(2, { kind: 'point_raised', pointNumber: 7 }), item(3, { kind: 'point_reply', pointNumber: 7, body: 'Now 25.' })];
+    const rows = timelineRows(items, []);
+    expect(rows.map((r) => r.kind)).toEqual(['human']);
+  });
 });
 
 describe('systemGlyph', () => {

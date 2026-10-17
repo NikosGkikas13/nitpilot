@@ -26,6 +26,8 @@ export function timelineRows(items: TimelineItem[], points: PointView[]): Timeli
   const rows: TimelineRow[] = [];
   for (const item of items) {
     const point = item.pointNumber === null ? undefined : byNumber.get(item.pointNumber);
+    // chat.items can arrive before the chat.state that brings the point: its card appears with that state.
+    if (item.pointNumber !== null && !point) continue;
     if (point) {
       if (!placed.has(point.number)) rows.push({ kind: 'point', point, thread: threads.get(point.number) ?? [] });
       placed.add(point.number);

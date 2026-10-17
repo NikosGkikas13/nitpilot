@@ -162,3 +162,51 @@ describe('Chat (handoff §2)', () => {
     expect(screen.getByRole('link', { name: 'Back to inbox' })).toHaveAttribute('href', '/');
   });
 });
+
+describe('Chat: a REST answer and the socket (Review Focus 1)', () => {
+  it('keeps an item the socket delivered while the chat was being fetched again', async () => {
+    fakeViewport(true);
+    let calls = 0;
+    let finish: (a: Answer) => void = () => {};
+    const slow = new Promise<Answer>((resolve) => (finish = resolve));
+    // The first GET answers at once; the second waits until the test lets it go.
+    const fetch = serve(() => [200, CHAT]);
+    const original = fetch.getMockImplementation()!;
+    fetch.mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/api/chats/acme/shop-api/142') && ++calls === 2) {
+        const [status, body] = await slow;
+        return new Response(JSON.stringify(body), { status });
+      }
+      return original(input, init);
+    });
+    const { sockets, queryClient } = renderApp(PATH);
+    await screen.findByRole('region', { name: /PR chat/ });
+    act(() => sockets.last().open());
+
+    // A second GET starts and hangs...
+    void queryClient.invalidateQueries({ queryKey: ['chat'] });
+    await waitFor(() => expect(calls).toBe(2));
+    // ...the socket delivers seq 6 meanwhile...
+    act(() => sockets.last().receive({ v: 1, t: 'chat.items', d: { chatId: 'chat_142', items: [item(6, { body: 'Round 2 started' })], lastSeq: 6 } }));
+    expect(await screen.findByText('Round 2 started')).toBeInTheDocument();
+    // ...and the GET answers with what it read before seq 6 was committed.
+    await act(async () => finish([200, CHAT]));
+    await waitFor(() => expect(queryClient.isFetching({ queryKey: ['chat'] })).toBe(0));
+    expect(screen.getByText('Round 2 started')).toBeInTheDocument();
+  });
+
+  it('keeps the pages loaded with "Load earlier" when the chat is fetched again', async () => {
+    serve(() => [200, chatResponse({ items: [item(201, { body: 'newer' })], hasOlder: true })], {
+      'GET /api/chats/chat_142/messages': (): Answer => [200, { items: [item(200, { body: 'older' })], hasOlder: false }],
+    });
+    const { queryClient } = renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Load earlier' }));
+    expect(await screen.findByText('older')).toBeInTheDocument();
+    await act(async () => queryClient.invalidateQueries({ queryKey: ['chat'] }));
+    // Read the cache itself: the screen redraws a moment later.
+    expect(queryClient.getQueryData<ChatResponse>(['chat', 'acme', 'shop-api', '142'])).toMatchObject({ hasOlder: false });
+    expect(queryClient.getQueryData<ChatResponse>(['chat', 'acme', 'shop-api', '142'])!.items.map((i) => i.seq)).toEqual([200, 201]);
+    expect(screen.getByText('older')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load earlier' })).not.toBeInTheDocument();
+  });
+});
