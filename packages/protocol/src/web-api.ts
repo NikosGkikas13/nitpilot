@@ -7,14 +7,29 @@ import { Snippet } from './job-result';
 // answer with these, as the CLI does with api.ts.
 
 /**
+ * A person's settings (spec §8 `User`), kept on the server and edited on the Settings page: the Auto defaults for new
+ * chats (reviewing and fixing), and how many agent runs each of your CLIs starts in a day. `PUT /api/me/settings`
+ * takes and answers it, and every connected CLI gets it in `welcome` and in `settings` (spec §10).
+ */
+export const Settings = z.object({
+  autoReview: z.boolean(),
+  autoAddress: z.boolean(),
+  dailyJobCap: z.number().int().min(5).max(200),
+});
+export type Settings = z.infer<typeof Settings>;
+
+/**
  * `GET /api/me`, as the web app reads it: the CLI's answer plus who you are. The CLI parses the same answer
- * with `MeResponse`, which ignores the extra fields. Later milestones add settings, onboarding and push.
+ * with `MeResponse`, which ignores the extra fields. Later milestones add onboarding and push.
  */
 export const WebMe = MeResponse.extend({
   id: z.string(),
   githubId: z.string(),
   /** True while any of your CLIs is connected: the inbox's "Your agent is offline" banner reads it. */
   agentOnline: z.boolean(),
+  settings: Settings,
+  /** Agent runs your connected CLIs started today, added up, each counted from its own midnight (the Settings page's usage bar). */
+  usedToday: z.number().int().nonnegative(),
 });
 export type WebMe = z.infer<typeof WebMe>;
 

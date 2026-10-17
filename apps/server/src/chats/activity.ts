@@ -19,8 +19,11 @@ export type ActiveJob = { login: string; userId: string; status: 'queued' | 'run
 /** A person's CLIs: the repos each connected one has linked, and when any of them was last seen. */
 export type Presence = { connected: ReadonlySet<string>[]; lastSeenAt: Date | null };
 
-/** The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. */
-export type LiveClis = { connectionsFor(userId: string): readonly { repos: ReadonlySet<string> }[] };
+/**
+ * The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. `usedToday` is how many agent runs
+ * that CLI started today (its last ping said so).
+ */
+export type LiveClis = { connectionsFor(userId: string): readonly { repos: ReadonlySet<string>; usedToday: number }[] };
 
 export type ActivityFacts = {
   phase: Phase;

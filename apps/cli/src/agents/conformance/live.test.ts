@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { BundlePoint, JobBundle } from '@nitpilot/protocol';
+import type { AgentJobBundle, BundlePoint } from '@nitpilot/protocol';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { prRepo, type FileSpec } from '../../../test/git-fixtures';
 import { tempDir } from '../../../test/temp';
@@ -45,7 +45,7 @@ type LiveJob = { ctx: McpJobContext; run: AgentRun; lines: string[]; elapsedMs: 
 /** Check out a test PR the way the executor does, and run the agent on it with `prompt` (default: the job's own). */
 async function runLive(adapter: AgentAdapter, mode: AgentMode, opts: { head?: Record<string, FileSpec>; scrub?: boolean; prompt?: (ctx: McpJobContext) => string; timeoutMs?: number } = {}): Promise<LiveJob> {
   const pr = prRepo({ head: opts.head });
-  const bundle: JobBundle = mode === 'editor' ? addressJob(pr.bundle) : pr.bundle;
+  const bundle: AgentJobBundle = mode === 'editor' ? addressJob(pr.bundle) : pr.bundle;
   const configDir = tempDir();
   const worktree = await prepareWorktree(bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: opts.scrub === false ? [] : scrubPathsFor(adapter.scrubPaths), env: pr.env });
   onTestFinished(() => worktree.cleanup());
@@ -62,7 +62,7 @@ async function runLive(adapter: AgentAdapter, mode: AgentMode, opts: { head?: Re
   return { ctx, run, lines, elapsedMs: Date.now() - started, tmpDir };
 }
 
-function addressJob(bundle: JobBundle): JobBundle {
+function addressJob(bundle: AgentJobBundle): AgentJobBundle {
   const point = (number: number, title: string): BundlePoint => ({
     number, origin: 'agent', raisedBy: 'leo', path: 'src/orders.ts', line: 1, side: 'RIGHT', severity: 'major', category: 'bug',
     title, body: `${title}.`, status: 'open', authorResolution: null, round: 1, trusted: true, thread: [],

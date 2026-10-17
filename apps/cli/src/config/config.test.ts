@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tempDir } from '../../test/temp';
-import { configDir, configPath, DEFAULT_SERVER, loadConfig, loadConfigFile, saveConfig } from './config';
+import { configDir, configPath, DEFAULT_SERVER, ignoredSettingsIn, loadConfig, loadConfigFile, saveConfig } from './config';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -24,10 +24,8 @@ describe('loadConfig', () => {
       server: DEFAULT_SERVER,
       token: null,
       agent: 'claude-code',
-      auto: { review: true, address: true },
       concurrency: 1,
       jobTimeoutMinutes: 15,
-      dailyJobCap: 40,
       apiBilling: false,
       repos: {},
     });
@@ -58,6 +56,33 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ env: {}, dir })).toThrow(/Unknown setting "concurency" in .*config\.json/);
     writeConfig(dir, JSON.stringify({ repos: { 'acme/shop-api': { path: '/code/shop-api', setpu: ['npm', 'ci'] } } }));
     expect(() => loadConfig({ env: {}, dir })).toThrow('Unknown setting "repos.acme/shop-api.setpu"');
+  });
+});
+
+describe('settings that moved to the server', () => {
+  it('accepts a Plan 1 config.json that still has auto and dailyJobCap, and ignores them', () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ token: 'nit_old', auto: { review: false, address: true }, dailyJobCap: 10 }));
+    const config = loadConfig({ env: {}, dir });
+    expect(config.token).toBe('nit_old');
+    expect(config).not.toHaveProperty('auto');
+    expect(config).not.toHaveProperty('dailyJobCap');
+    expect(ignoredSettingsIn(dir)).toEqual(['auto', 'dailyJobCap']);
+  });
+
+  it('drops them from the file the next time it is saved', () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ dailyJobCap: 10 }));
+    saveConfig(loadConfigFile(dir), dir);
+    expect(JSON.parse(readFileSync(configPath(dir), 'utf8'))).not.toHaveProperty('dailyJobCap');
+    expect(ignoredSettingsIn(dir)).toEqual([]);
+  });
+
+  it('finds none in a missing or unreadable file', () => {
+    const dir = tempDir();
+    expect(ignoredSettingsIn(dir)).toEqual([]);
+    writeConfig(dir, '{ not json');
+    expect(ignoredSettingsIn(dir)).toEqual([]);
   });
 });
 

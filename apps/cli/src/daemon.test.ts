@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JobBundle, RunningJob, ServerToCli } from '@nitpilot/protocol';
-import { jobBundle, jobResult } from '@nitpilot/protocol/test-samples';
+import { jobBundle, jobResult, settings } from '@nitpilot/protocol/test-samples';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { recordOut } from '../test/out';
 import { startStubHub, type StubConnection } from '../test/stub-hub';
@@ -51,13 +51,16 @@ async function setup(over: Partial<DaemonOptions> = {}, opts: { daemonToken?: st
   return { hub, daemon, out, notified };
 }
 
-/** The daemon's next connection: wait for its hello and answer welcome. */
-async function welcomed(hub: Awaited<ReturnType<typeof startStubHub>>) {
+/** The daemon's next connection: wait for its hello and answer welcome, with the default settings or these. */
+async function welcomed(hub: Awaited<ReturnType<typeof startStubHub>>, over: Parameters<StubConnection['welcome']>[0] = {}) {
   const conn = await hub.connection();
   const hello = await conn.next('hello');
-  conn.welcome();
+  conn.welcome(over);
   return { conn, hello };
 }
+
+/** Job `n` of a burst: its own id, so each one is a new job. */
+const nth = (n: number) => ({ ...jobBundle(), jobId: `job_${n}` });
 
 /** Wait for a ping (one every 50 ms) whose running list is exactly `expected`. */
 function pingListing(conn: StubConnection, expected: RunningJob[]) {
@@ -87,22 +90,25 @@ describe('startDaemon', () => {
     const { hub } = await setup();
     const { hello } = await welcomed(hub);
     expect(hello.d).toEqual({
-      protocol: 1,
+      protocol: 2,
       cliVersion: CLI_VERSION,
       device: 'test laptop',
       agent: { id: 'fake', version: null, modes: ['reviewer', 'editor'] },
       repos: ['acme/shop-api'],
       concurrency: 1,
       running: [],
-      defaults: { autoReview: true, autoAddress: true },
     });
   });
 
-  it('pings on a timer once welcomed', async () => {
-    const { hub } = await setup();
+  it("pings on a timer once welcomed, with how many jobs it started today", async () => {
+    const configDir = tempDir();
+    writeFileSync(join(configDir, 'state.json'), JSON.stringify({ day: localDay(new Date()), jobs: 7 }));
+    const { hub } = await setup({ configDir });
     const { conn } = await welcomed(hub);
-    expect((await conn.next('ping')).d.running).toEqual([]);
-    expect((await conn.next('ping')).d.running).toEqual([]);
+    expect((await conn.next('ping')).d).toEqual({ running: [], usedToday: 7 });
+    conn.send(assign());
+    await conn.next('job.complete');
+    await conn.nextMatching('ping', (ping) => ping.d.usedToday === 8);
   });
 
   it('runs a job and sends its result; the job counts as running until the server acks it', async () => {
@@ -132,6 +138,35 @@ describe('startDaemon', () => {
     conn.send(assign());
     expect((await conn.next('job.reject')).d).toEqual({ ...JOB, reason: 'daily_cap' });
     expect(executor).not.toHaveBeenCalled();
+  });
+
+  it('takes the daily cap from welcome: with a cap of 5, the sixth job is turned down', async () => {
+    const executor = vi.fn<JobExecutor>(async () => done);
+    const { hub, out } = await setup({ executor });
+    const { conn } = await welcomed(hub, { dailyJobCap: 5 });
+    for (let n = 1; n <= 6; n++) conn.send(assign(nth(n)));
+    expect((await conn.next('job.reject')).d).toEqual({ jobId: 'job_6', attempt: 1, reason: 'daily_cap' });
+    expect(executor).toHaveBeenCalledTimes(5);
+    expect(out.text()).toContain("today's 5 jobs are done");
+  });
+
+  it('takes a new cap from a settings message while it runs', async () => {
+    const executor = vi.fn<JobExecutor>(async () => done);
+    const { hub, notified } = await setup({ executor });
+    const { conn } = await welcomed(hub, { dailyJobCap: 5 });
+    for (let n = 1; n <= 5; n++) conn.send(assign(nth(n)));
+    await vi.waitFor(() => expect(executor).toHaveBeenCalledTimes(5));
+    conn.send({ v: 1, t: 'settings', d: { ...settings(), dailyJobCap: 10 } });
+    await handled(conn, notified);
+    conn.send(assign(nth(6)));
+    await conn.nextMatching('job.complete', (m) => m.d.jobId === 'job_6');
+    expect(executor).toHaveBeenCalledTimes(6);
+
+    // Lowered below what already ran today: the next job is turned down.
+    conn.send({ v: 1, t: 'settings', d: { ...settings(), dailyJobCap: 5 } });
+    await handled(conn, notified);
+    conn.send(assign(nth(7)));
+    expect((await conn.next('job.reject')).d).toEqual({ jobId: 'job_7', attempt: 1, reason: 'daily_cap' });
   });
 
   it('sends a change of stage at once, and the same stage at most every 2 s (spec §10)', async () => {

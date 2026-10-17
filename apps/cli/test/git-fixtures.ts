@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { JobBundle } from '@nitpilot/protocol';
+import type { AgentJobBundle } from '@nitpilot/protocol';
 import { jobBundle } from '@nitpilot/protocol/test-samples';
 import { tempDir } from './temp';
 
@@ -78,7 +78,7 @@ export function prRepo(opts: { base?: Record<string, FileSpec>; head?: Record<st
   const clone = join(box.root, 'clone');
   box.git(box.root, 'clone', '-q', base, clone);
 
-  const bundle: JobBundle = { ...sample, pr: { ...sample.pr, baseSha, headSha }, git: { ...sample.git, baseCloneUrl: base } };
+  const bundle: AgentJobBundle = { ...sample, pr: { ...sample.pr, baseSha, headSha }, git: { ...sample.git, baseCloneUrl: base } };
 
   /** Someone else pushes to the PR's branch (Review Focus #2). Returns the new head. */
   function pushAsHuman(files: Record<string, FileSpec>): string {

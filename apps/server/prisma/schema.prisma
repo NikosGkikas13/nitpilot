@@ -11,12 +11,17 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  githubId  String   @unique
-  login     String
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  githubId    String   @unique
+  login       String
+  avatarUrl   String?
+  /// The Settings page (spec §8 `User`): the Auto defaults for new chats, and the jobs each CLI starts in a day.
+  /// Sent to the person's CLIs in `welcome` and `settings` (spec §10).
+  autoReview  Boolean  @default(true)
+  autoAddress Boolean  @default(true)
+  dailyJobCap Int      @default(40)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   githubAuth    GithubAuth?
   sessions      WebSession[]
@@ -259,7 +264,7 @@ model Job {
   activeFor        String?     @unique
   userId           String
   user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// review | re_review | address
+  /// review | re_review | address | publish
   type             String
   /// queued | running | done | failed | cancelled
   status           String      @default("queued")
@@ -315,20 +320,20 @@ model Task {
 /// Every webhook delivery, kept 14 days. The primary key stops double processing.
 model RawEvent {
   /// X-GitHub-Delivery
-  deliveryId String   @id
+  deliveryId String    @id
   event      String
   action     String?
   repoId     String?
   body       String
   /// received | processed | ignored | retrying | failed (gave up after the last attempt)
-  status     String   @default("received")
+  status     String    @default("received")
   note       String?
   /// Failed processing attempts so far
-  attempts   Int      @default(0)
+  attempts   Int       @default(0)
   /// When a `retrying` delivery is processed again
   retryAt    DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([status])
   @@index([createdAt])

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
-import { ActionResponse, ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, WebMe, type ChatView, type InboxRow } from './web-api';
+import { settings } from './test-samples';
+import { ActionResponse, ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, Settings, WebMe, type ChatView, type InboxRow } from './web-api';
 
 describe('web API bodies', () => {
-  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12 };
 
   it('round-trips WebMe', () => {
     expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
@@ -11,6 +12,13 @@ describe('web API bodies', () => {
 
   it('leaves the CLI able to read the same /api/me answer', () => {
     expect(MeResponse.parse(me)).toEqual({ login: 'maya', avatarUrl: null, githubAuth: 'ok' });
+  });
+
+  it('takes settings with a daily cap of 5 to 200 jobs', () => {
+    expect(Settings.parse({ autoReview: false, autoAddress: true, dailyJobCap: 5 })).toEqual({ autoReview: false, autoAddress: true, dailyJobCap: 5 });
+    expect(Settings.parse({ ...settings(), dailyJobCap: 200 }).dailyJobCap).toBe(200);
+    for (const dailyJobCap of [4, 201, 12.5]) expect(Settings.safeParse({ ...settings(), dailyJobCap }).success).toBe(false);
+    expect(Settings.safeParse({ autoReview: true, dailyJobCap: 40 }).success).toBe(false);
   });
 
   it('knows every inbox status, and nothing else', () => {

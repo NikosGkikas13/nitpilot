@@ -1,5 +1,6 @@
-import type { JobBundle } from './job-bundle';
+import type { AgentJobBundle, PublishBundle } from './job-bundle';
 import type { JobResult } from './job-result';
+import type { Settings } from './web-api';
 
 // Realistic sample values for tests in every workspace. Each call returns a fresh copy.
 
@@ -21,10 +22,11 @@ export function jobResult(): JobResult {
     decisions: [],
     replies: [],
     push: null,
+    draft: null,
   };
 }
 
-export function jobBundle(): JobBundle {
+export function jobBundle(): AgentJobBundle {
   return {
     jobId: 'job_1',
     attempt: 1,
@@ -56,4 +58,26 @@ export function jobBundle(): JobBundle {
     notes: [],
     rules: { ignorePaths: ['**/*.lock'], alwaysEscalate: ['security'], maxPoints: 20 },
   };
+}
+
+/** A publish job: push the draft commit that address job `job_7` left on this laptop (spec §11 "Publish jobs"). */
+export function publishBundle(): PublishBundle {
+  return {
+    jobId: 'job_9',
+    attempt: 1,
+    type: 'publish',
+    pr: { repoFullName: 'acme/shop-api', number: 142, headRef: 'feature/cursor-pagination', url: 'https://github.com/acme/shop-api/pull/142' },
+    git: {
+      baseCloneUrl: 'https://github.com/acme/shop-api.git',
+      fetchRef: 'refs/pull/142/head',
+      headRepoPath: 'acme/shop-api',
+      headBranch: 'feature/cursor-pagination',
+    },
+    draft: { jobId: 'job_7', sha: 'c'.repeat(40), from: 'a'.repeat(40) },
+  };
+}
+
+/** A person's settings as they are by default (spec §8 `User`). */
+export function settings(): Settings {
+  return { autoReview: true, autoAddress: true, dailyJobCap: 40 };
 }

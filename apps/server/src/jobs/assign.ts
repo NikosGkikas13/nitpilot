@@ -2,8 +2,11 @@ import { LEASE_SEC, type AgentMode, type JobBundle, type JobType } from '@nitpil
 import { prisma } from '../lib/prisma';
 import type { CliConnection, CliHub } from '../ws/cli-hub';
 
-/** The agent mode each job type needs (spec §12.2): reviews only read, address jobs edit files. */
-const MODE_FOR: Record<JobType, AgentMode> = { review: 'reviewer', re_review: 'reviewer', address: 'editor' };
+/**
+ * The agent mode each job type needs (spec §12.2): reviews only read, address jobs edit files. A publish job runs no
+ * agent (null). Until publish jobs are routed to the device that holds the draft, the assigner leaves them queued.
+ */
+const MODE_FOR: Record<JobType, AgentMode | null> = { review: 'reviewer', re_review: 'reviewer', address: 'editor', publish: null };
 
 /** When a lease handed out now runs out (spec §9.4: 90 seconds, renewed by every ping). */
 export function leaseUntil(now: Date): Date {
@@ -82,6 +85,7 @@ export class JobAssigner {
     let assigned = 0;
     for (const job of jobs) {
       const mode = MODE_FOR[job.type as JobType];
+      if (!mode) continue; // a publish job: nothing hands one out yet
       // Pick from `clis`, the snapshot `load` was counted for, not from the hub's live list: a CLI that
       // connected mid-pass has no count here (its hello wakes the assigner, so the next pass has it). A
       // snapshot connection that was replaced or dropped since is skipped: it has a dead socket.

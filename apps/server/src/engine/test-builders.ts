@@ -112,7 +112,7 @@ export function newPoint(over: Partial<NewPoint> = {}): NewPoint {
 }
 
 export function result(over: Partial<JobResult> = {}): JobResult {
-  return { summary: 'Done.', points: [], decisions: [], replies: [], push: null, ...over };
+  return { summary: 'Done.', points: [], decisions: [], replies: [], push: null, draft: null, ...over };
 }
 
 export function rulesWith(over: Partial<TeamRules> = {}): TeamRules {

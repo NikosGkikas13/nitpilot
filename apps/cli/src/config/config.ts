@@ -24,23 +24,31 @@ const RepoConfig = z.strictObject({
 });
 
 /**
+ * Settings Plan 1 kept in config.json that live on the server from Plan 2 on (spec §13): the Auto defaults and the daily
+ * job cap, edited on the web app's Settings page. A file that still has them is accepted; they are ignored, and dropped
+ * the next time the file is saved. `nitpilot doctor` says where they went.
+ */
+export const IGNORED_SETTINGS = ['auto', 'dailyJobCap'] as const;
+
+/**
  * config.json (spec §13). Every field has a default, so a missing or empty file is valid.
  * Names it doesn't know are rejected, so a typo is an error instead of a setting silently ignored (and dropped on the next save).
+ * IGNORED_SETTINGS are taken out first, so an old file isn't an error.
  */
-export const PersonalConfigSchema = z.strictObject({
-  server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
-  token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
-  agent: AgentId.default('claude-code'),
-  /** Defaults for new chats. Ignored in Plan 1, where Auto is always on. */
-  auto: z.strictObject({ review: z.boolean(), address: z.boolean() }).default({ review: true, address: true }),
-  concurrency: z.number().int().min(1).max(4).default(1),
-  jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
-  dailyJobCap: z.number().int().min(1).default(40),
-  /** Let Claude Code bill your API key. Off: ANTHROPIC_API_KEY never reaches the agent (spec §12.2). */
-  apiBilling: z.boolean().default(false),
-  /** Linked clones, keyed `owner/name`. */
-  repos: z.record(z.string(), RepoConfig).default({}),
-});
+export const PersonalConfigSchema = z.preprocess(
+  withoutIgnoredSettings,
+  z.strictObject({
+    server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
+    token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
+    agent: AgentId.default('claude-code'),
+    concurrency: z.number().int().min(1).max(4).default(1),
+    jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
+    /** Let Claude Code bill your API key. Off: ANTHROPIC_API_KEY never reaches the agent (spec §12.2). */
+    apiBilling: z.boolean().default(false),
+    /** Linked clones, keyed `owner/name`. */
+    repos: z.record(z.string(), RepoConfig).default({}),
+  }),
+);
 export type PersonalConfig = z.infer<typeof PersonalConfigSchema>;
 
 /** Where the config lives: $NITPILOT_CONFIG_DIR, else $XDG_CONFIG_HOME/nitpilot, else ~/.config/nitpilot. */
@@ -80,6 +88,24 @@ export function saveConfig(cfg: PersonalConfig, dir: string): void {
   writeFileSync(tmp, `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
   chmodSync(tmp, 0o600); // mode only applies to new files; a leftover .tmp could have another one
   renameSync(tmp, path);
+}
+
+/** The file's settings without IGNORED_SETTINGS. Anything that isn't an object is left for the schema to refuse. */
+function withoutIgnoredSettings(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw;
+  const ignored: readonly string[] = IGNORED_SETTINGS;
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => !ignored.includes(key)));
+}
+
+/** Which of IGNORED_SETTINGS the config file in `dir` still has. None when there's no file or it can't be read. */
+export function ignoredSettingsIn(dir: string): string[] {
+  let raw: Record<string, unknown>;
+  try {
+    raw = readRaw(configPath(dir));
+  } catch {
+    return []; // loading the config reports that problem
+  }
+  return IGNORED_SETTINGS.filter((key) => Object.hasOwn(raw, key));
 }
 
 function readRaw(path: string): Record<string, unknown> {

@@ -4,7 +4,11 @@
 
 ## The file (`apps/cli/src/config/config.ts`)
 
-`~/.config/nitpilot/config.json` holds the server's address, this device's token from `nitpilot login`, which agent you use, your limits (`concurrency`, `jobTimeoutMinutes`, `dailyJobCap`) and your linked clones (`repos`). Every setting has a default (spec §13), so a missing file just means "all defaults". The file is checked with a zod schema when it's read: a misspelled setting name or a wrong value gives an error that names the file and the setting, instead of being ignored (the same rule as `.nitpilot.yml`).
+`~/.config/nitpilot/config.json` holds the server's address, this device's token from `nitpilot login`, which agent you use, your limits (`concurrency`, `jobTimeoutMinutes`) and your linked clones (`repos`). Every setting has a default (spec §13), so a missing file just means "all defaults". The file is checked with a zod schema when it's read: a misspelled setting name or a wrong value gives an error that names the file and the setting, instead of being ignored (the same rule as `.nitpilot.yml`).
+
+## Settings that moved to the server
+
+Plan 1's file also held `auto` (the Auto defaults for new chats) and `dailyJobCap`. From Plan 2 they live on the server and are edited on the web app's Settings page, so every laptop of yours uses the same ones ([websockets.md](websockets.md), "Settings live on the server"). An old file that still has them isn't an error: the schema takes them out before it checks the rest (`IGNORED_SETTINGS` in `config/config.ts`), they're left out of the file the next time it's saved, and `nitpilot doctor` says where they went.
 
 ## One folder per account
 

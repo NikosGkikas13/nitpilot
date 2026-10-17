@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatResponse, chatView, item, point } from '../../test/chat';
 import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
 
-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
 const maya = { githubId: '1001', login: 'maya' };
 const leo = { githubId: '1002', login: 'leo' };
 const PATH = '/c/acme/shop-api/142';

@@ -45,14 +45,13 @@ export function hello(over: Partial<Hello['d']> = {}): Hello {
       repos: [],
       concurrency: 1,
       running: [],
-      defaults: { autoReview: true, autoAddress: true },
       ...over,
     },
   };
 }
 
-export function ping(running: RunningJob[]): Extract<CliToServer, { t: 'ping' }> {
-  return { v: 1, t: 'ping', d: { running } };
+export function ping(running: RunningJob[], usedToday = 0): Extract<CliToServer, { t: 'ping' }> {
+  return { v: 1, t: 'ping', d: { running, usedToday } };
 }
 
 /** The HTTP status a WebSocket upgrade request to `path` gets: 101 when the server accepts it. */

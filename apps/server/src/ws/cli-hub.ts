@@ -1,10 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import {
-  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli,
+  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli, type Settings,
 } from '@nitpilot/protocol';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { authenticateCliToken, touchCliToken, type CliAuth } from '../auth/cli-token';
+import { SETTINGS_COLUMNS, settingsOf } from '../auth/users';
 import { prisma } from '../lib/prisma';
 import { SerialQueue } from '../lib/serial-queue';
 import { refuse } from './upgrade-router';
@@ -33,6 +34,8 @@ export type CliConnection = {
   lastMessageAt: Date;
   /** For each run bound to this CLI (keyed `jobId#attempt`), how many pings in a row left it out (jobs/leases.ts). */
   missedPings: Map<string, number>;
+  /** Agent runs this device started today, from its last ping (jobs/leases.ts). 0 until the first one. */
+  usedToday: number;
   send(msg: ServerToCli): boolean;
   close(code: number, reason: string): void;
   terminate(): void;
@@ -87,6 +90,17 @@ export class CliHub {
   /** Send to the CLI with this token. False when it isn't connected. */
   send(tokenId: string, msg: ServerToCli): boolean {
     return this.byToken.get(tokenId)?.send(msg) ?? false;
+  }
+
+  /**
+   * The person changed their settings (`PUT /api/me/settings`): tell each of their connected CLIs, which take the
+   * new daily cap from their next job on (spec §10 `settings`). Returns how many got it. A CLI that's offline gets
+   * the settings in its next welcome.
+   */
+  sendSettings(userId: string, settings: Settings): number {
+    let sent = 0;
+    for (const conn of this.connectionsFor(userId)) if (conn.send({ v: 1, t: 'settings', d: settings })) sent += 1;
+    return sent;
   }
 
   /** Close every socket. With 1012 on shutdown, the CLIs reconnect. */
@@ -186,7 +200,7 @@ export class CliHub {
       ws.close(CLOSE_CODES.upgradeCli, `This server speaks protocol ${PROTOCOL_VERSION}. Upgrade ${BRAND.cli}.`);
       return null;
     }
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { login: true } });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { login: true, ...SETTINGS_COLUMNS } });
     const conn: CliConnection = {
       tokenId: auth.tokenId,
       userId: auth.userId,
@@ -197,6 +211,7 @@ export class CliHub {
       concurrency: hello.d.concurrency,
       lastMessageAt: new Date(),
       missedPings: new Map(),
+      usedToday: 0,
       send: (msg) => {
         if (ws.readyState !== ws.OPEN) return false;
         ws.send(JSON.stringify(msg));
@@ -210,7 +225,8 @@ export class CliHub {
     const replaced = this.byToken.get(auth.tokenId);
     replaced?.close(CLOSE_CODES.replaced, `Another ${BRAND.cli} start on this device took over.`);
     this.byToken.set(auth.tokenId, conn);
-    conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC } });
+    // The settings live on the server (spec §8 `User`): the CLI takes its daily job cap from here.
+    conn.send({ v: 1, t: 'welcome', d: { login: user.login, pingSec: PING_SEC, leaseSec: LEASE_SEC, settings: settingsOf(user) } });
     // The same device again (back from sleep) was online all along, as far as anyone watching can tell.
     if (!replaced) this.presenceChanged(conn, 'connected');
     return conn;

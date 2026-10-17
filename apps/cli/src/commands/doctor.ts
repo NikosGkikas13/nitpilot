@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { BRAND, type AgentId } from '@nitpilot/protocol';
 import { adapterFor } from '../agents/registry';
-import { loadConfig, type PersonalConfig } from '../config/config';
+import { configDir, ignoredSettingsIn, loadConfig, type PersonalConfig } from '../config/config';
 import { githubReposInRemoteList } from '../git/remotes';
 import { ServerClient } from '../http';
 import { terminal, type Out } from '../out';
@@ -21,6 +21,8 @@ export type DoctorDeps = {
   /** Is the agent the config names installed and logged in? */
   detectAgent(config: PersonalConfig): Promise<AgentCheck>;
   isFolder(path: string): boolean;
+  /** Settings config.json still has that live on the server now (`auto`, `dailyJobCap`). */
+  ignoredSettings(): string[];
 };
 
 const MIN_NODE = 22;
@@ -37,7 +39,7 @@ export async function runDoctor(deps: DoctorDeps): Promise<Check[]> {
     // Without a config there's nothing more to check.
     return [...checks, { name: 'Config', status: 'fail', detail: (err as Error).message }];
   }
-  checks.push({ name: 'Config', status: 'ok', detail: 'valid' });
+  checks.push(checkIgnoredSettings(deps.ignoredSettings()));
 
   const client = deps.client(config);
   const server = await checkServer(client, config.server);
@@ -63,6 +65,13 @@ async function checkGit(deps: DoctorDeps): Promise<Check> {
   const r = await deps.run('git', ['--version']);
   if (r.code === 0) return { name: 'git', status: 'ok', detail: r.stdout.trim() };
   return { name: 'git', status: 'fail', detail: 'git is not installed (or not on your PATH)' };
+}
+
+/** A config that is valid, but still holds settings that moved to the server: say where they went. */
+function checkIgnoredSettings(keys: string[]): Check {
+  if (keys.length === 0) return { name: 'Config', status: 'ok', detail: 'valid' };
+  const [verb, pronoun] = keys.length === 1 ? ['is', 'it'] : ['are', 'them'];
+  return { name: 'Config', status: 'warn', detail: `${keys.join(' and ')} in config.json ${verb} ignored: set ${pronoun} in the web app's Settings page.` };
 }
 
 async function checkServer(client: Pick<ServerClient, 'health'>, server: string): Promise<Check> {
@@ -162,6 +171,7 @@ export async function doctor(deps: { env?: Record<string, string | undefined>; o
     client: (config) => new ServerClient(config.server, config.token),
     detectAgent: (config) => detectAgentFor(config, env),
     isFolder: (path) => statSync(path, { throwIfNoEntry: false })?.isDirectory() ?? false,
+    ignoredSettings: () => ignoredSettingsIn(configDir(env)),
   });
   return printChecks(checks, out);
 }

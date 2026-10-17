@@ -1,4 +1,4 @@
-import { BRAND, type JobBundle, type PushInfo } from '@nitpilot/protocol';
+import { BRAND, type AgentJobBundle, type PushInfo } from '@nitpilot/protocol';
 import type { JobIo } from '../daemon';
 import { remoteFor } from '../git/remotes';
 import { JobFailure } from './job-failure';
@@ -7,7 +7,7 @@ import { scrubPlan } from './scrub';
 import type { Worktree } from './worktree';
 
 export type PushContext = {
-  bundle: JobBundle;
+  bundle: AgentJobBundle;
   worktree: Pick<Worktree, 'git' | 'headSha'>;
   /** Where the PR's branch lives: a remote name (pushTarget) or a URL. Null for a draft, which never pushes. */
   remote: string | null;
@@ -25,7 +25,7 @@ export type PushContext = {
  * the repo itself). The executor asks before the agent runs, so a deleted fork or a missing remote
  * fails early with a clear reason, not after the work (spec §11 step 6).
  */
-export async function pushTarget(bundle: JobBundle, place: GitPlace): Promise<string> {
+export async function pushTarget(bundle: AgentJobBundle, place: GitPlace): Promise<string> {
   return pickPushRemote((await safeGit(place, ['remote', '-v'])).stdout, bundle.git.headRepoPath);
 }
 

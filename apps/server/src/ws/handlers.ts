@@ -41,8 +41,7 @@ export function jobMessageHandler(deps: { dispatch: Dispatch; platform: Platform
         return ack(conn, msg.id, await report(deps.dispatch, conn, { type: 'job_failed', jobId, attempt, reason, retryable: true }));
       }
       default:
-        // hello and ping belong to jobs/leases.ts. job.progress is for Plan 2's live status line;
-        // nothing shows it in Plan 1.
+        // hello and ping (with its usedToday) belong to jobs/leases.ts; job.progress to ws/web-wire.ts.
         return;
     }
   };

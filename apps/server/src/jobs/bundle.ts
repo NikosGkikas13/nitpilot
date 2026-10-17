@@ -1,4 +1,4 @@
-import { JobBundle } from '@nitpilot/protocol';
+import { AgentJobBundle } from '@nitpilot/protocol';
 import { prRefOf } from '../chats/refs';
 import { rulesFromJson } from '../chats/rules';
 import { prisma } from '../lib/prisma';
@@ -9,7 +9,7 @@ import type { PlatformReads } from '../platform/types';
  * fetch its code, the points with their threads, the human notes and the team rules. It's built
  * right after the job was assigned, so `attempt` and `headSha` are the ones the CLI must use.
  */
-export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads, 'gitSpec'>): Promise<JobBundle> {
+export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads, 'gitSpec'>): Promise<AgentJobBundle> {
   const job = await prisma.job.findUniqueOrThrow({
     where: { id: jobId },
     include: {
@@ -34,7 +34,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
   const loginOf = (githubId: string) => logins.get(githubId) ?? githubId;
 
   // parse() checks every enum the database stores as a plain string, so a bad row fails here, not in the CLI.
-  return JobBundle.parse({
+  return AgentJobBundle.parse({
     jobId: job.id,
     attempt: job.attempt,
     type: job.type,

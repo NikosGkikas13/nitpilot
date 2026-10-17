@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BundlePoint, JobBundle } from '@nitpilot/protocol';
+import type { AgentJobBundle, BundlePoint } from '@nitpilot/protocol';
+import { publishBundle } from '@nitpilot/protocol/test-samples';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { overSsh, prRepo } from '../../test/git-fixtures';
 import { rawPost } from '../../test/mcp-agent';
@@ -24,7 +25,7 @@ function openPoint(number: number, title: string): BundlePoint {
 }
 
 /** The author's address job for `pr`, with the happy scenario's two points open. */
-function addressJob(pr: Pr, over: Partial<JobBundle> = {}): JobBundle {
+function addressJob(pr: Pr, over: Partial<AgentJobBundle> = {}): AgentJobBundle {
   return { ...pr.bundle, type: 'address', you: { login: 'maya', role: 'author' }, points: [openPoint(1, 'Page size is too big'), openPoint(2, 'Mention it in the README')], ...over };
 }
 
@@ -252,5 +253,7 @@ describe('createExecutor', () => {
     const { execute } = await executorFor(pr, { adapter: { ...fakeAdapter(), modes: ['reviewer'] } });
     expect(await execute({ ...pr.bundle, pr: { ...pr.bundle.pr, repoFullName: 'acme/other' } }, jobIo().io)).toEqual({ kind: 'reject', reason: 'repo_not_linked' });
     expect(await execute(addressJob(pr), jobIo().io)).toEqual({ kind: 'reject', reason: 'unsupported_mode' });
+    // Publish jobs aren't run yet (Task 17); the server doesn't queue any.
+    expect(await execute(publishBundle(), jobIo().io)).toEqual({ kind: 'reject', reason: 'unsupported_mode' });
   });
 });

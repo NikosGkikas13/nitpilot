@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http';
-import { CLI_WS_PATH, type CliToServer, type ServerToCli } from '@nitpilot/protocol';
+import { CLI_WS_PATH, type CliToServer, type ServerToCli, type Settings } from '@nitpilot/protocol';
+import { settings as defaultSettings } from '@nitpilot/protocol/test-samples';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { startStubServer, type StubRoutes } from './stub-server';
 
@@ -44,9 +45,9 @@ export class StubConnection {
     this.ws.close(code, reason);
   }
 
-  /** Answer the hello the way the hub does. */
-  welcome(login = 'maya'): void {
-    this.send({ v: 1, t: 'welcome', d: { login, pingSec: 25, leaseSec: 90 } });
+  /** Answer the hello the way the hub does, with the person's settings (the defaults unless a test says otherwise). */
+  welcome(settings: Partial<Settings> = {}, login = 'maya'): void {
+    this.send({ v: 1, t: 'welcome', d: { login, pingSec: 25, leaseSec: 90, settings: { ...defaultSettings(), ...settings } } });
   }
 
   /** Take the next message of type `t` out of the inbox, waiting up to `ms`. Other messages stay. */

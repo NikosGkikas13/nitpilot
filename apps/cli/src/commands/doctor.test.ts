@@ -35,6 +35,7 @@ function healthy(over: Partial<DoctorDeps> = {}): DoctorDeps {
     client: () => server,
     detectAgent: async () => ({ ok: true, version: '2.1.29 (Claude Code)' }),
     isFolder: () => true,
+    ignoredSettings: () => [],
     ...over,
   };
 }
@@ -78,6 +79,14 @@ describe('runDoctor', () => {
     const checks = await runDoctor(healthy({ loadConfig }));
     expect(find(checks, 'Config')).toEqual({ name: 'Config', status: 'fail', detail: 'Invalid setting "concurrency" in config.json' });
     expect(find(checks, 'Server')).toBeUndefined();
+  });
+
+  it('says where auto and dailyJobCap went when config.json still has them', async () => {
+    const both = await runDoctor(healthy({ ignoredSettings: () => ['auto', 'dailyJobCap'] }));
+    expect(find(both, 'Config')).toEqual({ name: 'Config', status: 'warn', detail: "auto and dailyJobCap in config.json are ignored: set them in the web app's Settings page." });
+    const one = await runDoctor(healthy({ ignoredSettings: () => ['dailyJobCap'] }));
+    expect(find(one, 'Config')?.detail).toBe("dailyJobCap in config.json is ignored: set it in the web app's Settings page.");
+    expect(find(one, 'Server')).toMatchObject({ status: 'ok' });
   });
 
   it("fails when the server can't be reached, and skips the account checks", async () => {

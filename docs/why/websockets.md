@@ -9,9 +9,21 @@ Polling means the CLI asks every N seconds. With N = 60 a review starts up to a 
 ## The life of one connection (`ws/cli-hub.ts`)
 
 1. **Upgrade.** A WebSocket starts as an ordinary HTTP request carrying `Upgrade: websocket`. Before agreeing, the hub checks the `Authorization: Bearer nit_…` header (`auth/cli-token.ts`). No valid token: a plain `401`, and no socket at all.
-2. **hello / welcome.** The CLI's first message is `hello`: its protocol version, device name, linked repos, how many jobs it runs at once, which agent it has, and which jobs it's still running. The server answers `welcome` with the user's login and the ping and lease timings. A CLI on an old protocol is closed with `4426` ("upgrade").
+2. **hello / welcome.** The CLI's first message is `hello`: its protocol version, device name, linked repos, how many jobs it runs at once, which agent it has, and which jobs it's still running. The server answers `welcome` with the user's login, the ping and lease timings, and the person's settings. A CLI on an old protocol is closed with `4426` ("upgrade").
 3. **Messages.** Every message is JSON in one envelope, `{ v: 1, t: "<type>", id?, re?, d: {…} }`, checked with the zod schemas in `packages/protocol/src/cli-messages.ts`. A message that doesn't fit is logged and dropped; the socket stays open. One CLI's messages are handled one at a time, in order (`lib/serial-queue.ts`).
 4. **Closing.** The close code tells the CLI what to do next: `4401` log in again (the token was revoked), `4426` upgrade, `4409` another `nitpilot start` on this device took over (stop), `1012` the server is restarting (reconnect). Any other code means "reconnect after a pause", such as `1008` (the CLI broke the rules, for example by not saying hello first) and `1011` (the server hit an error halfway through the handshake).
+
+## Protocol versions
+
+Two numbers travel, and they mean different things. `v` in every message is the **envelope's** version (`ENVELOPE_VERSION`, still 1): the shape `{ v, t, id?, re?, d }`. `hello.protocol` is the **CLI protocol's** version (`PROTOCOL_VERSION` in `packages/protocol/src/envelope.ts`): which messages exist and what's inside them. Plan 1 spoke protocol 1; Plan 2 speaks 2, which adds publish jobs, draft results, settings from the server and `usedToday` in `ping`, and drops `hello.defaults`.
+
+The server only talks to CLIs on its own version. An old CLI's hello still parses (zod drops the key it no longer knows), so the hub can read its version and close it with `4426` and a sentence saying to upgrade, instead of ignoring it until the hello timer runs out. It's an API version in a URL (`/v1/…` vs `/v2/…`), checked once at the start of the conversation instead of on every request.
+
+## Settings live on the server
+
+A person's Auto defaults and daily job cap are columns on `User` (spec §8), edited on the web app's Settings page (`PUT /api/me/settings`, `http/routes/settings.ts`). In Plan 1 they sat in each laptop's `config.json`, so two laptops could disagree and the web app couldn't show them. Now the server is the source of truth and the CLIs follow it: `welcome` carries the settings, and a change is pushed at once to every connected CLI of that person (`settings`, `CliHub.sendSettings`). A CLI that was offline gets the new ones in its next `welcome`. It's a server-state cache that the server keeps fresh by pushing, like `setQueryData` from a socket message instead of waiting for a refetch.
+
+The cap itself is still enforced by each CLI, counting from its own midnight (`apps/cli/src/state.ts`), because the CLI is what spends the agent quota. Every `ping` reports the count as `usedToday`, and `GET /api/me` adds up the person's connected CLIs for the Settings page's usage bar.
 
 ## One connection per device
 

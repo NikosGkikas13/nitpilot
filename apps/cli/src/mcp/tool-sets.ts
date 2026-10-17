@@ -1,4 +1,4 @@
-import type { JobType } from '@nitpilot/protocol';
+import type { AgentJobType } from '@nitpilot/protocol';
 
 /**
  * Which tools each job type gets (spec §11, the tool table). A review only reads and raises points; a
@@ -8,10 +8,10 @@ export const TOOL_SETS = {
   review: ['get_job', 'list_changed_files', 'get_diff', 'get_file', 'add_point', 'finish'],
   re_review: ['get_job', 'list_changed_files', 'get_diff', 'get_file', 'add_point', 'decide_point', 'finish'],
   address: ['get_job', 'list_changed_files', 'get_diff', 'get_file', 'reply_to_point', 'run_check', 'finish'],
-} as const satisfies Record<JobType, readonly string[]>;
+} as const satisfies Record<AgentJobType, readonly string[]>;
 
-export type ToolName = (typeof TOOL_SETS)[JobType][number];
+export type ToolName = (typeof TOOL_SETS)[AgentJobType][number];
 
-export function toolsFor(type: JobType): readonly ToolName[] {
+export function toolsFor(type: AgentJobType): readonly ToolName[] {
   return TOOL_SETS[type];
 }

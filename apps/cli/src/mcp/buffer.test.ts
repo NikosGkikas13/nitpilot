@@ -13,7 +13,7 @@ describe('ResultBuffer', () => {
     expect(buffer.isEmpty()).toBe(false);
     const result = buffer.toJobResult({ from: 'a'.repeat(40), to: 'b'.repeat(40) });
     expect(JobResult.parse(result)).toEqual(result);
-    expect(result).toEqual({ summary: 'One naming nit.', points: [point], decisions: [], replies: [], push: { from: 'a'.repeat(40), to: 'b'.repeat(40) } });
+    expect(result).toEqual({ summary: 'One naming nit.', points: [point], decisions: [], replies: [], push: { from: 'a'.repeat(40), to: 'b'.repeat(40) }, draft: null });
   });
 
   it('writes the summary itself when the agent never called finish (spec §11)', () => {

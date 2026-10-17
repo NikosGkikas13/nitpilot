@@ -52,7 +52,7 @@ describe('Plan 1a end to end', () => {
       return job;
     }
 
-    await runJob('review', { summary: 'Two issues.', points: [point('`parseOrder` crashes on empty input', 'major'), point('Rename `fetchAll`', 'nit')], decisions: [], replies: [], push: null });
+    await runJob('review', { summary: 'Two issues.', points: [point('`parseOrder` crashes on empty input', 'major'), point('Rename `fetchAll`', 'nit')], decisions: [], replies: [], push: null, draft: null });
     await runJob(
       'address',
       {
@@ -64,11 +64,12 @@ describe('Plan 1a end to end', () => {
           { point: 2, resolution: 'declined', comment: 'Kept for API compatibility.' },
         ],
         push: { from: 'a'.repeat(40), to: 'c'.repeat(40) },
+        draft: null,
       },
       'c'.repeat(40),
     );
     expect(await prisma.job.findFirstOrThrow({ where: { chatId, type: 're_review' } })).toMatchObject({ sinceSha: 'a'.repeat(40), headSha: 'c'.repeat(40) });
-    await runJob('re_review', { summary: 'All settled.', points: [], decisions: [{ point: 1, decision: 'resolve', comment: 'Fixed.' }, { point: 2, decision: 'resolve', comment: 'Fair.' }], replies: [], push: null });
+    await runJob('re_review', { summary: 'All settled.', points: [], decisions: [{ point: 1, decision: 'resolve', comment: 'Fixed.' }, { point: 2, decision: 'resolve', comment: 'Fair.' }], replies: [], push: null, draft: null });
 
     await s.runner.runDue();
 

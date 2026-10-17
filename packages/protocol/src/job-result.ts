@@ -41,6 +41,26 @@ export type PointReply = z.infer<typeof PointReply>;
 export const PushInfo = z.object({ from: z.string().min(7), to: z.string().min(7) });
 export type PushInfo = z.infer<typeof PushInfo>;
 
+/** The biggest draft diff the CLI sends (spec §11 "Draft mode"). Over it, `diff` is null. */
+export const MAX_DRAFT_DIFF_BYTES = 200 * 1024;
+
+/** One file a draft commit changes. */
+export const DraftFile = z.object({ path: z.string().min(1), adds: z.number().int().nonnegative(), dels: z.number().int().nonnegative() });
+export type DraftFile = z.infer<typeof DraftFile>;
+
+/**
+ * The commit an author's address job made with Auto off (spec §11 step 6.4). It stays on that laptop at
+ * `refs/nitpilot/drafts/<job>` until the author sends it. `from` is the head it was made on. `diff` is the commit's
+ * unified diff, or null when it's over MAX_DRAFT_DIFF_BYTES (the web app then shows the files and `git show`).
+ */
+export const DraftInfo = z.object({
+  sha: z.string().min(7),
+  from: z.string().min(7),
+  files: z.array(DraftFile),
+  diff: z.string().nullable(),
+});
+export type DraftInfo = z.infer<typeof DraftInfo>;
+
 /**
  * Everything an agent produced in one job. The CLI buffers tool calls locally and sends
  * this once, in `job.complete`, so a job is all-or-nothing (spec §10).
@@ -51,5 +71,7 @@ export const JobResult = z.object({
   decisions: z.array(PointDecision),
   replies: z.array(PointReply),
   push: PushInfo.nullable(),
+  /** An address job's draft commit (Auto off). Results saved before Plan 2 have none, so it defaults to null. */
+  draft: DraftInfo.nullable().default(null),
 });
 export type JobResult = z.infer<typeof JobResult>;

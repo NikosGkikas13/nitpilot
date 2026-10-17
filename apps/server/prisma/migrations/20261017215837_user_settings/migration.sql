@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "autoAddress" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "autoReview" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "dailyJobCap" INTEGER NOT NULL DEFAULT 40;

@@ -5,8 +5,9 @@ import { z } from 'zod';
 const State = z.object({ day: z.string(), jobs: z.number().int().min(0) });
 
 /**
- * Counts the jobs this CLI ran today, so `dailyJobCap` limits how much of your agent quota others can
- * spend by requesting your review (spec §14, budget protection). Kept in <config dir>/state.json.
+ * Counts the jobs this CLI ran today, so `dailyJobCap` (a setting on the server, spec §8 `User`) limits how much of
+ * your agent quota others can spend by requesting your review (spec §14, budget protection). Kept in
+ * <config dir>/state.json. Every ping reports the count (`usedToday`) for the Settings page's usage bar.
  */
 export class DailyJobCounter {
   constructor(
@@ -17,12 +18,17 @@ export class DailyJobCounter {
   /** Count one more job, unless `cap` jobs already ran today. False means: over the cap, turn it down. */
   take(cap: number): boolean {
     const today = localDay(this.now());
-    const saved = this.read();
-    const ran = saved?.day === today ? saved.jobs : 0;
+    const ran = this.usedToday();
     if (ran >= cap) return false;
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     writeFileSync(this.file(), `${JSON.stringify({ day: today, jobs: ran + 1 })}\n`, { mode: 0o600 });
     return true;
+  }
+
+  /** How many jobs were counted today: 0 on a new day, and when nothing was saved yet. */
+  usedToday(): number {
+    const saved = this.read();
+    return saved?.day === localDay(this.now()) ? saved.jobs : 0;
   }
 
   private file(): string {

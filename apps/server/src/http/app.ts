@@ -17,6 +17,7 @@ import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
+import { settingsRoutes, type SettingsSender } from './routes/settings';
 import { setupRoutes } from './routes/setup';
 import { webhookRoutes } from './routes/webhooks';
 import { DEFAULT_WEB_DIST, spaRoutes } from './spa';
@@ -27,7 +28,8 @@ export type AppDeps = {
   appAuth: AppAuth;
   ingest: Ingest;
   dispatch: Dispatch;
-  clis: LiveClis;
+  /** The connected CLIs (the CLI hub): who is online, and where new settings go. */
+  clis: LiveClis & SettingsSender;
   /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
   access: RepoAccess;
   /** GitHub reads with the app's installation token (the chat screen's file list). */
@@ -47,6 +49,7 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.route('/', authRoutes(deps));
   app.route('/', meRoutes(deps));
+  app.route('/', settingsRoutes(deps));
   app.route('/', inboxRoutes(deps));
   app.route('/', chatRoutes(deps));
   app.route('/', chatActionRoutes(deps));

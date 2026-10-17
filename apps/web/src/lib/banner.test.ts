@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { chatView, point } from '../test/chat';
 import { chatBanner, escalationNote } from './banner';
 
-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true };
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
 const view = (over: Partial<ChatView> = {}) => chatView(over);
 const escalated = (over: Partial<PointView> = {}) => point({ status: 'escalated', escalationReason: 'category', category: 'security', ...over });
 

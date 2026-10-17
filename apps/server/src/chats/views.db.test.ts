@@ -26,7 +26,7 @@ async function scene() {
       { ...point, number: 3, origin: 'agent', path: null, line: null, side: null, title: 'Add a test', status: 'open' },
     ],
   });
-  const clis: LiveClis = { connectionsFor: (userId) => (userId === maya.id ? [{ repos: new Set([repo.fullName]) }] : []) };
+  const clis: LiveClis = { connectionsFor: (userId) => (userId === maya.id ? [{ repos: new Set([repo.fullName]), usedToday: 0 }] : []) };
   return { repo, chat, maya, leo, leoP, lastSeen, clis };
 }
 

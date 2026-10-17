@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Category, JobType, MessageKind, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+import { AgentJobType, Category, MessageKind, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
 
 /** One entry in a point's thread: a reply, a decision, or a human note about it. */
 export const ThreadEntry = z.object({
@@ -31,13 +31,26 @@ export const BundlePoint = z.object({
 export type BundlePoint = z.infer<typeof BundlePoint>;
 
 /**
- * Everything the CLI needs to run one job, self-contained (spec §10 `job.assign`).
+ * How the CLI gets the PR's code and where it pushes (spec §11 steps 1 and 6). The platform adapter fills it in
+ * (`gitSpec`), so a GitLab adapter can name its own refs.
+ */
+export const BundleGit = z.object({
+  baseCloneUrl: z.string(),
+  fetchRef: z.string(),
+  /** `null` when the PR came from a fork that has been deleted: nothing can be pushed. */
+  headRepoPath: z.string().nullable(),
+  headBranch: z.string(),
+});
+export type BundleGit = z.infer<typeof BundleGit>;
+
+/**
+ * Everything the CLI needs to run one agent job, self-contained (spec §10 `job.assign`).
  * `headSha` is the PR head at assignment time: queued jobs follow the latest head.
  */
-export const JobBundle = z.object({
+export const AgentJobBundle = z.object({
   jobId: z.string().min(1),
   attempt: z.number().int().positive(),
-  type: JobType,
+  type: AgentJobType,
   round: z.number().int().positive(),
   maxRounds: z.number().int().positive(),
   /** `draft`: do the work but don't publish or push it (Auto is off). */
@@ -55,13 +68,7 @@ export const JobBundle = z.object({
     baseSha: z.string(),
     headSha: z.string(),
   }),
-  git: z.object({
-    baseCloneUrl: z.string(),
-    fetchRef: z.string(),
-    /** `null` when the PR came from a fork that has been deleted: nothing can be pushed. */
-    headRepoPath: z.string().nullable(),
-    headBranch: z.string(),
-  }),
+  git: BundleGit,
   /** For re-reviews: only look at commits after this one. `null` means review everything. */
   sinceSha: z.string().nullable(),
   points: z.array(BundlePoint),
@@ -72,4 +79,28 @@ export const JobBundle = z.object({
     maxPoints: z.number().int().positive(),
   }),
 });
+export type AgentJobBundle = z.infer<typeof AgentJobBundle>;
+
+/**
+ * A publish job (spec §11 "Publish jobs"): push the draft commit an author's address job left in the linked clone,
+ * at `refs/nitpilot/drafts/<draft.jobId>`. `draft.sha` is that commit and `draft.from` the head it was made on.
+ * No agent runs, so there are no points, notes or rules.
+ */
+export const PublishBundle = z.object({
+  jobId: z.string().min(1),
+  attempt: z.number().int().positive(),
+  type: z.literal('publish'),
+  pr: z.object({
+    repoFullName: z.string(),
+    number: z.number().int().positive(),
+    headRef: z.string(),
+    url: z.string(),
+  }),
+  git: BundleGit,
+  draft: z.object({ jobId: z.string().min(1), sha: z.string().min(7), from: z.string().min(7) }),
+});
+export type PublishBundle = z.infer<typeof PublishBundle>;
+
+/** What `job.assign` carries: an agent job, or a publish job. `type` tells them apart. */
+export const JobBundle = z.discriminatedUnion('type', [AgentJobBundle, PublishBundle]);
 export type JobBundle = z.infer<typeof JobBundle>;

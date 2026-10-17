@@ -52,7 +52,7 @@ export class ResultBuffer {
   toJobResult(push: PushInfo | null): JobResult {
     const decisions = [...this.decisions.values()];
     const replies = [...this.replies.values()];
-    return { summary: this.summary ?? summarize(this.points.length, decisions, replies), points: [...this.points], decisions, replies, push };
+    return { summary: this.summary ?? summarize(this.points.length, decisions, replies), points: [...this.points], decisions, replies, push, draft: null };
   }
 }
 

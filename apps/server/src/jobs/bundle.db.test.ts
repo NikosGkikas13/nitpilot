@@ -70,7 +70,7 @@ describe('buildJobBundle', () => {
     await dispatcher.dispatch(chat.id, {
       type: 'job_completed',
       jobId: address.id, attempt: 1,
-      result: { summary: 'Fixed it.', points: [], decisions: [], replies: [{ point: 1, resolution: 'fixed', comment: 'Added the empty check.' }], push: { from: chat.headSha, to: 'c'.repeat(40) } },
+      result: { summary: 'Fixed it.', points: [], decisions: [], replies: [{ point: 1, resolution: 'fixed', comment: 'Added the empty check.' }], push: { from: chat.headSha, to: 'c'.repeat(40) }, draft: null },
     });
     await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(maya), body: 'Please keep the public API stable.' });
     const reReview = await running(chat.id, 're_review');

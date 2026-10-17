@@ -19,9 +19,21 @@ describe('DailyJobCounter', () => {
     expect(counter.take(1)).toBe(true);
   });
 
+  it("says how many jobs it counted today, and 0 once it's a new day", () => {
+    let now = new Date(2026, 9, 10, 23, 59);
+    const counter = new DailyJobCounter(tempDir(), () => now);
+    expect(counter.usedToday()).toBe(0);
+    counter.take(40);
+    counter.take(40);
+    expect(counter.usedToday()).toBe(2);
+    now = new Date(2026, 9, 11, 0, 1);
+    expect(counter.usedToday()).toBe(0);
+  });
+
   it('treats a missing or unreadable file as no jobs yet', () => {
     const dir = tempDir();
     writeFileSync(join(dir, 'state.json'), 'not json');
+    expect(new DailyJobCounter(dir).usedToday()).toBe(0);
     expect(new DailyJobCounter(dir).take(1)).toBe(true);
     expect(localDay(new Date(2026, 0, 5))).toBe('2026-01-05');
   });

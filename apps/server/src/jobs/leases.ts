@@ -22,10 +22,14 @@ export class Leases {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  /** The hub listener: hello and ping both say "these are the jobs I'm running". */
+  /** The hub listener: hello and ping both say "these are the jobs I'm running". A ping also says how many ran today. */
   handle = async (conn: CliConnection, msg: CliToServer): Promise<void> => {
     if (msg.t === 'hello') await this.renewOrCancel(conn, msg.d.running);
-    if (msg.t === 'ping') await this.onPing(conn, msg.d.running);
+    if (msg.t === 'ping') {
+      // For the Settings page's usage bar (`GET /api/me`). Only kept while the CLI is connected.
+      conn.usedToday = msg.d.usedToday;
+      await this.onPing(conn, msg.d.running);
+    }
   };
 
   /** Every few seconds: jobs whose lease ran out go back to the queue, and silent CLIs are dropped. */

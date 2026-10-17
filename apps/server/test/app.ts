@@ -16,7 +16,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
     dispatch: new Dispatcher().dispatch,
     // No CLI is connected.
-    clis: { connectionsFor: () => [] },
+    clis: { connectionsFor: () => [], sendSettings: () => 0 },
     access: over.access ?? new RepoAccess(github),
     platform: new FakePlatform(),
     // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.

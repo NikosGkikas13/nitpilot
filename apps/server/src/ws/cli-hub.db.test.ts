@@ -1,7 +1,9 @@
-import { CLI_WS_PATH, CLOSE_CODES, LEASE_SEC, PING_SEC } from '@nitpilot/protocol';
+import { CLI_WS_PATH, CLOSE_CODES, LEASE_SEC, PING_SEC, WebMe } from '@nitpilot/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testApp } from '../../test/app';
 import { makeCliToken, makeUser } from '../../test/db';
-import { hello, listen, ping, sleep, TestCli, upgradeStatus } from '../../test/ws';
+import { sessionCookieFor } from '../../test/http';
+import { hello, listen, ping, sleep, startCliServer, TestCli, upgradeStatus } from '../../test/ws';
 import { prisma } from '../lib/prisma';
 import { CliHub, type PresenceChange } from './cli-hub';
 
@@ -41,17 +43,33 @@ describe('connecting to /ws/cli', () => {
     const { user, token } = await device('maya');
     const cli = await TestCli.connect(url, token.raw);
     cli.send(hello({ device: "Maya's MacBook Pro", repos: ['acme/shop-api'], concurrency: 2 }));
-    expect((await cli.next('welcome')).d).toEqual({ login: 'maya', pingSec: PING_SEC, leaseSec: LEASE_SEC });
+    expect((await cli.next('welcome')).d).toEqual({
+      login: 'maya',
+      pingSec: PING_SEC,
+      leaseSec: LEASE_SEC,
+      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 },
+    });
     expect(hub.connection(token.id)).toMatchObject({ userId: user.id, login: 'maya', device: "Maya's MacBook Pro", concurrency: 2, repos: new Set(['acme/shop-api']) });
     expect((await prisma.cliToken.findUniqueOrThrow({ where: { id: token.id } })).lastSeenAt).not.toBeNull();
   });
 
-  it('closes with 4426 when the CLI speaks another protocol version', async () => {
+  it("welcomes the CLI with its owner's settings", async () => {
+    const { url } = await hubOnPort();
+    const { user, token } = await device('maya');
+    await prisma.user.update({ where: { id: user.id }, data: { autoReview: false, dailyJobCap: 15 } });
+    const cli = await TestCli.connect(url, token.raw);
+    cli.send(hello());
+    expect((await cli.next('welcome')).d.settings).toEqual({ autoReview: false, autoAddress: true, dailyJobCap: 15 });
+  });
+
+  it('closes with 4426 when the CLI speaks another protocol version: a Plan 1 CLI, with its old hello, is told to upgrade', async () => {
     const { hub, url } = await hubOnPort();
     const { token } = await device();
     const cli = await TestCli.connect(url, token.raw);
-    cli.send(hello({ protocol: 2 }));
-    expect((await cli.closed).code).toBe(CLOSE_CODES.upgradeCli);
+    cli.send({ ...hello({ protocol: 1 }), d: { ...hello({ protocol: 1 }).d, defaults: { autoReview: true, autoAddress: true } } });
+    const closed = await cli.closed;
+    expect(closed.code).toBe(CLOSE_CODES.upgradeCli);
+    expect(closed.reason).toContain('protocol 2');
     expect(hub.connections()).toEqual([]);
   });
 
@@ -143,6 +161,19 @@ describe('connections', () => {
     expect(changes.map((c) => c.change)).toEqual(['connected', 'disconnected', 'connected', 'disconnected']);
   });
 
+  it("sends new settings to each of the person's connected CLIs, and says how many got them", async () => {
+    const { hub, url } = await hubOnPort();
+    const { user, token } = await device('maya');
+    const laptop = await TestCli.online(url, token.raw, { device: 'laptop' });
+    const desktop = await TestCli.online(url, (await makeCliToken(user.id)).raw, { device: 'desktop' });
+    const leos = await TestCli.online(url, (await device('leo')).token.raw);
+    const settings = { autoReview: true, autoAddress: false, dailyJobCap: 60 };
+    expect(hub.sendSettings(user.id, settings)).toBe(2);
+    expect((await laptop.next('settings')).d).toEqual(settings);
+    expect((await desktop.next('settings')).d).toEqual(settings);
+    await leos.nothing('settings');
+  });
+
   it('hands hello and every later message to the listeners, one at a time, in order', async () => {
     const hub = new CliHub();
     const seen: string[] = [];
@@ -156,5 +187,27 @@ describe('connections', () => {
     cli.send(ping([]));
     cli.send({ v: 1, t: 'job.progress', d: { jobId: 'job_1', attempt: 1, stage: 'preparing', text: 'fetching the PR' } });
     await vi.waitFor(() => expect(seen).toEqual(['hello', 'ping', 'job.progress']));
+  });
+});
+
+describe("a device's usage today", () => {
+  it("starts at 0, follows each ping's usedToday, and /api/me adds up the person's connected CLIs", async () => {
+    const server = await startCliServer();
+    running.push(server);
+    const { user, token } = await device('maya');
+    const laptop = await TestCli.online(server.url, token.raw, { device: 'laptop' });
+    const desktop = await TestCli.online(server.url, (await makeCliToken(user.id)).raw, { device: 'desktop' });
+    expect(server.hub.connection(token.id)?.usedToday).toBe(0);
+    laptop.send(ping([], 3));
+    desktop.send(ping([], 4));
+    await laptop.next('pong');
+    await desktop.next('pong');
+    expect(server.hub.connection(token.id)?.usedToday).toBe(3);
+    const me = async () => WebMe.parse(await (await testApp({ clis: server.hub }).request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } })).json());
+    expect((await me()).usedToday).toBe(7);
+    // A device that goes offline stops counting: the Settings page shows what the connected ones did.
+    desktop.close();
+    await vi.waitFor(() => expect(server.hub.connectionsFor(user.id)).toHaveLength(1));
+    expect((await me()).usedToday).toBe(3);
   });
 });

@@ -3,6 +3,7 @@ import { hostname } from 'node:os';
 import {
   BRAND, CLOSE_CODES, MAX_MESSAGE_BYTES, PROTOCOL_VERSION,
   type AgentId, type AgentMode, type CliToServer, type FailureReason, type JobBundle, type JobResult, type RunningJob, type ServerToCli,
+  type Settings,
 } from '@nitpilot/protocol';
 import type { PersonalConfig } from './config/config';
 import { Backoff } from './connection/backoff';
@@ -44,7 +45,7 @@ export type StopReason = 'stopped' | 'reauth' | 'upgrade' | 'replaced';
 
 export type DaemonOptions = {
   config: PersonalConfig;
-  /** Where state.json (the daily job count) lives. */
+  /** Where state.json (the daily job count) lives. The cap itself comes from the server, in `welcome` and `settings`. */
   configDir: string;
   agent: { id: AgentId; version: string | null; modes: AgentMode[] };
   executor: JobExecutor;
@@ -109,6 +110,11 @@ export function startDaemon(opts: DaemonOptions): Daemon {
   const stopping = new AbortController();
   let socket: ServerSocket | null = null;
   let welcomed = false;
+  /**
+   * The person's settings, from the last `welcome` or `settings` message (spec §10): the daily job cap is read from
+   * here. The server says welcome before it hands out any job, so they're known by the time one arrives.
+   */
+  let settings: Settings | null = null;
 
   async function loop(): Promise<StopReason> {
     out.log(`Connecting to ${config.server}…`);
@@ -157,7 +163,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
             s.abandon();
             return;
           }
-          s.send({ v: 1, t: 'ping', d: { running: runningList() } });
+          s.send({ v: 1, t: 'ping', d: { running: runningList(), usedToday: counter.usedToday() } });
           // The server may have failed while handling an answer, and then it sends no ack and the socket stays
           // open. So an answer with no ack after two pings goes again. The server applies each answer at most
           // once, so a second copy is acked as stale.
@@ -175,6 +181,7 @@ export function startDaemon(opts: DaemonOptions): Daemon {
 
   function onWelcome(d: Welcome): void {
     welcomed = true;
+    settings = d.settings;
     backoff.reset();
     const repos = Object.keys(config.repos);
     const linked = repos.length > 0 ? `Linked: ${repos.join(', ')}.` : `No repos linked yet: run \`${BRAND.cli} repos add\` in a clone.`;
@@ -204,6 +211,11 @@ export function startDaemon(opts: DaemonOptions): Daemon {
         out.log(`🔔 ${msg.d.title}  ${msg.d.url}`);
         notify(msg.d.title).catch(() => {});
         return;
+      case 'settings':
+        // Changed on the web app's Settings page: the new cap counts from the next job on.
+        settings = msg.d;
+        out.log(`Your settings changed: up to ${msg.d.dailyJobCap} jobs a day.`);
+        return;
       case 'welcome': // handled by connectOnce
       case 'pong': // only shows the server is alive, which connectOnce already noted
         return;
@@ -218,13 +230,15 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     running.set(job.jobId, job);
     const name = `${bundle.type.replace('_', '-')} of ${bundle.pr.repoFullName}#${bundle.pr.number}`;
 
+    // No settings can't happen (welcome comes first); if it did, turning the job down is the safe answer.
+    const cap = settings?.dailyJobCap ?? 0;
     let outcome: JobOutcome;
     try {
-      if (counter.take(config.dailyJobCap)) {
+      if (counter.take(cap)) {
         out.log(`→ ${name} (attempt ${bundle.attempt})`);
         outcome = await execute(bundle, job);
       } else {
-        out.log(`✗ Turned down the ${name}: today's ${config.dailyJobCap} jobs are done (dailyJobCap).`);
+        out.log(`✗ Turned down the ${name}: today's ${cap} jobs are done (the daily job cap in Settings).`);
         outcome = { kind: 'reject', reason: 'daily_cap' };
       }
     } catch (err) {
@@ -299,7 +313,6 @@ export function startDaemon(opts: DaemonOptions): Daemon {
         concurrency: config.concurrency,
         // Jobs still in progress from before a disconnect: the server binds them to this device again (spec §9.4).
         running: runningList(),
-        defaults: { autoReview: config.auto.review, autoAddress: config.auto.address },
       },
     };
   }

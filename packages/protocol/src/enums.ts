@@ -26,8 +26,13 @@ export type Role = z.infer<typeof Role>;
 export const Attention = z.enum(['none', 'decision', 'manual_review', 'failed', 'drafts']);
 export type Attention = z.infer<typeof Attention>;
 
-export const JobType = z.enum(['review', 're_review', 'address']);
+/** `publish` (Plan 2) pushes an author's draft commit: the CLI runs git, no agent (spec §11 "Publish jobs"). */
+export const JobType = z.enum(['review', 're_review', 'address', 'publish']);
 export type JobType = z.infer<typeof JobType>;
+
+/** The job types an agent runs. */
+export const AgentJobType = JobType.exclude(['publish']);
+export type AgentJobType = z.infer<typeof AgentJobType>;
 
 export const JobStatus = z.enum(['queued', 'running', 'done', 'failed', 'cancelled']);
 export type JobStatus = z.infer<typeof JobStatus>;

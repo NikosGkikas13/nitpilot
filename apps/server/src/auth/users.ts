@@ -1,4 +1,4 @@
-import type { WebMe } from '@nitpilot/protocol';
+import type { Settings, WebMe } from '@nitpilot/protocol';
 import type { LiveClis } from '../chats/activity';
 import { encrypt } from '../lib/crypto';
 import { prisma } from '../lib/prisma';
@@ -26,18 +26,31 @@ export async function saveGithubUser(gh: { githubId: string; login: string; avat
   return user;
 }
 
+/** The `User` columns that hold a person's settings (spec §8), for a Prisma `select`. */
+export const SETTINGS_COLUMNS = { autoReview: true, autoAddress: true, dailyJobCap: true } as const;
+
+/** A person's settings, picked out of their `User` row. */
+export function settingsOf(user: Settings): Settings {
+  return { autoReview: user.autoReview, autoAddress: user.autoAddress, dailyJobCap: user.dailyJobCap };
+}
+
 /**
  * Who you are, as the web app reads it (`GET /api/me`, and `me.update` on `/ws/web`): your GitHub account, whether
- * your GitHub sign-in still works, and whether one of your CLIs is connected right now.
+ * your GitHub sign-in still works, whether one of your CLIs is connected right now, your settings, and how many
+ * agent runs your connected CLIs started today.
  */
 export async function loadWebMe(userId: string, clis: LiveClis): Promise<WebMe> {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true } });
+  const connected = clis.connectionsFor(user.id);
   return {
     id: user.id,
     githubId: user.githubId,
     login: user.login,
     avatarUrl: user.avatarUrl,
     githubAuth: user.githubAuth?.status === 'ok' ? 'ok' : 'needs_reauth',
-    agentOnline: clis.connectionsFor(user.id).length > 0,
+    agentOnline: connected.length > 0,
+    settings: settingsOf(user),
+    // Each CLI counts from its own midnight; a device that's offline isn't counted.
+    usedToday: connected.reduce((sum, cli) => sum + cli.usedToday, 0),
   };
 }

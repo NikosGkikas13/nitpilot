@@ -1,4 +1,4 @@
-import type { JobType } from '@nitpilot/protocol';
+import type { AgentJobType } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { prRepo } from '../../test/git-fixtures';
 import { connectAgent, jsonOf, textOf } from '../../test/mcp-agent';
@@ -17,12 +17,12 @@ describe('jobTools', () => {
   it('gives each job type exactly its tools over MCP, each bound to its own job', async () => {
     const server = await mcpServer();
     const pr = prRepo();
-    for (const type of ['review', 're_review', 'address'] satisfies JobType[]) {
+    for (const type of ['review', 're_review', 'address'] satisfies AgentJobType[]) {
       const ctx = await mcpJob(pr, { type, jobId: `job_${type}`, sinceSha: type === 're_review' ? pr.baseSha : null });
       const job = server.registerJob(jobTools(ctx));
       const agent = await connectAgent(job.url, job.token);
       expect((await agent.listTools()).tools.map((t) => t.name)).toEqual(toolsFor(type));
-      expect(jsonOf<{ type: JobType }>(await agent.callTool({ name: 'get_job', arguments: {} })).type).toBe(type);
+      expect(jsonOf<{ type: AgentJobType }>(await agent.callTool({ name: 'get_job', arguments: {} })).type).toBe(type);
     }
   });
 

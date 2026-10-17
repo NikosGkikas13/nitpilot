@@ -1,6 +1,6 @@
 import { chmodSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { BRAND, type JobBundle } from '@nitpilot/protocol';
+import { BRAND, type AgentJobBundle } from '@nitpilot/protocol';
 import { remoteFor } from '../git/remotes';
 import { JobFailure } from './job-failure';
 import { linkedGitDir, safeGit, type GitPlace } from './safe-git';
@@ -40,7 +40,7 @@ export type PrepareOptions = {
  * detached worktree under <config dir>/worktrees, scrub agent files, and read the conventions from
  * the base branch. Anything else that goes wrong is `setup_failed`. See docs/why/git-worktrees.md.
  */
-export async function prepareWorktree(bundle: JobBundle, repoPath: string, opts: PrepareOptions): Promise<Worktree> {
+export async function prepareWorktree(bundle: AgentJobBundle, repoPath: string, opts: PrepareOptions): Promise<Worktree> {
   checkBundle(bundle);
   const key = `${bundle.jobId}-${bundle.attempt}`;
   const headRef = `${BRAND.gitRefNamespace}/${key}/head`;
@@ -89,13 +89,13 @@ const FOLDER_NAME = /^[A-Za-z0-9._-]+$/;
  * a server bug must never reach outside <config dir>/worktrees, or turn a URL into an option. Not
  * retryable: the same bundle would fail again.
  */
-function checkBundle(bundle: JobBundle): void {
+function checkBundle(bundle: AgentJobBundle): void {
   checkFolderNames(bundle);
   checkCloneUrl(bundle);
 }
 
 /** The job id and the repo's `owner` and `name` become folder and ref names. */
-function checkFolderNames(bundle: JobBundle): void {
+function checkFolderNames(bundle: AgentJobBundle): void {
   const repoParts = bundle.pr.repoFullName.split('/');
   const names = [bundle.jobId, ...repoParts];
   if (repoParts.length === 2 && names.every((name) => FOLDER_NAME.test(name) && name !== '.' && name !== '..')) return;
@@ -108,7 +108,7 @@ function checkFolderNames(bundle: JobBundle): void {
  * (a local copy; the tests use one). Anything else could be an option (`--upload-pack=…` runs a command)
  * or a transport that runs one (`ext::…`).
  */
-function checkCloneUrl(bundle: JobBundle): void {
+function checkCloneUrl(bundle: AgentJobBundle): void {
   const url = bundle.git.baseCloneUrl;
   if (url.startsWith('https://') || url.startsWith('/')) return;
   throw new JobFailure('setup_failed', false, `This job's clone URL isn't an https:// address or an absolute path: ${JSON.stringify(url.slice(0, 200))}`);

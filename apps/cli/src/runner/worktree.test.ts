@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { JobBundle } from '@nitpilot/protocol';
+import type { AgentJobBundle } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
@@ -12,7 +12,7 @@ import { cleanUpWorktrees, prepareWorktree } from './worktree';
 type Pr = ReturnType<typeof prRepo>;
 
 /** Run prepareWorktree on a test PR with a fresh config dir. The worktree is removed when the test ends. */
-async function prepare(pr: Pr, bundle: JobBundle = pr.bundle) {
+async function prepare(pr: Pr, bundle: AgentJobBundle = pr.bundle) {
   const configDir = tempDir();
   const wt = await prepareWorktree(bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env });
   onTestFinished(() => wt.cleanup());

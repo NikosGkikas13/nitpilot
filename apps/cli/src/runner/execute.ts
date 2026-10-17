@@ -43,6 +43,8 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
   // Every agent's files go, not only this agent's: a PR's .env or AGENTS.md has no business in a job (spec §11 step 3).
   const scrubPaths = scrubPathsFor(adapter.scrubPaths);
   return async (bundle, io) => {
+    // A publish job runs no agent (spec §11 "Publish jobs"). The server doesn't queue any yet.
+    if (bundle.type === 'publish') return { kind: 'reject', reason: 'unsupported_mode' };
     const repo = Object.hasOwn(config.repos, bundle.pr.repoFullName) ? config.repos[bundle.pr.repoFullName]! : null;
     if (!repo) return { kind: 'reject', reason: 'repo_not_linked' };
     const mode: AgentMode = bundle.type === 'address' ? 'editor' : 'reviewer';

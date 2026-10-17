@@ -3,6 +3,7 @@ import { message } from './envelope';
 import { AgentId, AgentMode, FailureReason, NotifyKind } from './enums';
 import { JobBundle } from './job-bundle';
 import { JobResult } from './job-result';
+import { Settings } from './web-api';
 
 /** Every job message carries (jobId, attempt), so answers from an old attempt can be spotted. */
 export const RunningJob = z.object({ jobId: z.string().min(1), attempt: z.number().int().positive() });
@@ -20,10 +21,15 @@ export const Hello = message('hello', z.object({
   concurrency: z.number().int().min(1).max(4),
   /** Jobs this CLI is still running, e.g. after the laptop slept. */
   running: z.array(RunningJob),
-  defaults: z.object({ autoReview: z.boolean(), autoAddress: z.boolean() }),
+  // Protocol 1's `defaults` (the Auto defaults from config.json) is gone: the settings live on the server now. An
+  // old CLI's hello still parses (the extra key is dropped), so the server can tell it to upgrade.
 }));
 
-export const Ping = message('ping', z.object({ running: z.array(RunningJob) }));
+export const Ping = message('ping', z.object({
+  running: z.array(RunningJob),
+  /** Agent runs this device started today, counted from its own midnight (the Settings page's usage bar). */
+  usedToday: z.number().int().nonnegative(),
+}));
 
 export const JobProgress = message('job.progress', RunningJob.extend({
   stage: z.enum(['preparing', 'running_agent', 'pushing', 'finishing']),
@@ -52,6 +58,8 @@ export const Welcome = message('welcome', z.object({
   login: z.string(),
   pingSec: z.number().int().positive(),
   leaseSec: z.number().int().positive(),
+  /** The person's settings: the CLI takes its daily job cap from here. */
+  settings: Settings,
 }));
 
 export const Pong = message('pong', z.object({}));
@@ -70,5 +78,8 @@ export const Notify = message('notify', z.object({
   url: z.string(),
 }));
 
-export const ServerToCli = z.discriminatedUnion('t', [Welcome, Pong, Ack, JobAssign, JobCancel, Notify]);
+/** The person changed their settings in the web app: sent to each of their connected CLIs. */
+export const SettingsMessage = message('settings', Settings);
+
+export const ServerToCli = z.discriminatedUnion('t', [Welcome, Pong, Ack, JobAssign, JobCancel, Notify, SettingsMessage]);
 export type ServerToCli = z.infer<typeof ServerToCli>;

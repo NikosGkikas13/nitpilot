@@ -21,7 +21,7 @@ afterEach(async () => {
 type User = Awaited<ReturnType<typeof makeUser>>;
 
 /** A job written straight into the table, the way apply-commands.ts writes one, without the engine. */
-async function queueJob(chatId: string, user: User, role: 'author' | 'reviewer', type: 'review' | 'address') {
+async function queueJob(chatId: string, user: User, role: 'author' | 'reviewer', type: 'review' | 'address' | 'publish') {
   const p = await prisma.participant.upsert({
     where: { chatId_githubId_role: { chatId, githubId: user.githubId, role } },
     create: { chatId, githubId: user.githubId, login: user.login, role, userId: user.id, requested: role === 'reviewer' },
@@ -65,6 +65,17 @@ describe('JobAssigner', () => {
     const cli = await online(leo, { repos: [repo.fullName] });
     await s.dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
     expect((await cli.next('job.assign')).d.bundle).toMatchObject({ type: 'review', you: { login: 'leo', role: 'reviewer' } });
+  });
+
+  it('leaves a publish job queued: nothing routes one to a CLI yet', async () => {
+    const maya = await makeUser({ login: 'maya' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const job = await queueJob(chat.id, maya, 'author', 'publish');
+    const cli = await online(maya, { repos: [repo.fullName] });
+    await s.settle();
+    await cli.nothing('job.assign');
+    expect(await statusOf(job.id)).toBe('queued');
   });
 
   it("never gives a job to someone else's CLI", async () => {
@@ -149,7 +160,7 @@ describe('JobAssigner', () => {
     // A push arrived while the job waited in the queue.
     await prisma.prChat.update({ where: { id: chat.id }, data: { headSha: 'c'.repeat(40) } });
     const cli = await online(leo, { repos: [repo.fullName] });
-    expect((await cli.next('job.assign')).d.bundle.pr.headSha).toBe('c'.repeat(40));
+    expect((await cli.next('job.assign')).d.bundle).toMatchObject({ pr: { headSha: 'c'.repeat(40) } });
     expect((await prisma.job.findUniqueOrThrow({ where: { id: job.id } })).headSha).toBe('c'.repeat(40));
   });
 

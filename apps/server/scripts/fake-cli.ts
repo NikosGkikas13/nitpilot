@@ -1,6 +1,6 @@
 import {
   CLI_WS_PATH, CliLoginPollResponse, CliLoginStartResponse, PROTOCOL_VERSION, ServerToCli,
-  type CliToServer, type JobBundle, type JobResult,
+  type AgentJobBundle, type CliToServer, type JobResult,
 } from '@nitpilot/protocol';
 
 // A stand-in for the real CLI (Plan 1b, M7), for live checks before it exists. It logs in like
@@ -36,6 +36,7 @@ const RESULT: JobResult = {
   decisions: [],
   replies: [],
   push: null,
+  draft: null,
 };
 
 async function postJson(path: string, body: unknown): Promise<unknown> {
@@ -60,10 +61,12 @@ async function main(): Promise<void> {
   const token = await login();
   const ws = new WebSocket(`${server.replace(/^http/, 'ws')}${CLI_WS_PATH}`, { headers: { authorization: `Bearer ${token}` } });
   const running = new Map<string, number>(); // jobId → attempt
+  let usedToday = 0; // jobs answered since it started: the real CLI counts from midnight
   const send = (msg: CliToServer) => ws.send(JSON.stringify(msg));
 
-  async function answer(bundle: JobBundle): Promise<void> {
+  async function answer(bundle: AgentJobBundle): Promise<void> {
     running.set(bundle.jobId, bundle.attempt);
+    usedToday += 1;
     log(`job.assign: ${bundle.type} of ${bundle.pr.repoFullName}#${bundle.pr.number} at ${bundle.pr.headSha.slice(0, 7)} (attempt ${bundle.attempt})`);
     await sleep(2000);
     if (running.get(bundle.jobId) !== bundle.attempt) return; // cancelled meanwhile
@@ -83,17 +86,17 @@ async function main(): Promise<void> {
         repos: [repo],
         concurrency: 1,
         running: [],
-        defaults: { autoReview: true, autoAddress: true },
       },
     });
   });
   ws.addEventListener('message', (event) => {
     const msg = ServerToCli.parse(JSON.parse(String(event.data)));
     if (msg.t === 'welcome') {
-      log(`connected as ${msg.d.login}; waiting for review jobs on ${repo} (Ctrl-C stops)`);
-      setInterval(() => send({ v: 1, t: 'ping', d: { running: [...running].map(([jobId, attempt]) => ({ jobId, attempt })) } }), msg.d.pingSec * 1000);
+      log(`connected as ${msg.d.login}; waiting for review jobs on ${repo} (Ctrl-C stops). It ignores the daily cap (${msg.d.settings.dailyJobCap}).`);
+      setInterval(() => send({ v: 1, t: 'ping', d: { running: [...running].map(([jobId, attempt]) => ({ jobId, attempt })), usedToday } }), msg.d.pingSec * 1000);
     } else if (msg.t === 'job.assign') {
-      void answer(msg.d.bundle);
+      // Its "agent" only reviews, so the server never sends it an address or publish job.
+      if (msg.d.bundle.type !== 'publish') void answer(msg.d.bundle);
     } else if (msg.t === 'job.cancel') {
       running.delete(msg.d.jobId);
       log(`job.cancel: ${msg.d.jobId} (${msg.d.reason})`);

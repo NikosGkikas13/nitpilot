@@ -17592,7 +17592,7 @@ No new packages.
 
 The workspace typecheck (`npm run typecheck`) turns red at Step 2 and stays red until Step 11: the protocol's types change first, and the CLI (Steps 4 and 6), the server (Steps 9 and 10) and the web fixtures (Step 11) follow one at a time. The steps in between run each package's own tests and typecheck.
 
-- [ ] **Step 1: Write the failing protocol tests**
+- [x] **Step 1: Write the failing protocol tests**
 
 The sample helpers come first. The tests import `settings()` and `publishBundle()`, and `jobResult()` gains `draft: null` (the type imports point at schemas Step 2 adds, which vitest does not check):
 
@@ -17846,7 +17846,7 @@ index 66974a4..6ed896d 100644
 ```
 
 
-- [ ] **Step 2: Run them to see them fail, then change the protocol**
+- [x] **Step 2: Run them to see them fail, then change the protocol**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 18 tests (43 pass). `Settings`, `AgentJobType`, `PublishBundle` and `MAX_DRAFT_DIFF_BYTES` don't exist yet; `PROTOCOL_VERSION` is 1; `ping` doesn't require `usedToday` and `welcome` doesn't require `settings`; `settings` isn't a message; `JobResult` has no `draft`; `WebMe` strips `settings` and `usedToday`.
@@ -18145,7 +18145,7 @@ index ee2f86e..c711042 100644
 Run: `npm test -w packages/protocol && npm run typecheck -w packages/protocol`
 Expected: PASS, 61 tests; the protocol typechecks. The CLI, server and web don't yet (Steps 3 to 11).
 
-- [ ] **Step 3: CLI: a publish bundle is turned down, and results carry `draft: null`**
+- [x] **Step 3: CLI: a publish bundle is turned down, and results carry `draft: null`**
 
 Two small behavior changes ride along with the type split. The executor (which takes the `JobBundle` union now) says `unsupported_mode` to a publish bundle, since Task 17 is the one that runs them; and the result buffer fills `draft: null`. The tests first (their other changes are the type renames of Step 4):
 
@@ -18202,7 +18202,7 @@ index b91b4bb..4a797dd 100644
 Run: `npm test -w apps/cli -- src/runner/execute.test.ts src/mcp/buffer.test.ts`
 Expected: FAIL, 2 tests (14 pass): the buffer's result has no `draft` yet, and the executor goes on to prepare a worktree for the publish bundle and throws `TypeError: Cannot read properties of undefined (reading 'role')`.
 
-- [ ] **Step 4: CLI: the agent code takes `AgentJobBundle`**
+- [x] **Step 4: CLI: the agent code takes `AgentJobBundle`**
 
 Everything that reads fields only an agent bundle has (points, rules, `you`, `apply`) takes `AgentJobBundle`, and the tool table is keyed by `AgentJobType`. The executor turns publish down first. The result buffer adds `draft: null`:
 
@@ -18568,7 +18568,7 @@ Expected: PASS, 163 tests (14 more are skipped: the live agent tests, which need
 
 The CLI still doesn't typecheck: the daemon, `state.ts`, `config.ts`, `doctor.ts` and the stub hub follow in Steps 5 and 6.
 
-- [ ] **Step 5: CLI: write the failing tests for settings from the server**
+- [x] **Step 5: CLI: write the failing tests for settings from the server**
 
 The stub hub's `welcome` takes the settings to send (the defaults unless a test says otherwise), so a test can set the cap:
 
@@ -18831,7 +18831,7 @@ index 1676820..3b02c2d 100644
 Run: `npm test -w apps/cli -- src/daemon.test.ts src/state.test.ts src/config/config.test.ts src/commands/doctor.test.ts`
 Expected: FAIL, 11 tests (56 pass). `DailyJobCounter.usedToday` and `ignoredSettingsIn` don't exist; the default config still has `auto` and `dailyJobCap`; the hello still carries `defaults`; the ping has no `usedToday`; the cap still comes from the config (40), so the cap-5 test and the `settings` message test wait for a `job.reject` that never comes and time out; `doctor` says `valid`.
 
-- [ ] **Step 6: CLI: settings from the server**
+- [x] **Step 6: CLI: settings from the server**
 
 `state.ts`: the counter reads today's count without taking one. `config.ts`: `auto` and `dailyJobCap` are removed before the strict schema runs, and `ignoredSettingsIn` reads the raw file for `doctor`. A first try with `.transform` and destructuring failed lint (unused variables); `z.preprocess` is the plain way:
 
@@ -19113,7 +19113,7 @@ Expected: PASS, 67 tests.
 Run: `npm test -w apps/cli && npm run typecheck -w apps/cli`
 Expected: PASS, 301 tests (14 skipped); the CLI typechecks.
 
-- [ ] **Step 7: Server: write the failing tests**
+- [x] **Step 7: Server: write the failing tests**
 
 `test/ws.ts` builds hellos and pings by hand: `hello()` loses `defaults`, and `ping()` takes `usedToday`:
 
@@ -19417,7 +19417,7 @@ index 2e7a42b..00036e2 100644
 Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/ws/cli-hub.db.test.ts src/http/routes/me.db.test.ts src/jobs/assign.db.test.ts`
 Expected: FAIL, 10 tests (28 pass). The welcome has no `settings`; `User` has no settings columns (`PrismaClientValidationError`); `hub.sendSettings is not a function`; `usedToday` is undefined; `WebMe` fails to parse (no `settings`, no `usedToday`); the PUT answers 404 where 200, 400, 403 and 401 are expected. Two tests pass already, by design: the protocol 1 hello is closed with 4426 (the existing version check), and the queued publish job stays queued (it did before too: `MODE_FOR.publish` was `undefined`, which no CLI's modes include). They are guards, not RED tests.
 
-- [ ] **Step 8: The columns**
+- [x] **Step 8: The columns**
 
 In `apps/server/prisma/schema.prisma`. `prisma format` realigned the whole `User` model (and `RawEvent`'s columns), so most of the lines below are whitespace; `Job.type`'s comment gains `publish`:
 
@@ -19498,7 +19498,7 @@ ADD COLUMN     "dailyJobCap" INTEGER NOT NULL DEFAULT 40;
 
 Existing users get the defaults (true, true, 40).
 
-- [ ] **Step 9: Server: settings in the welcome, the route, and `usedToday`**
+- [x] **Step 9: Server: settings in the welcome, the route, and `usedToday`**
 
 `auth/users.ts`: `SETTINGS_COLUMNS` and `settingsOf` are shared by `loadWebMe`, the hub's welcome and the route. `/api/me` adds the settings and the sum of the connected CLIs' `usedToday`. `LiveClis` entries gain `usedToday`:
 
@@ -19841,7 +19841,7 @@ index bb29163..e865f14 100644
 Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/ws/cli-hub.db.test.ts src/http/routes/me.db.test.ts src/jobs/assign.db.test.ts`
 Expected: PASS, 38 tests.
 
-- [ ] **Step 10: Server: the rest of the code follows the new types**
+- [x] **Step 10: Server: the rest of the code follows the new types**
 
 Run: `npm run typecheck -w apps/server`
 Expected: FAIL: `draft` is missing from the `JobResult` literals in `engine/test-builders.ts`, `jobs/bundle.db.test.ts` and `test/integration/plan-1a.db.test.ts`; the `LiveClis` stand-in in `chats/views.db.test.ts` has no `usedToday`; `scripts/fake-cli.ts` sends a `defaults` and a ping without `usedToday`, and reads `pr.headSha` from a bundle that may be a publish bundle.
@@ -19989,7 +19989,7 @@ index 6994596..9ea4e8b 100644
 Run: `npm test -w apps/server && npm run typecheck -w apps/server`
 Expected: PASS, 824 tests; the server typechecks.
 
-- [ ] **Step 11: Web: the `/api/me` fixtures gain the settings**
+- [x] **Step 11: Web: the `/api/me` fixtures gain the settings**
 
 The web app parses every answer with `WebMe`, so the tests' `me` fixtures need `settings` and `usedToday`. Run the tests first to see it:
 
@@ -20114,7 +20114,7 @@ index a23489d..99faf38 100644
 Run: `npm test -w apps/web && npm run typecheck`
 Expected: PASS, 158 tests; every workspace typechecks again.
 
-- [ ] **Step 12: Explainers**
+- [x] **Step 12: Explainers**
 
 `docs/why/websockets.md` gets "Protocol versions" and "Settings live on the server"; `docs/why/cli-config.md` says what happened to `dailyJobCap` and `auto`:
 
@@ -20170,7 +20170,7 @@ index f64714b..f653d84 100644
 ```
 
 
-- [ ] **Step 13: Run everything, then commit**
+- [x] **Step 13: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 61, CLI 301 passed + 14 skipped, server 824, web 158; end to end 5; Playwright 6; typecheck and lint clean. (The end-to-end harness and the Playwright control server run the real CLI daemon, so they speak protocol 2 without edits.)

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { JobBundle } from '@nitpilot/protocol';
+import type { AgentJobBundle } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { CANARY_HOOK, prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
@@ -17,8 +17,8 @@ type Pr = ReturnType<typeof prRepo>;
 const branchOf = (pr: Pr) => pr.git(pr.base, 'rev-parse', `refs/heads/${pr.bundle.git.headBranch}`);
 
 /** An address job's worktree for a test PR, removed when the test ends. */
-async function addressJob(pr: Pr, apply: JobBundle['apply'] = 'auto') {
-  const bundle: JobBundle = { ...pr.bundle, type: 'address', apply, you: { login: 'maya', role: 'author' } };
+async function addressJob(pr: Pr, apply: AgentJobBundle['apply'] = 'auto') {
+  const bundle: AgentJobBundle = { ...pr.bundle, type: 'address', apply, you: { login: 'maya', role: 'author' } };
   const configDir = tempDir();
   const worktree = await prepareWorktree(bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env });
   onTestFinished(() => worktree.cleanup());
