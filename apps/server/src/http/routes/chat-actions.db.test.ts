@@ -204,6 +204,32 @@ describe('POST /api/chats/:id/review', () => {
     expect(await errorOf(again)).toEqual({ code: 'conflict', message: 'Your agent is already on it.' });
   });
 
+  it('answers 409 to a late press once the review has run: no second review, nothing new in the timeline', async () => {
+    const { chat, post, users } = await scene({ trusted: false });
+    expect((await post('leo', `/api/chats/${chat.id}/review`)).status).toBe(200);
+    await prisma.job.updateMany({ where: { chatId: chat.id }, data: { status: 'done', activeFor: null } });
+    const before = { jobs: await prisma.job.count({ where: { chatId: chat.id } }), last: (await lastItem(chat.id)).seq };
+    const late = await post('leo', `/api/chats/${chat.id}/review`);
+    expect(late.status).toBe(409);
+    expect(await errorOf(late)).toEqual({ code: 'conflict', message: 'Your agent already reviewed the latest commit.' });
+    expect(await prisma.job.count({ where: { chatId: chat.id } })).toBe(before.jobs);
+    expect((await lastItem(chat.id)).seq).toBe(before.last);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: users.leo.githubId } })).toMatchObject({ attention: 'none' });
+  });
+
+  it("answers 409 while the author's agent is fixing: leo keeps waiting for his turn", async () => {
+    const { chat, post, users } = await scene({ trusted: false });
+    const maya = await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } });
+    await prisma.job.create({
+      data: { chatId: chat.id, participantId: maya.id, activeFor: maya.id, userId: users.maya.id, type: 'address', status: 'queued', round: 1, headSha: chat.headSha },
+    });
+    const res = await post('leo', `/api/chats/${chat.id}/review`);
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', message: "The author's agent is fixing the PR first. Press Review again once it's done." });
+    expect(await prisma.job.count({ where: { chatId: chat.id, userId: users.leo.id } })).toBe(0);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, githubId: users.leo.githubId } })).toMatchObject({ attention: 'manual_review' });
+  });
+
   it('refuses a reviewer who is no longer requested, and anyone on a trusted PR', async () => {
     const untrusted = await scene({ trusted: false });
     expect((await untrusted.post('nina', `/api/chats/${untrusted.chat.id}/review`)).status).toBe(403);

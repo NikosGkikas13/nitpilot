@@ -56,6 +56,16 @@ describe('manual_review', () => {
     expect(out.chat.participants[1]!.attention).toBe('none');
     expect(out.chat.phase).toBe('reviewing');
   });
+
+  it.each([
+    ['already ran (attention is none)', agentToAgent({ trusted: false, phase: 'ready', participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head0' })] })],
+    ["is not in the chat at all", agentToAgent({ trusted: false, phase: 'ready', participants: [participantOf(maya, 'author')] })],
+  ])('changes nothing when the review %s: a late or second press', (_case, chat) => {
+    const out = run(chat, { type: 'manual_review', reviewer: leo });
+    expect(out.chat).toEqual(chat);
+    expect(out.commands).toEqual([]);
+    expect(out.timeline).toEqual([]);
+  });
 });
 
 describe('review_requested', () => {

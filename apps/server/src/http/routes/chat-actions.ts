@@ -7,6 +7,7 @@ import { chatAccess } from '../../chats/access';
 import type { Dispatch } from '../../chats/dispatch';
 import { failureKind } from '../../chats/failed-flags';
 import { can, permissionFacts, type ChatAction, type PermissionFacts } from '../../chats/permissions';
+import { activeJobFor } from '../../engine/state';
 import type { ChatState, DecideOutput, Person } from '../../engine/types';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
@@ -71,7 +72,7 @@ export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch 
     if (!queuedFor(out, who)) {
       if (out.chat.closed) throw new HttpError('conflict', CLOSED);
       if (out.chat.isDraft) throw new HttpError('conflict', "This PR is a draft. Your agent starts once it's ready for review.");
-      throw new HttpError('conflict', 'Your agent is already on it.');
+      throw new HttpError('conflict', whyNoReview(out.chat, who));
     }
     return ok(c);
   });
@@ -156,6 +157,14 @@ function notEscalated(chat: ChatState, point: number): string {
 
 function queuedFor(out: DecideOutput, who: Person): boolean {
   return out.commands.some((cmd) => cmd.type === 'enqueue_job' && cmd.participant.githubId === who.githubId);
+}
+
+/** Why Review started nothing, when the PR is open and not a draft: someone was faster, or the author's agent goes first. */
+function whyNoReview(chat: ChatState, who: Person): string {
+  const you = chat.participants.find((p) => p.githubId === who.githubId && p.role === 'reviewer');
+  if (you && activeJobFor(chat, you)) return 'Your agent is already on it.';
+  if (you?.attention === 'manual_review') return "The author's agent is fixing the PR first. Press Review again once it's done.";
+  return 'Your agent already reviewed the latest commit.';
 }
 
 function stillFailed(chat: ChatState, who: Person): boolean {

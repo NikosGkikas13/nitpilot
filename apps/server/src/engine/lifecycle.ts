@@ -1,7 +1,7 @@
 import { advance } from './advance';
 import { say, system, type Ctx, type Ev } from './context';
 import { cancelJobs, startReview } from './jobs';
-import { activeJobFor, activeJobs, author, ensureParticipant, pointList, reviewers, who } from './state';
+import { activeJobFor, activeJobs, author, ensureParticipant, participant, pointList, reviewers, who } from './state';
 
 export function onPrOpened(ctx: Ctx, e: Ev<'pr_opened'>): void {
   // GitHub sends `opened` once, but a catch-up and a webhook can both meet a new PR. Only this adds the
@@ -80,7 +80,10 @@ export function onReviewRequestRemoved(ctx: Ctx, e: Ev<'review_request_removed'>
 }
 
 export function onManualReview(ctx: Ctx, e: Ev<'manual_review'>): void {
-  const r = ensureParticipant(ctx.chat, e.reviewer, 'reviewer');
+  // Only a review that waits for this person to start it: a late or second press changes nothing (the route answers 409).
+  const r = participant(ctx.chat, e.reviewer.githubId, 'reviewer');
+  if (!r || r.attention !== 'manual_review') return;
+  ensureParticipant(ctx.chat, e.reviewer, 'reviewer');
   r.requested = true;
   startReview(ctx, r, { manual: true });
 }
