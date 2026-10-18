@@ -31,7 +31,7 @@ self.addEventListener('notificationclick', (event) => {
 /**
  * The server sends `{ title, body, url, tag }` (apps/server/src/tasks/push-notifier.ts). `tag` is the chat's id, so
  * a newer notification about the same chat replaces the older one instead of piling up, and `renotify` makes the
- * replacement alert again. The browser insists that every push shows something (`userVisibleOnly`), so one this
+ * replacement alert again (a payload without a tag still shows, it just doesn't replace anything). The browser insists that every push shows something (`userVisibleOnly`), so one this
  * file can't read still shows a plain notification that opens the inbox.
  */
 function showPush(event) {
@@ -39,21 +39,19 @@ function showPush(event) {
   if (!payload) {
     return self.registration.showNotification(APP_NAME, { body: 'Something needs you.', icon: ICON, data: { url: ownPage('/') } });
   }
-  return self.registration.showNotification(payload.title, {
-    body: payload.body,
-    tag: payload.tag,
-    renotify: true,
-    icon: ICON,
-    data: { url: ownPage(payload.url) },
-  });
+  const options = { body: payload.body, icon: ICON, data: { url: ownPage(payload.url) } };
+  // With a tag, a newer notification replaces the older one and alerts again. `renotify` without a tag makes the
+  // browser throw, so both go together or neither.
+  if (payload.tag) Object.assign(options, { tag: payload.tag, renotify: true });
+  return self.registration.showNotification(payload.title, options);
 }
 
 /** The payload, or null when there's none or it isn't what the server sends. */
 function readPayload(event) {
   try {
     const data = event.data ? event.data.json() : null;
-    if (!data || typeof data.title !== 'string' || typeof data.body !== 'string' || typeof data.tag !== 'string') return null;
-    return { title: data.title, body: data.body, tag: data.tag, url: typeof data.url === 'string' ? data.url : '/' };
+    if (!data || typeof data.title !== 'string' || typeof data.body !== 'string') return null;
+    return { title: data.title, body: data.body, tag: typeof data.tag === 'string' ? data.tag : '', url: typeof data.url === 'string' ? data.url : '/' };
   } catch {
     return null;
   }

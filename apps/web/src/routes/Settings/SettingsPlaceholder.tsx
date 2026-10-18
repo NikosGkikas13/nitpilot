@@ -10,10 +10,13 @@ import styles from '../Shell/Pane.module.css';
 /** `/settings` until the Settings page arrives (Task 21): who you are, push for this browser, and Sign out. */
 export function SettingsPlaceholder() {
   const me = useMe().data;
+  const [signingOut, setSigningOut] = useState(false);
 
   // Sign out removes this browser's push subscription first (never for longer than a moment), then sends the form.
   function signOut(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (signingOut) return;
+    setSigningOut(true);
     const form = e.currentTarget;
     // form.submit() doesn't fire this handler again.
     void turnPushOffBeforeSignOut().then(() => form.submit());
@@ -26,7 +29,7 @@ export function SettingsPlaceholder() {
       {me && <PushRow me={me} />}
       {/* A plain form: the browser sends our Origin, which /auth/logout checks, then follows its redirect. */}
       <form method="post" action="/auth/logout" onSubmit={signOut}>
-        <button type="submit" className={styles.button}>
+        <button type="submit" className={styles.button} disabled={signingOut} aria-busy={signingOut}>
           Sign out
         </button>
       </form>
@@ -60,10 +63,14 @@ function PushRow({ me }: { me: WebMe }) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       // The server sends no me.update for this: you now have a subscription, or maybe not (other devices may have one).
-      const now = await pushState();
-      queryClient.setQueryData(['pushState'], now);
-      if (now === 'on') queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, push: { ...old.push, subscribed: true } } : old));
-      else void queryClient.invalidateQueries({ queryKey: ['me'] });
+      try {
+        const now = await pushState();
+        queryClient.setQueryData(['pushState'], now);
+        if (now === 'on') queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, push: { ...old.push, subscribed: true } } : old));
+        else void queryClient.invalidateQueries({ queryKey: ['me'] });
+      } catch {
+        // Couldn't read the browser's state: leave the row as it was. The button must not stay busy.
+      }
       setBusy(false);
     }
   }

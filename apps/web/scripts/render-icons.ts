@@ -23,7 +23,8 @@ const OUTPUTS: { file: string; size: number; variant: Variant }[] = [
   { file: 'icon-512.png', size: 512, variant: 'rounded' },
   { file: 'maskable-512.png', size: 512, variant: 'maskable' },
   { file: 'apple-touch-icon.png', size: 180, variant: 'full-bleed' },
-  // The browser tab. The SVG's media query drops the diamond at this size (handoff: "Drop the diamond below 32px").
+  // The browser tab. The SVG's media query drops the diamond at this size (handoff: "Drop the diamond below 32px"):
+  // a tab draws this file at 16 CSS px (32 device px on a Retina screen), the "below 32px" case the handoff means.
   { file: 'favicon-32.png', size: 32, variant: 'rounded' },
 ];
 

@@ -34,6 +34,8 @@ Browsers add two rules:
 - **Every push must show a notification** (`userVisibleOnly: true`). A site can't use push to run code silently in the background. So `sw.js` shows something even for a push it can't read.
 - **Asking needs a click.** `Notification.requestPermission()` only shows the prompt when the person just clicked something, which is why `turnPushOn` asks for permission first, before anything else that waits. "Block" is final for the page: only the person can undo it, in the browser's site settings, so the Settings page explains that instead of offering a button (`pushState()` answers `denied`).
 
+When the app starts, `resyncPush` (called by the Shell once per signed-in person) re-sends this browser's existing subscription: the server keeps one row per endpoint, so a row it dropped is back, and a subscription left by the last person on a shared browser is taken over by whoever is signed in. It never asks for permission and never subscribes anew.
+
 Turning push off (`turnPushOff`) unsubscribes in the browser first, then tells the server. If the server can't be told, its next push to that browser gets a 410 from the push service and the server deletes the row itself (`web-push.md`). Signing out turns push off first (best effort, at most 2 seconds), so a shared computer doesn't keep showing the last person's notifications.
 
 ## What makes the app installable
@@ -44,7 +46,7 @@ Turning push off (`turnPushOff`) unsubscribes in the browser first, then tells t
 2. **A web app manifest** (`public/manifest.webmanifest`, linked from `index.html`): the app's name (from `BRAND`), `start_url: "/"` (the inbox), `display: "standalone"` (its own window, no address bar), its colors, and its icons.
 3. **Icons**: 192 and 512 pixels, plus a *maskable* one. Android cuts a maskable icon to whatever shape the phone uses (a circle, a squircle), so it fills the whole square and keeps the mark inside the middle 80% (the "safe zone"). The SVG `public/icons/icon.svg` is the one source; `npm run icons -w apps/web` renders every PNG from it with Playwright's Chromium, and the PNGs are committed. At 32 px and below the icon drops its little diamond: the SVG has a media query that hides it at that size.
 
-Chromium browsers then fire a `beforeinstallprompt` event. Left alone, Chrome shows its own small install bar. We keep the event instead (`src/push/install.ts`, started in `main.tsx` because the event can come before you're signed in) and show our own card when you're in the app: **Install** opens the browser's real install dialog, **Not now** is remembered in this browser. Inside the installed app (`display-mode: standalone`) the card never shows.
+Chromium browsers then fire a `beforeinstallprompt` event. Left alone, Chrome on Android shows a small install bar at the bottom, and on desktop an install icon in the address bar. We keep the event (`src/push/install.ts`, started in `main.tsx` because the event can come before you're signed in) and show our own card when you're in the app (the address-bar icon stays either way): **Install** opens the browser's real install dialog, **Not now** is remembered in this browser. Inside the installed app (`display-mode: standalone`) the card never shows.
 
 In React terms: `install.ts` is a tiny external store, like a Zustand store with one value, read with `useSyncExternalStore` by the card.
 

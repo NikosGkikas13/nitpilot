@@ -73,7 +73,8 @@ export function IosHomeScreenSheet({ onClose }: { onClose: () => void }) {
   return (
     <div className={styles.layer} onKeyDown={onKeyDown}>
       <div className={styles.backdrop} data-testid="sheet-backdrop" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={textId} className={styles.sheet}>
+      {/* tabIndex -1: a click on the sheet's text keeps focus inside it (not on body), so Esc and Tab still reach onKeyDown. */}
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={textId} tabIndex={-1} className={styles.sheet}>
         <span className={styles.grabber} aria-hidden="true" />
         <div className={styles.head}>
           <img src="/icons/icon.svg" alt="" width={56} height={56} className={styles.icon} />

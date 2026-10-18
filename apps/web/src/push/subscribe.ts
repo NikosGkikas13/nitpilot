@@ -75,13 +75,39 @@ export async function turnPushOn(vapidPublicKey: string): Promise<void> {
 
   // userVisibleOnly: every push shows a notification (public/sw.js); browsers allow nothing else.
   const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-  const { keys } = subscription.toJSON();
-  const body: PushSubscriptionRequest = { endpoint: subscription.endpoint, keys: { p256dh: keys?.p256dh ?? '', auth: keys?.auth ?? '' }, label: deviceLabel() };
   try {
-    await api.send('POST', '/api/push/subscriptions', body, ActionResponse);
+    await sendSubscription(subscription);
   } catch (err) {
     await subscription.unsubscribe().catch(() => false);
     throw err;
+  }
+}
+
+/** Give the server this browser's subscription, labelled for this browser. The server keeps one row per endpoint. */
+async function sendSubscription(subscription: PushSubscription): Promise<void> {
+  const { keys } = subscription.toJSON();
+  const body: PushSubscriptionRequest = { endpoint: subscription.endpoint, keys: { p256dh: keys?.p256dh ?? '', auth: keys?.auth ?? '' }, label: deviceLabel() };
+  await api.send('POST', '/api/push/subscriptions', body, ActionResponse);
+}
+
+/**
+ * When the app starts: send the server this browser's existing subscription again, so what the server knows matches
+ * the browser. It fixes two things: a row the server dropped (five failures, or a 410 after the push service rotated
+ * the subscription), and a subscription left by the last person on a shared browser, which the server's upsert moves
+ * to whoever is signed in now. Never asks for permission, never subscribes, never throws (it logs a warning), and
+ * leaves alone a subscription made with another key: only `turnPushOn` replaces that. Answers whether it re-sent one.
+ */
+export async function resyncPush(vapidPublicKey: string): Promise<boolean> {
+  try {
+    if (isIos() && !isStandalone()) return false;
+    if (!pushSupported() || Notification.permission !== 'granted') return false;
+    const subscription = await currentSubscription();
+    if (!subscription || !sameKey(subscription.options.applicationServerKey, keyBytes(vapidPublicKey))) return false;
+    await sendSubscription(subscription);
+    return true;
+  } catch (err) {
+    console.warn("[push] this browser's subscription was not re-sent:", err instanceof Error ? err.message : String(err));
+    return false;
   }
 }
 

@@ -1,5 +1,5 @@
 import type { WebMe } from '@nitpilot/protocol';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pretendIphone, VAPID_KEY } from '../../test/push';
@@ -66,6 +66,19 @@ describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Show me how' }));
     await userEvent.click(screen.getByTestId('sheet-backdrop'));
     expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+  });
+
+  it('keeps Esc working after a click on the sheet itself (the click moves focus into the dialog, not out to the page)', async () => {
+    restore = pretendIphone();
+    renderApp('/settings');
+    const sheet = await screen.findByRole('dialog', { name: NAME });
+    // jsdom doesn't move focus on a click; this is what the browser does for a click on text inside a tabindex=-1 element.
+    await userEvent.click(within(sheet).getByText('On iPhone, notifications only work from the Home Screen app.'));
+    expect(sheet).toHaveAttribute('tabindex', '-1');
+    act(() => sheet.focus());
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
   });
 
   it('opens again from Settings, and gives focus back to the button that opened it', async () => {

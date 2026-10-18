@@ -45,6 +45,12 @@ export function pageProblems(page: Page): string[] {
   return errors;
 }
 
+/** Give someone a push subscription for a made-up endpoint, so `notify` has somewhere to send. `resetChats` clears it. */
+export async function pushSubscription(login: 'maya' | 'leo'): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/push-subscription`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`subscribing ${login} failed: ${res.status} ${await res.text()}`);
+}
+
 /**
  * Tell someone they're needed, through the server's real notifier: a sample "Ready for your approval". Answers who it
  * reached and the pushes the server recorded (the Playwright server never sends a real push).

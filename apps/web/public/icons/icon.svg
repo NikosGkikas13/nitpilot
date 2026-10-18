@@ -3,7 +3,8 @@
     Nitpilot's app icon (handoff §9 "App icon"): a white mono "n" with a #a8e3ea diamond at the top right, on a #16707f
     rounded square. The "n" is Fragment Mono's glyph as a path (no font needed), placed as in the handoff's 108px
     splash icon. At 32px and below the diamond goes ("Drop the diamond below 32px"): as an image, this file's media
-    queries see its own size. apps/web/scripts/render-icons.ts makes every PNG from it.
+    queries see its own size. favicon-32.png is drawn at 16 CSS px in a browser tab (32 device px on a Retina screen),
+    which is the "below 32px" case the handoff means, so it is rendered without the diamond. apps/web/scripts/render-icons.ts makes every PNG from it.
   -->
   <style>
     @media (max-width: 32px) {

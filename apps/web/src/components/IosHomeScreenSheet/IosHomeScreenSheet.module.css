@@ -27,6 +27,11 @@
   gap: 16px;
 }
 
+/* Only focusable so a click inside keeps focus in the sheet; it isn't a control, so no ring. Got it keeps its own. */
+.sheet:focus {
+  outline: none;
+}
+
 .grabber {
   align-self: center;
   width: 36px;

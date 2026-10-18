@@ -26,8 +26,8 @@ export function InstallCard({ prompt = installPrompt }: { prompt?: InstallPrompt
   }
 
   return (
-    // A dialog that doesn't take focus or block the page: the inbox stays usable behind it.
-    <section role="dialog" aria-labelledby={titleId} aria-describedby={textId} className={styles.card}>
+    // A named region, not a dialog: it never takes focus or blocks the page, the inbox stays usable behind it.
+    <section aria-labelledby={titleId} aria-describedby={textId} className={styles.card}>
       <img src="/icons/icon.svg" alt="" width={52} height={52} className={styles.icon} />
       <div className={styles.body}>
         <div className={styles.text}>

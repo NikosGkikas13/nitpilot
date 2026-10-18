@@ -40,13 +40,17 @@ export class InstallPrompt {
     return () => this.listeners.delete(onChange);
   };
 
-  /** Open the browser's install dialog and wait for the answer. The offer is used up either way. */
+  /** Open the browser's install dialog and wait for the answer. The offer is used up either way, even if the browser refuses to open it. */
   async install(): Promise<void> {
     const event = this.event;
     if (!event) return;
     this.set(null);
-    await event.prompt();
-    await event.userChoice;
+    try {
+      await event.prompt();
+      await event.userChoice;
+    } catch (err) {
+      console.warn('[install] the browser did not open its install dialog:', err instanceof Error ? err.message : String(err));
+    }
   }
 
   private set(event: InstallPromptEvent | null): void {

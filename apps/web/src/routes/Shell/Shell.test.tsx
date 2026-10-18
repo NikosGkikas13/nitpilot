@@ -3,7 +3,12 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chatRoutes } from '../../test/chat';
+import { VAPID_KEY } from '../../test/push';
 import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+// Everything real except the re-send of this browser's push subscription, which would need a browser.
+const resyncPush = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../push/subscribe', async (original) => ({ ...(await original<typeof import('../../push/subscribe')>()), resyncPush }));
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
 
@@ -15,9 +20,29 @@ function serve() {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resyncPush.mockClear();
+});
 
 describe('Shell (handoff "App shell and layout")', () => {
+  it("re-sends this browser's push subscription once after sign-in, when the server has push keys", async () => {
+    fakeViewport(true);
+    fakeApi({ 'GET /api/me': (): Answer => [200, { ...me, push: { vapidPublicKey: VAPID_KEY, subscribed: false } }], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
+    renderApp('/');
+    await screen.findByRole('region', { name: 'Inbox' });
+    expect(resyncPush).toHaveBeenCalledTimes(1);
+    expect(resyncPush).toHaveBeenCalledWith(VAPID_KEY);
+  });
+
+  it("doesn't re-send anything on a server without push keys", async () => {
+    fakeViewport(true);
+    serve();
+    renderApp('/');
+    await screen.findByRole('region', { name: 'Inbox' });
+    expect(resyncPush).not.toHaveBeenCalled();
+  });
+
   it('shows the inbox beside the open page on a desktop', async () => {
     fakeViewport(true);
     serve();

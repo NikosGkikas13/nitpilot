@@ -1,4 +1,6 @@
 import type { WebMe } from '@nitpilot/protocol';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Outlet, useMatch, useNavigate } from 'react-router';
 import { InstallCard } from '../../components/InstallCard/InstallCard';
 import { HomeScreenSheetProvider } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
@@ -6,6 +8,7 @@ import { ToastProvider } from '../../components/Toast/Toast';
 import { LiveProvider } from '../../live/LiveProvider';
 import { useEscapeBack } from '../../lib/keys';
 import { useIsDesktop } from '../../lib/viewport';
+import { resyncPush } from '../../push/subscribe';
 import { Inbox } from '../Inbox/Inbox';
 import styles from './Shell.module.css';
 import { UiStateProvider } from './UiState';
@@ -18,6 +21,23 @@ import { UiStateProvider } from './UiState';
  * install the app (handoff §9): the install card where the browser offers it, and the iPhone's Home Screen sheet.
  */
 export function Shell({ me }: { me: WebMe }) {
+  const queryClient = useQueryClient();
+  const userId = me.id;
+  const vapidPublicKey = me.push.vapidPublicKey;
+
+  // Once per signed-in person: send the server this browser's push subscription again (push/subscribe.ts), so one it
+  // dropped, or one left by the last person on a shared browser, belongs to whoever is signed in now.
+  useEffect(() => {
+    if (!vapidPublicKey) return;
+    let stale = false;
+    void resyncPush(vapidPublicKey).then((sent) => {
+      if (sent && !stale) queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, push: { ...old.push, subscribed: true } } : old));
+    });
+    return () => {
+      stale = true;
+    };
+  }, [userId, vapidPublicKey, queryClient]);
+
   return (
     <LiveProvider>
       <UiStateProvider>

@@ -23,6 +23,6 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// The service worker (public/sw.js) receives push notifications, and makes the app installable. Without it the app
+// The service worker (public/sw.js) receives push notifications and handles clicks on them. Without it the app
 // still works (src/push/register.ts).
 void registerServiceWorker();

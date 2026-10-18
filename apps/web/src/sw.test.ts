@@ -89,6 +89,15 @@ describe('the service worker (public/sw.js)', () => {
     });
   });
 
+  it('a payload without a tag (or with an empty one) still shows its title and body, with no tag and no renotify', async () => {
+    const { self, fire } = startWorker();
+    await fire('push', pushEvent({ title: payload.title, body: payload.body, url: payload.url }));
+    await fire('push', pushEvent({ ...payload, tag: '' }));
+    const plain = { body: 'acme/shop-api#142', icon: '/icons/icon-192.png', data: { url: `${ORIGIN}/c/acme/shop-api/142` } };
+    expect(self.registration.showNotification).toHaveBeenNthCalledWith(1, 'Ready for your approval', plain);
+    expect(self.registration.showNotification).toHaveBeenNthCalledWith(2, 'Ready for your approval', plain);
+  });
+
   it('only ever opens pages of its own site', async () => {
     const { self, fire } = startWorker();
     await fire('push', pushEvent({ ...payload, url: 'https://evil.example/phish' }));
@@ -115,6 +124,12 @@ describe('the service worker (public/sw.js)', () => {
     await fire('notificationclick', clickEvent(payload.url));
     expect(inbox.focus).not.toHaveBeenCalled();
     expect(self.clients.openWindow).toHaveBeenCalledWith(`${ORIGIN}/c/acme/shop-api/142`);
+  });
+
+  it('a click on a notification that points at another site opens the inbox instead', async () => {
+    const { self, fire } = startWorker();
+    await fire('notificationclick', clickEvent('https://evil.example/phish'));
+    expect(self.clients.openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
   });
 
   it('a click on a notification without a page opens the inbox', async () => {

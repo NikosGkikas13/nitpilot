@@ -102,7 +102,7 @@ control.post('/pr', async (c) => {
  * People, their sign-ins and the installation stay; their Settings go back to the defaults.
  */
 control.post('/reset', async (c) => {
-  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat" CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
   await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true } });
   return c.body(null, 204);
 });
@@ -115,6 +115,19 @@ control.post('/settings', async (c) => {
   const user = e2e.users[login];
   if (!user) return c.json({ error: `no test user "${login}"` }, 400);
   await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
+  return c.body(null, 204);
+});
+/**
+ * Give someone a push subscription without a browser: a row for a made-up endpoint, so the notifier has somewhere to
+ * send (the recording sender never contacts it). Cleared by /reset.
+ */
+control.post('/push-subscription', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  await prisma.pushSubscription.create({
+    data: { userId: user.id, endpoint: `https://push.example.test/${login}`, p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'sharedSecretAbc12345', label: 'Playwright' },
+  });
   return c.body(null, 204);
 });
 /**

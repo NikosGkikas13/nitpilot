@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOME_SCREEN_SHEET_SEEN_KEY } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
 import { ENDPOINT, fakeBrowser, SAFARI_IPHONE, VAPID_KEY } from '../../test/push';
 import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+import * as subscribe from '../../push/subscribe';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
 
@@ -45,6 +46,18 @@ describe('SettingsPlaceholder: the push switch until Task 21', () => {
     expect(queryClient.getQueryData<WebMe>(['me'])?.push.subscribed).toBe(true);
   });
 
+  it("doesn't stay busy when reading the push state fails afterwards", async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serve();
+    renderApp('/settings');
+    const button = await screen.findByRole('button', { name: 'Turn push on' });
+    // The first read (page load) worked; the one after the click fails.
+    vi.spyOn(subscribe, 'pushState').mockRejectedValueOnce(new Error('boom'));
+    await userEvent.click(button);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Turn push/ })).toBeEnabled());
+  });
+
   it('turns it off again', async () => {
     fakeViewport(true);
     const browser = fakeBrowser({ permission: 'granted' });
@@ -54,6 +67,8 @@ describe('SettingsPlaceholder: the push switch until Task 21', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Turn push off' }));
     expect(await screen.findByRole('button', { name: 'Turn push on' })).toBeInTheDocument();
     expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
+    // This browser can't know whether your other devices are still subscribed: the page asks the server again.
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url) === '/api/me').length).toBeGreaterThan(1));
   });
 
   it("says what went wrong when the server doesn't take the subscription", async () => {
@@ -111,6 +126,24 @@ describe('SettingsPlaceholder: Sign out', () => {
     expect(browser.pushManager.current).toBeNull();
     expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
     expect(submit.mock.contexts[0]).toHaveAttribute('action', '/auth/logout');
+  });
+
+  it('ignores a second press while it is signing out', async () => {
+    fakeViewport(true);
+    fakeBrowser({ permission: 'granted' });
+    serve();
+    let finish: () => void = () => {};
+    const wait = vi.spyOn(subscribe, 'turnPushOffBeforeSignOut').mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    const button = await screen.findByRole('button', { name: 'Sign out' });
+    await userEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    await userEvent.click(button);
+    finish();
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(wait).toHaveBeenCalledTimes(1);
   });
 
   it('signs out all the same in a browser without push', async () => {

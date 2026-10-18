@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ENDPOINT, fakeBrowser, SAFARI_IPHONE, VAPID_KEY } from '../test/push';
 import { fakeApi, type Answer } from '../test/render';
-import { keyBytes, pushState, turnPushOff, turnPushOffBeforeSignOut, turnPushOn } from './subscribe';
+import { keyBytes, pushState, resyncPush, turnPushOff, turnPushOffBeforeSignOut, turnPushOn } from './subscribe';
 
 /** The server's push routes (Task 19), answering `{ ok: true }`. */
 function servePush(answer: Answer = [200, { ok: true }]) {
@@ -148,5 +148,54 @@ describe('turnPushOffBeforeSignOut', () => {
     const fetch = fakeApi({ 'DELETE /api/push/subscriptions': () => [500, { error: { code: 'internal', message: 'boom' } }] });
     await expect(turnPushOffBeforeSignOut(20)).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resyncPush (the app re-sends this browser\'s subscription when it starts)', () => {
+  it('posts the existing subscription again, with the label, for whoever is signed in', async () => {
+    const browser = fakeBrowser({ permission: 'granted' });
+    const fetch = servePush();
+    await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) });
+    expect(await resyncPush(VAPID_KEY)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]![1]!.method).toBe('POST');
+    expect(sentBody(fetch)).toEqual({ endpoint: ENDPOINT, keys: { p256dh: 'BPublicKeyOfTheBrowser', auth: 'sharedSecret' }, label: 'Chrome on macOS' });
+    expect(browser.Notification.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('does nothing without a subscription, when notifications are not granted, or in a browser without push', async () => {
+    fakeBrowser({ permission: 'granted' });
+    const fetch = servePush();
+    await resyncPush(VAPID_KEY);
+    vi.unstubAllGlobals();
+
+    const denied = fakeBrowser({ permission: 'denied' });
+    await denied.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) });
+    await resyncPush(VAPID_KEY);
+    vi.unstubAllGlobals();
+
+    fakeBrowser({ serviceWorker: false });
+    await resyncPush(VAPID_KEY);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("leaves a subscription made with another server key alone (only turning push on replaces it)", async () => {
+    const browser = fakeBrowser({ permission: 'granted' });
+    const fetch = servePush();
+    const old = await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4, 1, 2, 3]) });
+    await resyncPush(VAPID_KEY);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(old.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it("doesn't throw, or unsubscribe, when the server refuses", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const browser = fakeBrowser({ permission: 'granted' });
+    servePush([500, { error: { code: 'internal', message: 'boom' } }]);
+    const sub = await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) });
+    await expect(resyncPush(VAPID_KEY)).resolves.toBe(false);
+    expect(sub.unsubscribe).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

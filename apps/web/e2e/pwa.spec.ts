@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { notify, pageProblems, signIn } from './control';
+import { notify, pageProblems, pushSubscription, resetChats, signIn } from './control';
 import { BASE_URL } from './ports';
 
 test('the signed-in app links its manifest and runs its service worker, with nothing blocked', async ({ page, context }) => {
@@ -33,7 +33,7 @@ test('the build puts the manifest, the service worker and the icons at the root,
   expect(manifest).toMatchObject({ name: 'Nitpilot', start_url: '/' });
 });
 
-test("Settings reads push from the real browser; nobody subscribed means nothing is pushed", async ({ page, context }) => {
+test("Settings reads push from the real browser, and the notifier pushes to a subscription on file", async ({ page, context }) => {
   await signIn(context, 'maya');
   await page.goto('/settings');
   // The server's VAPID key reached the page (without one it says push isn't set up), and pushState() ran against
@@ -41,5 +41,17 @@ test("Settings reads push from the real browser; nobody subscribed means nothing
   // "denied" state; the switch itself is checked by hand (the live step). Never subscribe here: that reaches
   // Google's push service.
   await expect(page.getByText("Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page.")).toBeVisible();
-  expect((await notify('maya')).recorded).toEqual([]);
+  // The server side of push, through the recording sender: with a subscription on file (seeded, since this browser
+  // can't subscribe), the notifier pushes to it and reaches maya. Never a real push service.
+  await resetChats();
+  await pushSubscription('maya');
+  try {
+    const { reached, recorded } = await notify('maya');
+    expect(reached).toEqual(['maya']);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.endpoint).toBe('https://push.example.test/maya');
+    expect(JSON.parse(recorded[0]!.payload)).toMatchObject({ title: 'Ready for your approval', body: 'octo/sandbox#1' });
+  } finally {
+    await resetChats();
+  }
 });
