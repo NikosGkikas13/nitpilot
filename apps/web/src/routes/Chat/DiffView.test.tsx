@@ -1,8 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DRAFT_DIFF as DIFF, DRAFT_FILES as FILES } from '../../test/chat';
 import { DiffView } from './DiffView';
+
+// The test run gives every name in a CSS module a class; the real build only gives the classes the file defines, and
+// DiffView.module.css has none for an unchanged ("context") line. Say so here, to see what a context line really gets.
+vi.mock('./DiffView.module.css', () => ({
+  default: Object.fromEntries(['diff', 'file', 'head', 'caret', 'path', 'adds', 'dels', 'code', 'line', 'number', 'sign', 'text', 'add', 'del', 'hunk', 'note'].map((name) => [name, `_${name}`])),
+}));
 
 const fileButton = (path: string) => screen.getByRole('button', { name: new RegExp(`^${path.replaceAll('.', '\\.')}`) });
 
@@ -18,6 +24,15 @@ describe('DiffView', () => {
     expect(added).toHaveTextContent(/^2\+/);
     expect(removed).toHaveAttribute('data-kind', 'del');
     expect(removed).toHaveTextContent(/^2−/);
+  });
+
+  it('gives each line the class of its kind only, never a class called "undefined"', () => {
+    const { container } = render(<DiffView diff={DIFF} files={FILES} />);
+    const lines = container.querySelectorAll('[data-kind]');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect([...line.classList]).not.toContain('undefined');
+    // A context line has just the base class (the CSS has no class of its own for it).
+    expect([...container.querySelector('[data-kind="context"]')!.classList]).toEqual(['_line']);
   });
 
   it('collapses and opens each file on its own', async () => {

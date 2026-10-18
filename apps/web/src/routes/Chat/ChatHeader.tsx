@@ -1,4 +1,5 @@
 import type { ChatView } from '@nitpilot/protocol';
+import { useIsMutating } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { useAutoSwitch } from '../../api/drafts';
 import { Ping } from '../../components/Ping/Ping';
@@ -82,9 +83,11 @@ export function ChatHeader(props: { view: ChatView; you: string; desktop: boolea
 /** Your Auto switch for your role here (lib/auto.ts says whether there is one, and why it may be off). */
 function YourAutoSwitch({ view, you }: { view: ChatView; you: string }) {
   const auto = useAutoSwitch(view.id);
+  // Read from the cache by the write's key, so a header drawn again while the request is open is still busy.
+  const busy = useIsMutating({ mutationKey: ['auto', view.id] }) > 0;
   const state = autoSwitchFor(view, you);
   if (!state) return null;
-  return <AutoSwitch {...state} busy={auto.isPending} onToggle={(on) => auto.mutate({ role: state.role, on })} />;
+  return <AutoSwitch {...state} busy={busy} onToggle={(on) => auto.mutate({ role: state.role, on })} />;
 }
 
 /** One pip per allowed round (accent when used, all amber on the last round), then "Round 2 of 3". */

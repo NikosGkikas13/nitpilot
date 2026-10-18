@@ -1,4 +1,5 @@
 import { BRAND, type ChatView, type DraftView, type NewPoint, type PointView } from '@nitpilot/protocol';
+import { useIsMutating } from '@tanstack/react-query';
 import { useDiscardDraft, useSendDraft } from '../../api/drafts';
 import { Ping } from '../../components/Ping/Ping';
 import { useCopy } from '../../lib/clipboard';
@@ -160,20 +161,23 @@ function CopyCommand({ command }: { command: string }) {
 /**
  * Send (primary) and Discard (outlined). Both wait while either is on its way. While the push runs, Send says
  * "Sending…"; Discard stays, since a push that hasn't started yet can still be called off (the server says when
- * it's too late).
+ * it's too late). "On its way" is read from the cache by the writes' keys (like the composer does), not from this
+ * card's own mutation, so a card drawn again while a request is open still waits.
  */
 function DraftActions({ chatId, draft }: { chatId: string; draft: DraftView }) {
   const send = useSendDraft(chatId);
   const discard = useDiscardDraft(chatId);
-  const pressed = send.isPending || discard.isPending;
-  const sending = draft.sending || send.isPending;
+  const sendOnItsWay = useIsMutating({ mutationKey: ['draft_send', chatId] }) > 0;
+  const discardOnItsWay = useIsMutating({ mutationKey: ['draft_discard', chatId] }) > 0;
+  const pressed = sendOnItsWay || discardOnItsWay;
+  const sending = draft.sending || sendOnItsWay;
   return (
     <div className={styles.actions}>
       <button type="button" className={styles.primary} disabled={pressed || draft.sending} onClick={() => send.mutate(draft)}>
         {sending ? 'Sending…' : 'Send'}
       </button>
       <button type="button" className={styles.secondary} disabled={pressed} onClick={() => discard.mutate(draft)}>
-        {discard.isPending ? 'Discarding…' : 'Discard'}
+        {discardOnItsWay ? 'Discarding…' : 'Discard'}
       </button>
     </div>
   );

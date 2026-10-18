@@ -1,10 +1,15 @@
 import type { ChatView, WebMe } from '@nitpilot/protocol';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makeQueryClient } from '../../app';
+import { ToastProvider } from '../../components/Toast/Toast';
 import { chatResponse, chatView } from '../../test/chat';
 import { fakeApi, renderApp, type Answer } from '../../test/render';
 import { AutoSwitch } from './AutoSwitch';
+import { ChatHeader } from './ChatHeader';
 
 const REASONS = {
   outside_contributor: 'Off for PRs from outside contributors.',
@@ -82,6 +87,29 @@ describe('the Auto switch in the chat header', () => {
     expect(await screen.findByText("Auto-fix is off. Your agent's work will wait as drafts.")).toBeInTheDocument();
     // No optimistic update: the switch moves when chat.state says so.
     expect(screen.getByRole('switch', { name: 'Auto-fix' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('stays busy when the header is drawn again while the request is on its way, so a press sends nothing', async () => {
+    const fetch = serve({}, { 'PUT /api/chats/chat_142/auto': () => new Promise<Answer>(() => {}) });
+    const queryClient = makeQueryClient({ retryDelay: 0 });
+    const header = (
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <MemoryRouter>
+            <ChatHeader view={chatView()} you="maya" desktop collapsed={false} details={{ available: false, open: false, toggle: () => {} }} />
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>
+    );
+    const first = render(header);
+    await userEvent.click(screen.getByRole('switch', { name: 'Auto-fix' }));
+    // The chat is left (or the header changes shape) and drawn again; the cache, and the request in it, stay.
+    first.unmount();
+    render(header);
+    const back = screen.getByRole('switch', { name: 'Auto-fix' });
+    expect(back).toHaveAttribute('aria-busy', 'true');
+    await userEvent.click(back);
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/auto'))).toHaveLength(1);
   });
 
   it("shows the server's words when it refuses", async () => {

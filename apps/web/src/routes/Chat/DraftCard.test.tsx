@@ -110,6 +110,32 @@ describe('DraftCard: an author draft', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: /^Draft: / })).not.toBeInTheDocument());
   });
 
+  it('keeps Send and Discard disabled when the card goes and comes back while the request is still on its way', async () => {
+    const fetch = serve(maya, authorDraft(), {}, { 'POST /api/chats/chat_142/drafts/job_9/send': () => new Promise<Answer>(() => {}) });
+    const { sockets } = renderApp(PATH);
+    const first = within(await card(/^Draft: /));
+    act(() => sockets.last().open());
+    await userEvent.click(first.getByRole('button', { name: 'Send' }));
+    // The card leaves the chat (unmounts), then the same draft is shown again (a new card), with the request still open.
+    const mayaDrafts = { ...chatView().permissions, drafts: ['job_9'] };
+    act(() => sockets.last().receive({ v: 1, t: 'chat.state', d: { chatId: 'chat_142', view: chatView({ points, drafts: [], lastSeq: 6 }) } }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: /^Draft: / })).not.toBeInTheDocument());
+    act(() => sockets.last().receive({ v: 1, t: 'chat.state', d: { chatId: 'chat_142', view: chatView({ points, drafts: [authorDraft()], permissions: mayaDrafts, lastSeq: 6 }) } }));
+    const again = within(await card(/^Draft: /));
+    expect(again.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+    expect(again.getByRole('button', { name: 'Discard' })).toBeDisabled();
+    await userEvent.click(again.getByRole('button', { name: 'Discard' }));
+    expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/discard'))).toHaveLength(0);
+  });
+
+  it('lets the owner Discard while the push is running, but not Send again', async () => {
+    serve(maya, authorDraft({ sending: true }));
+    renderApp(PATH);
+    const inside = within(await card(/^Draft: /));
+    expect(inside.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+    expect(inside.getByRole('button', { name: 'Discard' })).toBeEnabled();
+  });
+
   it("discards it, and shows the server's words when it refuses", async () => {
     serve(maya, authorDraft(), {}, {
       'POST /api/chats/chat_142/drafts/job_9/discard': (): Answer => [200, { ok: true }],

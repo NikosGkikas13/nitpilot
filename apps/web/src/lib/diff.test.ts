@@ -70,6 +70,47 @@ describe('splitDiff', () => {
     ]);
   });
 
+  it("reads git's quoted names (non-ASCII) and the tab git puts after a name with spaces, as the file list spells them", () => {
+    const quoted = [
+      'diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"',
+      'index 1111111..2222222 100644',
+      '--- "a/caf\\303\\251.txt"',
+      '+++ "b/caf\\303\\251.txt"',
+      '@@ -1 +1,2 @@',
+      ' menu',
+      '+tea',
+      '+cake',
+      'diff --git a/my notes.md b/my notes.md',
+      'index 3333333..4444444 100644',
+      '--- a/my notes.md\t',
+      '+++ b/my notes.md\t',
+      '@@ -1,2 +1 @@',
+      '-old',
+      ' keep',
+    ].join('\n');
+    const files = splitDiff(quoted, [
+      { path: 'café.txt', adds: 7, dels: 3 },
+      { path: 'my notes.md', adds: 5, dels: 4 },
+    ]);
+    // The counts are the listed ones (7 and 3, 5 and 4), not recounted from the lines: the path matched the list.
+    expect(files.map((f) => [f.path, f.adds, f.dels])).toEqual([
+      ['café.txt', 7, 3],
+      ['my notes.md', 5, 4],
+    ]);
+  });
+
+  it('unquotes the escapes git uses in a name, in the header too (a rename or a binary file has no ---/+++ lines)', () => {
+    const diff = [
+      'diff --git "a/old caf\\303\\251.png" "b/new \\"q\\" caf\\303\\251.png"',
+      'similarity index 100%',
+      'rename from "old caf\\303\\251.png"',
+      'rename to "new \\"q\\" caf\\303\\251.png"',
+    ].join('\n');
+    const [file] = splitDiff(diff, [{ path: 'new "q" café.png', adds: 0, dels: 0 }]);
+    expect(file!.path).toBe('new "q" café.png');
+    expect(file!.lines).toEqual([{ kind: 'note', n: null, text: 'Renamed from old café.png' }]);
+  });
+
   it('has no files for an empty diff', () => {
     expect(splitDiff('', [])).toEqual([]);
   });

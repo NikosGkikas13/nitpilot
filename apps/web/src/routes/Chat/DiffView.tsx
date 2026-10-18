@@ -39,7 +39,7 @@ function DiffFile({ file }: { file: DiffFileView }) {
       {open && (
         <pre className={styles.code}>
           {file.lines.map((line, i) => (
-            <div key={i} className={`${styles.line} ${styles[line.kind]}`} data-kind={line.kind}>
+            <div key={i} className={[styles.line, styles[line.kind]].filter(Boolean).join(' ')} data-kind={line.kind}>
               <span className={styles.number}>{line.n}</span>
               <span className={styles.sign}>{SIGN[line.kind]}</span>
               <code className={styles.text}>{line.text}</code>

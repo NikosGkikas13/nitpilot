@@ -63,7 +63,7 @@ function fileView(section: string[], files: DraftFile[]): DiffFileView {
 /** What to say for a file with no lines to show. */
 function noLines(section: string[]): DiffLine {
   const renamed = section.find((l) => l.startsWith('rename from '));
-  if (renamed) return { kind: 'note', n: null, text: `Renamed from ${renamed.slice('rename from '.length)}` };
+  if (renamed) return { kind: 'note', n: null, text: `Renamed from ${unquoteName(renamed.slice('rename from '.length))}` };
   if (section.some((l) => l.startsWith('Binary files '))) return { kind: 'note', n: null, text: 'Binary file, not shown' };
   return { kind: 'note', n: null, text: 'No line changes' };
 }
@@ -73,16 +73,50 @@ function noLines(section: string[]): DiffLine {
  * a file with neither (a rename, a binary file), the listed path the `diff --git` line ends with.
  */
 function pathOf(section: string[], files: DraftFile[]): string {
-  const plus = section.find((l) => l.startsWith('+++ '))?.slice(4);
-  const minus = section.find((l) => l.startsWith('--- '))?.slice(4);
-  const named = plus && plus !== '/dev/null' ? plus : minus && minus !== '/dev/null' ? minus : null;
+  const plus = section.find((l) => l.startsWith('+++ '))?.slice(4).replace(/\t$/, '');
+  const minus = section.find((l) => l.startsWith('--- '))?.slice(4).replace(/\t$/, '');
+  const quotedName = plus && plus !== '/dev/null' ? plus : minus && minus !== '/dev/null' ? minus : null;
+  const named = quotedName === null ? null : unquoteName(quotedName);
   if (named) {
     const unprefixed = named.replace(/^[^/]+\//, '');
     if (files.some((f) => f.path === named)) return named;
     if (files.some((f) => f.path === unprefixed)) return unprefixed;
     return /^[a-z]\//.test(named) ? unprefixed : named;
   }
-  const header = section[0]!;
+  const header = unquoteHeader(section[0]!);
   const ends = files.filter((f) => header.endsWith(` ${f.path}`) || header.endsWith(`/${f.path}`)).sort((a, b) => b.path.length - a.path.length);
   return ends[0]?.path ?? header.slice('diff --git '.length).split(' ').at(-1)!.replace(/^[a-z]\//, '');
+}
+
+const GIT_ESCAPES: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+
+/**
+ * A name as git prints it when it has characters git "quotes" (a non-ASCII letter, a tab, a quote): in double quotes,
+ * with C-style escapes (`\t`, `\"`) and `\303\251`-style octal bytes, which together spell the name in UTF-8. The CLI's file
+ * list has the raw name (`git diff --numstat -z`), so the patch's names are turned back into it to match. A name that
+ * isn't quoted comes back as it is.
+ */
+function unquoteName(name: string): string {
+  if (name.length < 2 || !name.startsWith('"') || !name.endsWith('"')) return name;
+  const inner = name.slice(1, -1);
+  const bytes: number[] = [];
+  const encoder = new TextEncoder();
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    const octal = /^[0-7]{3}/.exec(inner.slice(i + 1, i + 4));
+    if (ch !== '\\') bytes.push(...encoder.encode(ch));
+    else if (octal) {
+      bytes.push(parseInt(octal[0], 8));
+      i += 3;
+    } else if (inner[i + 1] !== undefined && GIT_ESCAPES[inner[i + 1]!] !== undefined) {
+      bytes.push(GIT_ESCAPES[inner[i + 1]!]!);
+      i += 1;
+    } else bytes.push(92); // A backslash git didn't escape: keep it.
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/** The `diff --git` line with each quoted name in it turned back into the name itself. */
+function unquoteHeader(header: string): string {
+  return header.replace(/"(?:[^"\\]|\\.)*"/g, (quoted) => unquoteName(quoted));
 }
