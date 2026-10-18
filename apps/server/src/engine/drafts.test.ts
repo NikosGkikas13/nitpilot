@@ -221,6 +221,8 @@ describe('Discard', () => {
     expect(out.chat.drafts).toEqual([]);
     expect(bodies(out)).toEqual(['leo discarded the drafted review', 'Ready for approval']);
     expect(out.chat.phase).toBe('ready');
+    // leo is the only requested reviewer, and his own Discard made it ready: nobody needs telling.
+    expect(commandsOf(out, 'notify')).toEqual([]);
   });
 
   it('on an author draft makes the open points her turn by hand: no address job starts', () => {

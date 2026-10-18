@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, person, pointOf, result, run, sam,
+  agentToAgent, chatState, commandsOf, draftOf, jobOf, leo, maya, newPoint, participantOf, person, pointOf, result, run, sam,
 } from './test-builders';
 import type { ChatState, DecideOutput, DomainEvent } from './types';
 
@@ -82,5 +82,44 @@ describe('a human push while a review is running', () => {
     expect(notifiedReady(out)).toEqual([]);
     expect(commandsOf(out, 'enqueue_job')).toEqual([]);
     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: [leo.userId], kind: 'manual_review', pointNumbers: [] }]);
+  });
+});
+
+// The person whose own action made the chat ready (Resolve, Discard, …) is looking at the Ready banner, so the
+// "Ready for your approval" notification goes only to the other requested reviewers (W4's deferred item).
+describe('who is told the chat is ready', () => {
+  const nina = person('nina'); // a second requested reviewer, on Nitpilot
+
+  /** maya's PR, reviewed by leo and nina at the current head; P1 from leo's agent is escalated. */
+  const escalated = () =>
+    agentToAgent({
+      phase: 'escalated',
+      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' }), participantOf(nina, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'category', category: 'security' })],
+    });
+
+  /** nina has reviewed; leo's review ran with Auto off and waits as a draft. */
+  const leosDraftWaits = () =>
+    agentToAgent({
+      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { auto: false, attention: 'drafts' }), participantOf(nina, 'reviewer', { lastReviewedSha: 'head1' })],
+      drafts: [draftOf('job-r1', leo, 'reviewer', 'review', { result: result({ summary: 'Two problems.', points: [newPoint()] }) })],
+    });
+
+  /** leo has reviewed; nina's agent is reviewing. */
+  const ninaReviewing = () =>
+    agentToAgent({
+      phase: 'reviewing',
+      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' }), participantOf(nina, 'reviewer')],
+      jobs: [jobOf('job-n1', nina, 'reviewer', 'review', { status: 'running' })],
+    });
+
+  it.each<[string, ChatState, DomainEvent, string[]]>([
+    ['leo resolves the last escalated point: only nina', escalated(), { type: 'point_resolve', who: leo, point: 1 }, ['user-nina']],
+    ["leo discards his drafted review: only nina", leosDraftWaits(), { type: 'draft_discard', who: leo, jobId: 'job-r1' }, ['user-nina']],
+    ["nina's agent finds nothing (nobody pressed anything): both", ninaReviewing(), { type: 'job_completed', jobId: 'job-n1', attempt: 1, result: result() }, ['user-leo', 'user-nina']],
+  ])('%s', (_label, chat, event, userIds) => {
+    const out = run(chat, event);
+    expect(out.chat.phase).toBe('ready');
+    expect(notifiedReady(out)).toEqual([{ type: 'notify', userIds, kind: 'ready', pointNumbers: [] }]);
   });
 });

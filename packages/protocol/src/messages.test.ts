@@ -30,7 +30,8 @@ const serverMessages: ServerToCli[] = [
   { v: 1, t: 'job.assign', d: { bundle: jobBundle() } },
   { v: 1, t: 'job.assign', d: { bundle: publishBundle() } },
   { v: 1, t: 'job.cancel', d: { ...job, reason: 'pr_closed' } },
-  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142' } },
+  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142', alert: true } },
+  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142', alert: false } },
   { v: 1, t: 'settings', d: { autoReview: false, autoAddress: true, dailyJobCap: 25 } },
 ];
 
@@ -72,6 +73,11 @@ describe('server → CLI messages', () => {
   it('refuses a welcome without the settings, and a daily cap outside 5 to 200', () => {
     expect(ServerToCli.safeParse({ v: 1, t: 'welcome', d: { login: 'maya', pingSec: 25, leaseSec: 90 } }).success).toBe(false);
     expect(ServerToCli.safeParse({ v: 1, t: 'settings', d: { ...settings(), dailyJobCap: 4 } }).success).toBe(false);
+  });
+
+  it("reads a notify without alert as an alerting one, the way a Plan 1 server sent it", () => {
+    const plan1 = { v: 1, t: 'notify', d: { kind: 'failed', chatId: 'c1', title: 'Agent failed: acme/shop-api#142', url: 'https://nitpilot.dev/c/acme/shop-api/142' } };
+    expect(ServerToCli.parse(plan1)).toMatchObject({ t: 'notify', d: { alert: true } });
   });
 });
 

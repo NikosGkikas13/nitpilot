@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
-import { ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, Settings, WebMe, type ChatView, type InboxRow } from './web-api';
+import {
+  ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, PushSubscriptionRequest,
+  PushUnsubscribeRequest, Settings, WebMe, type ChatView, type InboxRow,
+} from './web-api';
 
 describe('web API bodies', () => {
-  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12 };
+  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true } };
 
   it('round-trips WebMe', () => {
     expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
@@ -82,5 +85,45 @@ describe('web API bodies', () => {
     const draft = { jobId: 'job_7', owner: 'maya', role: 'author', jobType: 'address', headSha: 'c'.repeat(40), createdAt: '2026-10-16T18:00:00.000Z', result: plan1Result, sending: true };
     expect(DraftView.parse(draft).result.draft).toBeNull();
     expect(() => DraftView.parse({ ...draft, jobType: 'publish' })).toThrow();
+  });
+
+  describe('push subscriptions', () => {
+    const subscription = {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
+      keys: { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' },
+      label: 'Chrome on macOS',
+    };
+
+    it('takes what the browser hands out, with a label for the Settings page', () => {
+      expect(PushSubscriptionRequest.parse(subscription)).toEqual(subscription);
+      expect(PushUnsubscribeRequest.parse({ endpoint: subscription.endpoint })).toEqual({ endpoint: subscription.endpoint });
+      expect(PushSubscriptionRequest.parse({ ...subscription, endpoint: 'https://web.push.apple.com/QGuQyavXutnMH' }).endpoint).toBe('https://web.push.apple.com/QGuQyavXutnMH');
+    });
+
+    // The server POSTs to the endpoint, so it must never be one of the server's own neighbours (a blind SSRF).
+    it.each([
+      ['plain http', 'http://fcm.googleapis.com/fcm/send/abc'],
+      ['not a URL', 'fcm.googleapis.com/fcm/send/abc'],
+      ['another scheme', 'file:///etc/passwd'],
+      ['localhost', 'https://localhost/push'],
+      ['localhost with a dot at the end', 'https://localhost./push'],
+      ['a .localhost name', 'https://api.localhost/push'],
+      ['an IPv4 address', 'https://127.0.0.1/push'],
+      ['an IPv4 address written as one number', 'https://2130706433/push'],
+      ['a private IPv4 address', 'https://10.0.0.8:8443/push'],
+      ['an IPv6 address', 'https://[::1]/push'],
+      ['the cloud metadata address', 'https://169.254.169.254/latest/meta-data'],
+      ['over 2,048 characters', `https://fcm.googleapis.com/${'a'.repeat(2048)}`],
+    ])('refuses an endpoint that is %s', (_what, endpoint) => {
+      expect(PushSubscriptionRequest.safeParse({ ...subscription, endpoint }).success).toBe(false);
+      expect(PushUnsubscribeRequest.safeParse({ endpoint }).success).toBe(false);
+    });
+
+    it('wants a label of 1 to 100 characters and both keys', () => {
+      expect(PushSubscriptionRequest.safeParse({ ...subscription, label: '' }).success).toBe(false);
+      expect(PushSubscriptionRequest.safeParse({ ...subscription, label: 'x'.repeat(101) }).success).toBe(false);
+      expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { p256dh: subscription.keys.p256dh } }).success).toBe(false);
+      expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { ...subscription.keys, auth: 'not base64url!' } }).success).toBe(false);
+    });
   });
 });

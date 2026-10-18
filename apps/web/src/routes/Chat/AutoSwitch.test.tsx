@@ -61,7 +61,7 @@ describe('AutoSwitch (handoff §2 "Header")', () => {
 });
 
 describe('the Auto switch in the chat header', () => {
-  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
+  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
 
   function serve(view: Partial<ChatView>, routes: Record<string, () => Answer | Promise<Answer>> = {}) {
     return fakeApi({

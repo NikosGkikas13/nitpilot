@@ -1,10 +1,10 @@
 import type { CliHub } from '../ws/cli-hub';
-import { LogNotifier, type Notification, type Notifier } from './notifier';
+import { LogNotifier, oneLine, type Notification, type Notifier } from './notifier';
 
 /**
- * Plan 1's notifications (spec §16): every CLI a person has connected prints them and shows an OS
- * notification. Someone none of whose CLIs took it (none online, or only sockets that are closing)
- * only gets a line in the server log; Plan 2 adds Web Push.
+ * Notifications through the CLI (spec §16): every CLI a person has connected prints them, and shows an OS
+ * notification unless `alert` is false (Web Push brought it already; see FallbackNotifier). Someone none of whose
+ * CLIs took an alerting one (none online, or only sockets that are closing) gets a line in the server log.
  */
 export class CliNotifier implements Notifier {
   constructor(
@@ -12,16 +12,21 @@ export class CliNotifier implements Notifier {
     private readonly offline: Notifier = new LogNotifier(),
   ) {}
 
-  async notify(n: Notification): Promise<void> {
+  async notify(n: Notification): Promise<{ reached: string[] }> {
+    const alert = n.alert ?? true;
+    const reached: string[] = [];
     const unreached: string[] = [];
     for (const userId of n.userIds) {
-      let reached = false;
+      let took = false;
       // Every CLI gets it. send() says false when the socket is closing, which doesn't count as reached.
       for (const cli of this.hub.connectionsFor(userId)) {
-        if (cli.send({ v: 1, t: 'notify', d: { kind: n.kind, chatId: n.chatId, title: n.title, url: n.url } })) reached = true;
+        if (cli.send({ v: 1, t: 'notify', d: { kind: n.kind, chatId: n.chatId, title: oneLine(n), url: n.url, alert } })) took = true;
       }
-      if (!reached) unreached.push(userId);
+      if (took) reached.push(userId);
+      else unreached.push(userId);
     }
-    if (unreached.length > 0) await this.offline.notify({ ...n, userIds: unreached });
+    // Someone push reached (alert false) and with no CLI online was still told: nothing to log.
+    if (alert && unreached.length > 0) await this.offline.notify({ ...n, userIds: unreached });
+    return { reached };
   }
 }

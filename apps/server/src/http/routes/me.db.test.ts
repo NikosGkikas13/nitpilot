@@ -11,7 +11,7 @@ describe('GET /api/me', () => {
     expect(res.status).toBe(200);
     expect(WebMe.parse(await res.json())).toEqual({
       id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth', agentOnline: false,
-      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0,
+      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false },
     });
   });
 

@@ -28,6 +28,8 @@ export type WebWiring = {
   dispatcher: Dispatcher;
   cliHub: CliHub;
   access: RepoAccess;
+  /** The server's public Web Push key, for `me.update` (null, the default, when push is off). */
+  vapidPublicKey?: string | null;
   debounceMs?: number;
   /** Reads a chat's items after a seq (chats/timeline.ts). Tests pass one that fails. */
   loadItems?: (chatId: string, afterSeq: number) => Promise<TimelineItem[]>;
@@ -42,7 +44,7 @@ export type WebWiring = {
  * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
  * tests call this, so the tests run what production runs.
  */
-export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
+export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey = null, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
   // Work under one key goes out in order: a chat's items before the state that follows them (and its inbox rows apart, under `inbox:<chatId>`).
   const perChat = new KeyedLock();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -140,7 +142,7 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
 
   cliHub.onPresence(({ userId }) => {
     void (async () => {
-      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub) } });
+      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub, vapidPublicKey) } });
       for (const chatId of await chatsShowingAgentOf(userId, webHub.followedChats())) stateSoon(chatId);
     })().catch((err) => console.error('[web-wire] presence update failed:', err));
   });

@@ -29,6 +29,7 @@ model User {
   loginRequests CliLoginRequest[]
   jobs          Job[]
   chatReads     ChatRead[]
+  pushSubs      PushSubscription[]
 }
 
 /// The user's GitHub user access token (8 h) and refresh token (6 months, single use), encrypted.
@@ -363,4 +364,23 @@ model GithubWrite {
   updatedAt DateTime @updatedAt
 
   @@unique([kind, githubId])
+}
+
+/// One browser or device that asked for Web Push (Plan 2, spec §8; docs/why/web-push.md). `endpoint` is the push
+/// service's address for it; `p256dh` and `auth` are the keys the payload is encrypted with, so only that browser can
+/// read it. `label` names it on the Settings page ("Chrome on macOS"). A 404 or 410 from the push service deletes the
+/// row; other failures add 1 to `failCount`, a success sets it back to 0, and the fifth failure in a row deletes it.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  label     String
+  failCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

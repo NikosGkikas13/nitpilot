@@ -13,14 +13,17 @@ import { createIngest } from './ingest/process';
 import { purgeOldRows } from './ingest/record';
 import { recoverOnBoot } from './ingest/recovery';
 import { acquireSingletonLock } from './lib/advisory-lock';
-import { getEnv } from './lib/env';
+import { getEnv, vapidDetails } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
 import { CliNotifier } from './tasks/cli-notifier';
 import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
+import { FallbackNotifier } from './tasks/notifier';
+import { PushNotifier } from './tasks/push-notifier';
 import { TaskRunner } from './tasks/runner';
+import { webPushSend } from './tasks/web-push-send';
 import { CliHub } from './ws/cli-hub';
 import { routeUpgrades } from './ws/upgrade-router';
 import { WebHub } from './ws/web-hub';
@@ -43,7 +46,10 @@ async function main(): Promise<void> {
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
   // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
   const hub = new CliHub();
-  const notifier = new CliNotifier(hub);
+  // Notifications: Web Push to every browser and device a person subscribed, then their CLI, which alerts only for
+  // people no push reached (spec §16, docs/why/web-push.md). Without VAPID keys push is off: the CLI alerts everyone.
+  const vapid = vapidDetails(env);
+  const notifier = new FallbackNotifier(new PushNotifier(vapid ? webPushSend(vapid) : null), new CliNotifier(hub));
   // Browsers follow chats live over /ws/web: their new items as they're saved (spec §10, docs/why/web-socket-and-origin.md).
   // One answer per person and repo to "can they read it?", for every chat read and the browser's socket (auth/repo-access.ts).
   const access = new RepoAccess(github);
@@ -61,10 +67,12 @@ async function main(): Promise<void> {
   // Jobs → CLIs: the assigner, leases, and what CLIs report back (ws/wire.ts).
   const cliJobs = wireCliHub({ hub, dispatcher, platform });
   // Commits, CLI presence and progress → the browsers following along (ws/web-wire.ts).
-  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey: vapid?.publicKey ?? null });
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
-  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub });
+  const app = createApp({
+    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, vapidPublicKey: vapid?.publicKey ?? null,
+  });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
   });

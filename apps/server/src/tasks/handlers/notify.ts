@@ -7,24 +7,27 @@ import type { TaskHandler } from '../runner';
 
 const Payload = z.object({ userIds: z.array(z.string()), kind: NotifyKind, pointNumbers: z.array(z.number().int()) });
 
-/** Copy from the design handoff's push notifications. */
-export function notificationTitle(kind: NotifyKind, pr: string, points: number[]): string {
+/**
+ * The words of a notification, from the design handoff's push copy (§8): a heading, and the detail under it. A push
+ * shows them as its title and body; the CLI prints them on one line ("Ready for your approval: acme/shop-api#142").
+ */
+export function notificationText(kind: NotifyKind, pr: string, points: number[]): { title: string; body: string } {
   const list = points.map((n) => `P${n}`).join(', ');
   switch (kind) {
     case 'ready':
-      return `Ready for your approval: ${pr}`;
+      return { title: 'Ready for your approval', body: pr };
     case 'escalated':
-      return `Needs you: ${pr}: ${list} need${points.length === 1 ? 's' : ''} a human decision`;
+      return { title: 'Needs you', body: `${pr}: ${list} need${points.length === 1 ? 's' : ''} a human decision` };
     case 'manual_review':
-      return `Review waiting: ${pr} is from an outside contributor`;
+      return { title: 'Review waiting', body: `${pr} is from an outside contributor` };
     case 'failed':
-      return `Agent failed: ${pr}`;
+      return { title: 'Agent failed', body: pr };
     case 'drafts':
-      return `Drafts waiting: ${pr}`;
+      return { title: 'Drafts waiting', body: pr };
   }
 }
 
-/** Tell people they're needed (spec §16). */
+/** Tell people they're needed (spec §16): by Web Push first, then the CLI (main.ts builds the notifier). */
 export function notifyHandler(deps: { notifier: Notifier }): TaskHandler {
   return async (task) => {
     const { userIds, kind, pointNumbers } = Payload.parse(task.payload);
@@ -35,7 +38,7 @@ export function notifyHandler(deps: { notifier: Notifier }): TaskHandler {
       userIds,
       kind,
       chatId: chat.id,
-      title: notificationTitle(kind, `${chat.repo.fullName}#${chat.number}`, pointNumbers),
+      ...notificationText(kind, `${chat.repo.fullName}#${chat.number}`, pointNumbers),
       url: transcriptUrl(chat.repo.fullName, chat.number),
     });
   };

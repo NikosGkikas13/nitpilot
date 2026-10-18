@@ -1,4 +1,4 @@
-import { emit, type Ctx } from './context';
+import { actorOf, emit, type Ctx } from './context';
 import { onAutoChanged, onDraftDiscard, onDraftSend } from './drafts';
 import {
   onCommentDeleted, onExternalComment, onHeadUpdated, onReviewSubmitted, onThreadResolved, onThreadUnresolved, onTimer,
@@ -22,6 +22,7 @@ export function decide(input: DecideInput): DecideOutput {
     chat: structuredClone(input.chat),
     rules: input.rules,
     now: input.now,
+    actor: actorOf(input.event),
     timeline: [],
     commands: [],
   };

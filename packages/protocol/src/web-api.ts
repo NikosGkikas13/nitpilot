@@ -30,8 +30,53 @@ export const WebMe = MeResponse.extend({
   settings: Settings,
   /** Agent runs your connected CLIs started today, added up, each counted from its own midnight (the Settings page's usage bar). */
   usedToday: z.number().int().nonnegative(),
+  /**
+   * Web Push (spec §16): the server's public VAPID key, which the browser needs to subscribe (null: this server has
+   * no keys, so push is off and the CLI notifies as in Plan 1), and whether you have any subscription.
+   */
+  push: z.object({ vapidPublicKey: z.string().nullable(), subscribed: z.boolean() }),
 });
 export type WebMe = z.infer<typeof WebMe>;
+
+/**
+ * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
+ * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
+ * call its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …): a blind SSRF. Real push services are all
+ * https names (fcm.googleapis.com, web.push.apple.com, updates.push.services.mozilla.com, …). `new URL` writes every
+ * IPv4 form (`2130706433`, `0x7f.1`) as dotted digits and keeps IPv6 in brackets, so those two shapes cover them.
+ */
+export function isPushEndpoint(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.replace(/\.$/, '').toLowerCase();
+  if (url.protocol !== 'https:') return false;
+  if (host.startsWith('[') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return false;
+  return host !== 'localhost' && !host.endsWith('.localhost');
+}
+
+const PushEndpoint = z.string().max(2048).refine(isPushEndpoint, 'must be an https address of a push service');
+
+/** A key from the browser's subscription, in base64url (what `PushSubscription.toJSON()` gives). */
+const PushKey = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+={0,2}$/);
+
+/**
+ * `POST /api/push/subscriptions`: this browser's Web Push subscription (`pushManager.subscribe()`), and a label for the
+ * Settings page ("Chrome on macOS"). Saved by endpoint: the same endpoint again updates its row.
+ */
+export const PushSubscriptionRequest = z.object({
+  endpoint: PushEndpoint,
+  keys: z.object({ p256dh: PushKey, auth: PushKey }),
+  label: z.string().trim().min(1).max(100),
+});
+export type PushSubscriptionRequest = z.infer<typeof PushSubscriptionRequest>;
+
+/** `DELETE /api/push/subscriptions`: stop pushing to this browser. */
+export const PushUnsubscribeRequest = z.object({ endpoint: PushEndpoint });
+export type PushUnsubscribeRequest = z.infer<typeof PushUnsubscribeRequest>;
 
 /**
  * A row's status pill in the inbox (spec §16, handoff §1), worked out on the server for the person reading

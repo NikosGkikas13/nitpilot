@@ -100,7 +100,9 @@ function enterReady(ctx: Ctx): void {
   if (chat.phase === 'ready') return;
   chat.phase = 'ready';
   system(ctx, 'Ready for approval');
-  const userIds = reviewers(chat).filter((r) => r.requested && onNitpilot(r)).map((r) => r.userId!);
+  // The requested reviewers are told, except one whose own click made it ready (their Resolve or Discard, say):
+  // they are looking at the Ready banner already.
+  const userIds = reviewers(chat).filter((r) => r.requested && onNitpilot(r) && r.githubId !== ctx.actor).map((r) => r.userId!);
   if (userIds.length > 0) emit(ctx, { type: 'notify', userIds, kind: 'ready', pointNumbers: [] });
 }
 

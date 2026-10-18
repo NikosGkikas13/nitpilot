@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** An optional value: left empty (`NAME=` in .env) counts as not set. */
+const optionalText = z.string().optional().transform((value) => value?.trim() || undefined);
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
@@ -24,7 +27,21 @@ const EnvSchema = z.object({
     .string()
     .default('')
     .transform((s) => s.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)),
-});
+  /**
+   * Web Push (spec §16, docs/why/web-push.md): the server's VAPID key pair, made once with `npm run vapid:keys`, and a
+   * contact for the push services (`mailto:` or `https:`). Optional, but all three or none: without them push is off
+   * and every notification goes to the CLI, as in Plan 1.
+   */
+  VAPID_PUBLIC_KEY: optionalText,
+  VAPID_PRIVATE_KEY: optionalText,
+  VAPID_SUBJECT: optionalText.refine((s) => s === undefined || /^(mailto|https):/.test(s), 'must start with mailto: or https:'),
+}).refine(
+  (env) => {
+    const set = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT].filter(Boolean).length;
+    return set === 0 || set === 3;
+  },
+  { path: ['VAPID_SUBJECT'], message: 'set all three of VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT, or none (npm run vapid:keys makes a key pair)' },
+);
 
 export type Env = z.infer<typeof EnvSchema>;
 
@@ -36,4 +53,13 @@ export function getEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Invalid environment:\n  ${problems}\nSee apps/server/.env.example.`);
   }
   return parsed.data;
+}
+
+/** What web-push signs with (spec §16): the key pair and the contact the push services see. */
+export type VapidDetails = { subject: string; publicKey: string; privateKey: string };
+
+/** The VAPID details, or null when the server has none: then push is off. */
+export function vapidDetails(env: Env): VapidDetails | null {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return null;
+  return { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY };
 }

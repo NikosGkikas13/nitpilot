@@ -27854,7 +27854,7 @@ docs/why/web-push.md, docs/why/service-workers-and-pwa.md
 
 The steps go from the outside in: the database and the dependencies, the protocol, the web fixtures, the CLI, the engine, the configuration, one send, the notifiers, the routes, the wiring, and then the docs, one full run and the commit. Each group is test, run it red, code, run it green. The workspace typecheck is not clean in between (the protocol's `WebMe.push` reaches the server's `loadWebMe` and `createApp`, and the notifier's new return type reaches the test harness, one group at a time); it is clean again at Step 40. The server's db tests are run per group, not all together, until Step 43.
 
-- [ ] **Step 1: Install the dependencies**
+- [x] **Step 1: Install the dependencies**
 
 `web-push` does the VAPID signing and the payload encryption (3.6.7, published 2024-01-16); its types come separately (3.6.4, 2024-10-22). Both are pinned exactly. The command regenerates `package-lock.json`; it is not shown here.
 
@@ -27884,7 +27884,7 @@ index 1f00bdb..4c232c8 100644
    }
 ```
 
-- [ ] **Step 2: Add the table to the schema**
+- [x] **Step 2: Add the table to the schema**
 
 `PushSubscription` is one browser or device that asked for Web Push. `endpoint` is unique (one row per endpoint), `userId` is indexed, and deleting a user deletes their subscriptions, so `resetDb` (which truncates `User` with cascade) needs no change.
 
@@ -27929,7 +27929,7 @@ index f5831d7..4a22eb6 100644
 ```
 
 
-- [ ] **Step 3: Generate the migration and the client**
+- [x] **Step 3: Generate the migration and the client**
 
 Run: `npm run db:migrate -w apps/server -- --name push_subscriptions`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client; without this step `prisma.pushSubscription` doesn't exist).
 Expected: a new folder `apps/server/prisma/migrations/<timestamp>_push_subscriptions/` (the folder name carries your own timestamp) with this `migration.sql`, "Your database is now in sync with your schema." and "Generated Prisma Client".
@@ -27963,7 +27963,7 @@ ALTER TABLE "PushSubscription" ADD CONSTRAINT "PushSubscription_userId_fkey" FOR
 ```
 
 
-- [ ] **Step 4: Write the failing protocol tests**
+- [x] **Step 4: Write the failing protocol tests**
 
 `notify` gets `alert`: both values round-trip, and a `notify` without it (what a Plan 1 server sent) reads as alerting. `WebMe` gets `push`. The push bodies are tested hard, because the endpoint check is the only thing standing between a signed-in user and a POST from the server to its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …).
 
@@ -28069,12 +28069,12 @@ index 6299740..67321b2 100644
 ```
 
 
-- [ ] **Step 5: Run them to see them fail**
+- [x] **Step 5: Run them to see them fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 18 failed, 61 passed (79) in 2 files: the `WebMe` round trip (`push` is stripped), 14 push-body tests (`PushSubscriptionRequest` and `PushUnsubscribeRequest` don't exist), and 3 `notify` tests (`alert` is stripped, and a `notify` without it has no `alert: true`).
 
-- [ ] **Step 6: Add the schemas**
+- [x] **Step 6: Add the schemas**
 
 `isPushEndpoint` is exported because both bodies use it (and the web app may want it). `new URL` writes every spelling of an IPv4 address (`2130706433`, `0x7f.1`) as dotted digits and keeps IPv6 in brackets, so two checks on the host cover them.
 
@@ -28170,19 +28170,19 @@ index b2c638e..a091587 100644
 ```
 
 
-- [ ] **Step 7: Run the protocol tests to see them pass**
+- [x] **Step 7: Run the protocol tests to see them pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 79 tests in 8 files (Task 18 ended at 63).
 
-- [ ] **Step 8: See the web tests break on the new `WebMe` field**
+- [x] **Step 8: See the web tests break on the new `WebMe` field**
 
 Every web test that builds a `WebMe` now lacks `push`, and the web app parses `/api/me` with the protocol's schema.
 
 Run: `npm test -w apps/web`
 Expected: FAIL, 75 failed, 122 passed (197) in 8 of 28 files (`AutoSwitch`, `Chat`, `ChatBanner`, `Composer`, `DraftCard`, `Home`, `Inbox` and `Shell`): the `/api/me` answer no longer parses. `npm run typecheck -w apps/web` reports 8 errors.
 
-- [ ] **Step 9: Give the nine web fixtures a `push`**
+- [x] **Step 9: Give the nine web fixtures a `push`**
 
 Fixtures only: no web code changes in this task. A browser with push off and nothing subscribed:
 
@@ -28349,12 +28349,12 @@ index 99faf38..3c5709c 100644
 ```
 
 
-- [ ] **Step 10: Run the web tests to see them pass**
+- [x] **Step 10: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web && npm run typecheck -w apps/web`
 Expected: PASS, 197 tests in 28 files; typecheck clean.
 
-- [ ] **Step 11: Write the failing CLI test**
+- [x] **Step 11: Write the failing CLI test**
 
 The CLI always prints the 🔔 line; it shows the OS notification only when `alert` is true. The two existing `notify` messages in the file gain `alert: true` (the field is required on the parsed type).
 
@@ -28400,12 +28400,12 @@ index 63423ef..c332143 100644
 ```
 
 
-- [ ] **Step 12: Run it to see it fail**
+- [x] **Step 12: Run it to see it fail**
 
 Run: `npm test -w apps/cli -- src/daemon.test.ts`
 Expected: FAIL, 1 failed, 29 passed (30): "only prints a notification that Web Push already brought" (with `alert: false` the OS notification was still shown).
 
-- [ ] **Step 13: Show the OS notification only when asked**
+- [x] **Step 13: Show the OS notification only when asked**
 
 Modify `apps/cli/src/daemon.ts`:
 
@@ -28428,12 +28428,12 @@ index 6a4bf2a..75ebb10 100644
 ```
 
 
-- [ ] **Step 14: Run the CLI's tests to see them pass**
+- [x] **Step 14: Run the CLI's tests to see them pass**
 
 Run: `npm test -w apps/cli`
 Expected: PASS, 333 passed + 14 skipped (Task 18 ended at 332 + 14).
 
-- [ ] **Step 15: Write the failing engine tests (the reviewer who just pressed the button)**
+- [x] **Step 15: Write the failing engine tests (the reviewer who just pressed the button)**
 
 This is the W4 item the controller folded into this task: with Web Push, "Ready for your approval" would land on the phone of the reviewer who just clicked Resolve. A new table in `ready-gate.test.ts` says who is told in three cases: leo resolves the last escalated point (only nina), leo discards his drafted review (only nina), and nina's agent finds nothing, nobody pressed anything (both). Two older expectations change: `human.test.ts`'s Resolve now tells only nina, and `drafts.test.ts`'s Discard by the only requested reviewer tells nobody.
 
@@ -28535,12 +28535,12 @@ index 8c5ae70..2ea86a7 100644
 ```
 
 
-- [ ] **Step 16: Run them to see them fail**
+- [x] **Step 16: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: FAIL, 4 failed, 192 passed (196) in 3 of 11 files: the two new rows ("leo resolves the last escalated point" and "leo discards his drafted review": `user-leo` is still in `userIds`), `human.test.ts` (Resolve) and `drafts.test.ts` (Discard emitted a `notify`).
 
-- [ ] **Step 17: Make the engine skip the person who acted**
+- [x] **Step 17: Make the engine skip the person who acted**
 
 `actorOf(event)` names the person whose own action in Nitpilot an event is: a click in the web app, a note, `nitpilot retry`, signing in again. It is null for everything from GitHub, an agent or a timer. `decide` puts it on the `Ctx`, and `enterReady` leaves that person out. The engine stays pure: no database, platform or socket imports.
 
@@ -28638,12 +28638,12 @@ index 53d54f2..0d06f1e 100644
 ```
 
 
-- [ ] **Step 18: Run the engine's tests to see them pass**
+- [x] **Step 18: Run the engine's tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: PASS, 196 tests in 11 files (193 before this task: the new table adds 3).
 
-- [ ] **Step 19: Write the failing configuration tests**
+- [x] **Step 19: Write the failing configuration tests**
 
 Modify `apps/server/src/lib/env.test.ts`:
 
@@ -28696,12 +28696,12 @@ index fbb600c..e279d75 100644
 ```
 
 
-- [ ] **Step 20: Run them to see them fail**
+- [x] **Step 20: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
 Expected: FAIL, 4 failed, 4 passed (8): `vapidDetails` doesn't exist, and a bad `VAPID_SUBJECT` or a half-set group isn't refused yet.
 
-- [ ] **Step 21: Read the VAPID settings, document them, and add the key script**
+- [x] **Step 21: Read the VAPID settings, document them, and add the key script**
 
 The three variables are optional and all or none. They go through `optionalText` because `.env.example` lists them blank, and a blank line must count as not set. `scripts/vapid-keys.ts` prints a fresh pair for pasting into `.env`. The `vapid:keys` script goes into `apps/server/package.json` (the dependencies were added in Step 1, so this is the second part of that file's change):
 
@@ -28815,7 +28815,7 @@ VAPID_SUBJECT=mailto:you@example.com`);
 ```
 
 
-- [ ] **Step 22: Run the tests, and make a pair by hand**
+- [x] **Step 22: Run the tests, and make a pair by hand**
 
 Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
 Expected: PASS, 8 tests.
@@ -28823,7 +28823,7 @@ Expected: PASS, 8 tests.
 Run: `npm run vapid:keys -w apps/server`
 Expected: a comment line and the three lines `VAPID_PUBLIC_KEY=…`, `VAPID_PRIVATE_KEY=…`, `VAPID_SUBJECT=mailto:you@example.com`. Don't paste them anywhere in this task: the private key is a secret like `ENCRYPTION_KEY`.
 
-- [ ] **Step 23: Write the failing test for the real sender**
+- [x] **Step 23: Write the failing test for the real sender**
 
 No network: `sendNotification` is a stub that answers the way the `web-push` package does (a `WebPushError` with a status code).
 
@@ -28867,12 +28867,12 @@ describe('webPushSend', () => {
 ```
 
 
-- [ ] **Step 24: Run it to see it fail**
+- [x] **Step 24: Run it to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/tasks/web-push-send.test.ts`
 Expected: FAIL, 1 failed suite (no tests ran): `Cannot find module './web-push-send'`.
 
-- [ ] **Step 25: Add the sender**
+- [x] **Step 25: Add the sender**
 
 `import webpush from 'web-push'` (the default import) is needed: Node's ES modules can't see the package's named `sendNotification` export, because the package is CommonJS and its export is built in a way Node's scan doesn't follow. The type checker accepts the default import too. The sender never throws: a failure is an answer, so one bad push service can't stop the others. `timeout` is web-push's socket idle timeout, not a total deadline.
 
@@ -28924,12 +28924,12 @@ export function webPushSend(vapid: VapidDetails, sendNotification = webpush.send
 ```
 
 
-- [ ] **Step 26: Run it to see it pass**
+- [x] **Step 26: Run it to see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/tasks/web-push-send.test.ts`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 27: Write the failing notifier tests**
+- [x] **Step 27: Write the failing notifier tests**
 
 `Notifier.notify` answers who it reached. A notification's `title` is now the handoff's heading and a new `body` is the detail. The CLI still gets the old one-line title (`Ready for your approval: acme/shop-api#142`) in its `notify` message, plus `alert`. The notify handler's wording moves into `notificationText`, tested for all five kinds. The two stand-in notifiers in `handlers.db.test.ts` and `plan-1a.db.test.ts` answer `{ reached }`.
 
@@ -29070,12 +29070,12 @@ index d27c2d7..ec32577 100644
 ```
 
 
-- [ ] **Step 28: Run them to see them fail**
+- [x] **Step 28: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/tasks/cli-notifier.db.test.ts src/tasks/handlers/handlers.db.test.ts`
 Expected: FAIL, 9 failed, 13 passed (22) in 2 files: in `cli-notifier.db.test.ts` the `{ reached }` answer, the heading/body split and `alert` are missing (2 tests), and in `handlers.db.test.ts` `notificationText` doesn't exist (the 5-row wording table) and the two older notify tests see the old title (2 tests). `plan-1a.db.test.ts` passes either way; its change is for the type checker.
 
-- [ ] **Step 29: Change the notifier contract and the wording**
+- [x] **Step 29: Change the notifier contract and the wording**
 
 `FallbackNotifier` is here, in the file of the `Notifier` interface, because it only needs the interface. Its own test is in Step 31, where `PushNotifier` exists. `CliNotifier` writes the server-log line only for alerting notifications nobody reached, so a person a push reached who has no CLI online isn't logged.
 
@@ -29261,12 +29261,12 @@ index 86a2256..cc59668 100644
 ```
 
 
-- [ ] **Step 30: Run them to see them pass**
+- [x] **Step 30: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/tasks/cli-notifier.db.test.ts src/tasks/handlers/handlers.db.test.ts test/integration/plan-1a.db.test.ts`
 Expected: PASS, 24 tests in 3 files (22 in the first two).
 
-- [ ] **Step 31: Write the failing tests for `PushNotifier` and the fallback**
+- [x] **Step 31: Write the failing tests for `PushNotifier` and the fallback**
 
 Two `describe`s. `PushNotifier`: every subscription is tried and one that arrives reaches the person; nobody is reached when all failed or there is none; 404 and 410 delete; `failCount` counts, resets and deletes at the fifth; a throwing sender doesn't stop the rest; `null` leaves the rows alone. "Web Push first, the CLI as fallback" is **Review Focus 5**: three people with a fake push service and a real `CliNotifier` over a fake hub, and for each person exactly one alerting ping.
 
@@ -29449,12 +29449,12 @@ describe('Web Push first, the CLI as fallback', () => {
 ```
 
 
-- [ ] **Step 32: Run it to see it fail**
+- [x] **Step 32: Run it to see it fail**
 
 Run: `npm run test:db -w apps/server -- src/tasks/push-notifier.db.test.ts`
 Expected: FAIL, 1 failed suite (no tests ran): `Cannot find module './push-notifier'`.
 
-- [ ] **Step 33: Add `PushNotifier`**
+- [x] **Step 33: Add `PushNotifier`**
 
 One query loads everyone's subscriptions, oldest first; they are sent one after another; each row is updated with `updateMany`/`deleteMany` by id, so a row the person removed while we were sending is skipped instead of failing the task. The fifth failure is an increment and then a delete of the rows at 5.
 
@@ -29530,12 +29530,12 @@ async function record(sub: Subscription, result: PushResult): Promise<void> {
 ```
 
 
-- [ ] **Step 34: Run it to see it pass**
+- [x] **Step 34: Run it to see it pass**
 
 Run: `npm run test:db -w apps/server -- src/tasks/push-notifier.db.test.ts`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 35: Write the failing route tests**
+- [x] **Step 35: Write the failing route tests**
 
 `GET /api/me` says `push`. The push routes are tested through `testApp`, which gains `vapidPublicKey` in Step 37.
 
@@ -29681,12 +29681,12 @@ index 60cef7d..5ae870c 100644
 ```
 
 
-- [ ] **Step 36: Run them to see them fail**
+- [x] **Step 36: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/push.db.test.ts src/http/routes/me.db.test.ts`
 Expected: FAIL, 10 failed, 3 passed (13) in 2 files: 7 tests of the routes themselves (they answer 404, or the row they look for isn't there), and 3 tests that read `push` from `GET /api/me` (one in `me.db.test.ts`, two in `push.db.test.ts`).
 
-- [ ] **Step 37: Add the routes and the public key to `/api/me`**
+- [x] **Step 37: Add the routes and the public key to `/api/me`**
 
 Both routes need the session cookie and the Origin check; a CLI token gets the same 401 as no session. The upsert is by endpoint. `AppDeps.vapidPublicKey` is required, and `testDeps` sets it to null. `loadWebMe` counts the person's subscriptions in the same query as the user.
 
@@ -29884,7 +29884,7 @@ index e865f14..0f16e1e 100644
 ```
 
 
-- [ ] **Step 38: Run the route tests to see them pass**
+- [x] **Step 38: Run the route tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/push.db.test.ts src/http/routes/me.db.test.ts`
 Expected: PASS, 13 tests in 2 files.
@@ -29892,7 +29892,7 @@ Expected: PASS, 13 tests in 2 files.
 Run: `npm run typecheck -w apps/server`
 Expected: FAIL, exactly 2 errors, both fixed in the next step: `src/main.ts` (`createApp` lacks `vapidPublicKey`) and `test/e2e/harness.ts` (its notifier answers nothing, not `{ reached }`).
 
-- [ ] **Step 39: Wire it into the server and the end-to-end harness**
+- [x] **Step 39: Wire it into the server and the end-to-end harness**
 
 `main.ts` builds the real sender only when the three keys exist, and `FallbackNotifier(push, cli)`. The harness builds the same thing with no keys (`new PushNotifier(null)`), so the Plan 1 end-to-end tests keep running Plan 1's behavior, and still records what was notified.
 
@@ -29988,12 +29988,12 @@ index e7b4be8..5dd014a 100644
 ```
 
 
-- [ ] **Step 40: Typecheck and run the end-to-end tests**
+- [x] **Step 40: Typecheck and run the end-to-end tests**
 
 Run: `npm run typecheck && npm run test:e2e`
 Expected: typecheck clean in all four workspaces; the end-to-end tests PASS, 6 tests in 2 files.
 
-- [ ] **Step 41: The explainer**
+- [x] **Step 41: The explainer**
 
 `docs/why/web-push.md` is new, in React terms (a push endpoint is like a callback somebody handed you; the fallback is like an error boundary that still renders a little).
 
@@ -30049,7 +30049,7 @@ In React terms: it's an error boundary with a fallback, except the fallback alwa
 ```
 
 
-- [ ] **Step 42: The spec**
+- [x] **Step 42: The spec**
 
 Four places in `docs/superpowers/specs/2026-10-07-nitpilot-design.md` change: §6.3's "Ready for approval" row (who is notified), §8's `PushSubscription` row (a success resets `failCount`, the fifth failure deletes, one row per endpoint), §10's `notify` row (`alert`), and §16 (the VAPID variables, what a push carries, what an endpoint may be).
 
@@ -30099,12 +30099,12 @@ index fe6f86b..f28db95 100644
 ```
 
 
-- [ ] **Step 43: Run everything**
+- [x] **Step 43: Run everything**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 79, CLI 333 passed + 14 skipped, server 971, web 197; end to end 6; Playwright 7; typecheck, lint and build clean. The server's log has no stray lines from the push tests (the ones that fail a send on purpose silence `console.warn`).
 
-- [ ] **Step 44: Commit**
+- [x] **Step 44: Commit**
 
 ```bash
 git add packages/protocol/src apps/cli/src apps/server/src apps/server/test apps/server/scripts apps/server/prisma apps/server/package.json apps/server/.env.example apps/web/src docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md package-lock.json

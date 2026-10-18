@@ -18,6 +18,7 @@ import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
+import { pushRoutes } from './routes/push';
 import { settingsRoutes, type SettingsSender } from './routes/settings';
 import { setupRoutes } from './routes/setup';
 import { webhookRoutes } from './routes/webhooks';
@@ -35,6 +36,8 @@ export type AppDeps = {
   access: RepoAccess;
   /** GitHub reads with the app's installation token (the chat screen's file list). */
   platform: PlatformReads;
+  /** The server's public Web Push key (VAPID), which browsers subscribe with; null when push is off (lib/env.ts). */
+  vapidPublicKey: string | null;
   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
   webSockets?: { closeSession(tokenHash: string): void };
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
@@ -51,6 +54,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', authRoutes(deps));
   app.route('/', meRoutes(deps));
   app.route('/', settingsRoutes(deps));
+  app.route('/', pushRoutes());
   app.route('/', inboxRoutes(deps));
   app.route('/', chatRoutes(deps));
   app.route('/', chatActionRoutes(deps));

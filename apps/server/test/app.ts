@@ -19,6 +19,8 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     clis: { connectionsFor: () => [], sendSettings: () => 0 },
     access: over.access ?? new RepoAccess(github),
     platform: new FakePlatform(),
+    // No VAPID keys: push is off, as on a server that hasn't set them.
+    vapidPublicKey: null,
     // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
     webDistDir: '/nonexistent/nitpilot-web-dist',
     ...over,

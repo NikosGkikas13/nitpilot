@@ -32,7 +32,8 @@ describe('point_resolve', () => {
     expect(out.timeline.map((i) => i.body)).toEqual(['leo resolved P1', 'Ready for approval']);
     expect(out.timeline[0]).toMatchObject({ kind: 'system', pointNumber: null, data: { point: 1 } });
     expect(out.chat.phase).toBe('ready');
-    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo', 'user-nina'], kind: 'ready', pointNumbers: [] }]);
+    // leo pressed Resolve and is looking at the Ready banner: only nina is told.
+    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-nina'], kind: 'ready', pointNumbers: [] }]);
     // Nobody needs to decide anything any more.
     expect(out.chat.participants.map((p) => p.attention)).toEqual(['none', 'none', 'none']);
   });

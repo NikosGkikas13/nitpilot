@@ -208,8 +208,9 @@ export function startDaemon(opts: DaemonOptions): Daemon {
         return;
       }
       case 'notify':
+        // The terminal line always; the OS notification only when Web Push didn't already bring it (spec §16).
         out.log(`🔔 ${msg.d.title}  ${msg.d.url}`);
-        notify(msg.d.title).catch(() => {});
+        if (msg.d.alert) notify(msg.d.title).catch(() => {});
         return;
       case 'settings':
         // Changed on the web app's Settings page: the new cap counts from the next job on.

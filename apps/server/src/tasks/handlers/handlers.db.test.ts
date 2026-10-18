@@ -10,6 +10,7 @@ import type { Notification } from '../notifier';
 import { PermanentTaskError } from '../runner';
 import { reportFailedWrite } from './failed-writes';
 import { createTaskHandlers } from './index';
+import { notificationText } from './notify';
 
 beforeEach(resetDb);
 
@@ -27,7 +28,7 @@ async function scene(opts: { authorOnNitpilot: boolean }) {
   });
   const platform = new FakePlatform();
   const sent: Notification[] = [];
-  const handlers = createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); } }, dispatch: async () => { throw new Error('not used'); } });
+  const handlers = createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); return { reached: n.userIds }; } }, dispatch: async () => { throw new Error('not used'); } });
   const ref = prRefOf(await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id }, include: { repo: true } }));
   const point = (number: number, over: Partial<Prisma.PointUncheckedCreateInput> = {}) =>
     prisma.point.create({ data: { chatId: chat.id, number, raisedByGithubId: leo.githubId, origin: 'agent', severity: 'major', category: 'bug', title: `Point ${number}`, body: 'Explanation.', round: 1, path: 'src/a.ts', line: 10, side: 'RIGHT', commitSha: 'a'.repeat(40), ...over } });
@@ -173,14 +174,25 @@ describe('notify', () => {
     const s = await scene({ authorOnNitpilot: true });
     await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id], kind: 'ready', pointNumbers: [] }));
     expect(s.sent).toEqual([
-      { userIds: [s.leo.id], kind: 'ready', chatId: s.chat.id, title: `Ready for your approval: ${s.repo.fullName}#${s.chat.number}`, url: `http://localhost:8787/c/${s.repo.fullName}/${s.chat.number}` },
+      { userIds: [s.leo.id], kind: 'ready', chatId: s.chat.id, title: 'Ready for your approval', body: `${s.repo.fullName}#${s.chat.number}`, url: `http://localhost:8787/c/${s.repo.fullName}/${s.chat.number}` },
     ]);
   });
 
   it('names the points that need a decision', async () => {
     const s = await scene({ authorOnNitpilot: true });
     await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id], kind: 'escalated', pointNumbers: [1, 3] }));
-    expect(s.sent[0]!.title).toBe(`Needs you: ${s.repo.fullName}#${s.chat.number}: P1, P3 need a human decision`);
+    expect(s.sent[0]).toMatchObject({ title: 'Needs you', body: `${s.repo.fullName}#${s.chat.number}: P1, P3 need a human decision` });
+  });
+
+  // The handoff's push copy (§8): a heading, and the detail under it. The CLI prints both on one line, as in Plan 1.
+  it.each([
+    ['ready', [], 'Ready for your approval', 'acme/shop-api#142'],
+    ['escalated', [3], 'Needs you', 'acme/shop-api#142: P3 needs a human decision'],
+    ['manual_review', [], 'Review waiting', 'acme/shop-api#142 is from an outside contributor'],
+    ['failed', [], 'Agent failed', 'acme/shop-api#142'],
+    ['drafts', [], 'Drafts waiting', 'acme/shop-api#142'],
+  ] as const)('words a %s notification', (kind, points, title, body) => {
+    expect(notificationText(kind, 'acme/shop-api#142', [...points])).toEqual({ title, body });
   });
 });
 

@@ -70,7 +70,7 @@ function pingListing(conn: StubConnection, expected: RunningJob[]) {
 /** Wait until the daemon has handled everything sent so far. It handles messages in order, so once it shows a notification, it has seen what came before. */
 async function handled(conn: StubConnection, notified: string[]) {
   const title = `handled ${notified.length}`;
-  conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title, url: 'http://nitpilot.test/x' } });
+  conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title, url: 'http://nitpilot.test/x', alert: true } });
   await vi.waitFor(() => expect(notified).toContain(title));
 }
 
@@ -354,9 +354,19 @@ describe('startDaemon', () => {
   it('shows notifications in the terminal and on the desktop', async () => {
     const { hub, out, notified } = await setup();
     const { conn } = await welcomed(hub);
-    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142' } });
+    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142', alert: true } });
     await vi.waitFor(() => expect(notified).toEqual(['Ready for your approval: acme/shop-api#142']));
     expect(out.text()).toContain('Ready for your approval: acme/shop-api#142  http://nitpilot.test/c/acme/shop-api/142');
+  });
+
+  it('only prints a notification that Web Push already brought to the person (alert: false)', async () => {
+    const { hub, out, notified } = await setup();
+    const { conn } = await welcomed(hub);
+    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142', alert: false } });
+    // The daemon handles messages in order: once the next one shows, the quiet one was handled.
+    await handled(conn, notified);
+    expect(out.text()).toContain('🔔 Ready for your approval: acme/shop-api#142  http://nitpilot.test/c/acme/shop-api/142');
+    expect(notified).not.toContain('Ready for your approval: acme/shop-api#142');
   });
 
   it("asks before pushing, and gives the executor the server's answer", async () => {

@@ -19,7 +19,8 @@ import { GithubClient } from '../../src/platform/github/client';
 import { CliNotifier } from '../../src/tasks/cli-notifier';
 import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
 import { createTaskHandlers } from '../../src/tasks/handlers/index';
-import type { Notification } from '../../src/tasks/notifier';
+import { FallbackNotifier, type Notification } from '../../src/tasks/notifier';
+import { PushNotifier } from '../../src/tasks/push-notifier';
 import { TaskRunner } from '../../src/tasks/runner';
 import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
 import { routeUpgrades } from '../../src/ws/upgrade-router';
@@ -51,8 +52,14 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   const platform = new FakePlatform();
   const hub = new CliHub();
   const notified: Notification[] = [];
-  const cliNotifier = new CliNotifier(hub);
-  const notifier = { notify: async (n: Notification) => void (notified.push(n), await cliNotifier.notify(n)) };
+  // As main.ts builds it on a server without VAPID keys: push is off, so every CLI alerts.
+  const realNotifier = new FallbackNotifier(new PushNotifier(null), new CliNotifier(hub));
+  const notifier = {
+    notify: async (n: Notification) => {
+      notified.push(n);
+      return realNotifier.notify(n);
+    },
+  };
   const dispatcher = new Dispatcher();
   // Debounced work (the summary comment, notifications) is due at once: tasks run as if a minute had passed.
   const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }), {

@@ -25,7 +25,7 @@ async function server() {
   const dispatcher = new Dispatcher();
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
   // Run tasks as if a minute had passed, so debounced ones are due.
-  const runner = new TaskRunner(createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); } }, dispatch: dispatcher.dispatch }), { now: () => new Date(Date.now() + 60_000) });
+  const runner = new TaskRunner(createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); return { reached: n.userIds }; } }, dispatch: dispatcher.dispatch }), { now: () => new Date(Date.now() + 60_000) });
   const app = testApp({ ingest });
   const deliver = async (event: string, payload: unknown) => {
     expect((await sendWebhook(app, event, payload)).status).toBe(202);

@@ -71,11 +71,17 @@ export const JobAssign = message('job.assign', z.object({ bundle: JobBundle }));
 
 export const JobCancel = message('job.cancel', RunningJob.extend({ reason: z.string() }));
 
+/**
+ * Someone is needed (spec §16). The CLI always prints `title` and `url` in the terminal. `alert: false` means Web Push
+ * already brought this notification to the person, so the CLI shows no OS notification (push first, the CLI as
+ * fallback: one ping each). A server from before Plan 2 sends no `alert`: that's an alerting one.
+ */
 export const Notify = message('notify', z.object({
   kind: NotifyKind,
   chatId: z.string(),
   title: z.string(),
   url: z.string(),
+  alert: z.boolean().default(true),
 }));
 
 /** The person changed their settings in the web app: sent to each of their connected CLIs. */

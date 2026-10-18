@@ -94,7 +94,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 
 | Outcome | When | Who is notified |
 |---|---|---|
-| **Ready for approval** | All reviews have settled, and no points are open, addressed or escalated | The reviewers who are on Nitpilot |
+| **Ready for approval** | All reviews have settled, and no points are open, addressed or escalated | The requested reviewers who are on Nitpilot, except one whose own action in Nitpilot made it ready (their Resolve or Discard, say): they are looking at the Ready banner (Plan 2) |
 | **Escalated** | Any of: a declined point is kept open (a disagreement); a point is in an `always_escalate` category (e.g. security); the round limit is reached with points still open | Both sides (if on Nitpilot), naming the point(s) |
 
 Approving and merging always happen on GitHub, done by a human. When a reviewer approves on GitHub, their remaining points are resolved and agent rounds stop for them.
@@ -167,7 +167,7 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
 | `RawEvent` | Every webhook received | deliveryId (PK = `X-GitHub-Delivery`), event, action, repoId, body (≤1 MB), status `received\|processed\|ignored\|retrying\|failed`, note, attempts, retryAt | Prevents double processing. Rows still `received` are replayed on boot. A delivery whose processing throws is `retrying`: tried again after 1, 2, 4, 8, 16 and 32 minutes, then `failed` after 7 attempts. Purged after 14 days |
 | `SeenComment` | GitHub comment ids already handled | commentId (PK) | A comment can arrive on its own and again inside its submitted review; this makes sure it is handled once. Written in the dispatcher's transaction, with the event that carried the comment, so a failed delivery leaves it unseen for the retry. Purged after 14 days, like `RawEvent` |
 | `GithubWrite` | Everything Nitpilot wrote to GitHub | chatId, kind `summary\|review\|review_comment\|reply`, githubId (unique per kind) | Used to edit those writes and to ignore our own events |
-| `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other failures add to `failCount` |
+| `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other failures add to `failCount`, a success sets it back to 0, and the fifth failure in a row deletes the row. One row per endpoint: subscribing again with the same endpoint updates it, and moves it to whoever is signed in |
 | `ChatRead` (Plan 2) | How far a person has read a chat | userId + chatId (unique), lastReadSeq | The inbox's unread count is the number of timeline items after `lastReadSeq` that someone else wrote |
 
 - **Severity:** `blocker | major | minor | nit`.
@@ -275,7 +275,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 | S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha`. A `publish` bundle instead names the draft (`draft{jobId, sha, from}`) and where to push |
 | S→CLI | `job.cancel {jobId, attempt, reason}` | |
 | S→CLI | `settings {autoReview, autoAddress, dailyJobCap}` | Sent to every connected CLI of a person who changed their settings in the web app. The CLI enforces `dailyJobCap` itself, counting from its own midnight |
-| S→CLI | `notify {kind, chatId, title, url}` | Printed in the terminal. In Plan 1 always shown as an OS notification too; from Plan 2 it is sent only when the person has no Web Push subscription that worked (§16) |
+| S→CLI | `notify {kind, chatId, title, url, alert}` | Always printed in the terminal. `alert` (Plan 2; a message without it alerts) says whether the CLI also shows an OS notification: false when a Web Push of this notification reached the person, so nobody gets it twice (§16) |
 
 - **Reconnecting.**
   - The CLI needs no event cursor: the Job table holds the state, and `hello` brings both sides back in sync.
@@ -632,7 +632,7 @@ Needs a human: none
   - drafts to send (your agent ran with Auto off, Plan 2);
   - an agent failure.
 
-In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they are Web Push notifications, sent to every browser and device the person subscribed, plus in-app badges. **Push first, CLI as fallback:** the CLI still prints the terminal line, but shows its OS notification only when the person has no Web Push subscription that worked for this notification, so nobody gets each ping twice. Sending runs inside the notify task (the outbox), with the `web-push` package doing the VAPID signing and the payload encryption; the server's VAPID key pair lives in its environment. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
+In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they are Web Push notifications, sent to every browser and device the person subscribed, plus in-app badges. **Push first, CLI as fallback:** the CLI still prints the terminal line, but shows its OS notification only when the person has no Web Push subscription that worked for this notification, so nobody gets each ping twice. Sending runs inside the notify task (the outbox), with the `web-push` package doing the VAPID signing and the payload encryption; the server's VAPID key pair lives in its environment (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: optional, all three or none; without them push is off and the CLI alerts everyone, as in Plan 1). A push carries the handoff's heading and detail, the chat's link, and the chat id as its tag; the push service keeps it a day at most. A push subscription's endpoint must be an `https:` address whose host is neither an IP address nor localhost, since the server sends to it. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
 
 **UI scope (Plan 2, designed in Claude Design from the design brief):**
 - **Inbox:** tabs for *To review* and *Mine*. Each row shows a status (Agent working · Waiting · Their turn · Needs you · Ready · Merged · Closed), the round and an unread count. The server works the status out for the person reading it: a finished PR first, then what that person has to do (an escalation is the red Needs you), then Ready (a reviewer's) or Their turn (the author waiting for approval), then a waiting or working agent, then whose turn it is; with nothing pending the row shows no pill.
