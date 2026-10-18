@@ -1,5 +1,5 @@
 import { BRAND, MAX_DRAFT_DIFF_BYTES, type DraftFile, type DraftInfo } from '@nitpilot/protocol';
-import { safeGit, type GitPlace } from './safe-git';
+import { safeGit, SafeGitError, type GitPlace } from './safe-git';
 import { cloneGitDir } from './worktree';
 
 /** How long a draft commit is kept in your clone when nobody sends or discards it (spec §11 "Publish jobs"). */
@@ -17,14 +17,25 @@ export function draftRef(jobId: string): string {
  * What a draft commit changes, for the web app's draft card (spec §11 step 6.4): the files with their added and
  * removed lines, and the unified diff, or null when it's over MAX_DRAFT_DIFF_BYTES (the card then shows the
  * files and the `git show` command). `from` is the head the commit was made on, `to` the commit. Both diffs run
- * with `--no-ext-diff --no-textconv`, so no diff program from your git config or the repo's attributes runs.
+ * with `--no-ext-diff --no-textconv`, so no diff program from your git config or the repo's attributes runs, and
+ * with the same rename detection and `a/` `b/` prefixes whatever `diff.renames` or `diff.noprefix` say there.
+ * The patch is read with a limit of MAX_DRAFT_DIFF_BYTES, so a huge one is never held in memory.
  */
 export async function describeDraft(place: GitPlace, from: string, to: string): Promise<DraftInfo> {
   // The commits go before `--`, so git reads them as commits and nothing after them as one.
-  const numstat = await safeGit(place, ['diff', '--no-ext-diff', '--no-textconv', '--numstat', '-z', from, to, '--']);
-  const patch = await safeGit(place, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', from, to, '--']);
-  const diff = Buffer.byteLength(patch.stdout) > MAX_DRAFT_DIFF_BYTES ? null : patch.stdout;
-  return { sha: to, from, files: parseNumstat(numstat.stdout), diff };
+  const same = ['diff', '--no-ext-diff', '--no-textconv', '--find-renames'];
+  const numstat = await safeGit(place, [...same, '--numstat', '-z', from, to, '--']);
+  return { sha: to, from, files: parseNumstat(numstat.stdout), diff: await patchOf(place, [...same, '--no-color', '--src-prefix=a/', '--dst-prefix=b/', from, to, '--']) };
+}
+
+/** The patch, or null when git printed more than MAX_DRAFT_DIFF_BYTES. Any other failure is thrown. */
+async function patchOf(place: GitPlace, args: string[]): Promise<string | null> {
+  try {
+    return (await safeGit(place, args, { maxOutputBytes: MAX_DRAFT_DIFF_BYTES })).stdout;
+  } catch (err) {
+    if (err instanceof SafeGitError && err.outputTooLarge) return null;
+    throw err;
+  }
 }
 
 /**
@@ -77,9 +88,13 @@ export async function pruneOldDraftRefs(opts: PruneOptions): Promise<number> {
         const [date, sha, ref] = line.split(' ');
         // An empty date: the ref points at something that isn't a commit. Not a draft we made, so it stays.
         if (!date || !sha || !ref || Number(date) >= oldest) continue;
-        // With the sha: deleted only if it still points there, so a draft made a moment ago is never lost.
-        await safeGit(place, ['update-ref', '-d', ref, sha]);
-        removed++;
+        try {
+          // With the sha: deleted only if it still points there, so a draft made a moment ago is never lost.
+          await safeGit(place, ['update-ref', '-d', ref, sha]);
+          removed++;
+        } catch {
+          // This one can't be deleted now (locked by another git, say): not counted, and the clone's other drafts are still pruned.
+        }
       }
     } catch {
       // A clone that's gone or broken: skipped, like cleanUpWorktrees. The others are still pruned.

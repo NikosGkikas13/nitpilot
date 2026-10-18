@@ -153,6 +153,18 @@ describe('safeGit', () => {
     expect(failed).toMatchObject({ code: 128, message: 'git rev-parse failed: fatal: Needed a single revision' });
   });
 
+  it('marks a failure caused by too much output, and only that one', async () => {
+    const pr = prRepo();
+    const { inTree } = await worktreeOf(pr);
+    const tooMuch = await safeGit(inTree, ['log', '--format=%H'], { maxOutputBytes: 10 }).catch((err: unknown) => err);
+    expect(tooMuch).toBeInstanceOf(SafeGitError);
+    expect(tooMuch).toMatchObject({ outputTooLarge: true, message: expect.stringContaining('printed more than 10 bytes') });
+    const failed = await safeGit(inTree, ['rev-parse', '--verify', 'no-such-branch'], { maxOutputBytes: 1000 }).catch((err: unknown) => err);
+    expect(failed).toMatchObject({ outputTooLarge: false });
+    expect(new SafeGitError('x', [], null, '', '').outputTooLarge).toBe(false);
+    expect((await safeGit(inTree, ['log', '--format=%H'], { maxOutputBytes: 1000 })).stdout).toContain(pr.headSha);
+  });
+
   it("puts git's error line in the message when a push is rejected, not the line before it", async () => {
     const pr = prRepo();
     const { inTree } = await worktreeOf(pr);

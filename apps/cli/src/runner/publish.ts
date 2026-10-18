@@ -2,7 +2,7 @@ import type { PublishBundle, PushInfo } from '@nitpilot/protocol';
 import type { JobIo } from '../daemon';
 import { draftRef } from './draft';
 import { JobFailure } from './job-failure';
-import { pushTarget, rejectedBecauseMoved } from './push';
+import { askBeforePush, pushTarget, rejectedBecauseMoved } from './push';
 import { safeGit, SafeGitError, type GitPlace } from './safe-git';
 import { cloneGitDir } from './worktree';
 
@@ -61,7 +61,7 @@ async function pushDraft(bundle: PublishBundle, place: GitPlace, pushing: JobIo[
     // A retry after an earlier attempt pushed and deleted the ref, but its answer never reached the server (the
     // CLI stopped first): the branch already is the draft. Tell the server, as for any push, and report that push.
     if (await branchIsAt(bundle, place, draft.sha)) {
-      await askServer(pushing, draft);
+      await askBeforePush(pushing, draft.from, draft.sha);
       return { push: { from: draft.from, to: draft.sha } };
     }
     const where = found === null ? 'is gone' : `points at ${found.slice(0, 7)} now`;
@@ -69,7 +69,7 @@ async function pushDraft(bundle: PublishBundle, place: GitPlace, pushing: JobIo[
   }
   // Where it goes, asked before the server is: a deleted fork or a missing remote fails now.
   const remote = await pushTarget(bundle, place);
-  await askServer(pushing, draft);
+  await askBeforePush(pushing, draft.from, draft.sha);
   try {
     // If an earlier attempt already pushed (and stopped before deleting the ref), this push changes nothing and succeeds.
     // `--`: whatever `remote` is, git reads it as a repository, never as an option. Never forced (no `+`, no `--force`).
@@ -86,13 +86,6 @@ async function pushDraft(bundle: PublishBundle, place: GitPlace, pushing: JobIo[
   // `nitpilot start` prunes old drafts anyway.
   await safeGit({ ...place, signal: undefined }, ['update-ref', '-d', ref, draft.sha]).catch(() => {});
   return { push: { from: draft.from, to: draft.sha } };
-}
-
-/** `job.pushing` (spec §10): the push counts only on an `applied` ack. `stale` means this attempt isn't the current one. */
-async function askServer(pushing: JobIo['pushing'], draft: PublishBundle['draft']): Promise<void> {
-  if ((await pushing(draft.from, draft.sha)) === 'stale') {
-    throw new JobFailure('stale_head', true, 'The server moved on before the push, so nothing was pushed.');
-  }
 }
 
 /**

@@ -161,6 +161,43 @@ describe('publishDraft', () => {
     expect(pushing).not.toHaveBeenCalled();
   });
 
+  it('fails with setup_failed, retryable, and asks nothing, when the linked clone is not there', async () => {
+    const pr = prRepo();
+    const { bundle, env } = await drafted(pr);
+    const pushing = vi.fn<JobIo['pushing']>(async () => 'applied');
+    const gone = { ...contextFor(pr, env, pushing), clonePath: join(pr.root, 'no-such-clone') };
+    const failed = await publishDraft(bundle, gone).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'setup_failed', retryable: true });
+    expect(pushing).not.toHaveBeenCalled();
+    expect(branchOf(pr)).toBe(pr.headSha);
+  });
+
+  it('fails with setup_failed, not retryable, and pushes nothing, when the draft ref is gone and there is no remote to ask (a deleted fork)', async () => {
+    const pr = prRepo();
+    const { bundle, env } = await drafted(pr);
+    pr.git(pr.clone, 'update-ref', '-d', draftRef('job_1'));
+    const pushing = vi.fn<JobIo['pushing']>(async () => 'applied');
+    const noFork = { ...bundle, git: { ...bundle.git, headRepoPath: null } };
+    const failed = await publishDraft(noFork, contextFor(pr, env, pushing)).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'setup_failed', retryable: false, message: expect.stringContaining("isn't on this computer any more") });
+    expect(pushing).not.toHaveBeenCalled();
+    expect(branchOf(pr)).toBe(pr.headSha);
+  });
+
+  it('fails with git_error, retryable, and pushes nothing, when the draft ref is gone and the remote cannot be asked', async () => {
+    const pr = prRepo();
+    const { bundle, env } = await drafted(pr);
+    pr.git(pr.clone, 'update-ref', '-d', draftRef('job_1'));
+    rmSync(pr.base, { recursive: true, force: true }); // "GitHub" can't be reached, so `git ls-remote` fails
+    const pushing = vi.fn<JobIo['pushing']>(async () => 'applied');
+    const failed = await publishDraft(bundle, contextFor(pr, env, pushing)).catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'git_error', retryable: true });
+    expect(pushing).not.toHaveBeenCalled();
+  });
+
   it("refuses a draft job id that can't be a ref name, before any git runs", async () => {
     const pr = prRepo();
     const { bundle, env } = await drafted(pr);

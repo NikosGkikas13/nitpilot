@@ -90,6 +90,36 @@ describe('describeDraft', () => {
   });
 });
 
+describe('describeDraft and your git config', () => {
+  it('reads the same way whatever diff.noprefix and diff.renames say: a/ and b/ in the patch, a rename listed once under its new name', async () => {
+    const pr = prRepo({ base: { 'src/old-name.ts': 'export const a = 1;\nexport const b = 2;\nexport const c = 3;\n' } });
+    pr.git(pr.clone, 'config', 'diff.noprefix', 'true');
+    pr.git(pr.clone, 'config', 'diff.renames', 'false');
+    const sha = draftCommit(pr, { 'src/old-name.ts': null, 'src/new-name.ts': 'export const a = 1;\nexport const b = 2;\nexport const c = 3;\n' });
+    const draft = await describeDraft(placeOf(pr), pr.headSha, sha);
+    expect(draft.files).toEqual([{ path: 'src/new-name.ts', adds: 0, dels: 0 }]);
+    expect(draft.diff).toContain('diff --git a/src/old-name.ts b/src/new-name.ts');
+    expect(draft.diff).not.toMatch(/^diff --git src\//m);
+  });
+
+  it('allows a patch of exactly the limit, and leaves out one a byte over', async () => {
+    const pr = prRepo();
+    const placeFor = placeOf(pr);
+    const sizeOf = async (body: string) => {
+      const sha = draftCommit(pr, { 'src/exact.ts': body });
+      return { sha, bytes: Buffer.byteLength((await describeDraft(placeFor, pr.headSha, sha)).diff ?? '') };
+    };
+    // Find how big the patch is for a small file, then grow the file by the difference to reach the limit exactly.
+    const small = await sizeOf('x'.repeat(10) + '\n');
+    const fill = MAX_DRAFT_DIFF_BYTES - small.bytes;
+    const exact = await describeDraft(placeFor, pr.headSha, draftCommit(pr, { 'src/exact.ts': 'x'.repeat(10 + fill) + '\n' }));
+    expect(Buffer.byteLength(exact.diff ?? '')).toBe(MAX_DRAFT_DIFF_BYTES);
+    const over = await describeDraft(placeFor, pr.headSha, draftCommit(pr, { 'src/exact.ts': 'x'.repeat(10 + fill + 1) + '\n' }));
+    expect(over.diff).toBeNull();
+    expect(over.files).toEqual([{ path: 'src/exact.ts', adds: 1, dels: 0 }]);
+  });
+});
+
 describe('pruneOldDraftRefs', () => {
   it('removes only draft refs whose commit is older than 14 days, and leaves every other ref alone', async () => {
     const pr = prRepo();
@@ -110,6 +140,19 @@ describe('pruneOldDraftRefs', () => {
     expect(refsOf(pr, 'refs/nitpilot')).toEqual([draftRef('job_young'), 'refs/nitpilot/job_9-1/head']);
     expect(refsOf(pr, 'refs/heads/an-old-branch')).toEqual(['refs/heads/an-old-branch']);
     expect(pr.git(second, 'for-each-ref', 'refs/nitpilot')).toBe('');
+  });
+
+  it('skips a draft ref git cannot delete (locked), counts only what it removed, and still removes the clone\'s other old drafts', async () => {
+    const pr = prRepo();
+    const now = new Date('2026-10-17T12:00:00Z');
+    const old = commitFrom(pr, now, 20);
+    pr.git(pr.clone, 'update-ref', draftRef('job_a'), old);
+    pr.git(pr.clone, 'update-ref', draftRef('job_b'), old);
+    // A ref being updated by another git process has a `.lock` file beside it: deleting it fails until that is gone.
+    writeFileSync(join(pr.clone, '.git/refs/nitpilot/drafts/job_a.lock'), '');
+    const removed = await pruneOldDraftRefs({ repoPaths: [pr.clone], hooksDir: emptyHooksDir(tempDir()), now, env: pr.env });
+    expect(removed).toBe(1);
+    expect(refsOf(pr, 'refs/nitpilot')).toEqual([draftRef('job_a')]);
   });
 
   it('skips a linked clone that is gone, and still prunes the others', async () => {

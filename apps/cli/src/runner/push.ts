@@ -37,6 +37,16 @@ export function pickPushRemote(remoteList: string, headRepoPath: string | null):
   throw new JobFailure('git_error', false, `No remote in your clone points at ${headRepoPath}. Add one (git remote add <name> <url>), then run \`${BRAND.cli} retry\`.`);
 }
 
+/**
+ * `job.pushing` (spec §10): the push counts only on an `applied` ack. `stale` means this attempt isn't the current
+ * one (cancelled, or handed out again), so nothing is pushed. Used by address jobs and publish jobs.
+ */
+export async function askBeforePush(pushing: JobIo['pushing'], from: string, to: string): Promise<void> {
+  if ((await pushing(from, to)) === 'stale') {
+    throw new JobFailure('stale_head', true, 'The server moved on before the push, so nothing was pushed.');
+  }
+}
+
 /** What an address job's commit became: pushed (`push`), kept as a draft (`draft`), or neither when nothing changed. */
 export type Committed = { push: PushInfo | null; draft: DraftInfo | null };
 
@@ -80,9 +90,7 @@ async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }:
   }
   // The executor asks pushTarget before the agent runs, so an auto job always has a remote. Not having one is a bug.
   if (remote === null) throw new Error('An address job that pushes needs a remote (pushTarget).');
-  if ((await pushing(worktree.headSha, to)) === 'stale') {
-    throw new JobFailure('stale_head', true, 'The server moved on before the push, so nothing was pushed.');
-  }
+  await askBeforePush(pushing, worktree.headSha, to);
   try {
     // `--`: whatever `remote` is, git reads it as a repository, never as an option.
     await git(['push', '--porcelain', '--no-verify', '--', remote, `HEAD:refs/heads/${bundle.git.headBranch}`]);

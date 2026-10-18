@@ -32,6 +32,8 @@ export class SafeGitError extends Error {
     readonly code: number | null,
     readonly stdout: string,
     readonly stderr: string,
+    /** Git printed more than the output limit (see SafeGitOptions.maxOutputBytes); stdout holds only what fit. */
+    readonly outputTooLarge: boolean = false,
   ) {
     super(message);
     this.name = 'SafeGitError';
@@ -43,6 +45,11 @@ const ENV_ALLOWLIST = [
   'PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TMPDIR', 'XDG_CONFIG_HOME', 'GIT_CONFIG_NOSYSTEM',
   'SSH_AUTH_SOCK', 'GIT_SSH_COMMAND', 'GIT_SSH', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy',
 ];
+
+export type SafeGitOptions = {
+  /** The most git may print (bytes). Past it, git is stopped and the call rejects with `outputTooLarge`. Default: MAX_OUTPUT_BYTES. */
+  maxOutputBytes?: number;
+};
 
 /** A slow fetch of a big repo is fine; a git that hangs forever is not. */
 const GIT_TIMEOUT_MS = 10 * 60_000;
@@ -84,7 +91,7 @@ export function safeGitEnv(place: GitPlace): Record<string, string> {
  * worktree's `.git` link wasn't changed. Resolves with the output; rejects with SafeGitError when
  * git fails. See docs/why/safe-git.md.
  */
-export async function safeGit(place: GitPlace, args: string[]): Promise<GitResult> {
+export async function safeGit(place: GitPlace, args: string[], opts: SafeGitOptions = {}): Promise<GitResult> {
   const folder = place.workTree ?? place.gitDir;
   if (!existsSync(folder)) {
     // Without this, git's "can't start in a folder that isn't there" reads as "git is not installed", or as a tampered `.git`.
@@ -98,7 +105,7 @@ export async function safeGit(place: GitPlace, args: string[]): Promise<GitResul
   }
   const env = safeGitEnv(place);
   if (env.GIT_SSH_COMMAND === undefined && env.GIT_SSH === undefined) env.GIT_SSH_COMMAND = await sshCommandWithBatchMode(place, env, args);
-  return runGit(place, args, env, args);
+  return runGit(place, args, env, args, opts.maxOutputBytes ?? MAX_OUTPUT_BYTES);
 }
 
 /**
@@ -106,7 +113,7 @@ export async function safeGit(place: GitPlace, args: string[]): Promise<GitResul
  * stops ssh from ever waiting for a passphrase: their command, plus `-o BatchMode=yes`.
  */
 async function sshCommandWithBatchMode(place: GitPlace, env: Record<string, string>, asked: string[]): Promise<string> {
-  const configured = await runGit(place, ['config', '--get', 'core.sshCommand'], env, asked).then(
+  const configured = await runGit(place, ['config', '--get', 'core.sshCommand'], env, asked, MAX_OUTPUT_BYTES).then(
     (result) => result.stdout.trim(),
     (err: unknown) => {
       if (err instanceof SafeGitError && err.code === 1) return ''; // exit code 1: core.sshCommand isn't set
@@ -117,21 +124,23 @@ async function sshCommandWithBatchMode(place: GitPlace, env: Record<string, stri
 }
 
 /** Start git. `asked` is the command the caller wanted, so a failure in a helper command is reported under that name. */
-function runGit(place: GitPlace, gitArgs: string[], env: Record<string, string>, asked: string[]): Promise<GitResult> {
-  const options = { cwd: place.workTree ?? place.gitDir, env, signal: place.signal, timeout: GIT_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES };
+function runGit(place: GitPlace, gitArgs: string[], env: Record<string, string>, asked: string[], maxBuffer: number): Promise<GitResult> {
+  const options = { cwd: place.workTree ?? place.gitDir, env, signal: place.signal, timeout: GIT_TIMEOUT_MS, maxBuffer };
   return new Promise((done, fail) => {
     execFile('git', safeGitArgs(place, gitArgs), options, (err, stdout, stderr) => {
       if (!err) return done({ stdout, stderr });
       const code = typeof err.code === 'number' ? err.code : null;
-      fail(new SafeGitError(describeFailure(asked, err, stderr), asked, code, stdout, stderr));
+      const outputTooLarge = err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+      fail(new SafeGitError(describeFailure(asked, err, stderr, maxBuffer), asked, code, stdout, stderr, outputTooLarge));
     });
   });
 }
 
-function describeFailure(args: string[], err: ExecFileException, stderr: string): string {
+function describeFailure(args: string[], err: ExecFileException, stderr: string, maxBuffer: number): string {
   const command = `git ${args[0] ?? ''}`.trim();
   if (err.name === 'AbortError') return `${command} was stopped`;
   if (err.code === 'ENOENT') return 'git is not installed (or not on your PATH)';
+  if (err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return `${command} printed more than ${maxBuffer} bytes`;
   if (err.killed) return `${command} took longer than ${GIT_TIMEOUT_MS / 60_000} minutes`;
   // Git's own error line, not the lines around it (a rejected push prints `To <url>` and ` ! [rejected]` first).
   const lines = stderr.split('\n').map((line) => line.trim()).filter((line) => line !== '');
