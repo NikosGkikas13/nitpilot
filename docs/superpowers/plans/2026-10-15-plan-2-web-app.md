@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1, W2, W3 and W4 at step level; W5–W8 at task level.** W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1–W6 at step level; W7 and W8 at task level.** W6 (Tasks 19–20) was written at step level on 2026-10-18 against the branch at `3285e9b`; see "Checked against the code (W6)". W5 (Tasks 14–18) was written at step level on 2026-10-18 against the branch at `03241c8`; see "Checked against the code (W5)". W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -249,6 +249,38 @@ W5 was written at step level on 2026-10-18, against branch `plan-2-web-app` at `
 - `pr_retargeted` turning a trusted PR untrusted while a review is already queued leaves that job's apply state as it was.
 - No chat banner for a waiting draft: the inbox says "Needs you" and the card sits in the timeline.
 - From W4, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing (`lib/viewport.ts`), the failure reason in the failed banner, the resolver getting the "ready" notification.
+
+## Checked against the code (W6)
+
+W6 was written at step level on 2026-10-18, against branch `plan-2-web-app` at `3285e9b` (W5 done, with its fix rounds; PR #2 open). Its code was built and run in a scratch worktree first, one task at a time, on a database of its own (protocol 63 → 79, CLI 332 → 333 passed + 14 skipped, server 935 → 971, web 197 → 260, end to end 6, Playwright 7 → 10; typecheck, lint and build clean after each task), and every code block below was generated from those tested commits by a script: whole files for new ones, `git diff` for changed ones; the PNG icons are made by the task's own script. Each step's "Expected: FAIL" counts were checked by applying only that step's tests to the commit before it. Versions checked against npm that day: `web-push` 3.6.7 and `@types/web-push` 3.6.4 (both the latest). Task 20 was looked at in the in-app browser at 1280 px and 375 px, light and dark: the service worker and manifest load, the install card (shown with a stand-in install event, since that browser never offers one), Not now, the settings placeholder's push section, and the iOS sheet (with an iPhone user agent set in the page). The browser's notification permission is always "blocked" there, so turning push on, a real push and its click, and Chrome's install dialog are left to the live step. Where W6 differs from the task-level text, and why:
+
+**Task 19 (Web Push on the server)**
+- **Ruling (controller): the CLI's terminal line always; its OS notification only when no push worked.** Spec §16 and Global Constraints said so; §10 and the task-level text said the CLI gets nothing when push worked. The CLI's `notify` gains `alert` (default true): the CLI always prints the line and shows the OS notification only when `alert` is true. `FallbackNotifier(primary, fallback)` runs push first, then sends the CLI `alert: false` for the people push reached and `alert: true` for the rest. Review Focus 5 is tested as "exactly one alerting ping per person". Spec §10 now says this, and the CLI gains one test.
+- **Ruling (controller): the W4 deferred item is folded in as its own engine step.** Whoever's own action made the chat ready (Resolve, Send, Discard, a note…) isn't notified "Ready for your approval"; the other requested reviewers still are. `Ctx.actor` comes from `actorOf(event)` (the event's `who`, a note's author, a manual review's reviewer); events from GitHub, agents and timers have none. With Web Push, that ping would land on the phone of the person who just clicked. Spec §6.3 says so.
+- **`Notification` gains `body` and `alert`.** The title is the handoff's heading ("Ready for your approval", "Needs you", "Review waiting", "Agent failed", "Drafts waiting") and the body the detail; `oneLine(n)` joins them into exactly the line the CLI printed before, so the terminal line reads as it did. `notificationTitle` became `notificationText(kind, pr, points) → { title, body }`. The handoff's sample counts ("2 rounds, 3 points resolved") aren't shown: the notify task doesn't load them.
+- **Ruling: `PushNotifier` takes `PushSend | null`.** Null means the server has no VAPID keys: nobody is reached and the rows are left alone. A sender that always failed would delete everyone's subscriptions after five notifications on a server whose keys were removed for a while.
+- **New file `tasks/web-push-send.ts`** (`PushTarget`, `PushResult`, `PushSend`, `webPushSend`), so the 404/410 mapping is tested without a database or a network. Options: a message lives at most 24 hours at the push service, a send gives up after 10 s of silence, normal urgency. `web-push` is imported as a default import (`import webpush from 'web-push'`): Node can't see its named exports.
+- **Ruling (controller): the push routes take the session cookie only** (like Settings, W5), with the Origin check. The endpoint must be an `https:` address whose host isn't an IP address or localhost (`isPushEndpoint` in the protocol), because the server POSTs to it. DELETE removes only your own row and answers `{ ok: true }` either way. Subscribing again moves an endpoint to whoever is signed in and forgets its failures.
+- The VAPID variables are optional but all-or-none; an empty line in `.env` counts as unset. `AppDeps.vapidPublicKey` feeds `GET /api/me` and `me.update`; the relation on `User` is `pushSubs`, with an index on `userId`.
+- A database error mid-task retries the notify task, which may push a second time to someone it already reached: accepted, and said in the code and the explainer.
+
+**Task 20 (service worker, manifest, icons)**
+- **Ruling (controller): the temporary push switch is on `/settings`** (the placeholder Task 21 replaces), not a stray button in the shell: "Turn push on" / "Turn push off", the iOS tip with "Show me how", and one sentence each for blocked, unsupported and "not set up on this server". It's a plain button, not the handoff's 46×28 switch (Task 21).
+- **Sign out first removes this browser's subscription** (controller decision, at most 2 s, never blocking), so a shared browser stops getting the last person's notifications. Spec §16 says so.
+- **The manifest is a static file** with a unit test against `BRAND`; it adds `id`, `scope` and a description. The handoff's splash (the plate, the wordmark, "Loading your inbox…", a dark variant) can't be put in a manifest: Android draws its own from the color, icon and name, and there are no iOS startup images.
+- **Icons:** `icon.svg` draws Fragment Mono's "n" as a path (no font needed), and its own media query hides the diamond at 32 px and below, which is how `favicon-32.png` is rendered too. `npm run icons -w apps/web` renders every PNG from it with Playwright's Chromium; the PNGs are committed. The maskable icon shrinks the mark to 80% so the diamond stays inside the safe zone.
+- **Files the text didn't list:** `push/device.ts` (`isIos`, `isStandalone`, `deviceLabel`), `push/install.ts` (the install offer can arrive before sign-in, so it is kept from before React renders), `lib/remember.ts`, `test/push.ts`, and tests for each.
+- **`turnPushOn` subscribes nothing when the person blocks the prompt**, and takes the browser's subscription back if the server refuses it, so the two never disagree. **`turnPushOff` unsubscribes the browser first, then tells the server**: if the server can't be told, its next push gets a 410 and it deletes the row itself.
+- **`sw.js`** also has `skipWaiting()` (no cache, so a new version may take over at once), `renotify` (a newer ping for the same chat alerts again), the icon, a plain notification for a push it can't read (browsers require one), and a guard that keeps clicks on Nitpilot's own origin. No `fetch` listener, as asked.
+- **The iOS sheet's pointer** sits below the sheet (the handoff's margins put it over Got it's border) and is hidden at 760 px and up. Esc closes the sheet without also taking a phone back to the inbox.
+- **Playwright:** headless Chromium always reports notifications as blocked, even after granting them, so `pwa.spec.ts` checks the blocked sentence and that the generated key reached the page; the on/off path is covered by unit tests and the live step. The Playwright server takes VAPID keys from the env or makes a pair at start, records sends instead of making them unless `E2E_REAL_PUSH=1`, and has `POST /notify { login }` for the live step.
+- The CSP needed no change: `default-src 'self'` covers the worker and the manifest.
+
+**Deferred**
+- Task 19: the endpoint check doesn't catch a public name that resolves to a private address (the send is blind and reads only a status); two simultaneous subscribes of one new endpoint can collide (a 500, one browser only); web-push's timeout is an idle timeout, not a total deadline; no route lists a person's subscriptions (W7's Settings decides); no `me.update` after subscribing (the web app updates its own cache).
+- Task 20: a subscription the server dropped after five failures still reads "on" in that browser (Task 21 could post it again on load); no `pushsubscriptionchange` handler; no Android badge icon; no iOS startup images.
+- Noticed in the browser look: the sheet's icon appears a moment after the sheet opens; on a phone the install card keeps the desktop sentence ("Its own window next to your editor…"); the placeholder's iOS tip is plain text (Task 21's Notifications section has the tinted box); the install card covers the inbox's keyboard hints until it is dismissed.
+- From W4 and W5, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing (`lib/viewport.ts`), the failure reason in the failed banner, a publish crash plus a push on top, `pr_retargeted` with a queued review, no chat banner for a waiting draft.
 
 ## How to work in this repo
 
@@ -27757,65 +27789,5105 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Milestone W6: Web Push and PWA
 
-W6 sends notifications as Web Push to every browser and device a person subscribed, with the CLI as fallback, and makes the web app installable.
+W6 sends notifications as Web Push to every browser and device a person subscribed, with the CLI as fallback (its terminal line always, its OS notification only when no push arrived), and makes the web app installable: a service worker that shows pushes, a manifest and icons, the install card and the iPhone Home Screen sheet.
 
 **Files at the end of W6:**
 ```
 apps/server/src/
-  tasks/push-notifier.ts         PushNotifier (web-push), FallbackNotifier
-  http/routes/push.ts            POST/DELETE /api/push/subscriptions
-  lib/env.ts                     VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-  scripts/vapid-keys.ts          npm run vapid:keys
+  tasks/push-notifier.ts         PushNotifier (one send per subscription, gone → deleted, 5 failures → deleted)
+  tasks/web-push-send.ts         PushSend, webPushSend (web-push with the VAPID keys; 404/410 → gone)
+  tasks/notifier.ts              Notification { title, body, alert }, FallbackNotifier (push first, then the CLI)
+  http/routes/push.ts            POST/DELETE /api/push/subscriptions (cookie only, Origin check)
+  lib/env.ts                     VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (optional, all or none)
+  engine/context.ts              Ctx.actor: who acted is not told "Ready for your approval"
   prisma: PushSubscription
+apps/server/scripts/vapid-keys.ts  npm run vapid:keys
+packages/protocol/src/           Notify.alert, WebMe.push, PushSubscriptionRequest, PushUnsubscribeRequest, isPushEndpoint
+apps/cli/src/daemon.ts           the OS notification only when alert
 apps/web/
-  public/sw.js, public/manifest.webmanifest, public/icons/*
-  scripts/render-icons.ts        Playwright renders the SVG icon to PNGs (run by hand, output committed)
-  src/push/{register.ts,subscribe.ts}, src/components/{InstallCard,IosHomeScreenSheet}/…
+  public/sw.js, public/manifest.webmanifest, public/icons/{icon.svg,icon-192,icon-512,maskable-512,apple-touch-icon,favicon-32}
+  scripts/render-icons.ts        npm run icons: Playwright renders the SVG icon to PNGs (run by hand, output committed)
+  src/push/{register,subscribe,device,install}.ts, src/lib/remember.ts
+  src/components/{InstallCard,IosHomeScreenSheet}/…
+  src/routes/Settings/SettingsPlaceholder.tsx   the temporary push switch (Task 21 replaces the page)
+  e2e/pwa.spec.ts
 docs/why/web-push.md, docs/why/service-workers-and-pwa.md
 ```
 
 ### Task 19: Web Push on the server, with the CLI as fallback
 
 **Files:**
-- Create: `apps/server/src/tasks/push-notifier.ts` and `push-notifier.db.test.ts`, `apps/server/src/http/routes/push.ts` and `push.db.test.ts`, `apps/server/scripts/vapid-keys.ts`, a migration (`PushSubscription`), `docs/why/web-push.md`.
-- Modify: `apps/server/package.json` (`web-push`, `@types/web-push`, `vapid:keys` script), `apps/server/src/lib/env.ts` and `.env.example` (VAPID variables, optional: push is off without them), `apps/server/src/tasks/notifier.ts` (`Notifier.notify` returns who was reached), `apps/server/src/tasks/cli-notifier.ts`, `apps/server/src/main.ts`, `apps/server/src/http/routes/me.ts` (`WebMe.push`), `packages/protocol/src/web-api.ts` (`PushSubscriptionRequest`, `WebMe.push`).
+- Create (server): `apps/server/src/tasks/push-notifier.ts` and `push-notifier.db.test.ts`, `apps/server/src/tasks/web-push-send.ts` and `web-push-send.test.ts`, `apps/server/src/http/routes/push.ts` and `push.db.test.ts`, `apps/server/scripts/vapid-keys.ts`, `apps/server/prisma/migrations/<timestamp>_push_subscriptions/migration.sql` (generated).
+- Create (docs): `docs/why/web-push.md`.
+- Modify (protocol): `packages/protocol/src/cli-messages.ts` and `messages.test.ts` (`Notify.alert`), `web-api.ts` and `web-api.test.ts` (`WebMe.push`, `isPushEndpoint`, `PushSubscriptionRequest`, `PushUnsubscribeRequest`).
+- Modify (CLI): `apps/cli/src/daemon.ts` and `daemon.test.ts`.
+- Modify (engine, see "The reviewer who just pressed the button"): `apps/server/src/engine/{context.ts,decide.ts,advance.ts}` and `{ready-gate,human,drafts}.test.ts`.
+- Modify (server): `apps/server/package.json` (`web-push`, `@types/web-push`, the `vapid:keys` script), `package-lock.json` (regenerated by `npm install`), `apps/server/prisma/schema.prisma`, `apps/server/.env.example`, `apps/server/src/lib/env.ts` and `env.test.ts`, `apps/server/src/tasks/{notifier.ts,cli-notifier.ts,cli-notifier.db.test.ts}`, `apps/server/src/tasks/handlers/{notify.ts,handlers.db.test.ts}`, `apps/server/src/auth/users.ts`, `apps/server/src/http/app.ts`, `apps/server/src/http/routes/{me.ts,me.db.test.ts}`, `apps/server/src/ws/web-wire.ts`, `apps/server/src/main.ts`, `apps/server/test/app.ts`, `apps/server/test/e2e/harness.ts`, `apps/server/test/integration/plan-1a.db.test.ts`.
+- Modify (web, fixtures only): `apps/web/src/lib/banner.test.ts`, `apps/web/src/routes/Chat/{AutoSwitch,Chat,ChatBanner,Composer,DraftCard}.test.tsx`, `apps/web/src/routes/Home/Home.test.tsx`, `apps/web/src/routes/Inbox/Inbox.test.tsx`, `apps/web/src/routes/Shell/Shell.test.tsx` (each gains `push` on its `WebMe`).
+- Modify (docs): `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§6.3, §8, §10, §16).
 
 **Interfaces:**
-- Produces: model `PushSubscription { id, userId, endpoint String @unique, p256dh, auth, label, failCount Int @default(0), createdAt, updatedAt }`. `type PushSend = (sub: { endpoint; keys: { p256dh; auth } }, payload: string) => Promise<{ ok: true } | { ok: false; gone: boolean; error: string }>` (production: `web-push`'s `sendNotification` with the VAPID details, a 404/410 status → `gone`); `class PushNotifier implements Notifier { constructor(send: PushSend) }`; `class FallbackNotifier implements Notifier { constructor(primary: Notifier, fallback: Notifier) }` (the fallback gets only the user ids the primary didn't reach). `Notifier.notify(n): Promise<{ reached: string[] }>`. Payload: `{ title, body, url, tag: chatId }`, from the notify task's existing titles split into title and body per the handoff's §8 copy. `POST /api/push/subscriptions { endpoint, keys: { p256dh, auth }, label }` (upsert by endpoint; an endpoint owned by another user moves to this one), `DELETE /api/push/subscriptions { endpoint }`. `WebMe.push = { vapidPublicKey: string | null; subscribed: boolean }` (`subscribed`: this user has any subscription).
+- Consumes: `Notifier`, `Notification`, `CliNotifier` and the `notify` task (Plan 1: `tasks/notifier.ts`, `tasks/cli-notifier.ts`, `tasks/handlers/notify.ts`); `requireUser`, `requireSameOrigin`, `HttpError`, `ActionResponse`, `WebMe`, `loadWebMe` (W3, W5); the engine's `enterReady` and the event types that carry `who` (W4, Task 15).
+- Produces (database): model `PushSubscription { id; userId; endpoint String @unique; p256dh; auth; label; failCount Int @default(0); createdAt; updatedAt }` with `@@index([userId])`, and `User.pushSubs`.
+- Produces (protocol): `Notify` (the CLI message `notify`) gains `alert: boolean` (default `true`, so a server from before Plan 2 reads as alerting). `WebMe.push = { vapidPublicKey: string | null; subscribed: boolean }`. `isPushEndpoint(value: string): boolean`; `PushSubscriptionRequest = { endpoint; keys: { p256dh; auth }; label }` and `PushUnsubscribeRequest = { endpoint }` (both `endpoint`s must pass `isPushEndpoint` and be at most 2,048 characters; keys are base64url, 1 to 200 characters; `label` is trimmed, 1 to 100 characters).
+- Produces (server):
+  - `Notifier.notify(n): Promise<{ reached: string[] }>`. `Notification` gains `body: string` (the detail under the heading) and `alert?: boolean` (left out means alert); `title` is now the handoff's heading. `oneLine(n)` gives `title: body` (what the CLI prints: byte for byte Plan 1's one-line title). `notificationText(kind, pr, points): { title; body }` replaces `notificationTitle` (`tasks/handlers/notify.ts`).
+  - `type PushTarget = { endpoint; keys: { p256dh; auth } }`, `type PushResult = { ok: true } | { ok: false; gone: boolean; error: string }`, `type PushSend = (target: PushTarget, payload: string) => Promise<PushResult>` and `webPushSend(vapid: VapidDetails, sendNotification = webpush.sendNotification): PushSend` (`tasks/web-push-send.ts`; a 404 or 410 → `gone`).
+  - `class PushNotifier implements Notifier { constructor(send: PushSend | null) }` (`null`: no VAPID keys, reaches nobody and leaves the rows alone), `MAX_PUSH_FAILURES = 5`, `type PushPayload = { title; body; url; tag }` (`tasks/push-notifier.ts`).
+  - `class FallbackNotifier implements Notifier { constructor(primary: Notifier, fallback: Notifier) }` (`tasks/notifier.ts`): the primary goes first; then the fallback gets every person, with `alert: false` for the ones the primary reached and `alert: true` for the rest. `LogNotifier` answers `{ reached: [] }`.
+  - `VapidDetails = { subject; publicKey; privateKey }` and `vapidDetails(env): VapidDetails | null` (`lib/env.ts`); env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+  - `Ctx.actor: string | null` (a GitHub id) and `actorOf(event)` (`engine/context.ts`).
+  - `AppDeps.vapidPublicKey: string | null` (`testDeps` sets `null`); `loadWebMe(userId, clis, vapidPublicKey)`; `WebWiring.vapidPublicKey?: string | null`; `meRoutes(deps: { clis; vapidPublicKey })`; `pushRoutes()`: `POST /api/push/subscriptions` and `DELETE /api/push/subscriptions`, both answering `ActionResponse`.
 
 **Behavior:**
-- Each subscription is sent separately; one success reaches the user. `gone` → the row is deleted; another error adds 1 to `failCount`, and a row at 5 failures in a row is deleted (a success resets it).
-- A send error never fails the notify task for the others; the task fails (and retries) only if the database fails.
-- No VAPID keys configured → `PushNotifier` reaches nobody, so every notification goes to the CLI as in Plan 1.
-- `docs/why/web-push.md`: what a push service is, what VAPID keys prove, why the payload is encrypted, what 410 means, and the push-first-CLI-fallback rule; points to `tasks/push-notifier.ts`.
+- When someone is needed (Ready for your approval, Needs you, Review waiting, Agent failed, Drafts waiting), the server sends a Web Push to every browser and device that person turned push on for, one after another. One push that arrives reaches the person. The push shows the handoff's heading as its title and the detail under it ("Ready for your approval" · "acme/shop-api#142"), opens the chat's link when clicked, and carries the chat id as its tag, so a newer notification about the same chat replaces the older one. The push service keeps it a day at most (`TTL` 24 hours) and a push service that stops answering is given up on after 10 seconds.
+- **Push first, the CLI as fallback** (spec §16; the controller's ruling, which wins over the earlier task text "the fallback gets only the user ids the primary didn't reach"): every CLI still prints its terminal line, so the `notify` message goes to everyone. It carries `alert: false` for people a push reached, and their CLI shows no OS notification; it carries `alert: true` for the rest, and their CLI shows one, as in Plan 1. So each person gets one alerting ping: a push, or the CLI's notification. The server log gets a line only for people nobody reached (neither a push, nor an alerting CLI).
+- **Review Focus 5:** a person whose only subscription answers 410 → the row is deleted and their CLI alerts for that same notification; a person with one working and one gone subscription → the push reaches them, the CLI only prints; a person with no subscription → the CLI alerts; never both for one person, never neither for someone with a CLI online.
+- A subscription the push service calls gone (404 or 410) is deleted at once. Any other failure adds 1 to its `failCount`, a success sets it back to 0, and the fifth failure in a row deletes the row. A send that throws counts as a failure. A failed send never stops the others, and never fails the notify task: only a database error does, and then the task is retried and may push a second time to someone it already reached (accepted; noted in the code and the explainer).
+- No VAPID keys in the environment (or all three left empty) → push is off: `PushNotifier` reaches nobody and doesn't touch the rows (a sender that always failed would delete every subscription after five notifications on a server whose keys were removed for a while), so every CLI alerts as in Plan 1. The three keys are all or none; a half-set group is refused at start-up with a message that names `npm run vapid:keys`.
+- `POST /api/push/subscriptions { endpoint, keys, label }` saves this browser's subscription: one row per endpoint. Subscribing again updates the keys and label and forgets the failures; an endpoint that belongs to someone else moves to the person signed in now (the same browser, signed in as someone else). `DELETE /api/push/subscriptions { endpoint }` removes only the caller's own row and answers `{ ok: true }` either way, so a repeat is fine and someone else's endpoint is left alone. Both need the web app's session cookie (a CLI token or no session gets 401, like `PUT /api/me/settings`) and the Origin check (another site's page gets 403). An endpoint must be an `https:` address whose host is neither an IP address (any spelling) nor `localhost`, at most 2,048 characters, since the server will POST to it: a bad one is a 400 and nothing is saved. The guard checks the URL only, so a public name that points to a private address passes (web-push can't pin the address it resolves); accepted, since the server never reads the answer beyond its status.
+- `GET /api/me` says `push: { vapidPublicKey, subscribed }`: the public key the browser needs to subscribe (`null`: this server has no keys, so push is off) and whether this person has any subscription. Nothing is sent over `/ws/web` when a subscription is added or removed; the web app updates its own copy from the answer.
+- **The reviewer who just pressed the button** (the W4 deferred item, folded in here by the controller): a requested reviewer whose own action made the chat ready (their Resolve of the last open point, or their Discard of a draft) is not sent "Ready for your approval"; they are looking at the Ready banner. The other requested reviewers still are, and so is everyone when an agent, a push on GitHub or a timer made it ready. When nobody is left, no `notify` is emitted.
+- `docs/why/web-push.md`: what a push service is, what VAPID keys prove, why the payload is encrypted, what 410 means, and the push-first-CLI-fallback rule; points to `tasks/push-notifier.ts`, `tasks/web-push-send.ts`, `tasks/notifier.ts` and `http/routes/push.ts`.
 
-**Tests this task must include:**
-- **Review Focus 5:** a user whose only subscription answers 410 → the row is deleted and the CLI gets that same notification; a user with one working and one gone subscription → push reaches them, the CLI gets nothing; a user with no subscription → CLI only; never both for one user.
-- `failCount` grows on errors, resets on success, deletes at 5.
-- Routes: subscribe, re-subscribe the same endpoint (no duplicate), move an endpoint to another user, unsubscribe; another Origin → 403; `WebMe.push.vapidPublicKey` is null without keys.
+**Tests this task must include:** **Review Focus 5** (three people at once, in `push-notifier.db.test.ts`); `failCount` grows, resets and deletes at 5; the real `webPushSend`'s 404/410 mapping with a stubbed `sendNotification` (no network); the push routes (subscribe, again, move to another user, unsubscribe, someone else's endpoint left alone, the refused endpoints, another Origin 403, CLI token and no session 401); `WebMe.push.vapidPublicKey` null without keys; the VAPID environment rules; the CLI's `alert: false`; the engine table for who is told the chat is ready.
+
+The steps go from the outside in: the database and the dependencies, the protocol, the web fixtures, the CLI, the engine, the configuration, one send, the notifiers, the routes, the wiring, and then the docs, one full run and the commit. Each group is test, run it red, code, run it green. The workspace typecheck is not clean in between (the protocol's `WebMe.push` reaches the server's `loadWebMe` and `createApp`, and the notifier's new return type reaches the test harness, one group at a time); it is clean again at Step 40. The server's db tests are run per group, not all together, until Step 43.
+
+- [ ] **Step 1: Install the dependencies**
+
+`web-push` does the VAPID signing and the payload encryption (3.6.7, published 2024-01-16); its types come separately (3.6.4, 2024-10-22). Both are pinned exactly. The command regenerates `package-lock.json`; it is not shown here.
+
+Run: `npm install -w apps/server --save-exact web-push@3.6.7 && npm install -w apps/server -D --save-exact @types/web-push@3.6.4`
+
+`apps/server/package.json` now has:
+
+```diff
+diff --git a/apps/server/package.json b/apps/server/package.json
+index 1f00bdb..4c232c8 100644
+--- a/apps/server/package.json
++++ b/apps/server/package.json
+@@ -28,12 +28,14 @@
+     "dotenv": "^17.4.2",
+     "hono": "^4.13.13",
+     "pg": "^8.23.1",
++    "web-push": "3.6.7",
+     "ws": "^8.22.0",
+     "yaml": "^2.9.1",
+     "zod": "^4.6.5"
+   },
+   "devDependencies": {
+     "@types/pg": "^8.23.1",
++    "@types/web-push": "3.6.4",
+     "@types/ws": "^8.18.2",
+     "prisma": "^7.10.0"
+   }
+```
+
+- [ ] **Step 2: Add the table to the schema**
+
+`PushSubscription` is one browser or device that asked for Web Push. `endpoint` is unique (one row per endpoint), `userId` is indexed, and deleting a user deletes their subscriptions, so `resetDb` (which truncates `User` with cascade) needs no change.
+
+Modify `apps/server/prisma/schema.prisma`:
+
+```diff
+diff --git a/apps/server/prisma/schema.prisma b/apps/server/prisma/schema.prisma
+index f5831d7..4a22eb6 100644
+--- a/apps/server/prisma/schema.prisma
++++ b/apps/server/prisma/schema.prisma
+@@ -29,6 +29,7 @@ model User {
+   loginRequests CliLoginRequest[]
+   jobs          Job[]
+   chatReads     ChatRead[]
++  pushSubs      PushSubscription[]
+ }
+ 
+ /// The user's GitHub user access token (8 h) and refresh token (6 months, single use), encrypted.
+@@ -364,3 +365,22 @@ model GithubWrite {
+ 
+   @@unique([kind, githubId])
+ }
++
++/// One browser or device that asked for Web Push (Plan 2, spec §8; docs/why/web-push.md). `endpoint` is the push
++/// service's address for it; `p256dh` and `auth` are the keys the payload is encrypted with, so only that browser can
++/// read it. `label` names it on the Settings page ("Chrome on macOS"). A 404 or 410 from the push service deletes the
++/// row; other failures add 1 to `failCount`, a success sets it back to 0, and the fifth failure in a row deletes it.
++model PushSubscription {
++  id        String   @id @default(cuid())
++  userId    String
++  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
++  endpoint  String   @unique
++  p256dh    String
++  auth      String
++  label     String
++  failCount Int      @default(0)
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  @@index([userId])
++}
+```
+
+
+- [ ] **Step 3: Generate the migration and the client**
+
+Run: `npm run db:migrate -w apps/server -- --name push_subscriptions`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client; without this step `prisma.pushSubscription` doesn't exist).
+Expected: a new folder `apps/server/prisma/migrations/<timestamp>_push_subscriptions/` (the folder name carries your own timestamp) with this `migration.sql`, "Your database is now in sync with your schema." and "Generated Prisma Client".
+
+The generated `migration.sql` (the scratch commit's folder was `20261018081314_push_subscriptions`; yours has a new timestamp):
+
+```sql
+-- CreateTable
+CREATE TABLE "PushSubscription" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "endpoint" TEXT NOT NULL,
+    "p256dh" TEXT NOT NULL,
+    "auth" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "failCount" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
+
+-- CreateIndex
+CREATE INDEX "PushSubscription_userId_idx" ON "PushSubscription"("userId");
+
+-- AddForeignKey
+ALTER TABLE "PushSubscription" ADD CONSTRAINT "PushSubscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+```
+
+
+- [ ] **Step 4: Write the failing protocol tests**
+
+`notify` gets `alert`: both values round-trip, and a `notify` without it (what a Plan 1 server sent) reads as alerting. `WebMe` gets `push`. The push bodies are tested hard, because the endpoint check is the only thing standing between a signed-in user and a POST from the server to its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …).
+
+Modify `packages/protocol/src/messages.test.ts`:
+
+```diff
+diff --git a/packages/protocol/src/messages.test.ts b/packages/protocol/src/messages.test.ts
+index 44c7cf5..e5e1b18 100644
+--- a/packages/protocol/src/messages.test.ts
++++ b/packages/protocol/src/messages.test.ts
+@@ -30,7 +30,8 @@ const serverMessages: ServerToCli[] = [
+   { v: 1, t: 'job.assign', d: { bundle: jobBundle() } },
+   { v: 1, t: 'job.assign', d: { bundle: publishBundle() } },
+   { v: 1, t: 'job.cancel', d: { ...job, reason: 'pr_closed' } },
+-  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142' } },
++  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142', alert: true } },
++  { v: 1, t: 'notify', d: { kind: 'ready', chatId: 'c1', title: 'Ready for your approval', url: 'https://nitpilot.dev/c/acme/shop-api/142', alert: false } },
+   { v: 1, t: 'settings', d: { autoReview: false, autoAddress: true, dailyJobCap: 25 } },
+ ];
+ 
+@@ -73,6 +74,11 @@ describe('server → CLI messages', () => {
+     expect(ServerToCli.safeParse({ v: 1, t: 'welcome', d: { login: 'maya', pingSec: 25, leaseSec: 90 } }).success).toBe(false);
+     expect(ServerToCli.safeParse({ v: 1, t: 'settings', d: { ...settings(), dailyJobCap: 4 } }).success).toBe(false);
+   });
++
++  it("reads a notify without alert as an alerting one, the way a Plan 1 server sent it", () => {
++    const plan1 = { v: 1, t: 'notify', d: { kind: 'failed', chatId: 'c1', title: 'Agent failed: acme/shop-api#142', url: 'https://nitpilot.dev/c/acme/shop-api/142' } };
++    expect(ServerToCli.parse(plan1)).toMatchObject({ t: 'notify', d: { alert: true } });
++  });
+ });
+ 
+ describe('envelope and constants', () => {
+```
+
+Modify `packages/protocol/src/web-api.test.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.test.ts b/packages/protocol/src/web-api.test.ts
+index 6299740..67321b2 100644
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -1,10 +1,13 @@
+ import { describe, expect, it } from 'vitest';
+ import { MeResponse } from './api';
+ import { jobResult, settings } from './test-samples';
+-import { ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, Settings, WebMe, type ChatView, type InboxRow } from './web-api';
++import {
++  ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, PushSubscriptionRequest,
++  PushUnsubscribeRequest, Settings, WebMe, type ChatView, type InboxRow,
++} from './web-api';
+ 
+ describe('web API bodies', () => {
+-  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12 };
++  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true } };
+ 
+   it('round-trips WebMe', () => {
+     expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
+@@ -83,4 +86,44 @@ describe('web API bodies', () => {
+     expect(DraftView.parse(draft).result.draft).toBeNull();
+     expect(() => DraftView.parse({ ...draft, jobType: 'publish' })).toThrow();
+   });
++
++  describe('push subscriptions', () => {
++    const subscription = {
++      endpoint: 'https://fcm.googleapis.com/fcm/send/abc123',
++      keys: { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' },
++      label: 'Chrome on macOS',
++    };
++
++    it('takes what the browser hands out, with a label for the Settings page', () => {
++      expect(PushSubscriptionRequest.parse(subscription)).toEqual(subscription);
++      expect(PushUnsubscribeRequest.parse({ endpoint: subscription.endpoint })).toEqual({ endpoint: subscription.endpoint });
++      expect(PushSubscriptionRequest.parse({ ...subscription, endpoint: 'https://web.push.apple.com/QGuQyavXutnMH' }).endpoint).toBe('https://web.push.apple.com/QGuQyavXutnMH');
++    });
++
++    // The server POSTs to the endpoint, so it must never be one of the server's own neighbours (a blind SSRF).
++    it.each([
++      ['plain http', 'http://fcm.googleapis.com/fcm/send/abc'],
++      ['not a URL', 'fcm.googleapis.com/fcm/send/abc'],
++      ['another scheme', 'file:///etc/passwd'],
++      ['localhost', 'https://localhost/push'],
++      ['localhost with a dot at the end', 'https://localhost./push'],
++      ['a .localhost name', 'https://api.localhost/push'],
++      ['an IPv4 address', 'https://127.0.0.1/push'],
++      ['an IPv4 address written as one number', 'https://2130706433/push'],
++      ['a private IPv4 address', 'https://10.0.0.8:8443/push'],
++      ['an IPv6 address', 'https://[::1]/push'],
++      ['the cloud metadata address', 'https://169.254.169.254/latest/meta-data'],
++      ['over 2,048 characters', `https://fcm.googleapis.com/${'a'.repeat(2048)}`],
++    ])('refuses an endpoint that is %s', (_what, endpoint) => {
++      expect(PushSubscriptionRequest.safeParse({ ...subscription, endpoint }).success).toBe(false);
++      expect(PushUnsubscribeRequest.safeParse({ endpoint }).success).toBe(false);
++    });
++
++    it('wants a label of 1 to 100 characters and both keys', () => {
++      expect(PushSubscriptionRequest.safeParse({ ...subscription, label: '' }).success).toBe(false);
++      expect(PushSubscriptionRequest.safeParse({ ...subscription, label: 'x'.repeat(101) }).success).toBe(false);
++      expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { p256dh: subscription.keys.p256dh } }).success).toBe(false);
++      expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { ...subscription.keys, auth: 'not base64url!' } }).success).toBe(false);
++    });
++  });
+ });
+```
+
+
+- [ ] **Step 5: Run them to see them fail**
+
+Run: `npm test -w packages/protocol`
+Expected: FAIL, 18 failed, 61 passed (79) in 2 files: the `WebMe` round trip (`push` is stripped), 14 push-body tests (`PushSubscriptionRequest` and `PushUnsubscribeRequest` don't exist), and 3 `notify` tests (`alert` is stripped, and a `notify` without it has no `alert: true`).
+
+- [ ] **Step 6: Add the schemas**
+
+`isPushEndpoint` is exported because both bodies use it (and the web app may want it). `new URL` writes every spelling of an IPv4 address (`2130706433`, `0x7f.1`) as dotted digits and keeps IPv6 in brackets, so two checks on the host cover them.
+
+Modify `packages/protocol/src/cli-messages.ts`:
+
+```diff
+diff --git a/packages/protocol/src/cli-messages.ts b/packages/protocol/src/cli-messages.ts
+index c711042..dc21e2d 100644
+--- a/packages/protocol/src/cli-messages.ts
++++ b/packages/protocol/src/cli-messages.ts
+@@ -71,11 +71,17 @@ export const JobAssign = message('job.assign', z.object({ bundle: JobBundle }));
+ 
+ export const JobCancel = message('job.cancel', RunningJob.extend({ reason: z.string() }));
+ 
++/**
++ * Someone is needed (spec §16). The CLI always prints `title` and `url` in the terminal. `alert: false` means Web Push
++ * already brought this notification to the person, so the CLI shows no OS notification (push first, the CLI as
++ * fallback: one ping each). A server from before Plan 2 sends no `alert`: that's an alerting one.
++ */
+ export const Notify = message('notify', z.object({
+   kind: NotifyKind,
+   chatId: z.string(),
+   title: z.string(),
+   url: z.string(),
++  alert: z.boolean().default(true),
+ }));
+ 
+ /** The person changed their settings in the web app: sent to each of their connected CLIs. */
+```
+
+Modify `packages/protocol/src/web-api.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.ts b/packages/protocol/src/web-api.ts
+index b2c638e..a091587 100644
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -30,9 +30,54 @@ export const WebMe = MeResponse.extend({
+   settings: Settings,
+   /** Agent runs your connected CLIs started today, added up, each counted from its own midnight (the Settings page's usage bar). */
+   usedToday: z.number().int().nonnegative(),
++  /**
++   * Web Push (spec §16): the server's public VAPID key, which the browser needs to subscribe (null: this server has
++   * no keys, so push is off and the CLI notifies as in Plan 1), and whether you have any subscription.
++   */
++  push: z.object({ vapidPublicKey: z.string().nullable(), subscribed: z.boolean() }),
+ });
+ export type WebMe = z.infer<typeof WebMe>;
+ 
++/**
++ * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
++ * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
++ * call its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …): a blind SSRF. Real push services are all
++ * https names (fcm.googleapis.com, web.push.apple.com, updates.push.services.mozilla.com, …). `new URL` writes every
++ * IPv4 form (`2130706433`, `0x7f.1`) as dotted digits and keeps IPv6 in brackets, so those two shapes cover them.
++ */
++export function isPushEndpoint(value: string): boolean {
++  let url: URL;
++  try {
++    url = new URL(value);
++  } catch {
++    return false;
++  }
++  const host = url.hostname.replace(/\.$/, '').toLowerCase();
++  if (url.protocol !== 'https:') return false;
++  if (host.startsWith('[') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return false;
++  return host !== 'localhost' && !host.endsWith('.localhost');
++}
++
++const PushEndpoint = z.string().max(2048).refine(isPushEndpoint, 'must be an https address of a push service');
++
++/** A key from the browser's subscription, in base64url (what `PushSubscription.toJSON()` gives). */
++const PushKey = z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+={0,2}$/);
++
++/**
++ * `POST /api/push/subscriptions`: this browser's Web Push subscription (`pushManager.subscribe()`), and a label for the
++ * Settings page ("Chrome on macOS"). Saved by endpoint: the same endpoint again updates its row.
++ */
++export const PushSubscriptionRequest = z.object({
++  endpoint: PushEndpoint,
++  keys: z.object({ p256dh: PushKey, auth: PushKey }),
++  label: z.string().trim().min(1).max(100),
++});
++export type PushSubscriptionRequest = z.infer<typeof PushSubscriptionRequest>;
++
++/** `DELETE /api/push/subscriptions`: stop pushing to this browser. */
++export const PushUnsubscribeRequest = z.object({ endpoint: PushEndpoint });
++export type PushUnsubscribeRequest = z.infer<typeof PushUnsubscribeRequest>;
++
+ /**
+  * A row's status pill in the inbox (spec §16, handoff §1), worked out on the server for the person reading
+  * it (`apps/server/src/chats/inbox-status.ts`). `who` is a GitHub login ("leo" → "Leo's agent working");
+```
+
+
+- [ ] **Step 7: Run the protocol tests to see them pass**
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 79 tests in 8 files (Task 18 ended at 63).
+
+- [ ] **Step 8: See the web tests break on the new `WebMe` field**
+
+Every web test that builds a `WebMe` now lacks `push`, and the web app parses `/api/me` with the protocol's schema.
+
+Run: `npm test -w apps/web`
+Expected: FAIL, 75 failed, 122 passed (197) in 8 of 28 files (`AutoSwitch`, `Chat`, `ChatBanner`, `Composer`, `DraftCard`, `Home`, `Inbox` and `Shell`): the `/api/me` answer no longer parses. `npm run typecheck -w apps/web` reports 8 errors.
+
+- [ ] **Step 9: Give the nine web fixtures a `push`**
+
+Fixtures only: no web code changes in this task. A browser with push off and nothing subscribed:
+
+Modify `apps/web/src/lib/banner.test.ts`:
+
+```diff
+diff --git a/apps/web/src/lib/banner.test.ts b/apps/web/src/lib/banner.test.ts
+index 273936a..9806ac2 100644
+--- a/apps/web/src/lib/banner.test.ts
++++ b/apps/web/src/lib/banner.test.ts
+@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
+ import { chatView, point } from '../test/chat';
+ import { chatBanner, escalationNote } from './banner';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ const view = (over: Partial<ChatView> = {}) => chatView(over);
+ const escalated = (over: Partial<PointView> = {}) => point({ status: 'escalated', escalationReason: 'category', category: 'security', ...over });
+ 
+```
+
+Modify `apps/web/src/routes/Chat/AutoSwitch.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/AutoSwitch.test.tsx b/apps/web/src/routes/Chat/AutoSwitch.test.tsx
+index 8957864..2c62acc 100644
+--- a/apps/web/src/routes/Chat/AutoSwitch.test.tsx
++++ b/apps/web/src/routes/Chat/AutoSwitch.test.tsx
+@@ -61,7 +61,7 @@ describe('AutoSwitch (handoff §2 "Header")', () => {
+ });
+ 
+ describe('the Auto switch in the chat header', () => {
+-  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ 
+   function serve(view: Partial<ChatView>, routes: Record<string, () => Answer | Promise<Answer>> = {}) {
+     return fakeApi({
+```
+
+Modify `apps/web/src/routes/Chat/Chat.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/Chat.test.tsx b/apps/web/src/routes/Chat/Chat.test.tsx
+index ad1fc40..79c4915 100644
+--- a/apps/web/src/routes/Chat/Chat.test.tsx
++++ b/apps/web/src/routes/Chat/Chat.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, chatView, item, point } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ const maya = { githubId: '1001', login: 'maya' };
+ const leo = { githubId: '1002', login: 'leo' };
+ const PATH = '/c/acme/shop-api/142';
+```
+
+Modify `apps/web/src/routes/Chat/ChatBanner.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/ChatBanner.test.tsx b/apps/web/src/routes/Chat/ChatBanner.test.tsx
+index d56a2ca..581a42a 100644
+--- a/apps/web/src/routes/Chat/ChatBanner.test.tsx
++++ b/apps/web/src/routes/Chat/ChatBanner.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, point } from '../../test/chat';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ const PATH = '/c/acme/shop-api/142';
+ const none: Permissions = { note: true, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] };
+ 
+```
+
+Modify `apps/web/src/routes/Chat/Composer.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/Composer.test.tsx b/apps/web/src/routes/Chat/Composer.test.tsx
+index cb38c0d..c2bd874 100644
+--- a/apps/web/src/routes/Chat/Composer.test.tsx
++++ b/apps/web/src/routes/Chat/Composer.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, chatView } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ const PATH = '/c/acme/shop-api/142';
+ const SENT = "Sent. Included in the agents' next round.";
+ 
+```
+
+Modify `apps/web/src/routes/Chat/DraftCard.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/DraftCard.test.tsx b/apps/web/src/routes/Chat/DraftCard.test.tsx
+index 3311ea7..dd6e6f7 100644
+--- a/apps/web/src/routes/Chat/DraftCard.test.tsx
++++ b/apps/web/src/routes/Chat/DraftCard.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { authorDraft, chatResponse, chatView, item, point, reviewerDraft } from '../../test/chat';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const me = (githubId: string, login: string): WebMe => ({ id: `u_${login}`, githubId, login, avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 0 });
++const me = (githubId: string, login: string): WebMe => ({ id: `u_${login}`, githubId, login, avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } });
+ const maya = me('1001', 'maya');
+ const leo = me('1002', 'leo');
+ const PATH = '/c/acme/shop-api/142';
+```
+
+Modify `apps/web/src/routes/Home/Home.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Home/Home.test.tsx b/apps/web/src/routes/Home/Home.test.tsx
+index 6b265fb..7e5ce0a 100644
+--- a/apps/web/src/routes/Home/Home.test.tsx
++++ b/apps/web/src/routes/Home/Home.test.tsx
+@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ const noRows = (): Answer => [200, { rows: [] }];
+ 
+ afterEach(() => vi.unstubAllGlobals());
+```
+
+Modify `apps/web/src/routes/Inbox/Inbox.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Inbox/Inbox.test.tsx b/apps/web/src/routes/Inbox/Inbox.test.tsx
+index 516c4da..a0a9151 100644
+--- a/apps/web/src/routes/Inbox/Inbox.test.tsx
++++ b/apps/web/src/routes/Inbox/Inbox.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatRoutes } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ 
+ function row(over: Partial<InboxRow>): InboxRow {
+   return {
+```
+
+Modify `apps/web/src/routes/Shell/Shell.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Shell.test.tsx b/apps/web/src/routes/Shell/Shell.test.tsx
+index 99faf38..3c5709c 100644
+--- a/apps/web/src/routes/Shell/Shell.test.tsx
++++ b/apps/web/src/routes/Shell/Shell.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatRoutes } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+ 
+ function serve() {
+   fakeApi({
+```
+
+
+- [ ] **Step 10: Run the web tests to see them pass**
+
+Run: `npm test -w apps/web && npm run typecheck -w apps/web`
+Expected: PASS, 197 tests in 28 files; typecheck clean.
+
+- [ ] **Step 11: Write the failing CLI test**
+
+The CLI always prints the 🔔 line; it shows the OS notification only when `alert` is true. The two existing `notify` messages in the file gain `alert: true` (the field is required on the parsed type).
+
+Modify `apps/cli/src/daemon.test.ts`:
+
+```diff
+diff --git a/apps/cli/src/daemon.test.ts b/apps/cli/src/daemon.test.ts
+index 63423ef..c332143 100644
+--- a/apps/cli/src/daemon.test.ts
++++ b/apps/cli/src/daemon.test.ts
+@@ -70,7 +70,7 @@ function pingListing(conn: StubConnection, expected: RunningJob[]) {
+ /** Wait until the daemon has handled everything sent so far. It handles messages in order, so once it shows a notification, it has seen what came before. */
+ async function handled(conn: StubConnection, notified: string[]) {
+   const title = `handled ${notified.length}`;
+-  conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title, url: 'http://nitpilot.test/x' } });
++  conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title, url: 'http://nitpilot.test/x', alert: true } });
+   await vi.waitFor(() => expect(notified).toContain(title));
+ }
+ 
+@@ -354,11 +354,21 @@ describe('startDaemon', () => {
+   it('shows notifications in the terminal and on the desktop', async () => {
+     const { hub, out, notified } = await setup();
+     const { conn } = await welcomed(hub);
+-    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142' } });
++    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142', alert: true } });
+     await vi.waitFor(() => expect(notified).toEqual(['Ready for your approval: acme/shop-api#142']));
+     expect(out.text()).toContain('Ready for your approval: acme/shop-api#142  http://nitpilot.test/c/acme/shop-api/142');
+   });
+ 
++  it('only prints a notification that Web Push already brought to the person (alert: false)', async () => {
++    const { hub, out, notified } = await setup();
++    const { conn } = await welcomed(hub);
++    conn.send({ v: 1, t: 'notify', d: { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://nitpilot.test/c/acme/shop-api/142', alert: false } });
++    // The daemon handles messages in order: once the next one shows, the quiet one was handled.
++    await handled(conn, notified);
++    expect(out.text()).toContain('🔔 Ready for your approval: acme/shop-api#142  http://nitpilot.test/c/acme/shop-api/142');
++    expect(notified).not.toContain('Ready for your approval: acme/shop-api#142');
++  });
++
+   it("asks before pushing, and gives the executor the server's answer", async () => {
+     const answer = deferred<'applied' | 'stale'>();
+     const executor: JobExecutor = async (_bundle, io) => {
+```
+
+
+- [ ] **Step 12: Run it to see it fail**
+
+Run: `npm test -w apps/cli -- src/daemon.test.ts`
+Expected: FAIL, 1 failed, 29 passed (30): "only prints a notification that Web Push already brought" (with `alert: false` the OS notification was still shown).
+
+- [ ] **Step 13: Show the OS notification only when asked**
+
+Modify `apps/cli/src/daemon.ts`:
+
+```diff
+diff --git a/apps/cli/src/daemon.ts b/apps/cli/src/daemon.ts
+index 6a4bf2a..75ebb10 100644
+--- a/apps/cli/src/daemon.ts
++++ b/apps/cli/src/daemon.ts
+@@ -208,8 +208,9 @@ export function startDaemon(opts: DaemonOptions): Daemon {
+         return;
+       }
+       case 'notify':
++        // The terminal line always; the OS notification only when Web Push didn't already bring it (spec §16).
+         out.log(`🔔 ${msg.d.title}  ${msg.d.url}`);
+-        notify(msg.d.title).catch(() => {});
++        if (msg.d.alert) notify(msg.d.title).catch(() => {});
+         return;
+       case 'settings':
+         // Changed on the web app's Settings page: the new cap counts from the next job on.
+```
+
+
+- [ ] **Step 14: Run the CLI's tests to see them pass**
+
+Run: `npm test -w apps/cli`
+Expected: PASS, 333 passed + 14 skipped (Task 18 ended at 332 + 14).
+
+- [ ] **Step 15: Write the failing engine tests (the reviewer who just pressed the button)**
+
+This is the W4 item the controller folded into this task: with Web Push, "Ready for your approval" would land on the phone of the reviewer who just clicked Resolve. A new table in `ready-gate.test.ts` says who is told in three cases: leo resolves the last escalated point (only nina), leo discards his drafted review (only nina), and nina's agent finds nothing, nobody pressed anything (both). Two older expectations change: `human.test.ts`'s Resolve now tells only nina, and `drafts.test.ts`'s Discard by the only requested reviewer tells nobody.
+
+Modify `apps/server/src/engine/ready-gate.test.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/ready-gate.test.ts b/apps/server/src/engine/ready-gate.test.ts
+index 53a1a34..d9b387c 100644
+--- a/apps/server/src/engine/ready-gate.test.ts
++++ b/apps/server/src/engine/ready-gate.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from 'vitest';
+ import {
+-  agentToAgent, chatState, commandsOf, jobOf, leo, maya, participantOf, person, pointOf, result, run, sam,
++  agentToAgent, chatState, commandsOf, draftOf, jobOf, leo, maya, newPoint, participantOf, person, pointOf, result, run, sam,
+ } from './test-builders';
+ import type { ChatState, DecideOutput, DomainEvent } from './types';
+ 
+@@ -84,3 +84,42 @@ describe('a human push while a review is running', () => {
+     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: [leo.userId], kind: 'manual_review', pointNumbers: [] }]);
+   });
+ });
++
++// The person whose own action made the chat ready (Resolve, Discard, …) is looking at the Ready banner, so the
++// "Ready for your approval" notification goes only to the other requested reviewers (W4's deferred item).
++describe('who is told the chat is ready', () => {
++  const nina = person('nina'); // a second requested reviewer, on Nitpilot
++
++  /** maya's PR, reviewed by leo and nina at the current head; P1 from leo's agent is escalated. */
++  const escalated = () =>
++    agentToAgent({
++      phase: 'escalated',
++      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' }), participantOf(nina, 'reviewer', { lastReviewedSha: 'head1' })],
++      points: [pointOf(1, leo, { status: 'escalated', escalationReason: 'category', category: 'security' })],
++    });
++
++  /** nina has reviewed; leo's review ran with Auto off and waits as a draft. */
++  const leosDraftWaits = () =>
++    agentToAgent({
++      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { auto: false, attention: 'drafts' }), participantOf(nina, 'reviewer', { lastReviewedSha: 'head1' })],
++      drafts: [draftOf('job-r1', leo, 'reviewer', 'review', { result: result({ summary: 'Two problems.', points: [newPoint()] }) })],
++    });
++
++  /** leo has reviewed; nina's agent is reviewing. */
++  const ninaReviewing = () =>
++    agentToAgent({
++      phase: 'reviewing',
++      participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' }), participantOf(nina, 'reviewer')],
++      jobs: [jobOf('job-n1', nina, 'reviewer', 'review', { status: 'running' })],
++    });
++
++  it.each<[string, ChatState, DomainEvent, string[]]>([
++    ['leo resolves the last escalated point: only nina', escalated(), { type: 'point_resolve', who: leo, point: 1 }, ['user-nina']],
++    ["leo discards his drafted review: only nina", leosDraftWaits(), { type: 'draft_discard', who: leo, jobId: 'job-r1' }, ['user-nina']],
++    ["nina's agent finds nothing (nobody pressed anything): both", ninaReviewing(), { type: 'job_completed', jobId: 'job-n1', attempt: 1, result: result() }, ['user-leo', 'user-nina']],
++  ])('%s', (_label, chat, event, userIds) => {
++    const out = run(chat, event);
++    expect(out.chat.phase).toBe('ready');
++    expect(notifiedReady(out)).toEqual([{ type: 'notify', userIds, kind: 'ready', pointNumbers: [] }]);
++  });
++});
+```
+
+Modify `apps/server/src/engine/human.test.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/human.test.ts b/apps/server/src/engine/human.test.ts
+index a6e5810..fdb8d9c 100644
+--- a/apps/server/src/engine/human.test.ts
++++ b/apps/server/src/engine/human.test.ts
+@@ -32,7 +32,8 @@ describe('point_resolve', () => {
+     expect(out.timeline.map((i) => i.body)).toEqual(['leo resolved P1', 'Ready for approval']);
+     expect(out.timeline[0]).toMatchObject({ kind: 'system', pointNumber: null, data: { point: 1 } });
+     expect(out.chat.phase).toBe('ready');
+-    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo', 'user-nina'], kind: 'ready', pointNumbers: [] }]);
++    // leo pressed Resolve and is looking at the Ready banner: only nina is told.
++    expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-nina'], kind: 'ready', pointNumbers: [] }]);
+     // Nobody needs to decide anything any more.
+     expect(out.chat.participants.map((p) => p.attention)).toEqual(['none', 'none', 'none']);
+   });
+```
+
+Modify `apps/server/src/engine/drafts.test.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/drafts.test.ts b/apps/server/src/engine/drafts.test.ts
+index 8c5ae70..2ea86a7 100644
+--- a/apps/server/src/engine/drafts.test.ts
++++ b/apps/server/src/engine/drafts.test.ts
+@@ -221,6 +221,8 @@ describe('Discard', () => {
+     expect(out.chat.drafts).toEqual([]);
+     expect(bodies(out)).toEqual(['leo discarded the drafted review', 'Ready for approval']);
+     expect(out.chat.phase).toBe('ready');
++    // leo is the only requested reviewer, and his own Discard made it ready: nobody needs telling.
++    expect(commandsOf(out, 'notify')).toEqual([]);
+   });
+ 
+   it('on an author draft makes the open points her turn by hand: no address job starts', () => {
+```
+
+
+- [ ] **Step 16: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/engine`
+Expected: FAIL, 4 failed, 192 passed (196) in 3 of 11 files: the two new rows ("leo resolves the last escalated point" and "leo discards his drafted review": `user-leo` is still in `userIds`), `human.test.ts` (Resolve) and `drafts.test.ts` (Discard emitted a `notify`).
+
+- [ ] **Step 17: Make the engine skip the person who acted**
+
+`actorOf(event)` names the person whose own action in Nitpilot an event is: a click in the web app, a note, `nitpilot retry`, signing in again. It is null for everything from GitHub, an agent or a timer. `decide` puts it on the `Ctx`, and `enterReady` leaves that person out. The engine stays pure: no database, platform or socket imports.
+
+Modify `apps/server/src/engine/context.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/context.ts b/apps/server/src/engine/context.ts
+index 10ab6b1..d5eaa30 100644
+--- a/apps/server/src/engine/context.ts
++++ b/apps/server/src/engine/context.ts
+@@ -6,6 +6,8 @@ export type Ctx = {
+   chat: ChatState;
+   rules: TeamRules;
+   now: Date;
++  /** The githubId of the person whose own action this event is (see `actorOf`), or null. */
++  actor: string | null;
+   timeline: NewItem[];
+   commands: Command[];
+ };
+@@ -13,6 +15,31 @@ export type Ctx = {
+ /** One event type out of the union: `Ev<'pr_closed'>` is `{ type: 'pr_closed'; merged: boolean }`. */
+ export type Ev<T extends DomainEvent['type']> = Extract<DomainEvent, { type: T }>;
+ 
++/**
++ * The person who caused this event by their own action in Nitpilot: a click in the web app (Resolve, Continue, the
++ * Auto switch, Send, Discard, Review), a note, `nitpilot retry`, or signing in again. Null for everything that comes
++ * from GitHub, an agent or a timer. Someone who just acted is looking at the chat, so they aren't notified about
++ * what their own action did (advance.ts, "Ready for approval").
++ */
++export function actorOf(event: DomainEvent): string | null {
++  switch (event.type) {
++    case 'point_resolve':
++    case 'point_continue':
++    case 'auto_changed':
++    case 'draft_send':
++    case 'draft_discard':
++    case 'retry_requested':
++    case 'signed_in_again':
++      return event.who.githubId;
++    case 'human_note':
++      return event.author.githubId;
++    case 'manual_review':
++      return event.reviewer.githubId;
++    default:
++      return null;
++  }
++}
++
+ export function emit(ctx: Ctx, command: Command): void {
+   ctx.commands.push(command);
+ }
+```
+
+Modify `apps/server/src/engine/decide.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/decide.ts b/apps/server/src/engine/decide.ts
+index 3f564c8..f91f087 100644
+--- a/apps/server/src/engine/decide.ts
++++ b/apps/server/src/engine/decide.ts
+@@ -1,4 +1,4 @@
+-import { emit, type Ctx } from './context';
++import { actorOf, emit, type Ctx } from './context';
+ import { onAutoChanged, onDraftDiscard, onDraftSend } from './drafts';
+ import {
+   onCommentDeleted, onExternalComment, onHeadUpdated, onReviewSubmitted, onThreadResolved, onThreadUnresolved, onTimer,
+@@ -22,6 +22,7 @@ export function decide(input: DecideInput): DecideOutput {
+     chat: structuredClone(input.chat),
+     rules: input.rules,
+     now: input.now,
++    actor: actorOf(input.event),
+     timeline: [],
+     commands: [],
+   };
+```
+
+Modify `apps/server/src/engine/advance.ts`:
+
+```diff
+diff --git a/apps/server/src/engine/advance.ts b/apps/server/src/engine/advance.ts
+index 53d54f2..0d06f1e 100644
+--- a/apps/server/src/engine/advance.ts
++++ b/apps/server/src/engine/advance.ts
+@@ -100,7 +100,9 @@ function enterReady(ctx: Ctx): void {
+   if (chat.phase === 'ready') return;
+   chat.phase = 'ready';
+   system(ctx, 'Ready for approval');
+-  const userIds = reviewers(chat).filter((r) => r.requested && onNitpilot(r)).map((r) => r.userId!);
++  // The requested reviewers are told, except one whose own click made it ready (their Resolve or Discard, say):
++  // they are looking at the Ready banner already.
++  const userIds = reviewers(chat).filter((r) => r.requested && onNitpilot(r) && r.githubId !== ctx.actor).map((r) => r.userId!);
+   if (userIds.length > 0) emit(ctx, { type: 'notify', userIds, kind: 'ready', pointNumbers: [] });
+ }
+ 
+```
+
+
+- [ ] **Step 18: Run the engine's tests to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/engine`
+Expected: PASS, 196 tests in 11 files (193 before this task: the new table adds 3).
+
+- [ ] **Step 19: Write the failing configuration tests**
+
+Modify `apps/server/src/lib/env.test.ts`:
+
+```diff
+diff --git a/apps/server/src/lib/env.test.ts b/apps/server/src/lib/env.test.ts
+index fbb600c..e279d75 100644
+--- a/apps/server/src/lib/env.test.ts
++++ b/apps/server/src/lib/env.test.ts
+@@ -1,5 +1,5 @@
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+-import { getEnv } from './env';
++import { getEnv, vapidDetails } from './env';
+ 
+ afterEach(() => vi.unstubAllEnvs());
+ 
+@@ -27,4 +27,33 @@ describe('getEnv', () => {
+     vi.stubEnv('PUBLIC_URL', 'not a url');
+     expect(() => getEnv()).toThrow(/GITHUB_CLIENT_ID[\s\S]*PUBLIC_URL|PUBLIC_URL[\s\S]*GITHUB_CLIENT_ID/);
+   });
++
++  describe('Web Push keys', () => {
++    const keys = { VAPID_PUBLIC_KEY: 'BPublic', VAPID_PRIVATE_KEY: 'private', VAPID_SUBJECT: 'mailto:admin@example.com' };
++    const stub = (values: Record<string, string>) => Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
++
++    it('are optional: without them push is off', () => {
++      expect(vapidDetails(getEnv())).toBeNull();
++      // Left empty, as in a copied .env.example, counts as not set.
++      stub({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', VAPID_SUBJECT: '' });
++      expect(vapidDetails(getEnv())).toBeNull();
++    });
++
++    it('turn push on when all three are set, with a mailto: or https: subject', () => {
++      stub(keys);
++      expect(vapidDetails(getEnv())).toEqual({ publicKey: 'BPublic', privateKey: 'private', subject: 'mailto:admin@example.com' });
++      vi.stubEnv('VAPID_SUBJECT', 'https://nitpilot.dev');
++      expect(vapidDetails(getEnv())?.subject).toBe('https://nitpilot.dev');
++    });
++
++    it('are all or none', () => {
++      stub({ VAPID_PUBLIC_KEY: keys.VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: keys.VAPID_PRIVATE_KEY });
++      expect(() => getEnv()).toThrow(/VAPID_SUBJECT: set all three of VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT, or none/);
++    });
++
++    it('refuse a subject that is neither mailto: nor https:', () => {
++      stub({ ...keys, VAPID_SUBJECT: 'admin@example.com' });
++      expect(() => getEnv()).toThrow(/VAPID_SUBJECT/);
++    });
++  });
+ });
+```
+
+
+- [ ] **Step 20: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
+Expected: FAIL, 4 failed, 4 passed (8): `vapidDetails` doesn't exist, and a bad `VAPID_SUBJECT` or a half-set group isn't refused yet.
+
+- [ ] **Step 21: Read the VAPID settings, document them, and add the key script**
+
+The three variables are optional and all or none. They go through `optionalText` because `.env.example` lists them blank, and a blank line must count as not set. `scripts/vapid-keys.ts` prints a fresh pair for pasting into `.env`. The `vapid:keys` script goes into `apps/server/package.json` (the dependencies were added in Step 1, so this is the second part of that file's change):
+
+```diff
+diff --git a/apps/server/package.json b/apps/server/package.json
+index 4c232c8..2355f5f 100644
+--- a/apps/server/package.json
++++ b/apps/server/package.json
+@@ -18,7 +18,8 @@
+     "start": "tsx src/main.ts",
+     "dev:tunnel": "tsx scripts/dev-tunnel.ts",
+     "dev:fake-cli": "tsx scripts/fake-cli.ts",
+-    "record:fixtures": "tsx scripts/record-fixtures.ts"
++    "record:fixtures": "tsx scripts/record-fixtures.ts",
++    "vapid:keys": "tsx scripts/vapid-keys.ts"
+   },
+   "dependencies": {
+     "@hono/node-server": "^1.19.17",
+```
+
+Modify `apps/server/src/lib/env.ts`:
+
+```diff
+diff --git a/apps/server/src/lib/env.ts b/apps/server/src/lib/env.ts
+index 36b5442..ce165e8 100644
+--- a/apps/server/src/lib/env.ts
++++ b/apps/server/src/lib/env.ts
+@@ -1,5 +1,8 @@
+ import { z } from 'zod';
+ 
++/** An optional value: left empty (`NAME=` in .env) counts as not set. */
++const optionalText = z.string().optional().transform((value) => value?.trim() || undefined);
++
+ const EnvSchema = z.object({
+   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+   PORT: z.coerce.number().int().positive().default(8787),
+@@ -24,7 +27,21 @@ const EnvSchema = z.object({
+     .string()
+     .default('')
+     .transform((s) => s.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)),
+-});
++  /**
++   * Web Push (spec §16, docs/why/web-push.md): the server's VAPID key pair, made once with `npm run vapid:keys`, and a
++   * contact for the push services (`mailto:` or `https:`). Optional, but all three or none: without them push is off
++   * and every notification goes to the CLI, as in Plan 1.
++   */
++  VAPID_PUBLIC_KEY: optionalText,
++  VAPID_PRIVATE_KEY: optionalText,
++  VAPID_SUBJECT: optionalText.refine((s) => s === undefined || /^(mailto|https):/.test(s), 'must start with mailto: or https:'),
++}).refine(
++  (env) => {
++    const set = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT].filter(Boolean).length;
++    return set === 0 || set === 3;
++  },
++  { path: ['VAPID_SUBJECT'], message: 'set all three of VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT, or none (npm run vapid:keys makes a key pair)' },
++);
+ 
+ export type Env = z.infer<typeof EnvSchema>;
+ 
+@@ -37,3 +54,12 @@ export function getEnv(source: NodeJS.ProcessEnv = process.env): Env {
+   }
+   return parsed.data;
+ }
++
++/** What web-push signs with (spec §16): the key pair and the contact the push services see. */
++export type VapidDetails = { subject: string; publicKey: string; privateKey: string };
++
++/** The VAPID details, or null when the server has none: then push is off. */
++export function vapidDetails(env: Env): VapidDetails | null {
++  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return null;
++  return { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY };
++}
+```
+
+Modify `apps/server/.env.example`:
+
+```diff
+diff --git a/apps/server/.env.example b/apps/server/.env.example
+index 6e6fd8d..76f1e1c 100644
+--- a/apps/server/.env.example
++++ b/apps/server/.env.example
+@@ -16,6 +16,12 @@ GITHUB_CLIENT_ID=
+ GITHUB_CLIENT_SECRET=
+ GITHUB_WEBHOOK_SECRET=
+ 
++# Web Push (optional; all three or none). Without them push is off and the CLI shows every notification.
++# `npm run vapid:keys -w apps/server` prints a fresh pair to paste here; VAPID_SUBJECT is a mailto: or https: contact.
++VAPID_PUBLIC_KEY=
++VAPID_PRIVATE_KEY=
++VAPID_SUBJECT=
++
+ # The built web app; leave unset to use apps/web/dist
+ # WEB_DIST_DIR=
+ 
+```
+
+Create `apps/server/scripts/vapid-keys.ts`:
+
+```ts
+import webpush from 'web-push';
+
+// Make the server's Web Push key pair (VAPID, spec §16, docs/why/web-push.md) for apps/server/.env. Run it once per
+// server: every browser subscribes with the public key, so a new pair means everyone has to turn push on again.
+// The private key is a secret, like ENCRYPTION_KEY: it lives only in the server's environment.
+
+const { publicKey, privateKey } = webpush.generateVAPIDKeys();
+console.log(`# Web Push (npm run vapid:keys). Put a contact for the push services in VAPID_SUBJECT.
+VAPID_PUBLIC_KEY=${publicKey}
+VAPID_PRIVATE_KEY=${privateKey}
+VAPID_SUBJECT=mailto:you@example.com`);
+```
+
+
+- [ ] **Step 22: Run the tests, and make a pair by hand**
+
+Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
+Expected: PASS, 8 tests.
+
+Run: `npm run vapid:keys -w apps/server`
+Expected: a comment line and the three lines `VAPID_PUBLIC_KEY=…`, `VAPID_PRIVATE_KEY=…`, `VAPID_SUBJECT=mailto:you@example.com`. Don't paste them anywhere in this task: the private key is a secret like `ENCRYPTION_KEY`.
+
+- [ ] **Step 23: Write the failing test for the real sender**
+
+No network: `sendNotification` is a stub that answers the way the `web-push` package does (a `WebPushError` with a status code).
+
+Create `apps/server/src/tasks/web-push-send.test.ts`:
+
+```ts
+import webpush from 'web-push';
+import { describe, expect, it, vi } from 'vitest';
+import { webPushSend } from './web-push-send';
+
+// No network here: `sendNotification` is a stub that answers the way the web-push package does.
+const vapid = { subject: 'mailto:admin@example.com', publicKey: 'BPublic', privateKey: 'private' };
+const sub = { endpoint: 'https://push.example.com/send/abc', keys: { p256dh: 'BKey', auth: 'authKey' } };
+const answering = (statusCode: number, body = '') => vi.fn(async () => {
+  throw new webpush.WebPushError('Received unexpected response code', statusCode, {}, body, sub.endpoint);
+});
+
+describe('webPushSend', () => {
+  it('signs with the VAPID keys and asks the push service to keep the message a day at most, with a 10-second timeout', async () => {
+    const sendNotification = vi.fn(async () => ({ statusCode: 201, body: '', headers: {} }));
+    expect(await webPushSend(vapid, sendNotification)(sub, '{"title":"Needs you"}')).toEqual({ ok: true });
+    expect(sendNotification).toHaveBeenCalledWith(sub, '{"title":"Needs you"}', { vapidDetails: vapid, TTL: 86_400, timeout: 10_000, urgency: 'normal' });
+  });
+
+  it.each([404, 410])('calls a subscription gone when the push service answers %i', async (status) => {
+    expect(await webPushSend(vapid, answering(status))(sub, '{}')).toEqual({ ok: false, gone: true, error: `the push service answered ${status}` });
+  });
+
+  it('calls any other answer a failure that may pass, with what the service said', async () => {
+    expect(await webPushSend(vapid, answering(429, 'Too many requests'))(sub, '{}')).toEqual({ ok: false, gone: false, error: 'the push service answered 429: Too many requests' });
+    expect(await webPushSend(vapid, answering(500))(sub, '{}')).toEqual({ ok: false, gone: false, error: 'the push service answered 500' });
+  });
+
+  it('turns a network error or a timeout into a failure, never a throw', async () => {
+    const timedOut = vi.fn(async () => {
+      throw new Error('Socket timeout');
+    });
+    expect(await webPushSend(vapid, timedOut)(sub, '{}')).toEqual({ ok: false, gone: false, error: 'Socket timeout' });
+  });
+});
+```
+
+
+- [ ] **Step 24: Run it to see it fail**
+
+Run: `npm run test:unit -w apps/server -- src/tasks/web-push-send.test.ts`
+Expected: FAIL, 1 failed suite (no tests ran): `Cannot find module './web-push-send'`.
+
+- [ ] **Step 25: Add the sender**
+
+`import webpush from 'web-push'` (the default import) is needed: Node's ES modules can't see the package's named `sendNotification` export, because the package is CommonJS and its export is built in a way Node's scan doesn't follow. The type checker accepts the default import too. The sender never throws: a failure is an answer, so one bad push service can't stop the others. `timeout` is web-push's socket idle timeout, not a total deadline.
+
+Create `apps/server/src/tasks/web-push-send.ts`:
+
+```ts
+import webpush from 'web-push';
+import type { VapidDetails } from '../lib/env';
+
+/** Where one browser's pushes go, and the keys only that browser can decrypt with (from its `PushSubscription`). */
+export type PushTarget = { endpoint: string; keys: { p256dh: string; auth: string } };
+
+/**
+ * How a send went. `gone`: the push service says this subscription no longer exists (404 or 410: site data cleared,
+ * permission revoked, the browser uninstalled), so the row should be deleted. Any other failure may pass.
+ */
+export type PushResult = { ok: true } | { ok: false; gone: boolean; error: string };
+
+/** Send one encrypted Web Push. Never throws: a failure is an answer. Tests pass a fake; production uses `webPushSend`. */
+export type PushSend = (target: PushTarget, payload: string) => Promise<PushResult>;
+
+/**
+ * - `TTL`: the push service keeps a message for a phone that's off for a day at most; a ping weeks late is noise.
+ * - `timeout`: a push service that stops answering can't hold up the notify task (web-push's socket timeout, in ms).
+ * - `urgency`: normal; nothing here is worth waking a phone in power-saving mode.
+ */
+const PUSH_OPTIONS = { TTL: 24 * 60 * 60, timeout: 10_000, urgency: 'normal' } as const;
+
+/**
+ * The real sender (docs/why/web-push.md): the web-push package signs the request with our VAPID keys, encrypts the
+ * payload for the browser's keys, and POSTs it to the push service. `sendNotification` is only replaced in tests.
+ */
+export function webPushSend(vapid: VapidDetails, sendNotification = webpush.sendNotification): PushSend {
+  return async (target, payload) => {
+    try {
+      await sendNotification(target, payload, { vapidDetails: vapid, ...PUSH_OPTIONS });
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof webpush.WebPushError) {
+        const gone = err.statusCode === 404 || err.statusCode === 410;
+        const said = err.body ? `: ${err.body.slice(0, 200)}` : '';
+        return { ok: false, gone, error: `the push service answered ${err.statusCode}${said}` };
+      }
+      // A network error, a timeout, or keys the encryption refused.
+      return { ok: false, gone: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+}
+```
+
+
+- [ ] **Step 26: Run it to see it pass**
+
+Run: `npm run test:unit -w apps/server -- src/tasks/web-push-send.test.ts`
+Expected: PASS, 5 tests.
+
+- [ ] **Step 27: Write the failing notifier tests**
+
+`Notifier.notify` answers who it reached. A notification's `title` is now the handoff's heading and a new `body` is the detail. The CLI still gets the old one-line title (`Ready for your approval: acme/shop-api#142`) in its `notify` message, plus `alert`. The notify handler's wording moves into `notificationText`, tested for all five kinds. The two stand-in notifiers in `handlers.db.test.ts` and `plan-1a.db.test.ts` answer `{ reached }`.
+
+Modify `apps/server/src/tasks/cli-notifier.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/cli-notifier.db.test.ts b/apps/server/src/tasks/cli-notifier.db.test.ts
+index 591c452..ab84103 100644
+--- a/apps/server/src/tasks/cli-notifier.db.test.ts
++++ b/apps/server/src/tasks/cli-notifier.db.test.ts
+@@ -15,7 +15,8 @@ const ready = (userIds: string[]): Notification => ({
+   userIds,
+   kind: 'ready',
+   chatId: 'chat_1',
+-  title: 'Ready for your approval: acme/shop-api#142',
++  title: 'Ready for your approval',
++  body: 'acme/shop-api#142',
+   url: 'http://localhost:8787/c/acme/shop-api/142',
+ });
+ 
+@@ -24,9 +25,10 @@ describe('CliNotifier', () => {
+     const leo = await makeUser({ login: 'leo' });
+     const laptop = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw, { device: 'laptop' });
+     const desktop = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw, { device: 'desktop' });
+-    const offline = { notify: vi.fn(async () => {}) };
+-    await new CliNotifier(s.hub, offline).notify(ready([leo.id]));
+-    const expected = { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://localhost:8787/c/acme/shop-api/142' };
++    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
++    expect(await new CliNotifier(s.hub, offline).notify(ready([leo.id]))).toEqual({ reached: [leo.id] });
++    // One line in the terminal: the heading and the detail together, as in Plan 1.
++    const expected = { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://localhost:8787/c/acme/shop-api/142', alert: true };
+     expect((await laptop.next('notify')).d).toEqual(expected);
+     expect((await desktop.next('notify')).d).toEqual(expected);
+     expect(offline.notify).not.toHaveBeenCalled();
+@@ -36,7 +38,7 @@ describe('CliNotifier', () => {
+     const leo = await makeUser({ login: 'leo' });
+     const kim = await makeUser({ login: 'kim' });
+     const laptop = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw);
+-    const offline = { notify: vi.fn(async () => {}) };
++    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
+     await new CliNotifier(s.hub, offline).notify(ready([leo.id, kim.id]));
+     await laptop.next('notify');
+     expect(offline.notify).toHaveBeenCalledWith(ready([kim.id]));
+@@ -48,10 +50,20 @@ describe('CliNotifier', () => {
+     const closing = { send: vi.fn(() => false) } as unknown as CliConnection;
+     const working = { send: vi.fn(() => true) } as unknown as CliConnection;
+     const hub = { connectionsFor: (userId: string) => (userId === 'leo' ? [closing] : [closing, working]) };
+-    const offline = { notify: vi.fn(async () => {}) };
++    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
+     await new CliNotifier(hub, offline).notify(ready(['leo', 'kim']));
+     // leo's only CLI is closing, so he gets the log line. kim has one that took it, so she doesn't.
+     expect(offline.notify).toHaveBeenCalledWith(ready(['leo']));
+     expect(working.send).toHaveBeenCalledOnce();
+   });
++
++  it('passes on alert: false (Web Push brought it already), and logs nobody for it', async () => {
++    const leo = await makeUser({ login: 'leo' });
++    const kim = await makeUser({ login: 'kim' });
++    const laptop = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw);
++    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
++    expect(await new CliNotifier(s.hub, offline).notify({ ...ready([leo.id, kim.id]), alert: false })).toEqual({ reached: [leo.id] });
++    expect((await laptop.next('notify')).d.alert).toBe(false);
++    expect(offline.notify).not.toHaveBeenCalled();
++  });
+ });
+```
+
+Modify `apps/server/src/tasks/handlers/handlers.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/handlers/handlers.db.test.ts b/apps/server/src/tasks/handlers/handlers.db.test.ts
+index 3a10a98..d0940fd 100644
+--- a/apps/server/src/tasks/handlers/handlers.db.test.ts
++++ b/apps/server/src/tasks/handlers/handlers.db.test.ts
+@@ -10,6 +10,7 @@ import type { Notification } from '../notifier';
+ import { PermanentTaskError } from '../runner';
+ import { reportFailedWrite } from './failed-writes';
+ import { createTaskHandlers } from './index';
++import { notificationText } from './notify';
+ 
+ beforeEach(resetDb);
+ 
+@@ -27,7 +28,7 @@ async function scene(opts: { authorOnNitpilot: boolean }) {
+   });
+   const platform = new FakePlatform();
+   const sent: Notification[] = [];
+-  const handlers = createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); } }, dispatch: async () => { throw new Error('not used'); } });
++  const handlers = createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); return { reached: n.userIds }; } }, dispatch: async () => { throw new Error('not used'); } });
+   const ref = prRefOf(await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id }, include: { repo: true } }));
+   const point = (number: number, over: Partial<Prisma.PointUncheckedCreateInput> = {}) =>
+     prisma.point.create({ data: { chatId: chat.id, number, raisedByGithubId: leo.githubId, origin: 'agent', severity: 'major', category: 'bug', title: `Point ${number}`, body: 'Explanation.', round: 1, path: 'src/a.ts', line: 10, side: 'RIGHT', commitSha: 'a'.repeat(40), ...over } });
+@@ -173,14 +174,25 @@ describe('notify', () => {
+     const s = await scene({ authorOnNitpilot: true });
+     await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id], kind: 'ready', pointNumbers: [] }));
+     expect(s.sent).toEqual([
+-      { userIds: [s.leo.id], kind: 'ready', chatId: s.chat.id, title: `Ready for your approval: ${s.repo.fullName}#${s.chat.number}`, url: `http://localhost:8787/c/${s.repo.fullName}/${s.chat.number}` },
++      { userIds: [s.leo.id], kind: 'ready', chatId: s.chat.id, title: 'Ready for your approval', body: `${s.repo.fullName}#${s.chat.number}`, url: `http://localhost:8787/c/${s.repo.fullName}/${s.chat.number}` },
+     ]);
+   });
+ 
+   it('names the points that need a decision', async () => {
+     const s = await scene({ authorOnNitpilot: true });
+     await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id], kind: 'escalated', pointNumbers: [1, 3] }));
+-    expect(s.sent[0]!.title).toBe(`Needs you: ${s.repo.fullName}#${s.chat.number}: P1, P3 need a human decision`);
++    expect(s.sent[0]).toMatchObject({ title: 'Needs you', body: `${s.repo.fullName}#${s.chat.number}: P1, P3 need a human decision` });
++  });
++
++  // The handoff's push copy (§8): a heading, and the detail under it. The CLI prints both on one line, as in Plan 1.
++  it.each([
++    ['ready', [], 'Ready for your approval', 'acme/shop-api#142'],
++    ['escalated', [3], 'Needs you', 'acme/shop-api#142: P3 needs a human decision'],
++    ['manual_review', [], 'Review waiting', 'acme/shop-api#142 is from an outside contributor'],
++    ['failed', [], 'Agent failed', 'acme/shop-api#142'],
++    ['drafts', [], 'Drafts waiting', 'acme/shop-api#142'],
++  ] as const)('words a %s notification', (kind, points, title, body) => {
++    expect(notificationText(kind, 'acme/shop-api#142', [...points])).toEqual({ title, body });
+   });
+ });
+ 
+```
+
+Modify `apps/server/test/integration/plan-1a.db.test.ts`:
+
+```diff
+diff --git a/apps/server/test/integration/plan-1a.db.test.ts b/apps/server/test/integration/plan-1a.db.test.ts
+index d27c2d7..ec32577 100644
+--- a/apps/server/test/integration/plan-1a.db.test.ts
++++ b/apps/server/test/integration/plan-1a.db.test.ts
+@@ -25,7 +25,7 @@ async function server() {
+   const dispatcher = new Dispatcher();
+   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
+   // Run tasks as if a minute had passed, so debounced ones are due.
+-  const runner = new TaskRunner(createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); } }, dispatch: dispatcher.dispatch }), { now: () => new Date(Date.now() + 60_000) });
++  const runner = new TaskRunner(createTaskHandlers({ platform, notifier: { notify: async (n) => { sent.push(n); return { reached: n.userIds }; } }, dispatch: dispatcher.dispatch }), { now: () => new Date(Date.now() + 60_000) });
+   const app = testApp({ ingest });
+   const deliver = async (event: string, payload: unknown) => {
+     expect((await sendWebhook(app, event, payload)).status).toBe(202);
+```
+
+
+- [ ] **Step 28: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/tasks/cli-notifier.db.test.ts src/tasks/handlers/handlers.db.test.ts`
+Expected: FAIL, 9 failed, 13 passed (22) in 2 files: in `cli-notifier.db.test.ts` the `{ reached }` answer, the heading/body split and `alert` are missing (2 tests), and in `handlers.db.test.ts` `notificationText` doesn't exist (the 5-row wording table) and the two older notify tests see the old title (2 tests). `plan-1a.db.test.ts` passes either way; its change is for the type checker.
+
+- [ ] **Step 29: Change the notifier contract and the wording**
+
+`FallbackNotifier` is here, in the file of the `Notifier` interface, because it only needs the interface. Its own test is in Step 31, where `PushNotifier` exists. `CliNotifier` writes the server-log line only for alerting notifications nobody reached, so a person a push reached who has no CLI online isn't logged.
+
+Modify `apps/server/src/tasks/notifier.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/notifier.ts b/apps/server/src/tasks/notifier.ts
+index 5f89e5a..0f1f79a 100644
+--- a/apps/server/src/tasks/notifier.ts
++++ b/apps/server/src/tasks/notifier.ts
+@@ -1,14 +1,61 @@
+ import type { NotifyKind } from '@nitpilot/protocol';
+ 
+-export type Notification = { userIds: string[]; kind: NotifyKind; chatId: string; title: string; url: string };
++export type Notification = {
++  userIds: string[];
++  kind: NotifyKind;
++  chatId: string;
++  /** The heading, from the design handoff's push copy: "Ready for your approval", "Needs you", … */
++  title: string;
++  /** The detail under it: "acme/shop-api#142", "acme/shop-api#139: P1 needs a human decision". */
++  body: string;
++  /** The chat's page in the web app. */
++  url: string;
++  /**
++   * False when Web Push already brought this notification to these people: their CLI prints it but shows no OS
++   * notification (spec §16). Left out, it alerts.
++   */
++  alert?: boolean;
++};
++
++/** A notification as one line: what the CLI prints (and Plan 1 showed), "Ready for your approval: acme/shop-api#142". */
++export function oneLine(n: Pick<Notification, 'title' | 'body'>): string {
++  return `${n.title}: ${n.body}`;
++}
+ 
+ export interface Notifier {
+-  notify(n: Notification): Promise<void>;
++  /** Tell these people. Answers who it reached: someone it couldn't get to isn't in `reached`. */
++  notify(n: Notification): Promise<{ reached: string[] }>;
+ }
+ 
+-/** Plan 1a writes notifications to the server log. Plan 1b sends them to each user's CLI. */
++/** Writes notifications to the server log, for people nothing else reached. A log line reaches nobody. */
+ export class LogNotifier implements Notifier {
+-  async notify(n: Notification): Promise<void> {
+-    console.log(`[notify] ${n.kind} → ${n.userIds.join(', ')}: ${n.title} (${n.url})`);
++  async notify(n: Notification): Promise<{ reached: string[] }> {
++    console.log(`[notify] ${n.kind} → ${n.userIds.join(', ')}: ${oneLine(n)} (${n.url})`);
++    return { reached: [] };
++  }
++}
++
++/**
++ * Push first, the CLI as fallback (spec §16, docs/why/web-push.md). The primary (Web Push) goes first. Then every
++ * person gets the fallback (their CLI) too, since the CLI's terminal line is always printed, but only the people the
++ * primary didn't reach get it with `alert` on (the CLI's OS notification). So each person gets one alerting ping:
++ * a push, or the CLI's notification when no push of theirs arrived.
++ */
++export class FallbackNotifier implements Notifier {
++  constructor(
++    private readonly primary: Notifier,
++    private readonly fallback: Notifier,
++  ) {}
++
++  async notify(n: Notification): Promise<{ reached: string[] }> {
++    const pushed = new Set((await this.primary.notify(n)).reached);
++    const quiet = n.userIds.filter((id) => pushed.has(id));
++    const loud = n.userIds.filter((id) => !pushed.has(id));
++    const reached = new Set(pushed);
++    if (quiet.length > 0) await this.fallback.notify({ ...n, userIds: quiet, alert: false });
++    if (loud.length > 0) {
++      for (const id of (await this.fallback.notify({ ...n, userIds: loud, alert: true })).reached) reached.add(id);
++    }
++    return { reached: [...reached] };
+   }
+ }
+```
+
+Modify `apps/server/src/tasks/cli-notifier.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/cli-notifier.ts b/apps/server/src/tasks/cli-notifier.ts
+index ef07fbd..33a3847 100644
+--- a/apps/server/src/tasks/cli-notifier.ts
++++ b/apps/server/src/tasks/cli-notifier.ts
+@@ -1,10 +1,10 @@
+ import type { CliHub } from '../ws/cli-hub';
+-import { LogNotifier, type Notification, type Notifier } from './notifier';
++import { LogNotifier, oneLine, type Notification, type Notifier } from './notifier';
+ 
+ /**
+- * Plan 1's notifications (spec §16): every CLI a person has connected prints them and shows an OS
+- * notification. Someone none of whose CLIs took it (none online, or only sockets that are closing)
+- * only gets a line in the server log; Plan 2 adds Web Push.
++ * Notifications through the CLI (spec §16): every CLI a person has connected prints them, and shows an OS
++ * notification unless `alert` is false (Web Push brought it already; see FallbackNotifier). Someone none of whose
++ * CLIs took an alerting one (none online, or only sockets that are closing) gets a line in the server log.
+  */
+ export class CliNotifier implements Notifier {
+   constructor(
+@@ -12,16 +12,21 @@ export class CliNotifier implements Notifier {
+     private readonly offline: Notifier = new LogNotifier(),
+   ) {}
+ 
+-  async notify(n: Notification): Promise<void> {
++  async notify(n: Notification): Promise<{ reached: string[] }> {
++    const alert = n.alert ?? true;
++    const reached: string[] = [];
+     const unreached: string[] = [];
+     for (const userId of n.userIds) {
+-      let reached = false;
++      let took = false;
+       // Every CLI gets it. send() says false when the socket is closing, which doesn't count as reached.
+       for (const cli of this.hub.connectionsFor(userId)) {
+-        if (cli.send({ v: 1, t: 'notify', d: { kind: n.kind, chatId: n.chatId, title: n.title, url: n.url } })) reached = true;
++        if (cli.send({ v: 1, t: 'notify', d: { kind: n.kind, chatId: n.chatId, title: oneLine(n), url: n.url, alert } })) took = true;
+       }
+-      if (!reached) unreached.push(userId);
++      if (took) reached.push(userId);
++      else unreached.push(userId);
+     }
+-    if (unreached.length > 0) await this.offline.notify({ ...n, userIds: unreached });
++    // Someone push reached (alert false) and with no CLI online was still told: nothing to log.
++    if (alert && unreached.length > 0) await this.offline.notify({ ...n, userIds: unreached });
++    return { reached };
+   }
+ }
+```
+
+Modify `apps/server/src/tasks/handlers/notify.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/handlers/notify.ts b/apps/server/src/tasks/handlers/notify.ts
+index 86a2256..cc59668 100644
+--- a/apps/server/src/tasks/handlers/notify.ts
++++ b/apps/server/src/tasks/handlers/notify.ts
+@@ -7,24 +7,27 @@ import type { TaskHandler } from '../runner';
+ 
+ const Payload = z.object({ userIds: z.array(z.string()), kind: NotifyKind, pointNumbers: z.array(z.number().int()) });
+ 
+-/** Copy from the design handoff's push notifications. */
+-export function notificationTitle(kind: NotifyKind, pr: string, points: number[]): string {
++/**
++ * The words of a notification, from the design handoff's push copy (§8): a heading, and the detail under it. A push
++ * shows them as its title and body; the CLI prints them on one line ("Ready for your approval: acme/shop-api#142").
++ */
++export function notificationText(kind: NotifyKind, pr: string, points: number[]): { title: string; body: string } {
+   const list = points.map((n) => `P${n}`).join(', ');
+   switch (kind) {
+     case 'ready':
+-      return `Ready for your approval: ${pr}`;
++      return { title: 'Ready for your approval', body: pr };
+     case 'escalated':
+-      return `Needs you: ${pr}: ${list} need${points.length === 1 ? 's' : ''} a human decision`;
++      return { title: 'Needs you', body: `${pr}: ${list} need${points.length === 1 ? 's' : ''} a human decision` };
+     case 'manual_review':
+-      return `Review waiting: ${pr} is from an outside contributor`;
++      return { title: 'Review waiting', body: `${pr} is from an outside contributor` };
+     case 'failed':
+-      return `Agent failed: ${pr}`;
++      return { title: 'Agent failed', body: pr };
+     case 'drafts':
+-      return `Drafts waiting: ${pr}`;
++      return { title: 'Drafts waiting', body: pr };
+   }
+ }
+ 
+-/** Tell people they're needed (spec §16). */
++/** Tell people they're needed (spec §16): by Web Push first, then the CLI (main.ts builds the notifier). */
+ export function notifyHandler(deps: { notifier: Notifier }): TaskHandler {
+   return async (task) => {
+     const { userIds, kind, pointNumbers } = Payload.parse(task.payload);
+@@ -35,7 +38,7 @@ export function notifyHandler(deps: { notifier: Notifier }): TaskHandler {
+       userIds,
+       kind,
+       chatId: chat.id,
+-      title: notificationTitle(kind, `${chat.repo.fullName}#${chat.number}`, pointNumbers),
++      ...notificationText(kind, `${chat.repo.fullName}#${chat.number}`, pointNumbers),
+       url: transcriptUrl(chat.repo.fullName, chat.number),
+     });
+   };
+```
+
+
+- [ ] **Step 30: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/tasks/cli-notifier.db.test.ts src/tasks/handlers/handlers.db.test.ts test/integration/plan-1a.db.test.ts`
+Expected: PASS, 24 tests in 3 files (22 in the first two).
+
+- [ ] **Step 31: Write the failing tests for `PushNotifier` and the fallback**
+
+Two `describe`s. `PushNotifier`: every subscription is tried and one that arrives reaches the person; nobody is reached when all failed or there is none; 404 and 410 delete; `failCount` counts, resets and deletes at the fifth; a throwing sender doesn't stop the rest; `null` leaves the rows alone. "Web Push first, the CLI as fallback" is **Review Focus 5**: three people with a fake push service and a real `CliNotifier` over a fake hub, and for each person exactly one alerting ping.
+
+Create `apps/server/src/tasks/push-notifier.db.test.ts`:
+
+```ts
+import type { ServerToCli } from '@nitpilot/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeUser, uid } from '../../test/db';
+import { prisma } from '../lib/prisma';
+import type { CliConnection } from '../ws/cli-hub';
+import { CliNotifier } from './cli-notifier';
+import { FallbackNotifier, type Notification } from './notifier';
+import { MAX_PUSH_FAILURES, PushNotifier } from './push-notifier';
+import type { PushResult, PushSend } from './web-push-send';
+
+// A failed send writes a line to the server log; these tests fail sends on purpose.
+beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => {}));
+afterEach(() => vi.restoreAllMocks());
+
+const OK: PushResult = { ok: true };
+const GONE: PushResult = { ok: false, gone: true, error: 'the push service answered 410' };
+const DOWN: PushResult = { ok: false, gone: false, error: 'the push service answered 503' };
+
+/** A pretend push service: each endpoint answers what the test says (OK if it says nothing). It records every send. */
+function fakePush(answers: Record<string, PushResult> = {}) {
+  const sent: { endpoint: string; payload: unknown; ok: boolean }[] = [];
+  const send: PushSend = async (sub, payload) => {
+    const answer = answers[sub.endpoint] ?? OK;
+    sent.push({ endpoint: sub.endpoint, payload: JSON.parse(payload), ok: answer.ok });
+    return answer;
+  };
+  return { send, sent };
+}
+
+/** A subscription of `userId`'s, as the browser hands it out: a push service URL and the keys to encrypt for it. */
+async function subscribe(userId: string, over: { failCount?: number } = {}) {
+  return prisma.pushSubscription.create({
+    data: { userId, endpoint: `https://push.example.com/send/${uid('sub')}`, p256dh: 'BKey', auth: 'authKey', label: 'Chrome on macOS', failCount: over.failCount ?? 0 },
+  });
+}
+
+const stillThere = async (id: string) => (await prisma.pushSubscription.findUnique({ where: { id } })) !== null;
+const failCountOf = async (id: string) => (await prisma.pushSubscription.findUniqueOrThrow({ where: { id } })).failCount;
+
+const ready = (userIds: string[]): Notification => ({
+  userIds,
+  kind: 'ready',
+  chatId: 'chat_1',
+  title: 'Ready for your approval',
+  body: 'acme/shop-api#142',
+  url: 'http://localhost:8787/c/acme/shop-api/142',
+});
+
+describe('PushNotifier', () => {
+  it("sends the notification to each of a person's subscriptions, and one that arrives reaches them", async () => {
+    const maya = await makeUser();
+    const [laptop, phone] = [await subscribe(maya.id), await subscribe(maya.id)];
+    const push = fakePush({ [phone.endpoint]: DOWN });
+    expect(await new PushNotifier(push.send).notify(ready([maya.id]))).toEqual({ reached: [maya.id] });
+    // What the service worker shows: the heading, the detail, where a click goes, and the chat as the tag, so a newer
+    // notification about the same chat replaces the older one.
+    const payload = { title: 'Ready for your approval', body: 'acme/shop-api#142', url: 'http://localhost:8787/c/acme/shop-api/142', tag: 'chat_1' };
+    expect(push.sent).toEqual([{ endpoint: laptop.endpoint, payload, ok: true }, { endpoint: phone.endpoint, payload, ok: false }]);
+  });
+
+  it("doesn't reach someone whose subscriptions all failed, or who has none", async () => {
+    const [maya, leo] = [await makeUser(), await makeUser()];
+    const sub = await subscribe(maya.id);
+    const push = fakePush({ [sub.endpoint]: DOWN });
+    expect(await new PushNotifier(push.send).notify(ready([maya.id, leo.id]))).toEqual({ reached: [] });
+  });
+
+  it('deletes a subscription the push service calls gone (404 or 410)', async () => {
+    const maya = await makeUser();
+    const sub = await subscribe(maya.id);
+    await new PushNotifier(fakePush({ [sub.endpoint]: GONE }).send).notify(ready([maya.id]));
+    expect(await stillThere(sub.id)).toBe(false);
+  });
+
+  it(`counts failures in a row, starts again after a success, and deletes a subscription at the ${MAX_PUSH_FAILURES}th`, async () => {
+    const maya = await makeUser();
+    const sub = await subscribe(maya.id);
+    const down = new PushNotifier(fakePush({ [sub.endpoint]: DOWN }).send);
+    const up = new PushNotifier(fakePush().send);
+
+    await down.notify(ready([maya.id]));
+    await down.notify(ready([maya.id]));
+    expect(await failCountOf(sub.id)).toBe(2);
+    await up.notify(ready([maya.id]));
+    expect(await failCountOf(sub.id)).toBe(0);
+
+    for (let i = 1; i < MAX_PUSH_FAILURES; i++) await down.notify(ready([maya.id]));
+    expect(await failCountOf(sub.id)).toBe(MAX_PUSH_FAILURES - 1);
+    await down.notify(ready([maya.id]));
+    expect(await stillThere(sub.id)).toBe(false);
+  });
+
+  it('keeps going for everyone else when one send throws', async () => {
+    const [maya, leo] = [await makeUser(), await makeUser()];
+    const [broken, fine] = [await subscribe(maya.id), await subscribe(leo.id)];
+    const send: PushSend = async (sub) => {
+      if (sub.endpoint === broken.endpoint) throw new Error('boom');
+      return OK;
+    };
+    expect(await new PushNotifier(send).notify(ready([maya.id, leo.id]))).toEqual({ reached: [leo.id] });
+    expect(await failCountOf(broken.id)).toBe(1);
+    expect(await stillThere(fine.id)).toBe(true);
+  });
+
+  it('reaches nobody and leaves the subscriptions alone when push is off (no VAPID keys)', async () => {
+    const maya = await makeUser();
+    const sub = await subscribe(maya.id);
+    expect(await new PushNotifier(null).notify(ready([maya.id]))).toEqual({ reached: [] });
+    expect(await failCountOf(sub.id)).toBe(0);
+  });
+});
+
+/**
+ * A pretend CLI hub: each person has one CLI that takes every message. Real sockets would work too
+ * (cli-notifier.db.test.ts); these let the test read what each person's CLI got, synchronously.
+ */
+function fakeHub(userIds: string[]) {
+  const got = new Map<string, Extract<ServerToCli, { t: 'notify' }>['d'][]>(userIds.map((id) => [id, []]));
+  const connectionFor = (userId: string) =>
+    ({ send: (msg: ServerToCli) => (msg.t === 'notify' && got.get(userId)!.push(msg.d), true) }) as unknown as CliConnection;
+  return { hub: { connectionsFor: (userId: string) => (got.has(userId) ? [connectionFor(userId)] : []) }, got };
+}
+
+// Review Focus 5: a subscription goes stale, and the same notification still reaches the person, through the CLI.
+// Never zero pings for someone with a CLI online, never two. "A ping" is anything that alerts: a Web Push that
+// arrived, or the CLI's OS notification (`alert: true`). The CLI's terminal line is always printed.
+describe('Web Push first, the CLI as fallback', () => {
+  it('gives each person exactly one alerting ping, deleting the subscriptions that are gone', async () => {
+    const [ana, ben, cy] = [await makeUser({ login: 'ana' }), await makeUser({ login: 'ben' }), await makeUser({ login: 'cy' })];
+    const anasOnly = await subscribe(ana.id); // site data cleared: the push service answers 410
+    const [bensWorking, bensGone] = [await subscribe(ben.id), await subscribe(ben.id)];
+    // cy never turned push on.
+    const push = fakePush({ [anasOnly.endpoint]: GONE, [bensGone.endpoint]: GONE });
+    const { hub, got } = fakeHub([ana.id, ben.id, cy.id]);
+    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
+    const notifier = new FallbackNotifier(new PushNotifier(push.send), new CliNotifier(hub, offline));
+
+    const { reached } = await notifier.notify(ready([ana.id, ben.id, cy.id]));
+
+    expect(await stillThere(anasOnly.id)).toBe(false);
+    expect(await stillThere(bensGone.id)).toBe(false);
+    expect(await stillThere(bensWorking.id)).toBe(true);
+    const line = { kind: 'ready', chatId: 'chat_1', title: 'Ready for your approval: acme/shop-api#142', url: 'http://localhost:8787/c/acme/shop-api/142' };
+    expect(got.get(ana.id)).toEqual([{ ...line, alert: true }]);
+    expect(got.get(ben.id)).toEqual([{ ...line, alert: false }]);
+    expect(got.get(cy.id)).toEqual([{ ...line, alert: true }]);
+    const owner = new Map([anasOnly, bensWorking, bensGone].map((sub) => [sub.endpoint, sub.userId]));
+    for (const user of [ana, ben, cy]) {
+      const pushArrived = push.sent.some((s) => s.ok && owner.get(s.endpoint) === user.id) ? 1 : 0;
+      const osAlerts = got.get(user.id)!.filter((d) => d.alert).length;
+      expect(pushArrived + osAlerts, user.login).toBe(1);
+    }
+    expect(reached.sort()).toEqual([ana.id, ben.id, cy.id].sort());
+    expect(offline.notify).not.toHaveBeenCalled();
+  });
+
+  it("logs only those nothing reached: push did, so a person with no CLI online isn't logged", async () => {
+    const [maya, leo] = [await makeUser(), await makeUser()];
+    await subscribe(maya.id);
+    const offline = { notify: vi.fn(async () => ({ reached: [] })) };
+    const notifier = new FallbackNotifier(new PushNotifier(fakePush().send), new CliNotifier(fakeHub([]).hub, offline));
+    expect(await notifier.notify(ready([maya.id, leo.id]))).toEqual({ reached: [maya.id] });
+    expect(offline.notify).toHaveBeenCalledExactlyOnceWith({ ...ready([leo.id]), alert: true });
+  });
+
+  it('with push off, is Plan 1: every CLI alerts', async () => {
+    const maya = await makeUser();
+    await subscribe(maya.id);
+    const { hub, got } = fakeHub([maya.id]);
+    await new FallbackNotifier(new PushNotifier(null), new CliNotifier(hub)).notify(ready([maya.id]));
+    expect(got.get(maya.id)!.map((d) => d.alert)).toEqual([true]);
+  });
+});
+```
+
+
+- [ ] **Step 32: Run it to see it fail**
+
+Run: `npm run test:db -w apps/server -- src/tasks/push-notifier.db.test.ts`
+Expected: FAIL, 1 failed suite (no tests ran): `Cannot find module './push-notifier'`.
+
+- [ ] **Step 33: Add `PushNotifier`**
+
+One query loads everyone's subscriptions, oldest first; they are sent one after another; each row is updated with `updateMany`/`deleteMany` by id, so a row the person removed while we were sending is skipped instead of failing the task. The fifth failure is an increment and then a delete of the rows at 5.
+
+Create `apps/server/src/tasks/push-notifier.ts`:
+
+```ts
+import { prisma } from '../lib/prisma';
+import type { Notification, Notifier } from './notifier';
+import type { PushResult, PushSend } from './web-push-send';
+
+/** A subscription that failed this many times in a row (without a 404 or 410) is deleted. */
+export const MAX_PUSH_FAILURES = 5;
+
+/** What the service worker gets (Task 20 shows it): heading, detail, where a click goes, and the chat as the tag. */
+export type PushPayload = { title: string; body: string; url: string; tag: string };
+
+type Subscription = { id: string; userId: string; endpoint: string; p256dh: string; auth: string; failCount: number };
+
+/**
+ * Web Push notifications (spec §16, docs/why/web-push.md): each notification goes to every browser and device a
+ * person subscribed, one after another. One that arrives reaches the person. A subscription the push service calls
+ * gone (404 or 410) is deleted; any other failure counts against it, and the fifth in a row deletes it (a success
+ * starts the count again). A failed send never stops the others: only a database error fails the notify task, which
+ * is then retried, and may push a second time to someone it already reached (accepted: rare, and harmless).
+ *
+ * `send` is null when the server has no VAPID keys: push is off, nobody is reached, and the rows are left alone.
+ */
+export class PushNotifier implements Notifier {
+  constructor(private readonly send: PushSend | null) {}
+
+  async notify(n: Notification): Promise<{ reached: string[] }> {
+    if (!this.send || n.userIds.length === 0) return { reached: [] };
+    const payload: PushPayload = { title: n.title, body: n.body, url: n.url, tag: n.chatId };
+    const message = JSON.stringify(payload);
+    // Everyone's subscriptions in one query, oldest first.
+    const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: { in: n.userIds } }, orderBy: { createdAt: 'asc' } });
+    const reached = new Set<string>();
+    for (const sub of subscriptions) {
+      const result = await this.sendOne(this.send, sub, message);
+      await record(sub, result);
+      if (result.ok) reached.add(sub.userId);
+    }
+    return { reached: n.userIds.filter((id) => reached.has(id)) };
+  }
+
+  /** Send to one subscription. A sender that throws (it shouldn't) counts as a failure, like any other. */
+  private async sendOne(send: PushSend, sub: Subscription, message: string): Promise<PushResult> {
+    try {
+      return await send({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, message);
+    } catch (err) {
+      return { ok: false, gone: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+}
+
+/**
+ * Keep the row honest about how sending went. `updateMany` / `deleteMany` by id, so a row the person removed meanwhile
+ * (they turned push off while we sent) is simply skipped instead of failing the task.
+ */
+async function record(sub: Subscription, result: PushResult): Promise<void> {
+  if (result.ok) {
+    if (sub.failCount > 0) await prisma.pushSubscription.updateMany({ where: { id: sub.id }, data: { failCount: 0 } });
+    return;
+  }
+  if (result.gone) {
+    await prisma.pushSubscription.deleteMany({ where: { id: sub.id } });
+    return;
+  }
+  console.warn(`[push] a subscription of user ${sub.userId} failed: ${result.error}`);
+  await prisma.pushSubscription.updateMany({ where: { id: sub.id }, data: { failCount: { increment: 1 } } });
+  await prisma.pushSubscription.deleteMany({ where: { id: sub.id, failCount: { gte: MAX_PUSH_FAILURES } } });
+}
+```
+
+
+- [ ] **Step 34: Run it to see it pass**
+
+Run: `npm run test:db -w apps/server -- src/tasks/push-notifier.db.test.ts`
+Expected: PASS, 9 tests.
+
+- [ ] **Step 35: Write the failing route tests**
+
+`GET /api/me` says `push`. The push routes are tested through `testApp`, which gains `vapidPublicKey` in Step 37.
+
+Create `apps/server/src/http/routes/push.db.test.ts`:
+
+```ts
+import { ActionResponse, WebMe } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeCliToken, makeUser, uid } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+import { prisma } from '../../lib/prisma';
+
+const ORIGIN = 'http://localhost:8787';
+
+/** A subscription as the browser's `pushManager.subscribe()` hands it out, plus the label the web app adds. */
+const subscription = (over: { endpoint?: string; label?: string } = {}) => ({
+  endpoint: over.endpoint ?? `https://fcm.googleapis.com/fcm/send/${uid('sub')}`,
+  keys: { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' },
+  label: over.label ?? 'Chrome on macOS',
+});
+
+/** maya, signed in to the web app, and requests to the push routes with her cookie. */
+async function scene(over: { vapidPublicKey?: string | null } = {}) {
+  const maya = await makeUser({ login: 'maya' });
+  const app = testApp(over);
+  const cookie = await sessionCookieFor(maya.id);
+  const call = (method: 'POST' | 'DELETE', body: unknown, headers: Record<string, string> = { cookie, origin: ORIGIN }) =>
+    app.request('/api/push/subscriptions', { method, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  const me = async (asCookie = cookie) => WebMe.parse(await (await app.request('/api/me', { headers: { cookie: asCookie } })).json());
+  return { maya, app, cookie, call, me };
+}
+
+const rowsOf = (userId: string) => prisma.pushSubscription.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
+
+describe('POST /api/push/subscriptions', () => {
+  it('saves your subscription, and /api/me says you are subscribed', async () => {
+    const { maya, call, me } = await scene({ vapidPublicKey: 'BPublicKey' });
+    expect((await me()).push).toEqual({ vapidPublicKey: 'BPublicKey', subscribed: false });
+    const sub = subscription();
+    const res = await call('POST', sub);
+    expect(res.status).toBe(200);
+    expect(ActionResponse.parse(await res.json())).toEqual({ ok: true });
+    expect(await rowsOf(maya.id)).toEqual([expect.objectContaining({ endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, label: 'Chrome on macOS', failCount: 0 })]);
+    expect((await me()).push).toEqual({ vapidPublicKey: 'BPublicKey', subscribed: true });
+  });
+
+  it('keeps one row per endpoint: subscribing again updates its keys and label and forgets its failures', async () => {
+    const { maya, call } = await scene();
+    const sub = subscription();
+    await call('POST', sub);
+    await prisma.pushSubscription.update({ where: { endpoint: sub.endpoint }, data: { failCount: 3 } });
+    const again = { ...sub, keys: { p256dh: 'BNewKey', auth: 'newAuth' }, label: 'Chrome on macOS (work)' };
+    expect((await call('POST', again)).status).toBe(200);
+    expect(await rowsOf(maya.id)).toEqual([expect.objectContaining({ endpoint: sub.endpoint, p256dh: 'BNewKey', auth: 'newAuth', label: 'Chrome on macOS (work)', failCount: 0 })]);
+  });
+
+  it('moves an endpoint to whoever subscribes with it now (the same browser, signed in as someone else)', async () => {
+    const { maya, call } = await scene();
+    const leo = await makeUser({ login: 'leo' });
+    const sub = subscription();
+    await call('POST', sub);
+    expect((await call('POST', sub, { cookie: await sessionCookieFor(leo.id), origin: ORIGIN })).status).toBe(200);
+    expect(await rowsOf(maya.id)).toEqual([]);
+    expect(await rowsOf(leo.id)).toEqual([expect.objectContaining({ endpoint: sub.endpoint })]);
+  });
+
+  it('refuses an endpoint the server must not call (not https, an IP address, localhost) with a 400, saving nothing', async () => {
+    const { maya, call } = await scene();
+    for (const endpoint of ['http://fcm.googleapis.com/x', 'https://127.0.0.1/x', 'https://[::1]/x', 'https://localhost/x', 'https://169.254.169.254/latest']) {
+      expect((await call('POST', subscription({ endpoint }))).status, endpoint).toBe(400);
+    }
+    expect((await call('POST', subscription({ label: '' }))).status).toBe(400);
+    expect(await rowsOf(maya.id)).toEqual([]);
+  });
+
+  it("refuses another site's page with a 403, a CLI token and no session with a 401", async () => {
+    const { maya, call } = await scene();
+    expect((await call('POST', subscription(), { cookie: await sessionCookieFor(maya.id), origin: 'https://evil.example' })).status).toBe(403);
+    const { raw } = await makeCliToken(maya.id);
+    expect((await call('POST', subscription(), { authorization: `Bearer ${raw}` })).status).toBe(401);
+    expect((await call('POST', subscription(), { origin: ORIGIN })).status).toBe(401);
+    expect(await rowsOf(maya.id)).toEqual([]);
+  });
+});
+
+describe('DELETE /api/push/subscriptions', () => {
+  it('removes your subscription, and saying it again is still ok', async () => {
+    const { maya, call, me } = await scene();
+    const sub = subscription();
+    await call('POST', sub);
+    for (let i = 0; i < 2; i++) {
+      const res = await call('DELETE', { endpoint: sub.endpoint });
+      expect(res.status).toBe(200);
+      expect(ActionResponse.parse(await res.json())).toEqual({ ok: true });
+    }
+    expect(await rowsOf(maya.id)).toEqual([]);
+    expect((await me()).push.subscribed).toBe(false);
+  });
+
+  it("never removes someone else's", async () => {
+    const { call } = await scene();
+    const leo = await makeUser({ login: 'leo' });
+    const leos = subscription();
+    await call('POST', leos, { cookie: await sessionCookieFor(leo.id), origin: ORIGIN });
+    expect((await call('DELETE', { endpoint: leos.endpoint })).status).toBe(200);
+    expect(await rowsOf(leo.id)).toEqual([expect.objectContaining({ endpoint: leos.endpoint })]);
+  });
+
+  it("refuses another site's page with a 403", async () => {
+    const { maya, call, cookie } = await scene();
+    const sub = subscription();
+    await call('POST', sub);
+    expect((await call('DELETE', { endpoint: sub.endpoint }, { cookie, origin: 'https://evil.example' })).status).toBe(403);
+    expect(await rowsOf(maya.id)).toHaveLength(1);
+  });
+});
+
+describe('GET /api/me', () => {
+  it('has no Web Push public key when the server has no VAPID keys (push is off)', async () => {
+    const { me } = await scene();
+    expect((await me()).push).toEqual({ vapidPublicKey: null, subscribed: false });
+  });
+});
+```
+
+Modify `apps/server/src/http/routes/me.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/me.db.test.ts b/apps/server/src/http/routes/me.db.test.ts
+index 60cef7d..5ae870c 100644
+--- a/apps/server/src/http/routes/me.db.test.ts
++++ b/apps/server/src/http/routes/me.db.test.ts
+@@ -11,7 +11,7 @@ describe('GET /api/me', () => {
+     expect(res.status).toBe(200);
+     expect(WebMe.parse(await res.json())).toEqual({
+       id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth', agentOnline: false,
+-      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0,
++      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false },
+     });
+   });
+ 
+```
+
+
+- [ ] **Step 36: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/push.db.test.ts src/http/routes/me.db.test.ts`
+Expected: FAIL, 10 failed, 3 passed (13) in 2 files: 7 tests of the routes themselves (they answer 404, or the row they look for isn't there), and 3 tests that read `push` from `GET /api/me` (one in `me.db.test.ts`, two in `push.db.test.ts`).
+
+- [ ] **Step 37: Add the routes and the public key to `/api/me`**
+
+Both routes need the session cookie and the Origin check; a CLI token gets the same 401 as no session. The upsert is by endpoint. `AppDeps.vapidPublicKey` is required, and `testDeps` sets it to null. `loadWebMe` counts the person's subscriptions in the same query as the user.
+
+Create `apps/server/src/http/routes/push.ts`:
+
+```ts
+import { PushSubscriptionRequest, PushUnsubscribeRequest, type ActionResponse } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import { prisma } from '../../lib/prisma';
+import { HttpError } from '../errors';
+
+/**
+ * `POST` and `DELETE /api/push/subscriptions` (spec §10 "Personal", docs/why/web-push.md): the Settings page's push
+ * switch saves this browser's Web Push subscription, or removes it. Only the web app's session cookie may: a CLI
+ * token is answered as if no one were signed in, like `PUT /api/me/settings`. The endpoint is checked by the schema
+ * (an https name, never an IP address or localhost), since the server will POST to it.
+ */
+export function pushRoutes(): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+  const ok: ActionResponse = { ok: true };
+
+  app.post('/api/push/subscriptions', requireUser, requireSameOrigin, async (c) => {
+    if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    const { endpoint, keys, label } = PushSubscriptionRequest.parse(await c.req.json());
+    const userId = c.get('user').id;
+    // One row per endpoint. Subscribing again (new keys, or the same browser now signed in as someone else) updates
+    // it, moves it to whoever is signed in, and forgets its failures.
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth, label },
+      update: { userId, p256dh: keys.p256dh, auth: keys.auth, label, failCount: 0 },
+    });
+    return c.json(ok);
+  });
+
+  app.delete('/api/push/subscriptions', requireUser, requireSameOrigin, async (c) => {
+    if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    const { endpoint } = PushUnsubscribeRequest.parse(await c.req.json());
+    // Only your own: someone else's endpoint is left alone, with the same answer, so this never says whose it is.
+    // Removing one that is already gone is fine too: the switch is off either way.
+    await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: c.get('user').id } });
+    return c.json(ok);
+  });
+
+  return app;
+}
+```
+
+Modify `apps/server/src/http/app.ts`:
+
+```diff
+diff --git a/apps/server/src/http/app.ts b/apps/server/src/http/app.ts
+index 68d91d4..ad9b0f5 100644
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -18,6 +18,7 @@ import { cliRoutes } from './routes/cli';
+ import { cliApproveRoutes } from './routes/cli-approve';
+ import { inboxRoutes } from './routes/inbox';
+ import { meRoutes } from './routes/me';
++import { pushRoutes } from './routes/push';
+ import { settingsRoutes, type SettingsSender } from './routes/settings';
+ import { setupRoutes } from './routes/setup';
+ import { webhookRoutes } from './routes/webhooks';
+@@ -35,6 +36,8 @@ export type AppDeps = {
+   access: RepoAccess;
+   /** GitHub reads with the app's installation token (the chat screen's file list). */
+   platform: PlatformReads;
++  /** The server's public Web Push key (VAPID), which browsers subscribe with; null when push is off (lib/env.ts). */
++  vapidPublicKey: string | null;
+   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
+   webSockets?: { closeSession(tokenHash: string): void };
+   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
+@@ -51,6 +54,7 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', authRoutes(deps));
+   app.route('/', meRoutes(deps));
+   app.route('/', settingsRoutes(deps));
++  app.route('/', pushRoutes());
+   app.route('/', inboxRoutes(deps));
+   app.route('/', chatRoutes(deps));
+   app.route('/', chatActionRoutes(deps));
+```
+
+Modify `apps/server/src/http/routes/me.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/me.ts b/apps/server/src/http/routes/me.ts
+index f88ae7f..72ec0b7 100644
+--- a/apps/server/src/http/routes/me.ts
++++ b/apps/server/src/http/routes/me.ts
+@@ -6,13 +6,13 @@ import type { LiveClis } from '../../chats/activity';
+ 
+ /**
+  * `GET /api/me` (spec §10): who you are, whether your GitHub sign-in still works, and whether one of your CLIs
+- * is connected. For the web app and the CLI alike.
++ * is connected. For the web app and the CLI alike. `vapidPublicKey` is the server's Web Push key, or null when push is off.
+  */
+-export function meRoutes(deps: { clis: LiveClis }): Hono<{ Variables: UserVariables }> {
++export function meRoutes(deps: { clis: LiveClis; vapidPublicKey: string | null }): Hono<{ Variables: UserVariables }> {
+   const app = new Hono<{ Variables: UserVariables }>();
+ 
+   app.get('/api/me', requireUser, async (c) => {
+-    const body: WebMe = await loadWebMe(c.get('user').id, deps.clis);
++    const body: WebMe = await loadWebMe(c.get('user').id, deps.clis, deps.vapidPublicKey);
+     return c.json(body);
+   });
+ 
+```
+
+Modify `apps/server/src/auth/users.ts`:
+
+```diff
+diff --git a/apps/server/src/auth/users.ts b/apps/server/src/auth/users.ts
+index 482e2f3..4eae786 100644
+--- a/apps/server/src/auth/users.ts
++++ b/apps/server/src/auth/users.ts
+@@ -36,11 +36,12 @@ export function settingsOf(user: Settings): Settings {
+ 
+ /**
+  * Who you are, as the web app reads it (`GET /api/me`, and `me.update` on `/ws/web`): your GitHub account, whether
+- * your GitHub sign-in still works, whether one of your CLIs is connected right now, your settings, and how many
+- * agent runs your connected CLIs started today.
++ * your GitHub sign-in still works, whether one of your CLIs is connected right now, your settings, how many
++ * agent runs your connected CLIs started today, and Web Push: the server's public key (null when push is off)
++ * and whether you have a subscription.
+  */
+-export async function loadWebMe(userId: string, clis: LiveClis): Promise<WebMe> {
+-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true } });
++export async function loadWebMe(userId: string, clis: LiveClis, vapidPublicKey: string | null): Promise<WebMe> {
++  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true, _count: { select: { pushSubs: true } } } });
+   const connected = clis.connectionsFor(user.id);
+   return {
+     id: user.id,
+@@ -52,5 +53,6 @@ export async function loadWebMe(userId: string, clis: LiveClis): Promise<WebMe>
+     settings: settingsOf(user),
+     // Each CLI counts from its own midnight; a device that's offline isn't counted.
+     usedToday: connected.reduce((sum, cli) => sum + cli.usedToday, 0),
++    push: { vapidPublicKey, subscribed: user._count.pushSubs > 0 },
+   };
+ }
+```
+
+Modify `apps/server/src/ws/web-wire.ts`:
+
+```diff
+diff --git a/apps/server/src/ws/web-wire.ts b/apps/server/src/ws/web-wire.ts
+index ef7bdb4..9e1c6bb 100644
+--- a/apps/server/src/ws/web-wire.ts
++++ b/apps/server/src/ws/web-wire.ts
+@@ -28,6 +28,8 @@ export type WebWiring = {
+   dispatcher: Dispatcher;
+   cliHub: CliHub;
+   access: RepoAccess;
++  /** The server's public Web Push key, for `me.update` (null, the default, when push is off). */
++  vapidPublicKey?: string | null;
+   debounceMs?: number;
+   /** Reads a chat's items after a seq (chats/timeline.ts). Tests pass one that fails. */
+   loadItems?: (chatId: string, afterSeq: number) => Promise<TimelineItem[]>;
+@@ -42,7 +44,7 @@ export type WebWiring = {
+  * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
+  * tests call this, so the tests run what production runs.
+  */
+-export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
++export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey = null, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
+   // Work under one key goes out in order: a chat's items before the state that follows them (and its inbox rows apart, under `inbox:<chatId>`).
+   const perChat = new KeyedLock();
+   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+@@ -140,7 +142,7 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
+ 
+   cliHub.onPresence(({ userId }) => {
+     void (async () => {
+-      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub) } });
++      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub, vapidPublicKey) } });
+       for (const chatId of await chatsShowingAgentOf(userId, webHub.followedChats())) stateSoon(chatId);
+     })().catch((err) => console.error('[web-wire] presence update failed:', err));
+   });
+```
+
+Modify `apps/server/test/app.ts`:
+
+```diff
+diff --git a/apps/server/test/app.ts b/apps/server/test/app.ts
+index e865f14..0f16e1e 100644
+--- a/apps/server/test/app.ts
++++ b/apps/server/test/app.ts
+@@ -19,6 +19,8 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
+     clis: { connectionsFor: () => [], sendSettings: () => 0 },
+     access: over.access ?? new RepoAccess(github),
+     platform: new FakePlatform(),
++    // No VAPID keys: push is off, as on a server that hasn't set them.
++    vapidPublicKey: null,
+     // No web app build, whatever is in apps/web/dist: a test that serves the app passes its own folder.
+     webDistDir: '/nonexistent/nitpilot-web-dist',
+     ...over,
+```
+
+
+- [ ] **Step 38: Run the route tests to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/push.db.test.ts src/http/routes/me.db.test.ts`
+Expected: PASS, 13 tests in 2 files.
+
+Run: `npm run typecheck -w apps/server`
+Expected: FAIL, exactly 2 errors, both fixed in the next step: `src/main.ts` (`createApp` lacks `vapidPublicKey`) and `test/e2e/harness.ts` (its notifier answers nothing, not `{ reached }`).
+
+- [ ] **Step 39: Wire it into the server and the end-to-end harness**
+
+`main.ts` builds the real sender only when the three keys exist, and `FallbackNotifier(push, cli)`. The harness builds the same thing with no keys (`new PushNotifier(null)`), so the Plan 1 end-to-end tests keep running Plan 1's behavior, and still records what was notified.
+
+Modify `apps/server/src/main.ts`:
+
+```diff
+diff --git a/apps/server/src/main.ts b/apps/server/src/main.ts
+index abef8fc..da9dff4 100644
+--- a/apps/server/src/main.ts
++++ b/apps/server/src/main.ts
+@@ -13,14 +13,17 @@ import { createIngest } from './ingest/process';
+ import { purgeOldRows } from './ingest/record';
+ import { recoverOnBoot } from './ingest/recovery';
+ import { acquireSingletonLock } from './lib/advisory-lock';
+-import { getEnv } from './lib/env';
++import { getEnv, vapidDetails } from './lib/env';
+ import { AppAuth } from './platform/github/app-auth';
+ import { GithubClient } from './platform/github/client';
+ import { GithubPlatform } from './platform/github/platform';
+ import { CliNotifier } from './tasks/cli-notifier';
+ import { reportFailedWrite } from './tasks/handlers/failed-writes';
+ import { createTaskHandlers } from './tasks/handlers/index';
++import { FallbackNotifier } from './tasks/notifier';
++import { PushNotifier } from './tasks/push-notifier';
+ import { TaskRunner } from './tasks/runner';
++import { webPushSend } from './tasks/web-push-send';
+ import { CliHub } from './ws/cli-hub';
+ import { routeUpgrades } from './ws/upgrade-router';
+ import { WebHub } from './ws/web-hub';
+@@ -43,7 +46,10 @@ async function main(): Promise<void> {
+   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
+   // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
+   const hub = new CliHub();
+-  const notifier = new CliNotifier(hub);
++  // Notifications: Web Push to every browser and device a person subscribed, then their CLI, which alerts only for
++  // people no push reached (spec §16, docs/why/web-push.md). Without VAPID keys push is off: the CLI alerts everyone.
++  const vapid = vapidDetails(env);
++  const notifier = new FallbackNotifier(new PushNotifier(vapid ? webPushSend(vapid) : null), new CliNotifier(hub));
+   // Browsers follow chats live over /ws/web: their new items as they're saved (spec §10, docs/why/web-socket-and-origin.md).
+   // One answer per person and repo to "can they read it?", for every chat read and the browser's socket (auth/repo-access.ts).
+   const access = new RepoAccess(github);
+@@ -61,10 +67,12 @@ async function main(): Promise<void> {
+   // Jobs → CLIs: the assigner, leases, and what CLIs report back (ws/wire.ts).
+   const cliJobs = wireCliHub({ hub, dispatcher, platform });
+   // Commits, CLI presence and progress → the browsers following along (ws/web-wire.ts).
+-  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
++  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey: vapid?.publicKey ?? null });
+   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
+ 
+-  const app = createApp({ github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub });
++  const app = createApp({
++    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, vapidPublicKey: vapid?.publicKey ?? null,
++  });
+   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
+   });
+```
+
+Modify `apps/server/test/e2e/harness.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/harness.ts b/apps/server/test/e2e/harness.ts
+index e7b4be8..5dd014a 100644
+--- a/apps/server/test/e2e/harness.ts
++++ b/apps/server/test/e2e/harness.ts
+@@ -19,7 +19,8 @@ import { GithubClient } from '../../src/platform/github/client';
+ import { CliNotifier } from '../../src/tasks/cli-notifier';
+ import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
+ import { createTaskHandlers } from '../../src/tasks/handlers/index';
+-import type { Notification } from '../../src/tasks/notifier';
++import { FallbackNotifier, type Notification } from '../../src/tasks/notifier';
++import { PushNotifier } from '../../src/tasks/push-notifier';
+ import { TaskRunner } from '../../src/tasks/runner';
+ import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
+ import { routeUpgrades } from '../../src/ws/upgrade-router';
+@@ -51,8 +52,14 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
+   const platform = new FakePlatform();
+   const hub = new CliHub();
+   const notified: Notification[] = [];
+-  const cliNotifier = new CliNotifier(hub);
+-  const notifier = { notify: async (n: Notification) => void (notified.push(n), await cliNotifier.notify(n)) };
++  // As main.ts builds it on a server without VAPID keys: push is off, so every CLI alerts.
++  const realNotifier = new FallbackNotifier(new PushNotifier(null), new CliNotifier(hub));
++  const notifier = {
++    notify: async (n: Notification) => {
++      notified.push(n);
++      return realNotifier.notify(n);
++    },
++  };
+   const dispatcher = new Dispatcher();
+   // Debounced work (the summary comment, notifications) is due at once: tasks run as if a minute had passed.
+   const runner = new TaskRunner(createTaskHandlers({ platform, notifier, dispatch: dispatcher.dispatch }), {
+```
+
+
+- [ ] **Step 40: Typecheck and run the end-to-end tests**
+
+Run: `npm run typecheck && npm run test:e2e`
+Expected: typecheck clean in all four workspaces; the end-to-end tests PASS, 6 tests in 2 files.
+
+- [ ] **Step 41: The explainer**
+
+`docs/why/web-push.md` is new, in React terms (a push endpoint is like a callback somebody handed you; the fallback is like an error boundary that still renders a little).
+
+Create `docs/why/web-push.md`:
+
+```markdown
+# Web Push: notifications when the tab is closed
+
+**In one sentence:** when someone is needed, the server asks each of their browsers' push services to wake that browser and show a notification, even with every Nitpilot tab closed; the CLI only alerts the people no push reached, so nobody gets the same ping twice.
+
+The code: `apps/server/src/tasks/push-notifier.ts` (who gets what, and keeping the subscriptions tidy), `tasks/web-push-send.ts` (one send), `tasks/notifier.ts` (`FallbackNotifier`: push first, then the CLI), `http/routes/push.ts` (saving a browser's subscription).
+
+## What a push service is
+
+A web page can't keep a connection open to our server once its tab is closed. Browsers solve that for every site at once: each browser keeps one connection to its maker's **push service** (Google's FCM for Chrome, Mozilla's for Firefox, Apple's for Safari). A site that wants to notify you sends its message to that service, and the service passes it on to your browser, which wakes the site's **service worker** (a small script the browser runs in the background, Task 20) to show it.
+
+When you turn push on, the browser hands the page a **subscription**: an `endpoint` (a URL at the push service that means "this browser, this site") and two keys. The web app sends that to `POST /api/push/subscriptions`, and the server keeps one `PushSubscription` row per endpoint. Your laptop's Chrome and your phone are two rows.
+
+In React terms: the endpoint is like a callback ref someone gave you. You can't call into their component, but you can call the function they handed you, and it runs on their side.
+
+## What VAPID keys prove
+
+Anyone who learns an endpoint could POST to it. So the push service only accepts messages signed by the site the browser subscribed for. That's **VAPID**: the server has a key pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in `.env`, made once with `npm run vapid:keys`). The browser subscribes with the public key (the web app gets it from `GET /api/me`, `push.vapidPublicKey`), and every send is signed with the private key. The push service checks the signature against the key the subscription was made with. `VAPID_SUBJECT` is a `mailto:` or `https:` contact the push service can use if our server misbehaves.
+
+The private key is a secret, like `ENCRYPTION_KEY`. A new pair means every browser has to subscribe again, so make it once per server. No keys at all is fine: push is off, `push.vapidPublicKey` is null, and the CLI notifies everyone as in Plan 1.
+
+## Why the payload is encrypted
+
+The message passes through Google's, Mozilla's or Apple's servers on its way. It names your PR and its repo. So it's encrypted for the browser alone: the subscription's two keys (`p256dh`, a public key of the browser's, and `auth`, a shared secret) let the server encrypt it so that only that browser can read it. The push service carries a locked box. The `web-push` package does the signing and the encryption; `tasks/web-push-send.ts` is just a call to it.
+
+What's in the box (`PushPayload`): `{ title, body, url, tag }`, the handoff's copy ("Ready for your approval" · "acme/shop-api#142"), the chat's link for a click, and the chat id as the tag, so a newer notification about the same chat replaces the older one instead of piling up.
+
+Two more options on every send: the push service keeps a message for a phone that's switched off for a day at most (`TTL`), and a push service that stops answering is given up on after 10 seconds, so it can't hold up the notify task.
+
+## What 404 and 410 mean
+
+The push service answers each send. `201`: delivered (or queued for a sleeping phone). `404` or `410`: **this subscription doesn't exist any more**. The person cleared the site's data, took back the permission, or uninstalled the browser. It won't come back, so the row is deleted at once.
+
+Anything else (`429` too many requests, `500`, a timeout) may pass, so it only adds 1 to the row's `failCount`. A success sets it back to 0. A row that fails 5 times in a row is deleted, so a dead endpoint that never says 410 doesn't get tried forever.
+
+A failed send never stops the others: each subscription is tried on its own, and the notify task fails (and is retried) only if the database does. A retry can push a second time to someone the first attempt already reached; that's accepted, since it needs a database failure in the middle of a send.
+
+## Push first, the CLI as fallback
+
+Spec §16: nobody should get each ping twice, and someone with a CLI online should never get none. So a notification goes out in this order (`FallbackNotifier`):
+
+1. **Web Push** to every subscription of every person it's for. A person is **reached** if at least one of their pushes arrived.
+2. **The CLI**, to everyone: its terminal line (`🔔 Ready for your approval: …`) is always printed, it's the log of what happened. But the `notify` message carries `alert`: `false` for the people push reached, so their CLI shows no OS notification, and `true` for the rest, whose CLI shows one, as in Plan 1.
+
+So for each person, one ping that makes a sound: a push, or the CLI's notification. The test "gives each person exactly one alerting ping" in `push-notifier.db.test.ts` checks it with three people: one whose only subscription answers 410 (deleted, and the CLI alerts), one with a working and a gone subscription (push reaches them, the CLI only prints), and one who never turned push on (the CLI alerts).
+
+In React terms: it's an error boundary with a fallback, except the fallback always renders a little (the terminal line) and only renders loudly when the primary failed.
+```
+
+
+- [ ] **Step 42: The spec**
+
+Four places in `docs/superpowers/specs/2026-10-07-nitpilot-design.md` change: §6.3's "Ready for approval" row (who is notified), §8's `PushSubscription` row (a success resets `failCount`, the fifth failure deletes, one row per endpoint), §10's `notify` row (`alert`), and §16 (the VAPID variables, what a push carries, what an endpoint may be).
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index fe6f86b..f28db95 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -94,7 +94,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
+ 
+ | Outcome | When | Who is notified |
+ |---|---|---|
+-| **Ready for approval** | All reviews have settled, and no points are open, addressed or escalated | The reviewers who are on Nitpilot |
++| **Ready for approval** | All reviews have settled, and no points are open, addressed or escalated | The requested reviewers who are on Nitpilot, except one whose own action in Nitpilot made it ready (their Resolve or Discard, say): they are looking at the Ready banner (Plan 2) |
+ | **Escalated** | Any of: a declined point is kept open (a disagreement); a point is in an `always_escalate` category (e.g. security); the round limit is reached with points still open | Both sides (if on Nitpilot), naming the point(s) |
+ 
+ Approving and merging always happen on GitHub, done by a human. When a reviewer approves on GitHub, their remaining points are resolved and agent rounds stop for them.
+@@ -167,7 +167,7 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
+ | `RawEvent` | Every webhook received | deliveryId (PK = `X-GitHub-Delivery`), event, action, repoId, body (≤1 MB), status `received\|processed\|ignored\|retrying\|failed`, note, attempts, retryAt | Prevents double processing. Rows still `received` are replayed on boot. A delivery whose processing throws is `retrying`: tried again after 1, 2, 4, 8, 16 and 32 minutes, then `failed` after 7 attempts. Purged after 14 days |
+ | `SeenComment` | GitHub comment ids already handled | commentId (PK) | A comment can arrive on its own and again inside its submitted review; this makes sure it is handled once. Written in the dispatcher's transaction, with the event that carried the comment, so a failed delivery leaves it unseen for the retry. Purged after 14 days, like `RawEvent` |
+ | `GithubWrite` | Everything Nitpilot wrote to GitHub | chatId, kind `summary\|review\|review_comment\|reply`, githubId (unique per kind) | Used to edit those writes and to ignore our own events |
+-| `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other failures add to `failCount` |
++| `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other failures add to `failCount`, a success sets it back to 0, and the fifth failure in a row deletes the row. One row per endpoint: subscribing again with the same endpoint updates it, and moves it to whoever is signed in |
+ | `ChatRead` (Plan 2) | How far a person has read a chat | userId + chatId (unique), lastReadSeq | The inbox's unread count is the number of timeline items after `lastReadSeq` that someone else wrote |
+ 
+ - **Severity:** `blocker | major | minor | nit`.
+@@ -275,7 +275,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ | S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha`. A `publish` bundle instead names the draft (`draft{jobId, sha, from}`) and where to push |
+ | S→CLI | `job.cancel {jobId, attempt, reason}` | |
+ | S→CLI | `settings {autoReview, autoAddress, dailyJobCap}` | Sent to every connected CLI of a person who changed their settings in the web app. The CLI enforces `dailyJobCap` itself, counting from its own midnight |
+-| S→CLI | `notify {kind, chatId, title, url}` | Printed in the terminal. In Plan 1 always shown as an OS notification too; from Plan 2 it is sent only when the person has no Web Push subscription that worked (§16) |
++| S→CLI | `notify {kind, chatId, title, url, alert}` | Always printed in the terminal. `alert` (Plan 2; a message without it alerts) says whether the CLI also shows an OS notification: false when a Web Push of this notification reached the person, so nobody gets it twice (§16) |
+ 
+ - **Reconnecting.**
+   - The CLI needs no event cursor: the Job table holds the state, and `hello` brings both sides back in sync.
+@@ -632,7 +632,7 @@ Needs a human: none
+   - drafts to send (your agent ran with Auto off, Plan 2);
+   - an agent failure.
+ 
+-In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they are Web Push notifications, sent to every browser and device the person subscribed, plus in-app badges. **Push first, CLI as fallback:** the CLI still prints the terminal line, but shows its OS notification only when the person has no Web Push subscription that worked for this notification, so nobody gets each ping twice. Sending runs inside the notify task (the outbox), with the `web-push` package doing the VAPID signing and the payload encryption; the server's VAPID key pair lives in its environment. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
++In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they are Web Push notifications, sent to every browser and device the person subscribed, plus in-app badges. **Push first, CLI as fallback:** the CLI still prints the terminal line, but shows its OS notification only when the person has no Web Push subscription that worked for this notification, so nobody gets each ping twice. Sending runs inside the notify task (the outbox), with the `web-push` package doing the VAPID signing and the payload encryption; the server's VAPID key pair lives in its environment (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: optional, all three or none; without them push is off and the CLI alerts everyone, as in Plan 1). A push carries the handoff's heading and detail, the chat's link, and the chat id as its tag; the push service keeps it a day at most. A push subscription's endpoint must be an `https:` address whose host is neither an IP address nor localhost, since the server sends to it. On iOS (16.4+), Web Push only works once the app has been added to the Home Screen; on Android and desktop it works in the browser.
+ 
+ **UI scope (Plan 2, designed in Claude Design from the design brief):**
+ - **Inbox:** tabs for *To review* and *Mine*. Each row shows a status (Agent working · Waiting · Their turn · Needs you · Ready · Merged · Closed), the round and an unread count. The server works the status out for the person reading it: a finished PR first, then what that person has to do (an escalation is the red Needs you), then Ready (a reviewer's) or Their turn (the author waiting for approval), then a waiting or working agent, then whose turn it is; with nothing pending the row shows no pill.
+```
+
+
+- [ ] **Step 43: Run everything**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 79, CLI 333 passed + 14 skipped, server 971, web 197; end to end 6; Playwright 7; typecheck, lint and build clean. The server's log has no stray lines from the push tests (the ones that fail a send on purpose silence `console.warn`).
+
+- [ ] **Step 44: Commit**
+
+```bash
+git add packages/protocol/src apps/cli/src apps/server/src apps/server/test apps/server/scripts apps/server/prisma apps/server/package.json apps/server/.env.example apps/web/src docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md package-lock.json
+git commit -m "feat(server): Web Push to every subscribed browser, with the CLI as fallback
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
 
 ### Task 20: Service worker, manifest, icons, subscribing and installing
 
 **Files:**
-- Create: `apps/web/public/sw.js`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/{icon.svg,icon-192.png,icon-512.png,maskable-512.png,apple-touch-icon.png}`, `apps/web/scripts/render-icons.ts`, `apps/web/src/push/{register.ts,subscribe.ts}` (+ tests), `apps/web/src/sw.test.ts` (loads `public/sw.js` with a fake `self`), `apps/web/src/components/{InstallCard,IosHomeScreenSheet}/…`, `docs/why/service-workers-and-pwa.md`.
-- Modify: `apps/web/index.html` (manifest link, `theme-color` #16707f, apple-touch-icon, `apple-mobile-web-app-capable`), `apps/web/src/main.tsx` (register the service worker), `apps/web/src/routes/Shell/…` (install card and iOS sheet).
+- Create: `apps/web/public/sw.js`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/{icon.svg,icon-192.png,icon-512.png,maskable-512.png,apple-touch-icon.png,favicon-32.png}`, `apps/web/scripts/render-icons.ts`.
+- Create (push, in `apps/web/src/push/`): `register.ts`, `subscribe.ts`, `device.ts` (`isIos`, `isStandalone`, `deviceLabel`), `install.ts` (the `InstallPrompt` store), with `register.test.ts`, `subscribe.test.ts` and `device.test.ts`.
+- Create (the rest of `apps/web/src/`): `sw.test.ts` (loads `public/sw.js` with a pretend `self`), `manifest.test.ts`, `lib/remember.ts`, `test/push.ts` (the pretend browser for push tests), `components/InstallCard/{InstallCard.tsx,InstallCard.module.css,InstallCard.test.tsx}`, `components/IosHomeScreenSheet/{IosHomeScreenSheet.tsx,IosHomeScreenSheet.module.css,IosHomeScreenSheet.test.tsx}`, `routes/Settings/SettingsPlaceholder.test.tsx`.
+- Create (end to end): `apps/web/e2e/pwa.spec.ts`, `docs/why/service-workers-and-pwa.md`.
+- Modify: `apps/web/index.html`, `apps/web/package.json` (the `icons` script), `apps/web/tsconfig.json` (`scripts` is type-checked), `eslint.config.mjs` (service-worker globals for `sw.js`, Node globals for `apps/web/scripts`), `apps/web/src/main.tsx`, `apps/web/src/routes/Shell/{Shell.tsx,Pane.module.css}`, `apps/web/src/routes/Settings/SettingsPlaceholder.tsx`, `apps/web/e2e/control.ts` (`notify`), `apps/server/test/e2e/{harness.ts,web-server.ts}`, `docs/why/web-push.md` (points to the new explainer), `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§16 Platform).
+- No protocol change, no server `src` change, no migration, no new dependency. The PNG icons are generated from `icon.svg` by `scripts/render-icons.ts` (run by hand, output committed).
 
 **Interfaces:**
-- Consumes: `WebMe.push.vapidPublicKey`, the push routes (Task 19).
-- Produces: `registerServiceWorker(): Promise<ServiceWorkerRegistration | null>`; `pushState(): Promise<'unsupported' | 'needs_home_screen' | 'denied' | 'off' | 'on'>`; `turnPushOn(vapidKey): Promise<void>` (asks permission, `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`, posts it with a label from the user agent); `turnPushOff(): Promise<void>`. `sw.js` handles `push` (shows `title`/`body`, `tag` = chat id so a chat's notifications replace each other, `data.url`) and `notificationclick` (focuses a tab already on that URL, else opens it).
+- Consumes: `WebMe.push.vapidPublicKey` and `WebMe.push.subscribed`; `PushSubscriptionRequest`, `PushUnsubscribeRequest` and `ActionResponse` (protocol); the routes `POST` and `DELETE /api/push/subscriptions` (session cookie plus Origin check, Task 19); `BRAND`; the Task 19 payload `{ title, body, url, tag }`; the `ToastProvider`, `Pane`, `useEscapeBack` and the Shell of W2 and W3; the Playwright server and its control API (Task 3, extended in Task 18); `webPushSend` and `PushSend` (`tasks/web-push-send.ts`, Task 19); `notificationText` (`tasks/handlers/notify.ts`).
+- Produces (`src/push/`):
+  - `registerServiceWorker(): Promise<ServiceWorkerRegistration | null>` (`register.ts`): registers `/sw.js` with scope `/`; `null` where service workers are missing or the browser refuses (it then logs a warning).
+  - `type PushState = 'unsupported' | 'needs_home_screen' | 'denied' | 'off' | 'on'` and `pushState(): Promise<PushState>` (`subscribe.ts`).
+  - `turnPushOn(vapidPublicKey: string): Promise<void>`: asks permission first, then subscribes with `{ userVisibleOnly: true, applicationServerKey }` and posts the subscription with a label from the user agent. A blocked or dismissed prompt resolves without posting. If the POST fails, the browser's subscription is taken back and the error is thrown.
+  - `turnPushOff(): Promise<void>`: unsubscribes in the browser, then sends the `DELETE`.
+  - `turnPushOffBeforeSignOut(ms = SIGN_OUT_WAIT_MS): Promise<void>` with `SIGN_OUT_WAIT_MS = 2000`: best effort, never throws, never waits longer than `ms`. Task 21's Account section reuses it. Also exported: `keyBytes(base64url): Uint8Array`.
+  - `device.ts`: `isIos(device?)`, `isStandalone()`, `deviceLabel(device?)` (for example "Chrome on macOS", "Safari on iPhone").
+  - `install.ts`: `InstallPromptEvent`, `class InstallPrompt` (`listen(window)`, `current()`, `subscribe()`, `install()`) and the one the app uses, `installPrompt`.
+- Produces (components): `<InstallCard prompt? />` and `INSTALL_DISMISSED_KEY`; `<HomeScreenSheetProvider>`, `useHomeScreenSheet().open()`, `<IosHomeScreenSheet onClose />` and `HOME_SCREEN_SHEET_SEEN_KEY`. Task 21's Notifications tip opens the sheet with `useHomeScreenSheet().open()`. `lib/remember.ts`: `isRemembered(key)` and `remember(key)`. The query key `['pushState']`.
+- Produces (`sw.js`): handles `push` (shows `title` and `body`, `tag` = the chat's id so a chat's notifications replace each other, `data.url`) and `notificationclick` (focuses a window already on that URL, else opens it). It has an `install` listener (`skipWaiting()`) and no `fetch` listener.
+- Produces (test server): `startE2e({ push?: { vapidPublicKey, send } })` also returns `notifier`. Control API `POST /notify { login }` answers `{ reached: string[], recorded: { endpoint, payload }[] }`; `E2E_REAL_PUSH=1` makes the Playwright server send through the real `webPushSend`. Helper `notify(login)` in `apps/web/e2e/control.ts`.
 
-**Behavior** (handoff §8, §9):
-- Manifest: name and short name from `BRAND`, `start_url: '/'`, `display: 'standalone'`, `theme_color` and `background_color` #16707f, icons (maskable with the safe zone; the diamond dropped below 32 px).
-- Install card (Chromium's `beforeinstallprompt`): bottom-left 380 px card, "Install Nitpilot" copy, Install / Not now (remembered). iOS Safari not standalone: the "Add Nitpilot to your Home Screen" sheet with its three steps and "Got it", shown once after sign-in and from Settings.
-- No offline cache: `sw.js` has no `fetch` handler.
-- `docs/why/service-workers-and-pwa.md`: a service worker as a tiny program the browser keeps for your site, why it's the only thing that can receive a push with the tab closed, what makes an app installable, and the iOS Home Screen rule; points to `public/sw.js`, `src/push/`.
-- **Live step (ask first):** in desktop Chrome on `localhost`, turn push on from a temporary button in the shell (Settings arrives in Task 21) and trigger a notification through the stand-in path; the phone check waits for the acceptance run (Task 25).
+**Behavior** (handoff §8, §9; spec §16 "Notifications" and "Platform"):
+- **The service worker** is plain JavaScript in `public/`, served as it is at `/sw.js`, so it covers the whole site. A push shows a notification with the payload's title and body, the chat's id as `tag` (a newer notification about the same chat replaces the older one and alerts again, `renotify`), and the Nitpilot icon. A click closes it, then focuses a window already showing that page or opens one. A page address on another site becomes the inbox, so a click never leaves Nitpilot. A push it can't read still shows "Nitpilot / Something needs you." (browsers insist that every push shows something). A new `sw.js` takes over at once (`skipWaiting`); it has no cache, so that is safe. **No offline cache:** there is no `fetch` listener, and a test says so.
+- **Turning push on and off, in terms of the person using it.** On `/settings` there is a temporary "Push notifications" row (Task 21 replaces the page with the real switch). It reads "Off for this browser." with **Turn push on**; pressing it makes the browser ask; Allow turns it into "On: this browser gets a notification when you're needed." with **Turn push off**. Block leaves it off and says nothing more (the browser keeps the answer; the row then explains it). Other cases: blocked earlier → "Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page."; a browser without push → "This browser can't show push notifications."; a server without VAPID keys → "Push isn't set up on this server."; iPhone or iPad outside the Home Screen app → the handoff's tip "On iPhone? Add Nitpilot to your Home Screen to get notifications. In Safari, tap Share, then Add to Home Screen." with **Show me how**, which opens the sheet. A failure shows inline as an alert. After turning it on, the page's `['me']` is updated from the answer (`push.subscribed` true); after turning it off, `['me']` is fetched again, because this browser can't know whether the person's other devices are still subscribed.
+- **`pushState` rules.** `needs_home_screen` is checked first (iOS Safari outside the Home Screen app has no `PushManager`, and "unsupported" would be wrong); then `unsupported`; then `denied`; `on` needs both the permission and a subscription in this browser. It looks only at this browser. Turning off unsubscribes the browser first and then tells the server; if the server can't be reached, its next push gets a 410 and it deletes the row itself (`docs/why/web-push.md`), so the order heals on its own. A subscription made with another key (the server's keys changed) is replaced.
+- **Sign out removes this browser's subscription first** (best effort, at most 2 seconds, never blocking sign-out), so a shared browser doesn't keep showing the last person's notifications (spec §16).
+- **Manifest** (a static file, checked against `BRAND` by a test): name and short name "Nitpilot", `id`, `start_url` and `scope` `/`, `display: standalone`, `theme_color` and `background_color` #16707f, a description, and three icons: 192, 512 and a maskable 512. The android splash is made by the browser from these; the handoff's own splash (plate, wordmark, "Loading your inbox…", the dark variant) can't be written in a manifest.
+- **Icons.** `icon.svg` draws the mono "n" (Fragment Mono's outline as a path, so no font is needed) and the diamond on a #16707f rounded square. **The diamond goes at 32 px and below** by a media query inside the SVG (as an image, an SVG's media queries see its own size); `favicon-32.png` is rendered through it. The maskable icon is full bleed with the mark scaled to 80% (inside the safe zone). The 180 px apple-touch icon is full bleed with no transparency (iOS turns transparent corners black). `index.html` links the manifest, both icons, the apple-touch icon and the Home Screen app tags.
+- **Install card** (Chromium's `beforeinstallprompt`, held by `install.ts` from the first moment, because the event can come before sign-in): a non-modal dialog at the bottom left, 24 px from the edges, 380 px wide, 18 px padding, 20 px radius, a 52 px icon, "Install Nitpilot", "Its own window next to your editor, with notifications when you're needed.", **Install** (opens the browser's own dialog) and **Not now** (remembered in this browser, `localStorage` in try/catch). On a phone (under 760 px) it spans the screen with 16 px gutters above the safe area. It never shows inside the installed app (`display-mode: standalone`) or after `appinstalled`.
+- **iOS Home Screen sheet** (every iOS browser, iPadOS's desktop user agent included; not standalone): opens by itself once after sign-in (saved when it closes) and again from Settings. A bottom sheet over a dimmed page, 28 px radius, grabber, the icon, "Add Nitpilot to your Home Screen", three numbered steps, a 48 px **Got it**. Focus moves to Got it and stays there; Esc (which doesn't also go back to the inbox), Got it and a tap on the dimmed page close it, and focus returns to the button that opened it. **Handoff fix:** the pointer diamond pokes 6 px below the sheet instead of sitting over Got it, and is hidden on a wide screen.
+- **Playwright server.** It makes a VAPID key pair at start (or uses the env's three) so the web app shows the switch, and it **records** every push instead of sending it. `POST /notify { login }` runs the server's real notifier (push first, then the CLI) with a sample "Ready for your approval". Only `E2E_REAL_PUSH=1` sends for real, for the live step.
+- **Content-Security-Policy:** no change. `default-src 'self'` covers the worker and the manifest, and `sw.js` is on our own origin; the Playwright test would show a blocked file.
+- `docs/why/service-workers-and-pwa.md`: what a service worker is (in React terms), why it's the only thing that can get a push with the tab closed, what makes an app installable, and the iOS Home Screen rule; it points to `public/sw.js` and `src/push/`.
 
 **Tests this task must include:**
-- `sw.test.ts`: a push event shows a notification with the payload's title, body, tag and url; a click focuses an existing client on the URL or opens a new window.
-- `subscribe.test.ts` (fake `Notification`, `navigator.serviceWorker`, `PushManager`): `pushState` for each case, including iOS not standalone → `needs_home_screen`; `turnPushOn` posts the subscription; denied permission doesn't post.
-- `npm run build` copies `sw.js` and the manifest to the root of `dist`; the server serves them with `no-cache` (Task 2's rule).
-- Browser check (by hand, no audit tool): Chrome offers "Install", and the installed window opens on the inbox.
+- `sw.test.ts`: a push shows a notification with the payload's title, body, tag and url; a push it can't read still shows one; a url on another site becomes the inbox; a click focuses an existing window on the URL, else opens one; there is no `fetch` listener.
+- `subscribe.test.ts` (pretend `Notification`, `navigator.serviceWorker`, `PushManager`): `pushState` for each case, including an iPhone outside the Home Screen app → `needs_home_screen`; `turnPushOn` posts the subscription with the device label; a blocked prompt doesn't post; a failed POST takes the subscription back; `turnPushOff` unsubscribes and then sends the DELETE; `turnPushOffBeforeSignOut` never throws and stops waiting.
+- `manifest.test.ts`: the manifest's names equal `BRAND`'s, `start_url`, `display`, colors, and icon files exist with the sizes they claim; the icons have the right pixel sizes and no alpha channel where iOS needs none; `index.html` has the new tags and every link points at a file in `public/`.
+- `InstallCard.test.tsx`, `IosHomeScreenSheet.test.tsx`, `SettingsPlaceholder.test.tsx`: as in the steps below.
+- Playwright `pwa.spec.ts`: the page links the manifest and `navigator.serviceWorker.ready` resolves with nothing blocked; `/manifest.webmanifest`, `/sw.js` and the icons answer 200 with the right types and `Cache-Control: no-cache` (Task 2's rule); Settings reads the real browser's push state. No test subscribes to push or sends one.
+- By hand (the browser look and the live step): Chrome's install offer and permission prompt can't be exercised in the in-app browser or in headless Chromium; the live step does them in desktop Chrome.
+
+- [ ] **Step 1: Write the failing tests for the service worker and the push helpers**
+
+Four test files and one helper. The worker test loads `public/sw.js` as text and runs it with a pretend `self` (no real worker): it records the listeners the file adds, and stands in for notifications and open windows:
+
+Create `apps/web/src/sw.test.ts`:
+
+```ts
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+import { BRAND } from '@nitpilot/protocol';
+import { describe, expect, it, vi } from 'vitest';
+
+/** public/sw.js as the browser gets it: plain JavaScript, not bundled. */
+const SOURCE = readFileSync(fileURLToPath(new URL('../public/sw.js', import.meta.url)), 'utf8');
+const ORIGIN = 'https://nitpilot.test';
+
+type Listener = (event: unknown) => void;
+type WindowClient = { url: string; focus: ReturnType<typeof vi.fn> };
+
+/**
+ * Runs sw.js the way a browser would start it, with a pretend `self`: it records the listeners the file adds, and
+ * stands in for showing notifications and for the open windows. No real worker, no real notification.
+ */
+function startWorker(windows: WindowClient[] = []) {
+  const listeners = new Map<string, Listener[]>();
+  const self = {
+    location: { origin: ORIGIN },
+    addEventListener: (type: string, listener: Listener) => listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+    skipWaiting: vi.fn(async () => {}),
+    registration: { showNotification: vi.fn(async () => {}) },
+    clients: {
+      matchAll: vi.fn(async () => windows),
+      openWindow: vi.fn(async () => null),
+    },
+  };
+  vm.runInNewContext(SOURCE, { self, URL });
+
+  /** Fire an event at the worker, and wait for everything it passed to `waitUntil`. */
+  async function fire(type: string, event: object): Promise<void> {
+    const waits: Promise<unknown>[] = [];
+    for (const listener of listeners.get(type) ?? []) listener({ ...event, waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+  }
+  return { self, listeners, fire };
+}
+
+/** A push as the push service delivers it: the server's JSON payload (Task 19's `PushPayload`). */
+function pushEvent(payload: unknown) {
+  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  return { data: { text: () => text, json: () => JSON.parse(text) as unknown } };
+}
+
+function clickEvent(url: unknown) {
+  return { notification: { data: { url }, close: vi.fn() } };
+}
+
+const payload = { title: 'Ready for your approval', body: 'acme/shop-api#142', url: `${ORIGIN}/c/acme/shop-api/142`, tag: 'chat-142' };
+
+describe('the service worker (public/sw.js)', () => {
+  it('listens for push and notificationclick, and never for fetch: there is no offline cache', () => {
+    const { listeners } = startWorker();
+    expect(listeners.has('push')).toBe(true);
+    expect(listeners.has('notificationclick')).toBe(true);
+    expect(listeners.has('fetch')).toBe(false);
+  });
+
+  it('takes over from an older version at once when it installs', async () => {
+    const { self, fire } = startWorker();
+    await fire('install', {});
+    expect(self.skipWaiting).toHaveBeenCalled();
+  });
+
+  it("shows a push as a notification with the payload's title, body, tag and url", async () => {
+    const { self, fire } = startWorker();
+    await fire('push', pushEvent(payload));
+    expect(self.registration.showNotification).toHaveBeenCalledWith('Ready for your approval', {
+      body: 'acme/shop-api#142',
+      tag: 'chat-142',
+      renotify: true,
+      icon: '/icons/icon-192.png',
+      data: { url: `${ORIGIN}/c/acme/shop-api/142` },
+    });
+  });
+
+  it('still shows something for a push it cannot read, since the browser insists on a visible notification', async () => {
+    const { self, fire } = startWorker();
+    await fire('push', pushEvent('not json'));
+    await fire('push', { data: null });
+    expect(self.registration.showNotification).toHaveBeenCalledTimes(2);
+    expect(self.registration.showNotification).toHaveBeenLastCalledWith(BRAND.name, {
+      body: 'Something needs you.',
+      icon: '/icons/icon-192.png',
+      data: { url: `${ORIGIN}/` },
+    });
+  });
+
+  it('only ever opens pages of its own site', async () => {
+    const { self, fire } = startWorker();
+    await fire('push', pushEvent({ ...payload, url: 'https://evil.example/phish' }));
+    expect(self.registration.showNotification).toHaveBeenCalledWith('Ready for your approval', expect.objectContaining({ data: { url: `${ORIGIN}/` } }));
+  });
+
+  it('a click focuses a window already on that page', async () => {
+    const other: WindowClient = { url: `${ORIGIN}/`, focus: vi.fn() };
+    const chat: WindowClient = { url: `${ORIGIN}/c/acme/shop-api/142`, focus: vi.fn() };
+    const { self, fire } = startWorker([other, chat]);
+    const click = clickEvent(payload.url);
+    await fire('notificationclick', click);
+    expect(click.notification.close).toHaveBeenCalled();
+    expect(chat.focus).toHaveBeenCalled();
+    expect(other.focus).not.toHaveBeenCalled();
+    expect(self.clients.openWindow).not.toHaveBeenCalled();
+    // Windows the worker doesn't control count too: it never claims the tabs that were open before it.
+    expect(self.clients.matchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
+  });
+
+  it('a click opens the page in a new window when no window shows it', async () => {
+    const inbox: WindowClient = { url: `${ORIGIN}/`, focus: vi.fn() };
+    const { self, fire } = startWorker([inbox]);
+    await fire('notificationclick', clickEvent(payload.url));
+    expect(inbox.focus).not.toHaveBeenCalled();
+    expect(self.clients.openWindow).toHaveBeenCalledWith(`${ORIGIN}/c/acme/shop-api/142`);
+  });
+
+  it('a click on a notification without a page opens the inbox', async () => {
+    const { self, fire } = startWorker();
+    await fire('notificationclick', clickEvent(undefined));
+    expect(self.clients.openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
+  });
+});
+```
+
+
+`isIos`, `isStandalone` and the device label (the name posted with each subscription, so a list of them can tell a laptop from a phone):
+
+Create `apps/web/src/push/device.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deviceLabel, isIos, isStandalone } from './device';
+
+const UA = {
+  chromeMac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+  safariMac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+  safariIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
+  chromeIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/141.0.0.0 Mobile/15E148 Safari/604.1',
+  firefoxWindows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0',
+  edgeWindows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0',
+  chromeAndroid: 'Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36',
+  firefoxLinux: 'Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0',
+};
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('isIos', () => {
+  it('knows an iPhone, and an iPad that asks for the desktop site (a Mac with a touch screen)', () => {
+    expect(isIos({ userAgent: UA.safariIphone, maxTouchPoints: 5 })).toBe(true);
+    expect(isIos({ userAgent: UA.chromeIphone, maxTouchPoints: 5 })).toBe(true);
+    expect(isIos({ userAgent: UA.safariMac, maxTouchPoints: 5 })).toBe(true);
+    expect(isIos({ userAgent: UA.safariMac, maxTouchPoints: 0 })).toBe(false);
+    expect(isIos({ userAgent: UA.chromeAndroid, maxTouchPoints: 5 })).toBe(false);
+  });
+});
+
+describe('isStandalone', () => {
+  it('is true in the installed app: a standalone window, or an iPhone Home Screen app', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(display-mode: standalone)' }));
+    expect(isStandalone()).toBe(true);
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    expect(isStandalone()).toBe(false);
+    vi.stubGlobal('navigator', { standalone: true });
+    expect(isStandalone()).toBe(true);
+  });
+});
+
+describe('deviceLabel (how Settings will name this browser)', () => {
+  it.each([
+    ['chromeMac', 0, 'Chrome on macOS'],
+    ['safariMac', 0, 'Safari on macOS'],
+    ['safariMac', 5, 'Safari on iPad'],
+    ['safariIphone', 5, 'Safari on iPhone'],
+    ['chromeIphone', 5, 'Chrome on iPhone'],
+    ['firefoxWindows', 0, 'Firefox on Windows'],
+    ['edgeWindows', 0, 'Edge on Windows'],
+    ['chromeAndroid', 5, 'Chrome on Android'],
+    ['firefoxLinux', 0, 'Firefox on Linux'],
+    ['unknown', 0, 'A browser'],
+  ] as const)('%s with %i touch points → %s', (name, maxTouchPoints, label) => {
+    const userAgent = name === 'unknown' ? '' : UA[name];
+    expect(deviceLabel({ userAgent, maxTouchPoints })).toBe(label);
+  });
+});
+```
+
+
+Registering the worker:
+
+Create `apps/web/src/push/register.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { registerServiceWorker } from './register';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe('registerServiceWorker', () => {
+  it('registers /sw.js for the whole site', async () => {
+    const registration = { scope: 'http://localhost/' };
+    const register = vi.fn(async () => registration);
+    vi.stubGlobal('navigator', { serviceWorker: { register } });
+    expect(await registerServiceWorker()).toBe(registration);
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
+  });
+
+  it('answers null in a browser without service workers', async () => {
+    vi.stubGlobal('navigator', {});
+    expect(await registerServiceWorker()).toBeNull();
+  });
+
+  it('answers null, and says why in the console, when the browser refuses (the app works without it)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('navigator', { serviceWorker: { register: vi.fn(async () => Promise.reject(new Error('SecurityError: insecure origin'))) } });
+    expect(await registerServiceWorker()).toBeNull();
+    expect(warn).toHaveBeenCalledWith('[push] the service worker was not registered:', 'SecurityError: insecure origin');
+  });
+});
+```
+
+
+The helper that the next test and, later, the Settings and sheet tests use: a pretend browser for push (`navigator`, `Notification`, `PushManager`) that can also pretend to be an iPhone. Nothing here reaches a real push service:
+
+Create `apps/web/src/test/push.ts`:
+
+```ts
+import { vi } from 'vitest';
+
+/**
+ * A pretend browser for push (src/push/): the parts of `navigator`, `Notification` and `PushManager` that subscribing
+ * uses, installed with `vi.stubGlobal` (undo with `vi.unstubAllGlobals()`). Nothing reaches a real push service.
+ */
+
+export const CHROME_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+export const SAFARI_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1';
+/** A VAPID public key's shape: 65 bytes in base64url. */
+export const VAPID_KEY = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM';
+export const ENDPOINT = 'https://fcm.googleapis.com/fcm/send/abc123';
+
+/** The browser's subscription object, as `pushManager.subscribe()` hands it out. */
+export class FakeSubscription {
+  readonly endpoint = ENDPOINT;
+  constructor(
+    private readonly manager: FakePushManager,
+    readonly options: { applicationServerKey: ArrayBuffer | null; userVisibleOnly: boolean },
+  ) {}
+  toJSON() {
+    return { endpoint: this.endpoint, expirationTime: null, keys: { p256dh: 'BPublicKeyOfTheBrowser', auth: 'sharedSecret' } };
+  }
+  unsubscribe = vi.fn(async () => {
+    this.manager.current = null;
+    return true;
+  });
+}
+
+export class FakePushManager {
+  current: FakeSubscription | null = null;
+  getSubscription = vi.fn(async () => this.current);
+  subscribe = vi.fn(async (opts: { userVisibleOnly: boolean; applicationServerKey: Uint8Array }) => {
+    const key = opts.applicationServerKey;
+    this.current = new FakeSubscription(this, { userVisibleOnly: opts.userVisibleOnly, applicationServerKey: key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength) as ArrayBuffer });
+    return this.current;
+  });
+}
+
+/**
+ * A browser for these tests: the parts of `navigator`, `Notification` and `PushManager` that push uses. `permission`
+ * is what the person decided so far; `answer` is what they click when asked.
+ */
+export function fakeBrowser(opts: { userAgent?: string; maxTouchPoints?: number; standalone?: boolean; serviceWorker?: boolean; pushManager?: boolean; permission?: NotificationPermission; answer?: NotificationPermission; registered?: boolean } = {}) {
+  const pushManager = new FakePushManager();
+  const registration = { pushManager };
+  const registered = opts.registered ?? true;
+  const serviceWorker = {
+    getRegistration: vi.fn(async () => (registered ? registration : undefined)),
+    register: vi.fn(async () => registration),
+    ready: Promise.resolve(registration),
+  };
+  vi.stubGlobal('navigator', {
+    userAgent: opts.userAgent ?? CHROME_MAC,
+    maxTouchPoints: opts.maxTouchPoints ?? 0,
+    ...(opts.standalone ? { standalone: true } : {}),
+    ...(opts.serviceWorker === false ? {} : { serviceWorker }),
+  });
+  class FakeNotification {
+    static permission: NotificationPermission = opts.permission ?? 'default';
+    static requestPermission = vi.fn(async () => {
+      FakeNotification.permission = opts.answer ?? 'granted';
+      return FakeNotification.permission;
+    });
+  }
+  vi.stubGlobal('Notification', FakeNotification);
+  if (opts.pushManager !== false) vi.stubGlobal('PushManager', FakePushManager);
+  return { pushManager, serviceWorker, Notification: FakeNotification };
+}
+
+/**
+ * Safari on an iPhone (outside the Home Screen app, unless `homeScreenApp`), for tests that render the whole app (which needs the rest of the
+ * real `navigator`). Returns the function that makes jsdom's navigator its usual self again.
+ */
+export function pretendIphone(opts: { homeScreenApp?: boolean } = {}): () => void {
+  Object.defineProperty(navigator, 'userAgent', { value: SAFARI_IPHONE, configurable: true });
+  Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true });
+  if (opts.homeScreenApp) Object.defineProperty(navigator, 'standalone', { value: true, configurable: true });
+  return () => {
+    // The own properties shadow jsdom's; deleting them brings jsdom's back.
+    const own = navigator as { userAgent?: string; maxTouchPoints?: number; standalone?: boolean };
+    delete own.userAgent;
+    delete own.maxTouchPoints;
+    delete own.standalone;
+  };
+}
+```
+
+
+Subscribing: every `pushState` case, `turnPushOn`, `turnPushOff` and the sign-out wait:
+
+Create `apps/web/src/push/subscribe.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ENDPOINT, fakeBrowser, SAFARI_IPHONE, VAPID_KEY } from '../test/push';
+import { fakeApi, type Answer } from '../test/render';
+import { keyBytes, pushState, turnPushOff, turnPushOffBeforeSignOut, turnPushOn } from './subscribe';
+
+/** The server's push routes (Task 19), answering `{ ok: true }`. */
+function servePush(answer: Answer = [200, { ok: true }]) {
+  return fakeApi({ 'POST /api/push/subscriptions': () => answer, 'DELETE /api/push/subscriptions': () => answer });
+}
+
+function sentBody(fetch: ReturnType<typeof fakeApi>, call = 0): unknown {
+  return JSON.parse(String(fetch.mock.calls[call]![1]!.body));
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('pushState', () => {
+  it('is unsupported without service workers or push', async () => {
+    fakeBrowser({ serviceWorker: false });
+    expect(await pushState()).toBe('unsupported');
+    vi.unstubAllGlobals();
+    fakeBrowser({ pushManager: false });
+    expect(await pushState()).toBe('unsupported');
+  });
+
+  it("needs the Home Screen on an iPhone or iPad that isn't running the installed app, whatever else it has", async () => {
+    fakeBrowser({ userAgent: SAFARI_IPHONE, maxTouchPoints: 5, pushManager: false });
+    expect(await pushState()).toBe('needs_home_screen');
+    vi.unstubAllGlobals();
+    fakeBrowser({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15', maxTouchPoints: 5 });
+    expect(await pushState()).toBe('needs_home_screen');
+  });
+
+  it('works like anywhere else in the Home Screen app', async () => {
+    fakeBrowser({ userAgent: SAFARI_IPHONE, maxTouchPoints: 5, standalone: true });
+    expect(await pushState()).toBe('off');
+  });
+
+  it('is denied when the person blocked notifications for this site', async () => {
+    fakeBrowser({ permission: 'denied' });
+    expect(await pushState()).toBe('denied');
+  });
+
+  it('is off until this browser has a subscription and the permission', async () => {
+    fakeBrowser({ permission: 'default' });
+    expect(await pushState()).toBe('off');
+    vi.unstubAllGlobals();
+    fakeBrowser({ permission: 'granted', registered: false });
+    expect(await pushState()).toBe('off');
+  });
+
+  it('is on once this browser is subscribed', async () => {
+    const browser = fakeBrowser({ permission: 'granted' });
+    servePush();
+    await turnPushOn(VAPID_KEY);
+    expect(await pushState()).toBe('on');
+    expect(browser.pushManager.current).not.toBeNull();
+  });
+});
+
+describe('turnPushOn', () => {
+  it("asks for permission, subscribes with the server's key, and sends the subscription with a label for this browser", async () => {
+    const browser = fakeBrowser();
+    const fetch = servePush();
+    await turnPushOn(VAPID_KEY);
+    expect(browser.Notification.requestPermission).toHaveBeenCalled();
+    expect(browser.pushManager.subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]![0]).toBe('/api/push/subscriptions');
+    expect(fetch.mock.calls[0]![1]!.method).toBe('POST');
+    expect(sentBody(fetch)).toEqual({ endpoint: ENDPOINT, keys: { p256dh: 'BPublicKeyOfTheBrowser', auth: 'sharedSecret' }, label: 'Chrome on macOS' });
+  });
+
+  it("subscribes nothing and sends nothing when the person doesn't allow notifications", async () => {
+    for (const answer of ['denied', 'default'] as const) {
+      const browser = fakeBrowser({ answer });
+      const fetch = servePush();
+      await turnPushOn(VAPID_KEY);
+      expect(browser.pushManager.subscribe).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("takes the subscription back when the server doesn't keep it, so the switch doesn't read on for nothing", async () => {
+    const browser = fakeBrowser();
+    servePush([400, { error: { code: 'bad_request', message: 'endpoint: must be an https address of a push service' } }]);
+    await expect(turnPushOn(VAPID_KEY)).rejects.toThrow('endpoint: must be an https address of a push service');
+    expect(browser.pushManager.current).toBeNull();
+  });
+
+  it("replaces a subscription made with another server key (the server's keys changed)", async () => {
+    const browser = fakeBrowser({ permission: 'granted' });
+    servePush();
+    const old = await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4, 1, 2, 3]) });
+    browser.pushManager.subscribe.mockClear();
+    await turnPushOn(VAPID_KEY);
+    expect(old.unsubscribe).toHaveBeenCalled();
+    expect(browser.pushManager.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers the service worker first if it is not registered yet', async () => {
+    const browser = fakeBrowser({ registered: false });
+    servePush();
+    await turnPushOn(VAPID_KEY);
+    expect(browser.serviceWorker.register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
+    expect(browser.pushManager.subscribe).toHaveBeenCalled();
+  });
+});
+
+describe('turnPushOff', () => {
+  it("unsubscribes this browser, then tells the server to forget it", async () => {
+    const browser = fakeBrowser({ permission: 'granted' });
+    const fetch = servePush();
+    await turnPushOn(VAPID_KEY);
+    const sub = browser.pushManager.current!;
+    await turnPushOff();
+    expect(sub.unsubscribe).toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1]![1]!.method).toBe('DELETE');
+    expect(sentBody(fetch, 1)).toEqual({ endpoint: ENDPOINT });
+    expect(await pushState()).toBe('off');
+  });
+
+  it('does nothing when this browser has no subscription', async () => {
+    fakeBrowser({ permission: 'granted' });
+    const fetch = servePush();
+    await turnPushOff();
+    expect(fetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+    fakeBrowser({ serviceWorker: false });
+    await turnPushOff();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('turnPushOffBeforeSignOut', () => {
+  it('never throws, and gives up waiting after the time limit', async () => {
+    fakeBrowser({ permission: 'granted' });
+    servePush();
+    await turnPushOn(VAPID_KEY);
+    // The server never answers the DELETE.
+    fakeApi({ 'DELETE /api/push/subscriptions': () => new Promise<Answer>(() => {}) });
+    await expect(turnPushOffBeforeSignOut(20)).resolves.toBeUndefined();
+    // Subscribed again, and this time the server fails the DELETE.
+    servePush();
+    await turnPushOn(VAPID_KEY);
+    const fetch = fakeApi({ 'DELETE /api/push/subscriptions': () => [500, { error: { code: 'internal', message: 'boom' } }] });
+    await expect(turnPushOffBeforeSignOut(20)).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm test -w apps/web`
+Expected: FAIL, 4 test files failed and 28 passed (32). The 197 existing tests still pass (`Tests 197 passed`), and the four new files fail to load, so none of their tests run: `src/sw.test.ts` ("ENOENT: no such file or directory, open '…/apps/web/public/sw.js'"), and `src/push/device.test.ts`, `register.test.ts` and `subscribe.test.ts` ("Failed to resolve import ./device", "./register", "./subscribe").
+
+- [ ] **Step 3: The service worker**
+
+Plain JavaScript, no imports (a worker file in `public/` isn't bundled). Read the comments: they say why each choice was made:
+
+Create `apps/web/public/sw.js`:
+
+```js
+/*
+ * Nitpilot's service worker (spec §16, docs/why/service-workers-and-pwa.md): a small program the browser keeps for
+ * this site and wakes when a push arrives, even with every Nitpilot tab closed. It shows the push as a notification,
+ * and a click on it opens that chat.
+ *
+ * Plain JavaScript, served as it is from public/ (never bundled), at /sw.js so it covers the whole site. On purpose
+ * there is no `fetch` listener: no offline cache, every request goes to the network as if this file didn't exist
+ * (the app needs the server anyway). src/sw.test.ts runs this file with a pretend `self`.
+ */
+
+/** The fallback title: BRAND.name (packages/protocol), which this plain file can't import. sw.test.ts checks it. */
+const APP_NAME = 'Nitpilot';
+const ICON = '/icons/icon-192.png';
+
+// A new version of this file takes over at once, instead of waiting until every tab is closed. Safe, since it keeps
+// no cache that an older page could depend on. (No `clients.claim()`: the worker never needs to control a page.)
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(showPush(event));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data && event.notification.data.url;
+  event.waitUntil(openPage(typeof url === 'string' ? url : '/'));
+});
+
+/**
+ * The server sends `{ title, body, url, tag }` (apps/server/src/tasks/push-notifier.ts). `tag` is the chat's id, so
+ * a newer notification about the same chat replaces the older one instead of piling up, and `renotify` makes the
+ * replacement alert again. The browser insists that every push shows something (`userVisibleOnly`), so one this
+ * file can't read still shows a plain notification that opens the inbox.
+ */
+function showPush(event) {
+  const payload = readPayload(event);
+  if (!payload) {
+    return self.registration.showNotification(APP_NAME, { body: 'Something needs you.', icon: ICON, data: { url: ownPage('/') } });
+  }
+  return self.registration.showNotification(payload.title, {
+    body: payload.body,
+    tag: payload.tag,
+    renotify: true,
+    icon: ICON,
+    data: { url: ownPage(payload.url) },
+  });
+}
+
+/** The payload, or null when there's none or it isn't what the server sends. */
+function readPayload(event) {
+  try {
+    const data = event.data ? event.data.json() : null;
+    if (!data || typeof data.title !== 'string' || typeof data.body !== 'string' || typeof data.tag !== 'string') return null;
+    return { title: data.title, body: data.body, tag: data.tag, url: typeof data.url === 'string' ? data.url : '/' };
+  } catch {
+    return null;
+  }
+}
+
+/** A full address on this site. Anything pointing elsewhere becomes the inbox: a click never leaves Nitpilot. */
+function ownPage(url) {
+  try {
+    const page = new URL(url, self.location.origin);
+    return page.origin === self.location.origin ? page.href : new URL('/', self.location.origin).href;
+  } catch {
+    return new URL('/', self.location.origin).href;
+  }
+}
+
+/**
+ * Focus a window already showing the page, else open it in a new one. `includeUncontrolled`: the tabs that were open
+ * before this worker started aren't controlled by it, and still count.
+ */
+async function openPage(url) {
+  const target = ownPage(url);
+  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const open = windows.find((client) => client.url === target);
+  if (open) return open.focus();
+  return self.clients.openWindow(target);
+}
+```
+
+
+ESLint needs to know that `self` is the worker here. This is the first of two hunks in `eslint.config.mjs` (the second comes in Step 9, so each part is shown as its own diff against the file as it is then):
+
+```diff
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+index fb91616..f46e194 100644
+--- a/eslint.config.mjs
++++ b/eslint.config.mjs
+@@ -14,6 +14,11 @@ export default tseslint.config(
+     languageOptions: { globals: globals.browser },
+     ...reactHooks.configs.flat['recommended-latest'],
+   },
++  {
++    // The service worker is plain JavaScript that runs in the browser's worker, where `self` is the worker.
++    files: ['apps/web/public/sw.js'],
++    languageOptions: { globals: globals.serviceworker },
++  },
+   {
+     // The engine is a pure function: same input, same output, no I/O.
+     // See docs/why/pure-engine.md.
+```
+
+Run: `npm test -w apps/web -- src/sw.test.ts`
+Expected: PASS, 8 tests.
+
+Run: `npx eslint apps/web/public/sw.js apps/web/src/sw.test.ts`
+Expected: no output. (Without the `eslint.config.mjs` change, ESLint reports 15 errors in `sw.js`: `'self' is not defined` and `'URL' is not defined`.)
+
+- [ ] **Step 4: The device helpers and the registration**
+
+What a browser says about itself:
+
+Create `apps/web/src/push/device.ts`:
+
+```ts
+/** What these functions read from `navigator`; tests pass their own. */
+type Device = Pick<Navigator, 'userAgent' | 'maxTouchPoints'>;
+
+/**
+ * An iPhone or iPad. iPadOS asks for the desktop site by default and then says it's a Mac, so a "Mac" with a touch
+ * screen is an iPad too. Every browser on iOS (Safari, Chrome, Firefox) follows the same Home Screen rule.
+ */
+export function isIos(device: Device = navigator): boolean {
+  if (/iPhone|iPad|iPod/.test(device.userAgent)) return true;
+  return /Macintosh/.test(device.userAgent) && device.maxTouchPoints > 1;
+}
+
+/**
+ * True inside the installed app: its own window (`display-mode: standalone`, from the manifest), or on iOS the app
+ * opened from the Home Screen (Safari's own `navigator.standalone`).
+ */
+export function isStandalone(): boolean {
+  if (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) return true;
+  return (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+/** The browser's name, from its user agent. The order matters: Edge says Chrome too, and Chrome says Safari. */
+function browserName(ua: string): string | null {
+  if (/Edg(e|A|iOS)?\//.test(ua)) return 'Edge';
+  if (/Firefox\/|FxiOS\//.test(ua)) return 'Firefox';
+  if (/Chrome\/|CriOS\//.test(ua)) return 'Chrome';
+  if (/Safari\//.test(ua)) return 'Safari';
+  return null;
+}
+
+function systemName(device: Device): string | null {
+  const ua = device.userAgent;
+  if (/iPhone|iPod/.test(ua)) return 'iPhone';
+  if (isIos(device)) return 'iPad';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh/.test(ua)) return 'macOS';
+  if (/CrOS/.test(ua)) return 'ChromeOS';
+  if (/Linux/.test(ua)) return 'Linux';
+  return null;
+}
+
+/**
+ * A name for this browser's push subscription, "Chrome on macOS", so a list of them (Settings) can tell your laptop
+ * from your phone. A guess from the user agent, never trusted for anything else.
+ */
+export function deviceLabel(device: Device = navigator): string {
+  const browser = browserName(device.userAgent);
+  const system = systemName(device);
+  if (browser && system) return `${browser} on ${system}`;
+  return browser ?? system ?? 'A browser';
+}
+```
+
+
+Registering the worker, called once at start (Step 19) and again by `turnPushOn` in case that first try failed:
+
+Create `apps/web/src/push/register.ts`:
+
+```ts
+/**
+ * Install the service worker (public/sw.js, docs/why/service-workers-and-pwa.md) for the whole site. It's what
+ * receives a push while no Nitpilot tab is open, and the browser wants one before it offers to install the app.
+ *
+ * Called once at start (main.tsx), and again by `turnPushOn` in case that failed: registering the same file again is
+ * harmless. Answers null in a browser without service workers, or when the browser refuses (a page that isn't on
+ * https or localhost): the app works without it, only push and installing don't.
+ */
+export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    return await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  } catch (err) {
+    console.warn('[push] the service worker was not registered:', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+```
+
+
+Run: `npm test -w apps/web -- src/push/device.test.ts src/push/register.test.ts`
+Expected: PASS, 15 tests (12 and 3).
+
+- [ ] **Step 5: Subscribing**
+
+`pushState`, `turnPushOn`, `turnPushOff` and the sign-out version. The order of the awaits matters: the permission prompt comes first because Safari only shows it for a click. The long comments say the reasons:
+
+Create `apps/web/src/push/subscribe.ts`:
+
+```ts
+import { ActionResponse, type PushSubscriptionRequest, type PushUnsubscribeRequest } from '@nitpilot/protocol';
+import { api } from '../api/client';
+import { deviceLabel, isIos, isStandalone } from './device';
+import { registerServiceWorker } from './register';
+
+/**
+ * Where push stands in this browser (docs/why/service-workers-and-pwa.md):
+ * - `unsupported`: no service workers or no Web Push here.
+ * - `needs_home_screen`: an iPhone or iPad outside the Home Screen app; iOS only allows push from there.
+ * - `denied`: the person blocked notifications for this site. Only they can undo it, in the browser's settings.
+ * - `off` / `on`: whether this browser holds a push subscription (and the permission to show it).
+ */
+export type PushState = 'unsupported' | 'needs_home_screen' | 'denied' | 'off' | 'on';
+
+/** How long Sign out waits for this browser's subscription to be removed before it goes ahead anyway. */
+export const SIGN_OUT_WAIT_MS = 2000;
+
+function pushSupported(): boolean {
+  return 'serviceWorker' in navigator && 'PushManager' in globalThis && 'Notification' in globalThis;
+}
+
+/** This browser's push subscription for the site, or null. */
+async function currentSubscription(): Promise<PushSubscription | null> {
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  return (await registration?.pushManager.getSubscription()) ?? null;
+}
+
+export async function pushState(): Promise<PushState> {
+  // First: iOS Safari outside the Home Screen app has no PushManager at all, and "unsupported" would be wrong.
+  if (isIos() && !isStandalone()) return 'needs_home_screen';
+  if (!pushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  const subscription = await currentSubscription();
+  return subscription && Notification.permission === 'granted' ? 'on' : 'off';
+}
+
+/** A base64url key (how the server sends its VAPID public key) as the bytes `pushManager.subscribe()` wants. */
+export function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(base64url.length / 4) * 4, '=');
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+function sameKey(current: ArrayBuffer | null, wanted: Uint8Array): boolean {
+  if (!current || current.byteLength !== wanted.length) return false;
+  const bytes = new Uint8Array(current);
+  return bytes.every((byte, i) => byte === wanted[i]);
+}
+
+/** The registration, once its worker is active: `subscribe()` refuses before that. Registers it if needed. */
+async function activeRegistration(): Promise<ServiceWorkerRegistration> {
+  const registered = (await navigator.serviceWorker.getRegistration('/')) ?? (await registerServiceWorker());
+  if (!registered) throw new Error("This browser didn't start Nitpilot's service worker, so push can't work here. Reload the page and try again.");
+  // `ready` waits for an active worker. Only awaited once one is registered: with none, it would wait forever.
+  return navigator.serviceWorker.ready;
+}
+
+/**
+ * Turn push on for this browser: ask for permission, subscribe at the browser's push service with the server's VAPID
+ * public key (`WebMe.push.vapidPublicKey`), and give the server the subscription, labelled for this browser.
+ *
+ * Call it straight from a click: browsers only show the permission prompt for one. A "Block" or a closed prompt
+ * subscribes nothing and sends nothing (read `pushState()` again to see which). If the server doesn't keep the
+ * subscription, the browser's is taken back too, so the two never disagree, and the error is thrown.
+ */
+export async function turnPushOn(vapidPublicKey: string): Promise<void> {
+  if (!pushSupported()) return;
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  const registration = await activeRegistration();
+  const key = keyBytes(vapidPublicKey);
+  // A subscription made with another key (the server's keys changed) can't be reused: subscribe() would refuse.
+  const existing = await registration.pushManager.getSubscription();
+  if (existing && !sameKey(existing.options.applicationServerKey, key)) await existing.unsubscribe();
+
+  // userVisibleOnly: every push shows a notification (public/sw.js); browsers allow nothing else.
+  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  const { keys } = subscription.toJSON();
+  const body: PushSubscriptionRequest = { endpoint: subscription.endpoint, keys: { p256dh: keys?.p256dh ?? '', auth: keys?.auth ?? '' }, label: deviceLabel() };
+  try {
+    await api.send('POST', '/api/push/subscriptions', body, ActionResponse);
+  } catch (err) {
+    await subscription.unsubscribe().catch(() => false);
+    throw err;
+  }
+}
+
+/**
+ * Turn push off for this browser: unsubscribe here first, then tell the server to forget it. In that order, because
+ * if the server can't be told, its next push to this browser answers 410 and the server deletes the row itself
+ * (docs/why/web-push.md). The server's error, if any, is thrown; the browser is off either way.
+ */
+export async function turnPushOff(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+  const subscription = await currentSubscription();
+  if (!subscription) return;
+  const body: PushUnsubscribeRequest = { endpoint: subscription.endpoint };
+  await subscription.unsubscribe();
+  await api.send('DELETE', '/api/push/subscriptions', body, ActionResponse);
+}
+
+/**
+ * Before signing out: remove this browser's subscription, so a shared browser stops getting the last person's
+ * notifications. Best effort. It never throws and never holds up signing out for longer than `ms`.
+ */
+export async function turnPushOffBeforeSignOut(ms = SIGN_OUT_WAIT_MS): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  await Promise.race([turnPushOff().catch(() => {}), limit]);
+  clearTimeout(timer);
+}
+```
+
+
+Run: `npm test -w apps/web -- src/sw.test.ts src/push`
+Expected: PASS, 37 tests in 4 files (8, 12, 3 and 14).
+
+- [ ] **Step 6: Typecheck and lint the push code**
+
+Run: `npm run typecheck -w apps/web && npx eslint apps/web/public apps/web/src/push apps/web/src/sw.test.ts apps/web/src/test/push.ts`
+Expected: no errors, no output from ESLint.
+
+- [ ] **Step 7: Write the failing manifest test**
+
+It reads the files the build copies to the root of `dist`, so it checks the real ones: the manifest against `BRAND`, the icon files against their claimed sizes, `apple-touch-icon.png` and `maskable-512.png` for an alpha channel (iOS fills transparency with black), and the new tags in `index.html`:
+
+Create `apps/web/src/manifest.test.ts`:
+
+```ts
+// @vitest-environment node
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { BRAND } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+
+/** A file of the web app, by its path from apps/web. */
+const file = (relative: string) => fileURLToPath(new URL(`../${relative}`, import.meta.url));
+/** Where a URL path of the site comes from: public/ is copied to the root of dist as it is. */
+const publicFile = (urlPath: string) => file(`public${urlPath}`);
+
+type Icon = { src: string; sizes: string; type: string; purpose: string };
+const manifest = JSON.parse(readFileSync(publicFile('/manifest.webmanifest'), 'utf8')) as {
+  name: string;
+  short_name: string;
+  start_url: string;
+  scope: string;
+  display: string;
+  theme_color: string;
+  background_color: string;
+  icons: Icon[];
+};
+
+/** A PNG's width and height, from its header (the IHDR chunk always comes first). */
+function pngSize(path: string): [number, number] {
+  const png = readFileSync(path);
+  expect(png.subarray(1, 4).toString('latin1')).toBe('PNG');
+  return [png.readUInt32BE(16), png.readUInt32BE(20)];
+}
+
+/** True when the PNG has an alpha channel (colour type 4 or 6). */
+function pngHasAlpha(path: string): boolean {
+  const colourType = readFileSync(path)[25];
+  return colourType === 4 || colourType === 6;
+}
+
+describe('the web app manifest (public/manifest.webmanifest)', () => {
+  it("names the app from BRAND, opens the inbox in its own window, in the handoff's teal", () => {
+    expect(manifest.name).toBe(BRAND.name);
+    expect(manifest.short_name).toBe(BRAND.name);
+    expect(manifest.start_url).toBe('/');
+    expect(manifest.scope).toBe('/');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.theme_color).toBe('#16707f');
+    expect(manifest.background_color).toBe('#16707f');
+  });
+
+  it('lists a 192 and a 512 icon and a maskable one, each a file of that size', () => {
+    const purposes = manifest.icons.map((icon) => `${icon.sizes} ${icon.purpose}`);
+    expect(purposes).toEqual(['192x192 any', '512x512 any', '512x512 maskable']);
+    for (const icon of manifest.icons) {
+      expect(icon.type).toBe('image/png');
+      expect(existsSync(publicFile(icon.src)), icon.src).toBe(true);
+      expect(pngSize(publicFile(icon.src)).join('x')).toBe(icon.sizes);
+    }
+  });
+});
+
+describe('the icons (public/icons, rendered by scripts/render-icons.ts)', () => {
+  it('draws the mark itself, so it looks the same without the font', () => {
+    const svg = readFileSync(publicFile('/icons/icon.svg'), 'utf8');
+    expect(svg).not.toMatch(/<text|font-family|@font-face|href=/);
+    // The diamond goes at small sizes (handoff §9: "Drop the diamond below 32px").
+    expect(svg).toMatch(/@media \(max-width: 32px\)/);
+  });
+
+  it('has an opaque 180 px Home Screen icon (iOS fills transparency with black) and a 32 px favicon', () => {
+    expect(pngSize(publicFile('/icons/apple-touch-icon.png'))).toEqual([180, 180]);
+    expect(pngHasAlpha(publicFile('/icons/apple-touch-icon.png'))).toBe(false);
+    expect(pngHasAlpha(publicFile('/icons/maskable-512.png'))).toBe(false);
+    expect(pngSize(publicFile('/icons/favicon-32.png'))).toEqual([32, 32]);
+  });
+});
+
+describe('index.html', () => {
+  const html = readFileSync(file('index.html'), 'utf8');
+
+  it('links the manifest, the icons, and asks for the Home Screen app to open full screen', () => {
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+    expect(html).toContain('<meta name="theme-color" content="#16707f" />');
+    expect(html).toContain('<link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />');
+    expect(html).toContain('<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />');
+    expect(html).toContain('<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(html).toContain(`<meta name="apple-mobile-web-app-title" content="${BRAND.name}" />`);
+    for (const path of html.matchAll(/href="(\/[^"]+)"/g)) expect(existsSync(publicFile(path[1]!)), path[1]).toBe(true);
+  });
+});
+```
+
+
+- [ ] **Step 8: Run it to see it fail**
+
+Run: `npm test -w apps/web -- src/manifest.test.ts`
+Expected: FAIL, 1 test file failed and no tests run: "ENOENT: no such file or directory, open '…/apps/web/public/manifest.webmanifest'" (the file is read when the test file loads).
+
+- [ ] **Step 9: The icons**
+
+`icon.svg` is the one source. The "n" is Fragment Mono's glyph drawn as a path (taken once from the font file, so no font is needed to draw it and it looks the same everywhere), placed as in the handoff's 108 px splash icon. The `@media (max-width: 32px)` inside it hides the diamond at 32 px and below:
+
+Create `apps/web/public/icons/icon.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Nitpilot's app icon (handoff §9 "App icon"): a white mono "n" with a #a8e3ea diamond at the top right, on a #16707f
+    rounded square. The "n" is Fragment Mono's glyph as a path (no font needed), placed as in the handoff's 108px
+    splash icon. At 32px and below the diamond goes ("Drop the diamond below 32px"): as an image, this file's media
+    queries see its own size. apps/web/scripts/render-icons.ts makes every PNG from it.
+  -->
+  <style>
+    @media (max-width: 32px) {
+      .diamond { display: none; }
+    }
+  </style>
+  <rect class="plate" width="512" height="512" rx="118" fill="#16707f" />
+  <g class="glyph">
+    <path fill="#ffffff" d="M212.1 356.3L183.0 356.3L183.0 172.4L210.0 172.4L210.0 203.0Q220.9 186.1 235.1 176.6Q249.3 167.2 271.1 167.2Q287.2 167.2 300.4 172.6Q313.5 178.0 321.4 189.1Q329.3 200.1 329.3 217.3L329.3 356.3L300.2 356.3L300.2 228.9Q300.2 210.3 289.0 201.6Q277.8 192.8 262.3 192.8Q245.8 192.8 234.6 201.2Q223.4 209.6 217.8 223.3Q212.1 237.0 212.1 252.8L212.1 356.3Z" />
+    <path class="diamond" fill="#a8e3ea" d="M376.9 86.8L420.5 130.4L376.9 174L333.3 130.4Z" />
+  </g>
+</svg>
+```
+
+
+The script that draws every PNG from it with Playwright's Chromium (already a dev dependency of `apps/web`). It fails loudly if the SVG changed shape, so a wrong icon is never written silently:
+
+Create `apps/web/scripts/render-icons.ts`:
+
+```ts
+/**
+ * Makes the app's PNG icons from public/icons/icon.svg, by drawing it in Playwright's Chromium (the browser the
+ * Playwright tests already install) and saving a screenshot of each size. Run it by hand after changing the SVG, and
+ * commit the PNGs it writes: `npm run icons -w apps/web`.
+ *
+ * The SVG is the one source. Each PNG is it, as an image of that size, after one of these small changes:
+ * - `rounded`: as it is, the rounded square on a transparent background (the manifest's "any" icons, the favicon).
+ * - `full-bleed`: square corners, no transparency. iOS rounds a Home Screen icon itself and turns transparent
+ *   corners black.
+ * - `maskable`: full bleed too, with the mark shrunk to 80% so it stays inside the safe zone (the centre circle, 80%
+ *   across) whatever shape Android cuts the icon to.
+ */
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { chromium } from '@playwright/test';
+
+const ICONS = fileURLToPath(new URL('../public/icons/', import.meta.url));
+
+type Variant = 'rounded' | 'full-bleed' | 'maskable';
+
+const OUTPUTS: { file: string; size: number; variant: Variant }[] = [
+  { file: 'icon-192.png', size: 192, variant: 'rounded' },
+  { file: 'icon-512.png', size: 512, variant: 'rounded' },
+  { file: 'maskable-512.png', size: 512, variant: 'maskable' },
+  { file: 'apple-touch-icon.png', size: 180, variant: 'full-bleed' },
+  // The browser tab. The SVG's media query drops the diamond at this size (handoff: "Drop the diamond below 32px").
+  { file: 'favicon-32.png', size: 32, variant: 'rounded' },
+];
+
+/** Replace `find` in the SVG, and fail loudly if it isn't there (the SVG changed shape): never a silent wrong icon. */
+function edit(svg: string, find: string, replace: string): string {
+  if (!svg.includes(find)) throw new Error(`icon.svg has no ${find}: update scripts/render-icons.ts to match it`);
+  return svg.replace(find, replace);
+}
+
+function variantOf(svg: string, variant: Variant): string {
+  if (variant === 'rounded') return svg;
+  const square = edit(svg, 'rx="118"', 'rx="0"');
+  if (variant === 'full-bleed') return square;
+  return edit(square, '<g class="glyph">', '<g class="glyph" transform="translate(256 256) scale(0.8) translate(-256 -256)">');
+}
+
+const source = readFileSync(`${ICONS}icon.svg`, 'utf8');
+const browser = await chromium.launch();
+try {
+  const page = await browser.newPage({ deviceScaleFactor: 1 });
+  for (const { file, size, variant } of OUTPUTS) {
+    const svg = variantOf(source, variant);
+    // As an <img>, so the SVG's own media queries see the image's size, as they will in a browser tab.
+    const src = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+    await page.setViewportSize({ width: size, height: size });
+    await page.setContent(`<body style="margin:0"><img src="${src}" width="${size}" height="${size}" style="display:block"></body>`);
+    await page.locator('img').evaluate((img: HTMLImageElement) => img.decode());
+    // A transparent background only where the icon may have one.
+    const png = await page.locator('img').screenshot({ omitBackground: variant === 'rounded' });
+    writeFileSync(`${ICONS}${file}`, png);
+    console.log(`wrote public/icons/${file} (${size}×${size}, ${variant})`);
+  }
+} finally {
+  await browser.close();
+}
+```
+
+
+An `icons` script in `apps/web/package.json`, and `scripts` added to the folders `tsc` checks:
+
+Modify `apps/web/package.json`:
+
+```diff
+diff --git a/apps/web/package.json b/apps/web/package.json
+index ca0e525..7a2df08 100644
+--- a/apps/web/package.json
++++ b/apps/web/package.json
+@@ -9,7 +9,8 @@
+     "preview": "vite preview",
+     "test": "vitest run",
+     "test:e2e": "playwright test",
+-    "typecheck": "tsc -p tsconfig.json"
++    "typecheck": "tsc -p tsconfig.json",
++    "icons": "tsx scripts/render-icons.ts"
+   },
+   "dependencies": {
+     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+```
+
+Modify `apps/web/tsconfig.json`:
+
+```diff
+diff --git a/apps/web/tsconfig.json b/apps/web/tsconfig.json
+index 55c5da0..9b97eda 100644
+--- a/apps/web/tsconfig.json
++++ b/apps/web/tsconfig.json
+@@ -5,5 +5,5 @@
+     "jsx": "react-jsx",
+     "types": ["vite/client", "node"]
+   },
+-  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
++  "include": ["src", "e2e", "scripts", "vite.config.ts", "playwright.config.ts"]
+ }
+```
+
+
+ESLint: the script runs in Node, so Node's globals (`Buffer`) are known. This is the second hunk of `eslint.config.mjs`, a diff against the file as Step 3 left it:
+
+```diff
+diff --git a/eslint.config.mjs b/eslint.config.mjs
+index f46e194..27f9f5e 100644
+--- a/eslint.config.mjs
++++ b/eslint.config.mjs
+@@ -19,6 +19,11 @@ export default tseslint.config(
+     files: ['apps/web/public/sw.js'],
+     languageOptions: { globals: globals.serviceworker },
+   },
++  {
++    // Run by hand with Node (npm run icons -w apps/web), not in the browser.
++    files: ['apps/web/scripts/**/*.ts'],
++    languageOptions: { globals: globals.node },
++  },
+   {
+     // The engine is a pure function: same input, same output, no I/O.
+     // See docs/why/pure-engine.md.
+```
+
+Now render the icons. This needs Playwright's Chromium (`npx playwright install chromium` once, if `npm run test:e2e -w apps/web` has never run on this computer):
+
+Run: `npm run icons -w apps/web`
+Expected: it prints five lines and writes these files (the PNGs are generated, not shown here; commit them):
+
+```
+wrote public/icons/icon-192.png (192×192, rounded)
+wrote public/icons/icon-512.png (512×512, rounded)
+wrote public/icons/maskable-512.png (512×512, maskable)
+wrote public/icons/apple-touch-icon.png (180×180, full-bleed)
+wrote public/icons/favicon-32.png (32×32, rounded)
+```
+
+The files it writes, all in `apps/web/public/icons/` (binary, so not shown; commit them):
+
+| File | Size | Kind |
+|---|---|---|
+| `icon-192.png` | 192 x 192 px | the rounded square, transparent corners (manifest "any") |
+| `icon-512.png` | 512 x 512 px | the same, larger (manifest "any") |
+| `maskable-512.png` | 512 x 512 px | full bleed, mark at 80% (manifest "maskable"), no alpha channel |
+| `apple-touch-icon.png` | 180 x 180 px | full bleed, no alpha channel (iOS turns transparent corners black) |
+| `favicon-32.png` | 32 x 32 px | the rounded square without the diamond (the browser tab) |
+
+Rendering these again with the same Chromium gave byte-identical files to the builder's (3704, 10325, 4530, 1820 and 651 bytes); another Chromium may draw a few pixels differently, which does no harm. `manifest.test.ts` (Step 10) checks the sizes and the missing alpha channels.
+
+Run: `npm run typecheck -w apps/web && npx eslint apps/web/scripts`
+Expected: no errors.
+
+- [ ] **Step 10: The manifest and `index.html`**
+
+A static file, so `vite build` copies it to the root of `dist` as it is. It adds `id` and `scope` (so the installed app is one app whatever address opens it) and a description. The SVG isn't listed as an icon (Chrome wants PNGs here):
+
+Create `apps/web/public/manifest.webmanifest`:
+
+```json
+{
+  "name": "Nitpilot",
+  "short_name": "Nitpilot",
+  "description": "Your agents review each other's PRs the moment they open. You're pinged only when there's a decision to make.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#16707f",
+  "background_color": "#16707f",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
+```
+
+
+`index.html` links the manifest and the icons, and asks iOS and Chrome for the full-screen Home Screen app. `mobile-web-app-capable` is there because Chrome calls the Apple-only tag deprecated. `theme-color` was already there:
+
+Modify `apps/web/index.html`:
+
+```diff
+diff --git a/apps/web/index.html b/apps/web/index.html
+index eb45613..2155928 100644
+--- a/apps/web/index.html
++++ b/apps/web/index.html
+@@ -5,6 +5,14 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+     <meta name="theme-color" content="#16707f" />
+     <title>Nitpilot</title>
++    <!-- Installing (docs/why/service-workers-and-pwa.md): the manifest, the icons, and iOS's Home Screen app. -->
++    <link rel="manifest" href="/manifest.webmanifest" />
++    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
++    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
++    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
++    <meta name="mobile-web-app-capable" content="yes" />
++    <meta name="apple-mobile-web-app-capable" content="yes" />
++    <meta name="apple-mobile-web-app-title" content="Nitpilot" />
+   </head>
+   <body>
+     <div id="root"></div>
+```
+
+
+Run: `npm test -w apps/web -- src/manifest.test.ts`
+Expected: PASS, 5 tests.
+
+- [ ] **Step 11: Write the failing install card tests**
+
+The card reads a tiny store (`InstallPrompt`), so the tests build their own with a pretend `window`; no real browser event is needed. They cover: nothing before the offer, the offer that comes before the card is on screen, Install opening the browser's dialog once, Not now remembered (also without site data), and never inside the installed app:
+
+Create `apps/web/src/components/InstallCard/InstallCard.test.tsx`:
+
+```ts
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { InstallPrompt } from '../../push/install';
+import { INSTALL_DISMISSED_KEY, InstallCard } from './InstallCard';
+
+/** What Chrome fires when the app can be installed: an event whose `prompt()` opens the browser's own dialog. */
+function fireInstallable(outcome: 'accepted' | 'dismissed' = 'accepted') {
+  const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+    prompt: vi.fn(async () => {}),
+    userChoice: Promise.resolve({ outcome, platform: 'web' }),
+  });
+  act(() => void window.dispatchEvent(event));
+  return event;
+}
+
+let stop: () => void = () => {};
+let prompt: InstallPrompt;
+
+beforeEach(() => {
+  localStorage.clear();
+  prompt = new InstallPrompt();
+  stop = prompt.listen(window);
+});
+
+afterEach(() => {
+  stop();
+  vi.unstubAllGlobals();
+});
+
+describe('InstallCard (handoff §9 "Desktop install prompt")', () => {
+  it('shows nothing until the browser says the app can be installed', () => {
+    render(<InstallCard prompt={prompt} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it("keeps the browser's own install bar away, and offers its card instead", () => {
+    render(<InstallCard prompt={prompt} />);
+    const event = fireInstallable();
+    expect(event.defaultPrevented).toBe(true);
+    const card = screen.getByRole('dialog', { name: 'Install Nitpilot' });
+    expect(card).toHaveAccessibleDescription("Its own window next to your editor, with notifications when you're needed.");
+    expect(screen.getByRole('button', { name: 'Install' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
+  });
+
+  it("an event that came before the card was on screen still counts (it fires early, before you're signed in)", () => {
+    fireInstallable();
+    render(<InstallCard prompt={prompt} />);
+    expect(screen.getByRole('dialog', { name: 'Install Nitpilot' })).toBeInTheDocument();
+  });
+
+  it("Install opens the browser's dialog, once, and the card goes", async () => {
+    render(<InstallCard prompt={prompt} />);
+    const event = fireInstallable('dismissed');
+    await userEvent.click(screen.getByRole('button', { name: 'Install' }));
+    expect(event.prompt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Turning the browser's dialog down isn't "Not now": the card may come back when the browser asks again.
+    expect(localStorage.getItem(INSTALL_DISMISSED_KEY)).toBeNull();
+  });
+
+  it('Not now hides the card and is remembered', async () => {
+    const { unmount } = render(<InstallCard prompt={prompt} />);
+    fireInstallable();
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    unmount();
+    render(<InstallCard prompt={prompt} />);
+    fireInstallable();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Not now still hides the card when the browser keeps no site data', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    });
+    render(<InstallCard prompt={prompt} />);
+    fireInstallable();
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('goes once the app is installed, and never shows inside the installed app', () => {
+    render(<InstallCard prompt={prompt} />);
+    fireInstallable();
+    act(() => void window.dispatchEvent(new Event('appinstalled')));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(display-mode: standalone)', addEventListener: () => {}, removeEventListener: () => {} }));
+    fireInstallable();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+```
+
+
+- [ ] **Step 12: Run it to see it fail**
+
+Run: `npm test -w apps/web`
+Expected: FAIL, 1 test file failed and 33 passed (34); `Tests 239 passed`. `InstallCard.test.tsx` fails to load: "Failed to resolve import ./InstallCard". (The 239 are the 197 from before and the 42 of Steps 1 to 10.)
+
+- [ ] **Step 13: The install store, the remembered flags and the card**
+
+`install.ts` is a tiny store for the browser's install offer, which can come as soon as the page loads, long before anyone signs in. In React terms it's a one-value Zustand store that the card reads with `useSyncExternalStore`:
+
+Create `apps/web/src/push/install.ts`:
+
+```ts
+/**
+ * Chromium's `beforeinstallprompt` event: the browser saying "this site can be installed". Calling `prompt()` opens
+ * the browser's own install dialog; it works once per event. Not in TypeScript's DOM types (Chromium only).
+ */
+export type InstallPromptEvent = Event & {
+  prompt(): Promise<void>;
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+};
+
+/**
+ * Holds the browser's offer to install the app until the install card (components/InstallCard) uses it. The event can
+ * fire as soon as the page has loaded, before anyone is signed in and long before the card is on screen, so main.tsx
+ * starts listening at once and the card reads it from here (with `useSyncExternalStore`, like a tiny store).
+ */
+export class InstallPrompt {
+  private event: InstallPromptEvent | null = null;
+  private readonly listeners = new Set<() => void>();
+
+  /** Start listening on the window. Returns the function that stops. */
+  listen(target: Window): () => void {
+    const offered = (e: Event) => {
+      // Keep Chromium's own install bar away; the card offers it instead, at a better moment.
+      e.preventDefault();
+      this.set(e as InstallPromptEvent);
+    };
+    const installed = () => this.set(null);
+    target.addEventListener('beforeinstallprompt', offered);
+    target.addEventListener('appinstalled', installed);
+    return () => {
+      target.removeEventListener('beforeinstallprompt', offered);
+      target.removeEventListener('appinstalled', installed);
+    };
+  }
+
+  /** The offer, or null when there's none (another browser, already installed, or used). */
+  readonly current = (): InstallPromptEvent | null => this.event;
+
+  readonly subscribe = (onChange: () => void): (() => void) => {
+    this.listeners.add(onChange);
+    return () => this.listeners.delete(onChange);
+  };
+
+  /** Open the browser's install dialog and wait for the answer. The offer is used up either way. */
+  async install(): Promise<void> {
+    const event = this.event;
+    if (!event) return;
+    this.set(null);
+    await event.prompt();
+    await event.userChoice;
+  }
+
+  private set(event: InstallPromptEvent | null): void {
+    this.event = event;
+    for (const listener of this.listeners) listener();
+  }
+}
+
+/** The one the app uses: main.tsx starts it listening, the install card reads it. */
+export const installPrompt = new InstallPrompt();
+```
+
+
+"Not now" and "seen" are remembered in `localStorage`, which can be missing or throw (a private window), so every use is wrapped:
+
+Create `apps/web/src/lib/remember.ts`:
+
+```ts
+/**
+ * Remembers a "done" in this browser (localStorage), like "Not now" on the install card. localStorage can be missing
+ * or throw (a private window, blocked site data), so every use is wrapped: then nothing is remembered, and the page
+ * still works for as long as it stays open.
+ */
+export function isRemembered(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function remember(key: string): void {
+  try {
+    localStorage.setItem(key, '1');
+  } catch {
+    // Not remembered: it may come back on the next visit.
+  }
+}
+```
+
+
+The card (`role="dialog"` but not modal: it doesn't take focus, the inbox stays usable behind it) and its CSS:
+
+Create `apps/web/src/components/InstallCard/InstallCard.tsx`:
+
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { useId, useState, useSyncExternalStore } from 'react';
+import { isStandalone } from '../../push/device';
+import { installPrompt, type InstallPrompt } from '../../push/install';
+import { isRemembered, remember } from '../../lib/remember';
+import styles from './InstallCard.module.css';
+
+export const INSTALL_DISMISSED_KEY = `${BRAND.cli}.install-dismissed`;
+
+/**
+ * "Install Nitpilot" (handoff §9 "Desktop install prompt"): a card at the bottom left, 380 px wide (full width on a
+ * phone), once the browser says the app can be installed (Chromium's `beforeinstallprompt`, held by push/install.ts).
+ * Install opens the browser's own dialog; Not now is remembered in this browser. Never inside the installed app.
+ * Safari has no such event: on an iPhone the Home Screen sheet (IosHomeScreenSheet) explains it instead.
+ */
+export function InstallCard({ prompt = installPrompt }: { prompt?: InstallPrompt }) {
+  const offer = useSyncExternalStore(prompt.subscribe, prompt.current);
+  const [dismissed, setDismissed] = useState(() => isRemembered(INSTALL_DISMISSED_KEY));
+  const titleId = useId();
+  const textId = useId();
+  if (!offer || dismissed || isStandalone()) return null;
+
+  function notNow() {
+    remember(INSTALL_DISMISSED_KEY);
+    setDismissed(true);
+  }
+
+  return (
+    // A dialog that doesn't take focus or block the page: the inbox stays usable behind it.
+    <section role="dialog" aria-labelledby={titleId} aria-describedby={textId} className={styles.card}>
+      <img src="/icons/icon.svg" alt="" width={52} height={52} className={styles.icon} />
+      <div className={styles.body}>
+        <div className={styles.text}>
+          <h2 id={titleId} className={styles.title}>
+            Install {BRAND.name}
+          </h2>
+          <p id={textId} className={styles.lede}>
+            Its own window next to your editor, with notifications when you're needed.
+          </p>
+        </div>
+        <div className={styles.actions}>
+          <button type="button" className={styles.install} onClick={() => void prompt.install()}>
+            Install
+          </button>
+          <button type="button" className={styles.later} onClick={notNow}>
+            Not now
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+```
+
+Create `apps/web/src/components/InstallCard/InstallCard.module.css`:
+
+```css
+/* handoff §9 "Desktop install prompt": 380px at the bottom left, 18px padding, 20px radius, a 52px icon. */
+.card {
+  position: fixed;
+  z-index: 20;
+  left: 24px;
+  bottom: 24px;
+  width: 380px;
+  padding: 18px;
+  border: 1px solid var(--b1);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 12px 36px rgba(16, 32, 24, 0.16);
+  display: flex;
+  gap: 14px;
+}
+
+.icon {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.lede {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg2);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.install,
+.later {
+  height: 38px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install {
+  padding: 0 16px;
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.later {
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+/* A phone: full width at the bottom, with the 16px gutter, above the home indicator. */
+@media (max-width: 759px) {
+  .card {
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+}
+```
+
+
+Run: `npm test -w apps/web -- src/components/InstallCard`
+Expected: PASS, 7 tests.
+
+Run: `npm run typecheck -w apps/web && npx eslint apps/web/src`
+Expected: no errors.
+
+- [ ] **Step 14: Write the failing sheet and Settings tests**
+
+The sheet is tested through the whole signed-in app (`renderApp`), pretending to be Safari on an iPhone: it opens by itself once with its steps and focus on Got it, is remembered, closes on Esc and on the backdrop, opens again from Settings with focus given back, and never opens elsewhere:
+
+Create `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx`:
+
+```ts
+import type { WebMe } from '@nitpilot/protocol';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { pretendIphone, VAPID_KEY } from '../../test/push';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+import { HOME_SCREEN_SHEET_SEEN_KEY } from './IosHomeScreenSheet';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
+
+function serve() {
+  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
+}
+
+const NAME = 'Add Nitpilot to your Home Screen';
+let restore: () => void = () => {};
+
+beforeEach(() => {
+  localStorage.clear();
+  fakeViewport(false);
+  serve();
+});
+
+afterEach(() => {
+  restore();
+  vi.unstubAllGlobals();
+});
+
+describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
+  it('opens once after sign-in on an iPhone outside the Home Screen app, with its three steps, focus on Got it', async () => {
+    restore = pretendIphone();
+    renderApp('/');
+    const sheet = await screen.findByRole('dialog', { name: NAME });
+    expect(sheet).toHaveAttribute('aria-modal', 'true');
+    expect(sheet).toHaveAccessibleDescription('On iPhone, notifications only work from the Home Screen app.');
+    const steps = within(sheet).getAllByRole('listitem');
+    expect(steps.map((step) => step.textContent)).toEqual(["1Tap Share in Safari's toolbar", '2Choose Add to Home Screen', '3Open Nitpilot from there and allow notifications']);
+    const gotIt = within(sheet).getByRole('button', { name: 'Got it' });
+    expect(gotIt).toHaveFocus();
+    // Focus stays inside while it's open.
+    await userEvent.tab();
+    expect(gotIt).toHaveFocus();
+    await userEvent.click(gotIt);
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+  });
+
+  it('is remembered: the next visit goes straight to the inbox', async () => {
+    restore = pretendIphone();
+    const first = renderApp('/');
+    await userEvent.click(within(await screen.findByRole('dialog', { name: NAME })).getByRole('button', { name: 'Got it' }));
+    first.unmount();
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+  });
+
+  it('Esc closes it without leaving the page; so does a tap on the dimmed page behind', async () => {
+    restore = pretendIphone();
+    renderApp('/settings');
+    await screen.findByRole('dialog', { name: NAME });
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+    // On a phone Esc also means "back to the inbox"; the sheet keeps it.
+    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show me how' }));
+    await userEvent.click(screen.getByTestId('sheet-backdrop'));
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+  });
+
+  it('opens again from Settings, and gives focus back to the button that opened it', async () => {
+    restore = pretendIphone();
+    localStorage.setItem(HOME_SCREEN_SHEET_SEEN_KEY, '1');
+    renderApp('/settings');
+    const showMe = await screen.findByRole('button', { name: 'Show me how' });
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+    await userEvent.click(showMe);
+    await userEvent.click(within(screen.getByRole('dialog', { name: NAME })).getByRole('button', { name: 'Got it' }));
+    expect(showMe).toHaveFocus();
+  });
+
+  it('never opens on its own anywhere else: another browser, or the Home Screen app itself', async () => {
+    const first = renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+    first.unmount();
+
+    restore = pretendIphone({ homeScreenApp: true });
+    renderApp('/');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+  });
+});
+```
+
+
+The Settings row, with the pretend browser and a server that answers the push routes: turning push on (and `['me']` learns it), off, an error from the server, the blocked, unsupported and no-keys explanations, the iPhone tip, and Sign out removing the subscription first:
+
+Create `apps/web/src/routes/Settings/SettingsPlaceholder.test.tsx`:
+
+```ts
+import type { WebMe } from '@nitpilot/protocol';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HOME_SCREEN_SHEET_SEEN_KEY } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
+import { ENDPOINT, fakeBrowser, SAFARI_IPHONE, VAPID_KEY } from '../../test/push';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
+
+/** The server: you, an empty inbox, and the push routes (`push` answers both). */
+function serve(opts: { me?: WebMe; push?: () => Answer | Promise<Answer> } = {}) {
+  const push = opts.push ?? ((): Answer => [200, { ok: true }]);
+  return fakeApi({
+    'GET /api/me': (): Answer => [200, opts.me ?? me],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    'POST /api/push/subscriptions': push,
+    'DELETE /api/push/subscriptions': push,
+  });
+}
+
+/** The requests sent to a path, as "METHOD body". */
+function sent(fetch: ReturnType<typeof fakeApi>, path: string): string[] {
+  return fetch.mock.calls.filter(([url]) => String(url) === path).map(([, init]) => `${init?.method ?? 'GET'} ${String(init?.body ?? '')}`);
+}
+
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe('SettingsPlaceholder: the push switch until Task 21', () => {
+  it('turns push on for this browser, and the page knows you are subscribed', async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser();
+    const fetch = serve();
+    const { queryClient } = renderApp('/settings');
+    expect(await screen.findByText('Off for this browser.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn push on' }));
+    expect(await screen.findByText("On: this browser gets a notification when you're needed.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn push off' })).toBeInTheDocument();
+    expect(browser.pushManager.current).not.toBeNull();
+    expect(sent(fetch, '/api/push/subscriptions')).toHaveLength(1);
+    expect(queryClient.getQueryData<WebMe>(['me'])?.push.subscribed).toBe(true);
+  });
+
+  it('turns it off again', async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser({ permission: 'granted' });
+    await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4]) });
+    const fetch = serve({ me: { ...me, push: { vapidPublicKey: VAPID_KEY, subscribed: true } } });
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn push off' }));
+    expect(await screen.findByRole('button', { name: 'Turn push on' })).toBeInTheDocument();
+    expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
+  });
+
+  it("says what went wrong when the server doesn't take the subscription", async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serve({ push: (): Answer => [400, { error: { code: 'bad_request', message: 'endpoint: must be an https address of a push service' } }] });
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Turn push on' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('endpoint: must be an https address of a push service');
+    expect(screen.getByRole('button', { name: 'Turn push on' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['denied', { permission: 'denied' } as const, "Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page."],
+    ['unsupported', { serviceWorker: false } as const, "This browser can't show push notifications."],
+  ])('explains %s instead of offering the switch', async (_state, browser, text) => {
+    fakeViewport(true);
+    fakeBrowser(browser);
+    serve();
+    renderApp('/settings');
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Turn push/ })).not.toBeInTheDocument();
+  });
+
+  it("says so when this server has no push keys", async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serve({ me: { ...me, push: { vapidPublicKey: null, subscribed: false } } });
+    renderApp('/settings');
+    expect(await screen.findByText("Push isn't set up on this server.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Turn push/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the iPhone tip outside the Home Screen app", async () => {
+    fakeViewport(false);
+    fakeBrowser({ userAgent: SAFARI_IPHONE, maxTouchPoints: 5, pushManager: false });
+    localStorage.setItem(HOME_SCREEN_SHEET_SEEN_KEY, '1');
+    serve();
+    renderApp('/settings');
+    expect(await screen.findByText(/Add Nitpilot to your Home Screen to get notifications\. In Safari, tap Share, then Add to Home Screen\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show me how' })).toBeInTheDocument();
+  });
+});
+
+describe('SettingsPlaceholder: Sign out', () => {
+  it("removes this browser's push subscription first, so a shared browser stops getting your notifications", async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser({ permission: 'granted' });
+    await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4]) });
+    const fetch = serve();
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(browser.pushManager.current).toBeNull();
+    expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
+    expect(submit.mock.contexts[0]).toHaveAttribute('action', '/auth/logout');
+  });
+
+  it('signs out all the same in a browser without push', async () => {
+    fakeViewport(true);
+    fakeBrowser({ serviceWorker: false });
+    serve();
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  });
+});
+```
+
+
+- [ ] **Step 15: Run them to see them fail**
+
+Run: `npm test -w apps/web`
+Expected: FAIL, 2 test files failed and 34 passed (36); `Tests 246 passed`. Both new files fail to load: "Failed to resolve import ./IosHomeScreenSheet" (the Settings test imports its `HOME_SCREEN_SHEET_SEEN_KEY`), so none of their 14 tests run.
+
+- [ ] **Step 16: The Home Screen sheet**
+
+The provider decides whether the sheet opens by itself (an iPhone or iPad, not the Home Screen app, not seen before). It also gives Settings `open()`. The sheet is a modal dialog: focus goes to Got it and stays; Esc calls `stopPropagation()` because on a phone the Shell's `useEscapeBack` would otherwise also leave the page. In its CSS the pointer diamond is positioned to poke out below the sheet, the handoff fix named in Behavior:
+
+Create `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.tsx`:
+
+```ts
+import { BRAND } from '@nitpilot/protocol';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { isRemembered, remember } from '../../lib/remember';
+import { isIos, isStandalone } from '../../push/device';
+import styles from './IosHomeScreenSheet.module.css';
+
+export const HOME_SCREEN_SHEET_SEEN_KEY = `${BRAND.cli}.home-screen-sheet-seen`;
+
+type SheetApi = { open: () => void };
+const SheetContext = createContext<SheetApi | null>(null);
+
+/**
+ * The iPhone's Home Screen sheet for the signed-in app (routes/Shell/Shell.tsx). On an iPhone or iPad outside the
+ * Home Screen app it opens by itself once, after sign-in (remembered in this browser), because iOS only allows push
+ * from there. Settings opens it again with `useHomeScreenSheet().open()`.
+ */
+export function HomeScreenSheetProvider({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(() => isIos() && !isStandalone() && !isRemembered(HOME_SCREEN_SHEET_SEEN_KEY));
+  // Where focus was before the sheet opened, to give it back when it closes.
+  const opener = useRef<HTMLElement | null>(null);
+  const api = useMemo<SheetApi>(
+    () => ({
+      open: () => {
+        opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setOpen(true);
+      },
+    }),
+    [],
+  );
+  const close = useCallback(() => {
+    remember(HOME_SCREEN_SHEET_SEEN_KEY);
+    setOpen(false);
+    opener.current?.focus();
+    opener.current = null;
+  }, []);
+  return (
+    <SheetContext.Provider value={api}>
+      {children}
+      {open && <IosHomeScreenSheet onClose={close} />}
+    </SheetContext.Provider>
+  );
+}
+
+export function useHomeScreenSheet(): SheetApi {
+  const api = useContext(SheetContext);
+  if (!api) throw new Error('useHomeScreenSheet needs a <HomeScreenSheetProvider> above it');
+  return api;
+}
+
+/**
+ * "Add Nitpilot to your Home Screen" (handoff §9 "iOS Home Screen hint"): a bottom sheet over the dimmed page, with a
+ * grabber, the three steps and "Got it". A modal dialog: focus moves to Got it and stays inside; Esc, Got it and a tap
+ * on the dimmed page close it.
+ */
+export function IosHomeScreenSheet({ onClose }: { onClose: () => void }) {
+  const gotIt = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const textId = useId();
+  useEffect(() => gotIt.current?.focus(), []);
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      // Stopped here: on a phone, Esc would otherwise also go back to the inbox (lib/keys.ts).
+      e.stopPropagation();
+      onClose();
+    } else if (e.key === 'Tab') {
+      // Got it is the only control, so focus stays on it.
+      e.preventDefault();
+      gotIt.current?.focus();
+    }
+  }
+
+  return (
+    <div className={styles.layer} onKeyDown={onKeyDown}>
+      <div className={styles.backdrop} data-testid="sheet-backdrop" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={textId} className={styles.sheet}>
+        <span className={styles.grabber} aria-hidden="true" />
+        <div className={styles.head}>
+          <img src="/icons/icon.svg" alt="" width={56} height={56} className={styles.icon} />
+          <div className={styles.text}>
+            <h2 id={titleId} className={styles.title}>
+              Add {BRAND.name} to your Home Screen
+            </h2>
+            <p id={textId} className={styles.lede}>
+              On iPhone, notifications only work from the Home Screen app.
+            </p>
+          </div>
+        </div>
+        <ol className={styles.steps}>
+          <li className={styles.step}>
+            <span className={styles.number} aria-hidden="true">
+              1
+            </span>
+            <span>
+              Tap <b>Share</b> in Safari's toolbar
+            </span>
+          </li>
+          <li className={styles.step}>
+            <span className={styles.number} aria-hidden="true">
+              2
+            </span>
+            <span>
+              Choose <b>Add to Home Screen</b>
+            </span>
+          </li>
+          <li className={styles.step}>
+            <span className={styles.number} aria-hidden="true">
+              3
+            </span>
+            <span>Open {BRAND.name} from there and allow notifications</span>
+          </li>
+        </ol>
+        <button ref={gotIt} type="button" className={styles.gotIt} onClick={onClose}>
+          Got it
+        </button>
+        {/* Points down at Safari's toolbar, where Share is. */}
+        <span className={styles.pointer} aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.module.css`:
+
+```css
+/* handoff §9 "iOS Home Screen hint": a bottom sheet, 8px from the edges, 28px radius, a grabber, over a dimmed page. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  /* An iPad in landscape: a sheet the width of a phone, centred. */
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 20px 24px;
+  border-radius: 28px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grabber {
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--b1);
+}
+
+.head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.icon {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.lede {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--fg2);
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 15px;
+}
+
+.number {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gotIt {
+  height: 48px;
+  border: 1px solid var(--b1);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg1);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * The little diamond under the sheet, pointing down at Safari's toolbar. Half of it pokes out below the sheet. (The
+ * handoff's flow margins put it inside the sheet, over Got it's border; placed absolutely it does what it means.)
+ * An iPad has Share at the top: none there.
+ */
+.pointer {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+
+@media (min-width: 760px) {
+  .pointer {
+    display: none;
+  }
+}
+```
+
+
+Run: `npm test -w apps/web -- src/components/IosHomeScreenSheet src/routes/Settings`
+Expected: FAIL, 13 failed and 1 passed (14): the files load now, but nothing puts the provider in the app or the row on the Settings page yet (only "never opens on its own anywhere else" passes). Step 17 does both.
+
+- [ ] **Step 17: The Shell and the Settings row**
+
+The Shell holds the sheet's provider and the install card, next to the toasts. The Settings placeholder gets the push row (`PushRow`, driven by `pushState()` in a query) and Sign out removes this browser's subscription first. `Pane.module.css` gets the two small classes the row uses (`.section`, `.heading`):
+
+Modify `apps/web/src/routes/Shell/Shell.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Shell.tsx b/apps/web/src/routes/Shell/Shell.tsx
+index 50667ab..bb4fdc6 100644
+--- a/apps/web/src/routes/Shell/Shell.tsx
++++ b/apps/web/src/routes/Shell/Shell.tsx
+@@ -1,5 +1,7 @@
+ import type { WebMe } from '@nitpilot/protocol';
+ import { Outlet, useMatch, useNavigate } from 'react-router';
++import { InstallCard } from '../../components/InstallCard/InstallCard';
++import { HomeScreenSheetProvider } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
+ import { ToastProvider } from '../../components/Toast/Toast';
+ import { LiveProvider } from '../../live/LiveProvider';
+ import { useEscapeBack } from '../../lib/keys';
+@@ -12,14 +14,18 @@ import { UiStateProvider } from './UiState';
+  * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
+  * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
+  * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
+- * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts.
++ * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts. So do the two ways to
++ * install the app (handoff §9): the install card where the browser offers it, and the iPhone's Home Screen sheet.
+  */
+ export function Shell({ me }: { me: WebMe }) {
+   return (
+     <LiveProvider>
+       <UiStateProvider>
+         <ToastProvider>
+-          <Layout me={me} />
++          <HomeScreenSheetProvider>
++            <Layout me={me} />
++            <InstallCard />
++          </HomeScreenSheetProvider>
+         </ToastProvider>
+       </UiStateProvider>
+     </LiveProvider>
+```
+
+Modify `apps/web/src/routes/Shell/Pane.module.css`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Pane.module.css b/apps/web/src/routes/Shell/Pane.module.css
+index 87d3917..dd723fa 100644
+--- a/apps/web/src/routes/Shell/Pane.module.css
++++ b/apps/web/src/routes/Shell/Pane.module.css
+@@ -102,3 +102,17 @@
+   gap: 4px;
+   cursor: pointer;
+ }
++
++/* A part of a page under its title (the Settings placeholder's push row). */
++.section {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  padding: 12px 0;
++}
++
++.heading {
++  margin: 0;
++  font-size: 16px;
++  font-weight: 700;
++}
+```
+
+Modify `apps/web/src/routes/Settings/SettingsPlaceholder.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Settings/SettingsPlaceholder.tsx b/apps/web/src/routes/Settings/SettingsPlaceholder.tsx
+index b213a9e..5cba72d 100644
+--- a/apps/web/src/routes/Settings/SettingsPlaceholder.tsx
++++ b/apps/web/src/routes/Settings/SettingsPlaceholder.tsx
+@@ -1,16 +1,31 @@
++import { BRAND, type WebMe } from '@nitpilot/protocol';
++import { useQuery, useQueryClient } from '@tanstack/react-query';
++import { useState, type FormEvent } from 'react';
+ import { useMe } from '../../api/me';
++import { useHomeScreenSheet } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
++import { pushState, turnPushOff, turnPushOffBeforeSignOut, turnPushOn } from '../../push/subscribe';
+ import { Pane } from '../Shell/Pane';
+ import styles from '../Shell/Pane.module.css';
+ 
+-/** `/settings` until the Settings page arrives (Task 21): who you are, and Sign out. */
++/** `/settings` until the Settings page arrives (Task 21): who you are, push for this browser, and Sign out. */
+ export function SettingsPlaceholder() {
+   const me = useMe().data;
++
++  // Sign out removes this browser's push subscription first (never for longer than a moment), then sends the form.
++  function signOut(e: FormEvent<HTMLFormElement>) {
++    e.preventDefault();
++    const form = e.currentTarget;
++    // form.submit() doesn't fire this handler again.
++    void turnPushOffBeforeSignOut().then(() => form.submit());
++  }
++
+   return (
+     <Pane>
+       <h1 className={styles.title}>Signed in as @{me?.login}</h1>
+       <p className={styles.muted}>Devices, notifications and defaults come to this page later.</p>
++      {me && <PushRow me={me} />}
+       {/* A plain form: the browser sends our Origin, which /auth/logout checks, then follows its redirect. */}
+-      <form method="post" action="/auth/logout">
++      <form method="post" action="/auth/logout" onSubmit={signOut}>
+         <button type="submit" className={styles.button}>
+           Sign out
+         </button>
+@@ -18,3 +33,88 @@ export function SettingsPlaceholder() {
+     </Pane>
+   );
+ }
++
++/**
++ * Push for this browser (docs/why/service-workers-and-pwa.md), temporary until Task 21's Notifications section: what
++ * `pushState()` says, with the button that changes it, or why there's none.
++ */
++function PushRow({ me }: { me: WebMe }) {
++  const queryClient = useQueryClient();
++  const sheet = useHomeScreenSheet();
++  const state = useQuery({ queryKey: ['pushState'], queryFn: pushState, retry: false });
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const vapidPublicKey = me.push.vapidPublicKey;
++
++  async function change(on: boolean) {
++    if (!vapidPublicKey) return;
++    setBusy(true);
++    setError(null);
++    try {
++      if (on) {
++        await turnPushOn(vapidPublicKey);
++      } else {
++        await turnPushOff();
++      }
++    } catch (err) {
++      setError(err instanceof Error ? err.message : String(err));
++    } finally {
++      // The server sends no me.update for this: you now have a subscription, or maybe not (other devices may have one).
++      const now = await pushState();
++      queryClient.setQueryData(['pushState'], now);
++      if (now === 'on') queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, push: { ...old.push, subscribed: true } } : old));
++      else void queryClient.invalidateQueries({ queryKey: ['me'] });
++      setBusy(false);
++    }
++  }
++
++  let body;
++  if (!vapidPublicKey) {
++    body = <p className={styles.muted}>Push isn't set up on this server.</p>;
++  } else if (state.data === undefined) {
++    body = null;
++  } else if (state.data === 'unsupported') {
++    body = <p className={styles.muted}>This browser can't show push notifications.</p>;
++  } else if (state.data === 'needs_home_screen') {
++    body = (
++      <>
++        <p className={styles.muted}>
++          <b>On iPhone?</b> Add {BRAND.name} to your Home Screen to get notifications. In Safari, tap Share, then Add to Home Screen.
++        </p>
++        <div className={styles.actions}>
++          <button type="button" className={styles.button} onClick={sheet.open}>
++            Show me how
++          </button>
++        </div>
++      </>
++    );
++  } else if (state.data === 'denied') {
++    body = <p className={styles.muted}>Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page.</p>;
++  } else {
++    const on = state.data === 'on';
++    body = (
++      <>
++        <p className={styles.muted}>{on ? "On: this browser gets a notification when you're needed." : 'Off for this browser.'}</p>
++        <div className={styles.actions}>
++          <button type="button" className={styles.button} disabled={busy} aria-busy={busy} onClick={() => void change(!on)}>
++            {on ? 'Turn push off' : 'Turn push on'}
++          </button>
++        </div>
++      </>
++    );
++  }
++
++  return (
++    <section className={styles.section} aria-labelledby="push-heading">
++      <h2 id="push-heading" className={styles.heading}>
++        Push notifications
++      </h2>
++      {body}
++      {error && (
++        <p className={styles.muted} role="alert">
++          {error}
++        </p>
++      )}
++    </section>
++  );
++}
+```
+
+
+Run: `npm test -w apps/web -- src/components/IosHomeScreenSheet src/routes/Settings`
+Expected: PASS, 14 tests (5 and 9).
+
+- [ ] **Step 18: Run all the web tests**
+
+Run: `npm test -w apps/web && npm run typecheck -w apps/web && npm run lint`
+Expected: PASS, 260 tests (36 files); typecheck and lint clean.
+
+- [ ] **Step 19: Register the worker, and keep the install offer from the start**
+
+`main.tsx` starts listening for the install offer before React renders (the card reads it later) and registers the worker after the first render. The app works without a worker; only push and installing need it:
+
+Modify `apps/web/src/main.tsx`:
+
+```diff
+diff --git a/apps/web/src/main.tsx b/apps/web/src/main.tsx
+index 959f755..67e5c29 100644
+--- a/apps/web/src/main.tsx
++++ b/apps/web/src/main.tsx
+@@ -6,15 +6,23 @@ import './styles/global.css';
+ import { StrictMode } from 'react';
+ import { createRoot } from 'react-dom/client';
+ import { App } from './app';
++import { installPrompt } from './push/install';
++import { registerServiceWorker } from './push/register';
+ import { applyTheme, readTheme } from './theme';
+ 
+ // Before React renders, so the first render already has the saved theme. The Content-Security-Policy allows no
+ // inline scripts (docs/why/content-security-policy.md), so a dark choice on a light system can flash light
+ // briefly on a cold load. Accepted.
+ applyTheme(readTheme());
++// The browser's offer to install the app can come at once, before the install card is on screen: keep it from now.
++installPrompt.listen(window);
+ 
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+     <App />
+   </StrictMode>,
+ );
++
++// The service worker (public/sw.js) receives push notifications, and makes the app installable. Without it the app
++// still works (src/push/register.ts).
++void registerServiceWorker();
+```
+
+
+Run: `npm run build -w apps/web && ls apps/web/dist`
+Expected: the build succeeds and `dist` holds `assets`, `icons`, `index.html`, `manifest.webmanifest` and `sw.js`: the worker and the manifest are at the root, where the server's `no-cache` rule for files outside `assets/` (Task 2) applies to them.
+
+- [ ] **Step 20: Write the failing Playwright spec**
+
+A helper for the control API (`notify`), and the spec. It uses the real Chromium: the page links the manifest and the worker becomes active, with nothing blocked by the Content-Security-Policy; the files answer with the right types and `no-cache`; Settings reads the push state. Headless Chromium reports notifications as blocked whatever the test allows, so the Settings test checks the blocked sentence; that still proves the server's VAPID key reached the page and `pushState()` ran against Chromium's real APIs. It never subscribes: that would reach Google's push service. The on and off switch is covered by `subscribe.test.ts`, `SettingsPlaceholder.test.tsx` and the live step:
+
+Modify `apps/web/e2e/control.ts`:
+
+```diff
+diff --git a/apps/web/e2e/control.ts b/apps/web/e2e/control.ts
+index 74fe071..7983a9e 100644
+--- a/apps/web/e2e/control.ts
++++ b/apps/web/e2e/control.ts
+@@ -44,3 +44,13 @@ export function pageProblems(page: Page): string[] {
+   page.on('pageerror', (err) => errors.push(err.message));
+   return errors;
+ }
++
++/**
++ * Tell someone they're needed, through the server's real notifier: a sample "Ready for your approval". Answers who it
++ * reached and the pushes the server recorded (the Playwright server never sends a real push).
++ */
++export async function notify(login: 'maya' | 'leo'): Promise<{ reached: string[]; recorded: { endpoint: string; payload: string }[] }> {
++  const res = await fetch(`${CONTROL_URL}/notify`, { method: 'POST', body: JSON.stringify({ login }) });
++  if (!res.ok) throw new Error(`notifying ${login} failed: ${res.status} ${await res.text()}`);
++  return (await res.json()) as { reached: string[]; recorded: { endpoint: string; payload: string }[] };
++}
+```
+
+Create `apps/web/e2e/pwa.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { notify, pageProblems, signIn } from './control';
+import { BASE_URL } from './ports';
+
+test('the signed-in app links its manifest and runs its service worker, with nothing blocked', async ({ page, context }) => {
+  const errors = pageProblems(page);
+  await signIn(context, 'maya');
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Inbox' })).toBeVisible();
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  // Resolves once public/sw.js is installed and active for the whole site.
+  const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
+  expect(scope).toBe(`${BASE_URL}/`);
+  expect(errors).toEqual([]);
+});
+
+test('the build puts the manifest, the service worker and the icons at the root, and they are re-checked on every load', async ({ request }) => {
+  const files: [path: string, type: string][] = [
+    ['/manifest.webmanifest', 'application/manifest+json'],
+    ['/sw.js', 'text/javascript'],
+    ['/icons/icon.svg', 'image/svg+xml'],
+    ['/icons/icon-192.png', 'image/png'],
+    ['/icons/apple-touch-icon.png', 'image/png'],
+  ];
+  for (const [path, type] of files) {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()['content-type'], path).toContain(type);
+    // Not under assets/, so no content hash in the name: the browser asks again each time (a new sw.js is seen).
+    expect(res.headers()['cache-control'], path).toBe('no-cache');
+  }
+  const manifest = (await (await request.get('/manifest.webmanifest')).json()) as { name: string; start_url: string };
+  expect(manifest).toMatchObject({ name: 'Nitpilot', start_url: '/' });
+});
+
+test("Settings reads push from the real browser; nobody subscribed means nothing is pushed", async ({ page, context }) => {
+  await signIn(context, 'maya');
+  await page.goto('/settings');
+  // The server's VAPID key reached the page (without one it says push isn't set up), and pushState() ran against
+  // Chromium's real APIs. Headless Chromium always blocks notifications, whatever the test allows, so this is the
+  // "denied" state; the switch itself is checked by hand (the live step). Never subscribe here: that reaches
+  // Google's push service.
+  await expect(page.getByText("Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page.")).toBeVisible();
+  expect((await notify('maya')).recorded).toEqual([]);
+});
+```
+
+
+- [ ] **Step 21: Run it to see it fail**
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: FAIL, 1 failed and 9 passed (10). The first two `pwa.spec.ts` tests already pass, because the web app and the build are done. The third fails: `getByText("Notifications are blocked for this site. …")` is not found, since the Playwright server still has no VAPID key, so Settings says "Push isn't set up on this server." (Ports 4319 and 4320 must be free: `lsof -i :4319`.)
+
+- [ ] **Step 22: The Playwright server: push keys, a recording sender, and `POST /notify`**
+
+`startE2e` takes an optional `push` (the public key for the web app, and the sender the push notifier uses) and returns the `notifier` it built. Without `push` it behaves exactly as before, so the server's own end-to-end project is unchanged:
+
+Modify `apps/server/test/e2e/harness.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/harness.ts b/apps/server/test/e2e/harness.ts
+index 5dd014a..a0653a3 100644
+--- a/apps/server/test/e2e/harness.ts
++++ b/apps/server/test/e2e/harness.ts
+@@ -21,6 +21,7 @@ import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
+ import { createTaskHandlers } from '../../src/tasks/handlers/index';
+ import { FallbackNotifier, type Notification } from '../../src/tasks/notifier';
+ import { PushNotifier } from '../../src/tasks/push-notifier';
++import type { PushSend } from '../../src/tasks/web-push-send';
+ import { TaskRunner } from '../../src/tasks/runner';
+ import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
+ import { routeUpgrades } from '../../src/ws/upgrade-router';
+@@ -44,16 +45,19 @@ export type RunningCli = { lines: string[]; configDir: string; agentStarted: boo
+  * Plan 1 end to end (spec §19): the server, wired exactly like main.ts with GitHub replaced by
+  * FakePlatform and local git folders, on a random port; and one `nitpilot start` per person, each with
+  * its own config folder, clone and git identity, running the fake agent. The Playwright tests' server
+- * (web-server.ts) passes a fixed port, the built web app, and a GithubClient that lets people read the test repo.
++ * (web-server.ts) passes a fixed port, the built web app, a GithubClient that lets people read the test repo, and
++ * `push`: a VAPID public key for the web app and the sender push uses (a recording fake, never a real push service
++ * in a test).
+  */
+-export async function startE2e(opts: { port?: number; webDistDir?: string; github?: GithubClient } = {}) {
++export async function startE2e(opts: { port?: number; webDistDir?: string; github?: GithubClient; push?: { vapidPublicKey: string; send: PushSend } } = {}) {
+   await resetDb();
+   const github = localGithub();
+   const platform = new FakePlatform();
+   const hub = new CliHub();
+   const notified: Notification[] = [];
+-  // As main.ts builds it on a server without VAPID keys: push is off, so every CLI alerts.
+-  const realNotifier = new FallbackNotifier(new PushNotifier(null), new CliNotifier(hub));
++  // As main.ts builds it. Without `push` it's a server without VAPID keys: push is off, so every CLI alerts.
++  const realNotifier = new FallbackNotifier(new PushNotifier(opts.push?.send ?? null), new CliNotifier(hub));
++  const vapidPublicKey = opts.push?.vapidPublicKey ?? null;
+   const notifier = {
+     notify: async (n: Notification) => {
+       notified.push(n);
+@@ -79,8 +83,8 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
+   const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
+   const access = new RepoAccess(githubApi);
+   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
+-  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
+-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
++  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey });
++  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+   const clis: RunningCli[] = [];
+   let server: Server | null = null;
+   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
+@@ -136,6 +140,8 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
+       hub,
+       webHub,
+       notified,
++      /** The server's notifier, as the notify task uses it (push first, then the CLI). */
++      notifier,
+       users,
+       deliver,
+       /** Run code on each CLI message before the server sees it. */
+```
+
+
+The Playwright server makes a key pair at start (or uses the three env variables if all are set, for example from `apps/server/.env`), records each push instead of sending it, and has the new control route. `E2E_REAL_PUSH=1` swaps in the real `webPushSend`, for the live step. The route sends through the same notifier the notify task uses, so the CLI fallback is real too:
+
+Modify `apps/server/test/e2e/web-server.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/web-server.ts b/apps/server/test/e2e/web-server.ts
+index 1797780..9f45cf2 100644
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -4,12 +4,18 @@
+  * control API on a second port that only the tests use (sign someone in, and later: send webhooks, read
+  * state). Playwright starts it (apps/web/playwright.config.ts); it is never imported by src/.
+  *
++ * Push is on, with the env's VAPID keys or a pair made at start, so the web app offers it. No test sends a real push:
++ * sends are recorded and answered as delivered. Only `E2E_REAL_PUSH=1` (the live step in desktop Chrome, by hand)
++ * sends to the browser's real push service.
++ *
+  * Run by hand: E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server
+  */
+ import 'dotenv/config';
+ import { fileURLToPath } from 'node:url';
+ import { serve } from '@hono/node-server';
+ import { Hono } from 'hono';
++import webpush from 'web-push';
++import type { PushSend } from '../../src/tasks/web-push-send';
+ import setupTestDatabase from '../global-setup';
+ import { testDatabaseUrl } from '../test-database';
+ import { TEST_ENV } from '../test-env';
+@@ -32,11 +38,28 @@ const { fakeFetch } = await import('../fake-fetch');
+ const { encrypt } = await import('../../src/lib/crypto');
+ const { prisma } = await import('../../src/lib/prisma');
+ const { GithubClient } = await import('../../src/platform/github/client');
++const { notificationText } = await import('../../src/tasks/handlers/notify');
++const { webPushSend } = await import('../../src/tasks/web-push-send');
++
++// The VAPID keys: the env's if it has all three, else a pair made now (any pair works for a test run).
++const env = process.env;
++const vapid =
++  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT
++    ? { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
++    : { subject: 'mailto:e2e@example.com', ...webpush.generateVAPIDKeys() };
++/** Every push the server would have sent, in order. */
++const pushes: { endpoint: string; payload: string }[] = [];
++const recordPush: PushSend = async (target, payload) => {
++  pushes.push({ endpoint: target.endpoint, payload });
++  return { ok: true };
++};
++const realPush = env.E2E_REAL_PUSH === '1';
+ 
+ const e2e = await startE2e({
+   port: webPort,
+   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
+   github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
++  push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
+ });
+ // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
+ const later = new Date(Date.now() + 365 * 86_400_000);
+@@ -94,6 +117,19 @@ control.post('/settings', async (c) => {
+   await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
+   return c.body(null, 204);
+ });
++/**
++ * Tell someone they're needed, through the server's real notifier (push first, then their CLI), with a sample "Ready
++ * for your approval" that opens the inbox. Answers who it reached and the pushes it recorded. The live step uses it,
++ * with E2E_REAL_PUSH=1, to see a notification arrive in desktop Chrome.
++ */
++control.post('/notify', async (c) => {
++  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
++  const user = e2e.users[login];
++  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
++  const before = pushes.length;
++  const { reached } = await e2e.notifier.notify({ userIds: [user.id], kind: 'ready', chatId: 'sample-notification', ...notificationText('ready', 'octo/sandbox#1', []), url: `${e2e.url}/` });
++  return c.json({ reached: reached.map(() => login), recorded: pushes.slice(before) });
++});
+ /** Each person's running CLI, started by a test. */
+ const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
+ /** Start someone's `nitpilot start` on the fake agent, with a scenario from apps/cli/src/agents/fake/scenarios. */
+@@ -111,7 +147,7 @@ control.delete('/cli', async (c) => {
+ });
+ serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
+ 
+-console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}`);
++console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}${realPush ? ', sending real pushes' : ''}`);
+ 
+ const stop = async () => {
+   await e2e.close();
+```
+
+
+- [ ] **Step 23: Run Playwright**
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 10 tests (`pwa.spec.ts` takes well under a second per test; the whole suite about 12 s). Run `npm run test:e2e -w apps/web` twice more: it must pass every time.
+
+- [ ] **Step 24: The explainer, the pointer and the spec**
+
+The explainer a React developer reads first (`CLAUDE.md`): a service worker as an event handler the browser keeps after the tab unmounts, why a push needs one, what makes an app installable, and the iOS rule:
+
+Create `docs/why/service-workers-and-pwa.md`:
+
+```markdown
+# Service workers and installing the app (PWA)
+
+**In one sentence:** a service worker is a small script the browser keeps for our site and runs on its own, even with every Nitpilot tab closed, so it's the only part of the web app that can receive a push and show a notification; with it, a manifest and icons, the browser also lets people install Nitpilot as an app.
+
+The code: `apps/web/public/sw.js` (the service worker), `apps/web/src/push/register.ts` (installing it), `src/push/subscribe.ts` (turning push on and off), `src/push/install.ts` and `src/components/InstallCard/` (the install card), `src/components/IosHomeScreenSheet/` (the iPhone's Home Screen sheet), `public/manifest.webmanifest` and `public/icons/` (made by `scripts/render-icons.ts`). The server side of push is in `docs/why/web-push.md`.
+
+## A service worker is a tiny program the browser keeps for you
+
+Your React app lives inside a tab. Close the tab and every component, every effect, every `useState` is gone. Nothing of ours runs any more.
+
+A service worker is different. The page asks the browser to install it once (`navigator.serviceWorker.register('/sw.js')`, in `register.ts`, called from `main.tsx`), and from then on the browser keeps that file for our site, separately from any tab. It isn't running all the time: the browser starts it when something happens that it signed up for, lets it handle that, and stops it again a little later. It has no DOM, no React, no `window`; it talks to the browser through `self` and events.
+
+In React terms: it's like an event handler you registered with the browser instead of with a component. `self.addEventListener('push', …)` is an `onPush` prop that stays attached after the component (the tab) unmounts.
+
+Ours listens to two events:
+
+- **`push`**: the browser's push service delivered a message from our server (`{ title, body, url, tag }`). The worker shows it as a notification. `tag` is the chat's id, so a newer notification about the same chat replaces the older one instead of piling up.
+- **`notificationclick`**: you clicked one. The worker focuses a Nitpilot window already showing that chat, or opens a new one.
+
+It also has an `install` listener that calls `skipWaiting()`: when we deploy a new `sw.js`, the new version takes over at once instead of waiting until every tab is closed. That's safe because the worker keeps nothing an older page could depend on.
+
+### No offline cache, on purpose
+
+Most articles about service workers are about a third event, `fetch`, which lets the worker answer the page's requests from a cache, so the site opens offline. Ours has **no `fetch` listener** (a test checks), so every request goes to the network as if the worker didn't exist. Nitpilot is a live view of what agents are doing on GitHub; an inbox from yesterday, served from a cache, would be worse than an honest "Can't reach Nitpilot". A cache also brings the classic bug where people keep running an old version of the app. So: no cache, no such bug.
+
+The server sends `sw.js` with `Cache-Control: no-cache` (like every file not under `assets/`, `apps/server/src/http/spa.ts`), so the browser notices a new version on the next visit.
+
+## Why only a service worker can get a push with the tab closed
+
+A push travels like this: our server → the browser maker's push service (Google, Mozilla, Apple) → the browser on your laptop or phone → our service worker. The last step needs code of ours that runs without a tab, and the service worker is the only such thing a website gets. That's why turning push on (`turnPushOn` in `subscribe.ts`) goes through it: `registration.pushManager.subscribe(...)` is called on the worker's registration, and the subscription it returns (an endpoint and two keys) belongs to the worker, not to the page. The page only hands it to our server (`POST /api/push/subscriptions`).
+
+Browsers add two rules:
+
+- **Every push must show a notification** (`userVisibleOnly: true`). A site can't use push to run code silently in the background. So `sw.js` shows something even for a push it can't read.
+- **Asking needs a click.** `Notification.requestPermission()` only shows the prompt when the person just clicked something, which is why `turnPushOn` asks for permission first, before anything else that waits. "Block" is final for the page: only the person can undo it, in the browser's site settings, so the Settings page explains that instead of offering a button (`pushState()` answers `denied`).
+
+Turning push off (`turnPushOff`) unsubscribes in the browser first, then tells the server. If the server can't be told, its next push to that browser gets a 410 from the push service and the server deletes the row itself (`web-push.md`). Signing out turns push off first (best effort, at most 2 seconds), so a shared computer doesn't keep showing the last person's notifications.
+
+## What makes the app installable
+
+"Install" means the browser can open Nitpilot in its own window with its own icon in the dock or on the home screen, like a native app. It's still the same website. A browser offers it when the site has:
+
+1. **HTTPS** (or `localhost` / `127.0.0.1` while developing).
+2. **A web app manifest** (`public/manifest.webmanifest`, linked from `index.html`): the app's name (from `BRAND`), `start_url: "/"` (the inbox), `display: "standalone"` (its own window, no address bar), its colors, and its icons.
+3. **Icons**: 192 and 512 pixels, plus a *maskable* one. Android cuts a maskable icon to whatever shape the phone uses (a circle, a squircle), so it fills the whole square and keeps the mark inside the middle 80% (the "safe zone"). The SVG `public/icons/icon.svg` is the one source; `npm run icons -w apps/web` renders every PNG from it with Playwright's Chromium, and the PNGs are committed. At 32 px and below the icon drops its little diamond: the SVG has a media query that hides it at that size.
+
+Chromium browsers then fire a `beforeinstallprompt` event. Left alone, Chrome shows its own small install bar. We keep the event instead (`src/push/install.ts`, started in `main.tsx` because the event can come before you're signed in) and show our own card when you're in the app: **Install** opens the browser's real install dialog, **Not now** is remembered in this browser. Inside the installed app (`display-mode: standalone`) the card never shows.
+
+In React terms: `install.ts` is a tiny external store, like a Zustand store with one value, read with `useSyncExternalStore` by the card.
+
+## The iOS Home Screen rule
+
+Safari on iPhone and iPad does Web Push, but only for a site that has been **added to the Home Screen** and opened from there (iOS 16.4 and later). In the browser tab, `PushManager` doesn't even exist. Safari also never fires `beforeinstallprompt`, so no site can offer an Install button: the person has to do it from Safari's Share menu.
+
+So on an iPhone or iPad outside the Home Screen app, `pushState()` answers `needs_home_screen` (checked before "unsupported", since the missing `PushManager` would otherwise say that), and the app shows the "Add Nitpilot to your Home Screen" sheet once after sign-in with the three steps, and again from Settings. Once opened from the Home Screen (`navigator.standalone` is true), push works as anywhere else. iPads that ask for the desktop site say they're a Mac; a "Mac" with a touch screen is treated as an iPad (`src/push/device.ts`).
+```
+
+
+`docs/why/web-push.md` pointed to "Task 20" for the service worker; now it points to the file:
+
+Modify `docs/why/web-push.md`:
+
+```diff
+diff --git a/docs/why/web-push.md b/docs/why/web-push.md
+index 8fe3069..8c01736 100644
+--- a/docs/why/web-push.md
++++ b/docs/why/web-push.md
+@@ -6,7 +6,7 @@ The code: `apps/server/src/tasks/push-notifier.ts` (who gets what, and keeping t
+ 
+ ## What a push service is
+ 
+-A web page can't keep a connection open to our server once its tab is closed. Browsers solve that for every site at once: each browser keeps one connection to its maker's **push service** (Google's FCM for Chrome, Mozilla's for Firefox, Apple's for Safari). A site that wants to notify you sends its message to that service, and the service passes it on to your browser, which wakes the site's **service worker** (a small script the browser runs in the background, Task 20) to show it.
++A web page can't keep a connection open to our server once its tab is closed. Browsers solve that for every site at once: each browser keeps one connection to its maker's **push service** (Google's FCM for Chrome, Mozilla's for Firefox, Apple's for Safari). A site that wants to notify you sends its message to that service, and the service passes it on to your browser, which wakes the site's **service worker** (a small script the browser runs in the background: `docs/why/service-workers-and-pwa.md`) to show it.
+ 
+ When you turn push on, the browser hands the page a **subscription**: an `endpoint` (a URL at the push service that means "this browser, this site") and two keys. The web app sends that to `POST /api/push/subscriptions`, and the server keeps one `PushSubscription` row per endpoint. Your laptop's Chrome and your phone are two rows.
+ 
+```
+
+
+Spec §16 "Platform" now names the install card and the sheet, and says that signing out removes the subscription first:
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index f28db95..a11612d 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -651,7 +651,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
+   4. `nitpilot repos add`.
+   5. `nitpilot start`.
+   The checklist ticks itself off as each step completes (`me.update` on `/ws/web`, §10).
+-- **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA. A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway.
++- **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA (the browser's install offer becomes the handoff's install card; on iOS, where only the Home Screen app gets push, a sheet explains how to add it). A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway. Signing out first removes that browser's push subscription (best effort, it never holds up signing out), so a shared browser stops getting the last person's notifications.
+ - **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. A chat open on `/ws/web` is checked again once that answer is 5 minutes old, the next time something is sent for it; losing access ends the subscription with `chat.error`. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of, and only those in repos they can still read: the same check, made once per repo and kept for 5 minutes. An expired GitHub sign-in makes the inbox a 401 that says so, and GitHub not answering makes it a 502.
+ - **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
+   - **Notes:** the author and the reviewers who are on Nitpilot.
+```
+
+
+- [ ] **Step 25: Look at it (controller, in the in-app browser)**
+
+Start the Playwright server (launch config `nitpilot-e2e-web`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build -w apps/web`), without `E2E_REAL_PUSH`: nothing is sent to a real push service. Sign maya in and set her cookie in the tab, as in Task 18's look:
+
+```bash
+C=http://127.0.0.1:4320
+curl -s -X POST $C/signin -d '{"login":"maya"}'
+```
+
+It prints `{"name":"nitpilot_session","value":"…"}`. In the tab on `http://127.0.0.1:4319`, run `document.cookie = "nitpilot_session=<value>; path=/"` and reload. Chromium's own install offer and the notification permission prompt **cannot be exercised in the in-app browser**: it reports `Notification.permission` as `'denied'`, like headless Chromium, and never fires a real `beforeinstallprompt`. So this look covers the files, the card and sheet drawn by our code, and the Settings states; the offer, the prompt, a real subscribe and a real push are the live step's job.
+
+- **Files:** `GET /sw.js` and `GET /manifest.webmanifest` answer 200 with `Cache-Control: no-cache` (`text/javascript` and `application/manifest+json`). In the console, `await navigator.serviceWorker.ready` gives a registration with an active worker whose `scriptURL` ends in `/sw.js` and scope `http://127.0.0.1:4319/`. The manifest's name is Nitpilot; the page's icon links are `icon.svg`, `favicon-32.png` and `apple-touch-icon.png`. The console has no errors (apart from 401s on `GET /api/me` before the cookie was set).
+- **Install card, 1280 px, light then dark.** Show the card by dispatching an offer from the console (for inspection only; the real event is the live step's):
+
+  ```js
+  window.dispatchEvent(Object.assign(new Event('beforeinstallprompt', { cancelable: true }), { prompt: async () => {}, userChoice: new Promise(() => {}) }));
+  ```
+
+  The card is 380 px wide, 24 px from the left and bottom edges, 18 px padding, 20 px radius, the 52 px icon, "Install Nitpilot" at 16/700, the two-line text at 13.5 px in `--fg2`, **Install** (accent) and **Not now** (outlined), both 38 px tall. In dark, the surface and border are the dark tokens. **Not now:** the card goes, `localStorage` has `nitpilot.install-dismissed` = `1`, and dispatching the offer again shows nothing. (Clear the key to see it again.)
+- **Install card, 375 px, light then dark.** The same dispatch: the card is 343 px wide with 16 px gutters on both sides. The text keeps the desktop wording "Its own window next to your editor…" (the handoff drew only the desktop prompt): a known minor.
+- **Settings, 1280 px, dark.** Open `/settings` (the avatar at the top of the sidebar): "Signed in as @maya", then the "Push notifications" heading and "Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page." (the in-app browser says `denied`), and Sign out.
+- **iPhone sheet, 375 px.** The in-app browser has no iPhone mode (its phone size pretends to be Android), so make the page itself see Safari on an iPhone from the console, without a reload (a reload drops it), then move inside the app so the Settings page reads the new answer:
+
+  ```js
+  const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => ua, configurable: true });
+  Object.defineProperty(navigator, 'userAgent', { get: () => ua, configurable: true });
+  Object.defineProperty(navigator, 'standalone', { get: () => false, configurable: true });
+  history.pushState({}, '', '/'); dispatchEvent(new PopStateEvent('popstate'));
+  setTimeout(() => { history.pushState({}, '', '/settings'); dispatchEvent(new PopStateEvent('popstate')); }, 300);
+  ```
+
+  `/settings` shows the "On iPhone?" tip and **Show me how**. Press it: a dimmed page, the sheet 8 px from the edges with a 28 px radius, the grabber, the 56 px icon, the title at 18/700, three numbered steps with tinted 28 px circles, the 48 px Got it, and the small diamond poking out below the sheet's bottom centre (not over Got it). Focus is on Got it (the ring is visible). Check light and dark. Esc closes it, the page stays on `/settings`, focus goes back to **Show me how**, and `localStorage` has `nitpilot.home-screen-sheet-seen` = `1`. There's no horizontal scroll. The sheet opening by itself once after sign-in needs the iPhone answer before the app starts, which this override can't give: `IosHomeScreenSheet.test.tsx` covers it.
+- Known minors: the sheet's icon can pop in a moment after the sheet opens (the SVG is fetched with `no-cache` on first use); the Settings tip is plain text, not the handoff's tinted box (Task 21 builds the real Notifications section); the install card covers the inbox's keyboard-hint footer until it is dismissed.
+
+- [ ] **Step 26: The live step (ask first)**
+
+Ask the person before running this: it sends a real notification through Google's push service (`fcm.googleapis.com`) to desktop Chrome. It runs in **desktop Google Chrome** on the Mac, at `http://127.0.0.1:4319`, as the Playwright server's test user **maya** (signed in through the control API; she is not a real GitHub account). It checks what no automated test can: Chrome's install offer and the installed window, the permission prompt, a real subscription, a real push arriving with no Nitpilot tab open, the click, and that the CLI shows no OS notification when a push arrived. (The sample notification has no chat behind it, so a click opens the inbox, not a chat.) The phone check waits for the acceptance run (Task 25).
+
+1. On macOS open **System Settings → Notifications → Google Chrome** and make sure **Allow notifications** is on, with the style **Banners** or **Alerts**. Otherwise Chrome receives the push and macOS shows nothing. Also look at **Script Editor** in the same list: the CLI's own notification (steps 13 and 15) is shown under that name.
+2. In a terminal at the repository root, run `npm run build -w apps/web`.
+3. In the same terminal run `E2E_REAL_PUSH=1 E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server`. Wait for the line `[web-e2e] app on http://127.0.0.1:4319, control API on http://127.0.0.1:4320, sending real pushes`. Leave it running. (It uses the test database, so don't run `npm test` while it is up.)
+4. Open a **second terminal** and run `curl -s -X POST http://127.0.0.1:4320/signin -d '{"login":"maya"}'`. It prints `{"name":"nitpilot_session","value":"…"}`. Copy the value.
+5. In Chrome, open a new window and go to `http://127.0.0.1:4319`. The landing page shows. Press **⌥⌘J** to open the Console, type `document.cookie = "nitpilot_session=<value>; path=/"` with the value from step 4, press **Enter**, close the DevTools, and press **⌘R**. You now see maya's inbox ("All quiet." or PR rows).
+6. Click the round **MA** avatar at the top right of the inbox sidebar. The Settings page opens: "Signed in as @maya", then a **Push notifications** section saying "Off for this browser." with a **Turn push on** button.
+7. Click **Turn push on**. Chrome shows "127.0.0.1:4319 wants to Show notifications" under the address bar. Click **Allow**. The text changes to "On: this browser gets a notification when you're needed." and the button to **Turn push off**.
+8. In the second terminal run `curl -s -X POST http://127.0.0.1:4320/notify -d '{"login":"maya"}'`. Expected: `{"reached":["maya"],"recorded":[]}`. A macOS notification appears at the top right: **Ready for your approval** / **octo/sandbox#1**, with the teal "n" icon and "127.0.0.1:4319". (If it prints `"reached":[]`, the send failed; the first terminal shows a `[push] …` warning with the push service's answer.)
+9. Close the Nitpilot tab with **⌘W**, keeping another Chrome window open. Run the same `curl` again. The notification appears again with no Nitpilot tab open. Click it: a new Chrome tab opens on `http://127.0.0.1:4319/` (maya's inbox).
+10. Leave that tab open and run the `curl` once more. Click the notification: Chrome focuses that same tab instead of opening a second one.
+11. On the Settings page (the **MA** avatar again) click **Turn push off**. The text goes back to "Off for this browser." Run the `curl`: expected `{"reached":[],"recorded":[]}` and no notification.
+12. Click **Turn push on** again (there's no prompt this time, Chrome remembers Allow), then click **Sign out**. The landing page shows. Run the `curl`: expected `{"reached":[],"recorded":[]}`, since signing out removed this browser's subscription first.
+13. The CLI check, part one (no push, so the CLI alerts). In the second terminal run `curl -s -X POST http://127.0.0.1:4320/cli -d '{"login":"maya"}'`. It prints nothing and returns after a few seconds: maya's CLI (the fake agent) is now connected to the server. Run the notify `curl`. Expected: `{"reached":["maya"],"recorded":[]}` and a macOS banner titled **Nitpilot** with "Ready for your approval: octo/sandbox#1" (from Script Editor). This is the fallback working: the CLI shows an OS notification because no push arrived.
+14. Sign maya in again, as in steps 4 and 5 (the cookie was removed when you signed out): `curl` for a new value, then in Chrome go to `http://127.0.0.1:4319`, open the Console, type the `document.cookie` line with the new value, press **Enter**, and press **⌘R**. Click the **MA** avatar, then **Turn push on** (Chrome doesn't ask again).
+15. The CLI check, part two (a push arrived, so the CLI stays quiet). Run the notify `curl`. Expected: `{"reached":["maya"],"recorded":[]}`, exactly **one** notification, the Chrome one ("Ready for your approval" from 127.0.0.1:4319), and **no** second banner titled **Nitpilot** from Script Editor. The CLI still prints the terminal line, but the Playwright server's CLI writes it to a buffer nobody reads here, so only the missing banner can be seen.
+16. Installing the app. Reload the Nitpilot tab (**⌘R**). In Chrome's address bar, at the right end, an install icon (a small monitor with a down arrow) appears, and our "Install Nitpilot" card shows at the bottom left of the page. (If the card hasn't appeared, open DevTools → **Application** → **Manifest** and check that "Installability" lists no errors.) Click **Not now** on the card: it goes, and reloading the page doesn't bring it back. To see it again, DevTools → **Application** → **Storage** → **Clear site data**, then reload. Now click **Install** on the card. Chrome's own dialog says "Install app?" with "Nitpilot" and the icon: click **Install**. A separate window opens on maya's inbox, its title bar is teal (#16707f) and no install card shows inside it. Close that window; to remove the app, open it again, click the **⋮** menu in its title bar and choose **Uninstall Nitpilot…**.
+17. Clean up. In Chrome click the site-info icon left of the address bar → **Site settings** → **Reset permissions**. In the first terminal press **Ctrl+C** (this stops maya's CLI too). Check that `lsof -iTCP:4319 -iTCP:4320 -sTCP:LISTEN` prints nothing.
+
+- [ ] **Step 27: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 79, CLI 333 passed + 14 skipped, server 971, web 260; end to end 6; Playwright 10; typecheck and lint clean.
+
+```bash
+git add apps/web apps/server/test/e2e eslint.config.mjs docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/why docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): the service worker, manifest and icons, push on and off in Settings, and the install card and iPhone sheet
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
