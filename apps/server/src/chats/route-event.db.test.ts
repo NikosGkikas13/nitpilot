@@ -40,6 +40,16 @@ describe('routing PR events', () => {
     expect(c.jobs).toEqual([expect.objectContaining({ type: 'review', userId: leo.id })]);
   });
 
+  it("starts each new participant with their own Auto defaults from Settings, so leo's first review runs as a draft", async () => {
+    const { maya, leo, deliver } = await setup();
+    await prisma.user.update({ where: { id: maya.id }, data: { autoAddress: false } });
+    await prisma.user.update({ where: { id: leo.id }, data: { autoReview: false } });
+    await deliver('pull_request', prEvent('opened'));
+    const c = await chat();
+    expect(c.participants.map((p) => [p.login, p.role, p.auto]).sort()).toEqual([['leo', 'reviewer', false], ['maya', 'author', false]]);
+    expect(c.jobs).toEqual([expect.objectContaining({ type: 'review', userId: leo.id, applyState: 'draft' })]);
+  });
+
   it('builds a chat it has never seen from the API, starting with pr_opened', async () => {
     const { deliver } = await setup();
     await deliver('pull_request_review_comment', reviewCommentEvent('created'));

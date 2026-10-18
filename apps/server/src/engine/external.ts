@@ -3,7 +3,7 @@ import { addMs, emit, say, system, type Ctx, type Ev } from './context';
 import { cancelJobs, enqueueJob, startReview } from './jobs';
 import { raisePoint } from './points';
 import {
-  activeJobFor, activeJobs, author, ensureParticipant, onNitpilot, participant, pointByThread, reviewers, who,
+  activeJobFor, activeJobs, author, ensureParticipant, handBackToAgent, onNitpilot, participant, pointByThread, reviewers, who,
 } from './state';
 import type { ExternalComment, Person } from './types';
 
@@ -42,6 +42,7 @@ export function onReviewSubmitted(ctx: Ctx, e: Ev<'external_review_submitted'>):
       commitSha: null,
       trusted: review.trusted,
     });
+    if (review.trusted) handBackToAgent(chat);
   }
   if (review.state === 'approved' && !byAuthor) approve(ctx, review.author);
 
@@ -80,6 +81,8 @@ export function onHeadUpdated(ctx: Ctx, e: Ev<'head_updated'>): void {
   // Our own push was announced with job.pushing; the address result handles it.
   if (e.ours || chat.phase === 'closed' || chat.isDraft) return;
   system(ctx, `New commits pushed (${e.after.slice(0, 7)})`, { before: e.before, after: e.after });
+  // Someone pushed: an author who discarded her drafted fixes gets her agent back for the next pass (spec §9 "Drafts").
+  handBackToAgent(chat);
 
   const address = activeJobs(chat).find((j) => j.jobType === 'address');
   const a = author(chat);
@@ -141,6 +144,8 @@ function handleComment(ctx: Ctx, c: ExternalComment): boolean {
     commitSha: c.commitSha,
     trusted: c.trusted,
   });
+  // A new trusted comment: an author who discarded her drafted fixes gets her agent back (spec §9 "Drafts").
+  if (c.trusted) handBackToAgent(chat);
   return c.trusted;
 }
 
@@ -153,6 +158,7 @@ function handleReply(ctx: Ctx, c: ExternalComment): void {
   // The reviewer pushes back on an answered GitHub point: it's open again (spec §9.2).
   if (pt.origin === 'github' && pt.status === 'addressed' && c.author.githubId === pt.raisedBy) {
     pt.status = 'open';
+    if (pt.trusted) handBackToAgent(chat);
     scheduleComments(ctx);
     return;
   }

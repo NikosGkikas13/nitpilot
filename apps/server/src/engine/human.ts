@@ -1,6 +1,6 @@
 import { advance } from './advance';
 import { system, type Ctx, type Ev } from './context';
-import { author, onNitpilot, pointByNumber, roundLimit } from './state';
+import { author, handBackToAgent, onNitpilot, pointByNumber, roundLimit } from './state';
 
 // What people decide in the web app about an escalated point (spec §9.2). Anything that doesn't apply changes
 // nothing: no line, no command. The route turns "nothing changed" into a 409 (http/routes/chat-actions.ts).
@@ -34,6 +34,8 @@ export function onPointContinue(ctx: Ctx, e: Ev<'point_continue'>): void {
   if (extraRound) chat.extraRounds += 1;
   pt.status = 'open';
   pt.escalationReason = null;
+  // A person handed the point back to the agents, so an author who discarded her drafted fixes gets her agent back too.
+  handBackToAgent(chat);
   system(ctx, `${e.who.login} let the agents continue on P${pt.number}${extraRound ? ' · one more round' : ''}`, { point: pt.number, extraRound });
   advance(ctx);
 }

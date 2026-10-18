@@ -3,8 +3,12 @@ import type {
   MessageKind, NotifyKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side, Snippet, TeamRules,
 } from '@nitpilot/protocol';
 
-/** A person on GitHub. `userId` is their Nitpilot account, or null when they don't use Nitpilot. */
-export type Person = { githubId: string; login: string; isBot: boolean; userId: string | null };
+/**
+ * A person on GitHub. `userId` is their Nitpilot account, or null when they don't use Nitpilot. `autoDefaults` are
+ * their Auto-review and Auto-fix settings for new chats (`User.autoReview` / `autoAddress`), filled in for people on
+ * Nitpilot (chats/people.ts); without them a new participant starts with Auto on.
+ */
+export type Person = { githubId: string; login: string; isBot: boolean; userId: string | null; autoDefaults?: { review: boolean; address: boolean } };
 
 /** A person in one chat, in one role. Identified by `githubId + role`. */
 export type ParticipantState = {
@@ -13,13 +17,18 @@ export type ParticipantState = {
   role: Role;
   userId: string | null;
   isBot: boolean;
-  /** Personal Auto switch. Always true in Plan 1. */
+  /** Personal Auto switch in this chat (spec §9 "Auto"). Off: the agent still runs, and its result waits as a draft. */
   auto: boolean;
   /** For reviewers: still a reviewer of this PR as far as Nitpilot is concerned. */
   requested: boolean;
   /** The head commit this reviewer's agent last reviewed; re-reviews start from here. */
   lastReviewedSha: string | null;
   attention: Attention;
+  /**
+   * For the author: they discarded their agent's drafted fixes, so the open points are theirs to do by hand. No
+   * address job starts until something changes (spec §9 "Drafts").
+   */
+  byHand: boolean;
 };
 
 /** One review point. Identified by its chat-local `number` (shown as P1, P2, …). */
@@ -63,6 +72,23 @@ export type JobView = {
   refundedAttempts: number;
   headSha: string;
   applyState: ApplyState;
+  /** For a publish job: the draft job whose commit it pushes. */
+  draftOfId: string | null;
+};
+
+/**
+ * A finished job whose result waits for its owner to Send or Discard (spec §9 "Drafts"). It is still waiting while
+ * the publish job that sends it is queued or running.
+ */
+export type DraftState = {
+  jobId: string;
+  participantGithubId: string;
+  role: Role;
+  jobType: JobType;
+  /** The head commit the agent worked on. */
+  headSha: string;
+  /** What the agent produced, stored with the job. */
+  result: JobResult;
 };
 
 /** Everything the engine knows about one PR chat. */
@@ -83,6 +109,8 @@ export type ChatState = {
   points: PointState[];
   /** Only jobs that are queued or running (plus any this decide() call changed). */
   jobs: JobView[];
+  /** The drafts waiting for their owner, oldest first. */
+  drafts: DraftState[];
 };
 
 /** A comment from GitHub, already normalized by the platform adapter. */
@@ -137,18 +165,27 @@ export type DomainEvent =
   /** Resolve on an escalated point, from the web app (spec §9.2): only the reviewer who raised it. */
   | { type: 'point_resolve'; who: Person; point: number }
   /** Continue on an escalated point, from the web app: the author or the reviewer who raised it. */
-  | { type: 'point_continue'; who: Person; point: number };
+  | { type: 'point_continue'; who: Person; point: number }
+  /** A person's Auto switch in this chat, from the web app: only for a role they have (spec §9 "Auto"). */
+  | { type: 'auto_changed'; who: Person; role: Role; on: boolean }
+  /** Send on a waiting draft, from the web app: only its owner (spec §9 "Drafts"). */
+  | { type: 'draft_send'; who: Person; jobId: string }
+  /** Discard on a waiting draft, from the web app: only its owner. */
+  | { type: 'draft_discard'; who: Person; jobId: string };
 
 export type ParticipantKey = { githubId: string; role: Role };
 
 /** Side effects the engine asks for. The dispatcher turns them into Job and Task rows. */
 export type Command =
-  | { type: 'enqueue_job'; participant: ParticipantKey; jobType: JobType; round: number; sinceSha: string | null; applyState: 'pending' | 'draft' }
+  /** `draftOfId` is set for a publish job: the draft it pushes. */
+  | { type: 'enqueue_job'; participant: ParticipantKey; jobType: JobType; round: number; sinceSha: string | null; applyState: 'pending' | 'draft'; draftOfId: string | null }
   | { type: 'cancel_jobs'; jobIds: string[]; reason: string }
   | { type: 'complete_job'; jobId: string; applyState: 'applied' | 'draft'; result: JobResult }
   /** `reason` is why its last run ended; the "waiting" status shows it (chats/activity.ts). */
   | { type: 'retry_job'; jobId: string; runAfter: Date; refundAttempt: boolean; reason: FailureReason }
   | { type: 'fail_job'; jobId: string; reason: FailureReason }
+  /** A queued job follows a new Auto setting; a draft is applied (sent) or discarded. */
+  | { type: 'set_apply_state'; jobId: string; applyState: ApplyState }
   | { type: 'schedule'; key: string; at: Date }
   | { type: 'unschedule'; key: string }
   | { type: 'upsert_summary' }

@@ -1,4 +1,5 @@
 import { emit, type Ctx } from './context';
+import { onAutoChanged, onDraftDiscard, onDraftSend } from './drafts';
 import {
   onCommentDeleted, onExternalComment, onHeadUpdated, onReviewSubmitted, onThreadResolved, onThreadUnresolved, onTimer,
 } from './external';
@@ -51,6 +52,9 @@ export function decide(input: DecideInput): DecideOutput {
     case 'signed_in_again': onSignedInAgain(ctx, event); break;
     case 'point_resolve': onPointResolve(ctx, event); break;
     case 'point_continue': onPointContinue(ctx, event); break;
+    case 'auto_changed': onAutoChanged(ctx, event); break;
+    case 'draft_send': onDraftSend(ctx, event); break;
+    case 'draft_discard': onDraftDiscard(ctx, event); break;
     default: {
       // If a new DomainEvent type is added without a case, this line stops compiling.
       const unhandled: never = event;

@@ -106,7 +106,7 @@ describe('retry_requested', () => {
   it("queues the reviewer's review again and clears the flag", () => {
     const out = run(reviewFailed(), { type: 'retry_requested', who: leo });
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
     expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
     expect(out.chat.phase).toBe('reviewing');
@@ -179,7 +179,7 @@ describe('signed_in_again (a person whose GitHub write failed signed in again)',
     expect(out.chat.participants.find((p) => p.login === 'maya')!.attention).toBe('none');
     expect(out.timeline[0]).toEqual(expect.objectContaining({ kind: 'system', body: 'maya signed in again' }));
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
   });
 

@@ -76,7 +76,7 @@ describe('point_continue', () => {
     expect(out.timeline.map((i) => i.body)).toEqual(['maya let the agents continue on P1', "maya's agent will work on 1 point"]);
     expect(out.timeline[0]).toMatchObject({ kind: 'system', pointNumber: null, data: { point: 1, extraRound: false } });
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
     expect(out.chat.phase).toBe('addressing');
     expect(out.chat.participants.map((p) => p.attention)).toEqual(['none', 'none', 'none']);

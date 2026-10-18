@@ -1,4 +1,4 @@
-import type { ApplyState, Attention, Category, EscalationReason, JobStatus, JobType, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side, Snippet, TeamRules } from '@nitpilot/protocol';
+import { JobResult, type ApplyState, type Attention, type Category, type EscalationReason, type JobStatus, type JobType, type Phase, type PointOrigin, type PointStatus, type Resolution, type Role, type Severity, type Side, type Snippet, type TeamRules } from '@nitpilot/protocol';
 import type { ChatState, PointState } from '../engine/types';
 import type { Point } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
@@ -16,6 +16,13 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
       points: { orderBy: { number: 'asc' } },
       jobs: { where: { status: { in: ['queued', 'running'] } }, include: { participant: true } },
     },
+  });
+
+  // The drafts waiting for their owner: finished jobs whose result wasn't applied (spec §9 "Drafts").
+  const drafts = await prisma.job.findMany({
+    where: { chatId, status: 'done', applyState: 'draft' },
+    include: { participant: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
 
   // Who uses Nitpilot can change after the chat started, so look it up fresh every time.
@@ -43,6 +50,7 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
       requested: p.requested,
       lastReviewedSha: p.lastReviewedSha,
       attention: p.attention as Attention,
+      byHand: p.byHand,
     })),
     points: row.points.map(toPointState),
     jobs: row.jobs.map((j) => ({
@@ -56,6 +64,16 @@ export async function loadChat(chatId: string): Promise<LoadedChat> {
       refundedAttempts: j.refundedAttempts,
       headSha: j.headSha,
       applyState: j.applyState as ApplyState,
+      draftOfId: j.draftOfId,
+    })),
+    drafts: drafts.map((j) => ({
+      jobId: j.id,
+      participantGithubId: j.participant.githubId,
+      role: j.participant.role as Role,
+      jobType: j.type as JobType,
+      headSha: j.headSha,
+      // Parsed, so a result stored before a field existed gets that field's default (`draft: null`).
+      result: JobResult.parse(j.result),
     })),
   };
   return { state, rules: rulesFromJson(row.repo.rulesJson) };

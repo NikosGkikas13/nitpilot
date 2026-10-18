@@ -174,6 +174,8 @@ model Participant {
   lastReviewedSha String?
   /// none | decision | manual_review | failed | drafts
   attention       String   @default("none")
+  /// The author discarded their agent's drafted fixes: no address job starts until something changes (spec §9 "Drafts").
+  byHand          Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   jobs            Job[]
@@ -287,6 +289,8 @@ model Job {
   result           Json?
   /// pending | applied | draft | discarded
   applyState       String      @default("pending")
+  /// For a publish job: the draft job whose commit it pushes. Only the device that made that draft can take it.
+  draftOfId        String?
   failure          String?
   cancelReason     String?
   createdAt        DateTime    @default(now())

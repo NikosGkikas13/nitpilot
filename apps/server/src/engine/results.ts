@@ -1,10 +1,13 @@
 import type { FailureReason, JobResult, PointReply, Severity } from '@nitpilot/protocol';
 import { advance } from './advance';
 import { addMs, emit, say, system, type Ctx, type Ev } from './context';
-import { startReview } from './jobs';
+import { settleDraft, startReview } from './jobs';
 import { applyDecision, applyReply, raisePoint } from './points';
 import { author, onNitpilot, participant, pointByNumber, reviewers, who } from './state';
 import type { JobView, ParticipantState } from './types';
+
+/** The job whose result is applied: one that just finished, or a draft being sent (drafts.ts). */
+export type AppliedJob = Pick<JobView, 'id' | 'jobType' | 'headSha'>;
 
 export function onJobCompleted(ctx: Ctx, e: Ev<'job_completed'>): void {
   const chat = ctx.chat;
@@ -15,13 +18,22 @@ export function onJobCompleted(ctx: Ctx, e: Ev<'job_completed'>): void {
   job.status = 'done';
   const p = participant(chat, job.participantGithubId, job.role);
 
+  if (job.jobType === 'publish') {
+    onPublished(ctx, job, p, e.result);
+    return;
+  }
+
   if (job.applyState === 'draft') {
     emit(ctx, { type: 'complete_job', jobId: job.id, applyState: 'draft', result: e.result });
+    // Add it to the waiting drafts too, so the rest of this decide() call holds this person's other work.
+    chat.drafts.push({ jobId: job.id, participantGithubId: job.participantGithubId, role: job.role, jobType: job.jobType, headSha: job.headSha, result: e.result });
     if (p) {
       p.attention = 'drafts';
       if (p.userId) emit(ctx, { type: 'notify', userIds: [p.userId], kind: 'drafts', pointNumbers: [] });
       system(ctx, `${p.login}'s agent finished; its work waits as drafts`, { jobId: job.id });
     }
+    // The person decides what happens to the draft; the rest of the chat carries on (spec §9.3).
+    advance(ctx);
     return;
   }
 
@@ -32,7 +44,22 @@ export function onJobCompleted(ctx: Ctx, e: Ev<'job_completed'>): void {
   advance(ctx);
 }
 
-function applyReview(ctx: Ctx, job: JobView, reviewer: ParticipantState, result: JobResult): void {
+/**
+ * A publish job pushed an author's draft commit (spec §9 "Drafts"). The draft's stored replies are applied exactly as
+ * an auto address pass would have been, with the commit that was just pushed.
+ */
+function onPublished(ctx: Ctx, job: JobView, authorP: ParticipantState | undefined, result: JobResult): void {
+  emit(ctx, { type: 'complete_job', jobId: job.id, applyState: 'applied', result });
+  const draft = ctx.chat.drafts.find((d) => d.jobId === job.draftOfId);
+  // A publish job pushes or fails, so a result without a push shouldn't come. If one does, the draft keeps waiting.
+  if (draft && authorP && result.push) {
+    settleDraft(ctx, draft, 'applied');
+    applyAddress(ctx, { id: draft.jobId, jobType: draft.jobType, headSha: draft.headSha }, authorP, { ...draft.result, push: result.push });
+  }
+  advance(ctx);
+}
+
+export function applyReview(ctx: Ctx, job: AppliedJob, reviewer: ParticipantState, result: JobResult): void {
   const chat = ctx.chat;
   say(ctx, { kind: 'job_summary', author: who(reviewer), jobId: job.id, body: result.summary, data: { jobType: job.jobType, counts: severityCounts(result) } });
 
@@ -63,7 +90,7 @@ function applyReview(ctx: Ctx, job: JobView, reviewer: ParticipantState, result:
   }
 }
 
-function applyAddress(ctx: Ctx, job: JobView, authorP: ParticipantState, result: JobResult): void {
+function applyAddress(ctx: Ctx, job: AppliedJob, authorP: ParticipantState, result: JobResult): void {
   const chat = ctx.chat;
   const commit = result.push?.to ?? null;
   // Our own push: move the head now, so the re-review queued below runs on the pushed commit instead
@@ -105,7 +132,7 @@ function severityCounts(result: JobResult): Partial<Record<Severity, number>> {
 
 export const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 30_000;
-/** The branch moved under the job: run it again on the new head right away. */
+/** The branch moved under the job: run it again on the new head right away. Not a publish job: its draft is out of date. */
 const RUN_AGAIN_NOW: readonly FailureReason[] = ['branch_moved'];
 /** Not the agent's fault: wait, then try again without counting an attempt. */
 const WAIT_MS: Partial<Record<FailureReason, number>> = {
@@ -117,6 +144,14 @@ const WAIT_MS: Partial<Record<FailureReason, number>> = {
 };
 /** Waits too short to be worth a line in the chat. */
 const QUIET_WAITS: readonly FailureReason[] = ['stale_head'];
+/**
+ * A publish job that fails like this won't work if tried again: the drafted fixes are out of date (spec §9 "Drafts").
+ * The CLI reports `setup_failed` when the draft commit is no longer in that clone (spec §11 "Publish jobs").
+ */
+const DRAFT_OUT_OF_DATE: Partial<Record<FailureReason, string>> = {
+  branch_moved: 'the branch moved',
+  setup_failed: 'the draft commit is gone from that computer',
+};
 
 export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const chat = ctx.chat;
@@ -126,6 +161,19 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const p = participant(chat, job.participantGithubId, job.role);
   const name = p ? `${p.login}'s agent` : 'An agent';
 
+  const outOfDate = job.jobType === 'publish' ? DRAFT_OUT_OF_DATE[e.reason] : undefined;
+  if (outOfDate) {
+    job.status = 'failed';
+    emit(ctx, { type: 'fail_job', jobId: job.id, reason: e.reason });
+    const draft = chat.drafts.find((d) => d.jobId === job.draftOfId);
+    if (draft) {
+      settleDraft(ctx, draft, 'discarded');
+      system(ctx, `The drafted fixes are out of date: ${outOfDate}`, { jobId: draft.jobId, reason: e.reason });
+    }
+    // The chat carries on from where it is: a new address pass, or a new draft with Auto off.
+    advance(ctx);
+    return;
+  }
   if (RUN_AGAIN_NOW.includes(e.reason)) {
     requeue(ctx, job, ctx.now, true, e.reason);
     return;
@@ -145,6 +193,12 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
 
   job.status = 'failed';
   emit(ctx, { type: 'fail_job', jobId: job.id, reason: e.reason });
+  if (job.jobType === 'publish') {
+    // The draft still waits, so its owner can Send it again or Discard it: their attention stays on the draft.
+    system(ctx, `Couldn't send ${p ? `${p.login}'s` : 'the'} drafted fixes (${e.reason.replaceAll('_', ' ')})`, { reason: e.reason, jobId: job.id });
+    if (p?.userId) emit(ctx, { type: 'notify', userIds: [p.userId], kind: 'failed', pointNumbers: [] });
+    return;
+  }
   system(ctx, `${name} couldn't finish (${e.reason.replaceAll('_', ' ')})`, { reason: e.reason, jobId: job.id });
   if (p) {
     p.attention = 'failed';

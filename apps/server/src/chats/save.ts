@@ -5,7 +5,7 @@ import type { Tx } from '../lib/prisma';
 // The engine returns a whole new ChatState; here we write only what changed.
 // Participants are matched by (githubId, role) and points by number: the engine's natural keys.
 
-const PARTICIPANT_FIELDS = ['login', 'userId', 'isBot', 'auto', 'requested', 'lastReviewedSha', 'attention'] as const;
+const PARTICIPANT_FIELDS = ['login', 'userId', 'isBot', 'auto', 'requested', 'lastReviewedSha', 'attention', 'byHand'] as const;
 const POINT_FIELDS = ['status', 'authorResolution', 'escalationReason', 'trusted', 'githubCommentId', 'githubThreadRootId'] as const;
 
 function pick<T, K extends keyof T>(obj: T, fields: readonly K[]): Pick<T, K> {

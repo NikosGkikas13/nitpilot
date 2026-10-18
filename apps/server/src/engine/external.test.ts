@@ -27,7 +27,7 @@ describe('loose GitHub comments (single-player author)', () => {
     const chat = soloAuthor({ points: [pointOf(1, sam, { origin: 'github', githubCommentId: '9001' })] });
     const out = run(chat, { type: 'timer', key: 'comments' });
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
     expect(out.chat.phase).toBe('addressing');
   });

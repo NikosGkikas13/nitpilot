@@ -65,7 +65,7 @@ describe('a human push while a review is running', () => {
     expect(out.chat.phase).toBe('reviewing');
     expect(notifiedReady(out)).toEqual([]);
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review', round: 1, sinceSha: 'head1', applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review', round: 1, sinceSha: 'head1', applyState: 'pending', draftOfId: null },
     ]);
   });
 

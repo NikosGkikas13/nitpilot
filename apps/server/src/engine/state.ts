@@ -1,7 +1,9 @@
-import type { JobStatus, Role, TeamRules } from '@nitpilot/protocol';
-import type { ChatState, JobView, ParticipantState, Person, PointState } from './types';
+import type { JobStatus, JobType, Role, TeamRules } from '@nitpilot/protocol';
+import type { ChatState, DraftState, JobView, ParticipantState, Person, PointState } from './types';
 
 const ACTIVE: readonly JobStatus[] = ['queued', 'running'];
+/** The author's side of a round: her agent fixing, or her drafted fixes being pushed. */
+const AUTHOR_JOBS: readonly JobType[] = ['address', 'publish'];
 
 export function author(chat: ChatState): ParticipantState | undefined {
   return chat.participants.find((p) => p.role === 'author');
@@ -29,13 +31,20 @@ export function ensureParticipant(chat: ChatState, person: Person, role: Role): 
     role,
     userId: person.userId,
     isBot: person.isBot,
-    auto: true,
+    auto: autoDefault(person, role),
     requested: false,
     lastReviewedSha: null,
     attention: 'none',
+    byHand: false,
   };
   chat.participants.push(created);
   return created;
+}
+
+/** A new participant's Auto switch: their own default for that side (spec §9 "Auto"), or on for someone not on Nitpilot. */
+function autoDefault(person: Person, role: Role): boolean {
+  if (!person.autoDefaults) return true;
+  return role === 'reviewer' ? person.autoDefaults.review : person.autoDefaults.address;
 }
 
 /** True when this person runs Nitpilot, so their agent can do work. Bots never do. */
@@ -49,6 +58,27 @@ export function activeJobs(chat: ChatState): JobView[] {
 
 export function activeJobFor(chat: ChatState, p: ParticipantState): JobView | undefined {
   return activeJobs(chat).find((j) => j.participantGithubId === p.githubId && j.role === p.role);
+}
+
+export function isAuthorJob(job: JobView): boolean {
+  return AUTHOR_JOBS.includes(job.jobType);
+}
+
+/**
+ * This person's draft that waits for them to Send or Discard it (spec §9 "Drafts"). There is at most one: while it
+ * waits, no other job of theirs starts in this chat. It still waits while its publish job runs.
+ */
+export function waitingDraftFor(chat: ChatState, p: ParticipantState): DraftState | undefined {
+  return chat.drafts.find((d) => d.participantGithubId === p.githubId && d.role === p.role);
+}
+
+/**
+ * Something changed since the author discarded her drafted fixes (a new trusted comment, someone's push, a Continue,
+ * or Auto turned on), so her agent may work on the open points again (spec §9 "Drafts").
+ */
+export function handBackToAgent(chat: ChatState): void {
+  const a = author(chat);
+  if (a) a.byHand = false;
 }
 
 /** How many address passes this chat may have: the team's max_rounds plus the ones people granted with Continue (spec §9.3). */

@@ -8,7 +8,7 @@ describe('pr_opened', () => {
     const out = run(chatState(), { type: 'pr_opened', author: maya, reviewers: [leo] });
     expect(out.chat.phase).toBe('reviewing');
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 'review', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
     expect(out.chat.participants.map((p) => [p.login, p.role, p.requested])).toEqual([
       ['maya', 'author', false],

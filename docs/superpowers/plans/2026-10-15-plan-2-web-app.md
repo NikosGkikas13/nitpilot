@@ -20219,7 +20219,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Discard (reviewer) → counts as reviewed, Ready reachable without new points; Discard (author) → no new address job on the next unrelated event, but a new trusted comment, Continue, Auto on, or a push that isn't ours starts one: **Auto off + Discard never loops.**
 - A removed reviewer's draft is discarded; one who approves keeps theirs.
 
-- [ ] **Step 1: Write the failing engine tests**
+- [x] **Step 1: Write the failing engine tests**
 
 First the builders, which every engine test uses (`byHand: false` on a participant, `drafts: []` on a chat, `draftOfId: null` on a job, and `draftOf` for a waiting draft). `types.ts` doesn't have these fields yet; Vitest doesn't typecheck, so the tests still run.
 
@@ -20837,12 +20837,12 @@ describe('Send and Discard that no longer apply change nothing (Review Focus 3)'
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: FAIL, 53 tests (132 pass, 185 in all). Of the 49 new tests, 45 fail: `decide` throws `Unhandled event` for `auto_changed`, `draft_send` and `draft_discard`; new participants get `auto: true` whatever their defaults say; a draft-mode result doesn't join `chat.drafts` and leaves the phase `reviewing`; a publish job's push and its out-of-date failures have no special case; the author's second address job isn't held. The 4 that pass are guards that must keep passing ("starts with Auto on for someone not on Nitpilot", "keeps the switch someone already set", "follows the usual retries for any other failure", "keeps waiting when they approve on GitHub"). The other 8 failures are older tests whose `enqueue_job` command now has to carry `draftOfId: null`.
 
-- [ ] **Step 3: The types and the helpers**
+- [x] **Step 3: The types and the helpers**
 
 `Person` gets its Auto defaults, a participant gets `byHand`, a job gets `draftOfId`, the chat gets its waiting `drafts`, the three events and `set_apply_state` join the unions:
 
@@ -21024,7 +21024,7 @@ index bcc81cf..be559a5 100644
    return ctx.rules.max_rounds + ctx.chat.extraRounds;
 ```
 
-- [ ] **Step 4: Queuing and the holds**
+- [x] **Step 4: Queuing and the holds**
 
 `jobs.ts`: `enqueueJob` now checks and then calls `addJob`, which the publish job uses directly (it has no Auto mode to pick); `settleDraft` is how a draft stops waiting; `startReview` holds a reviewer with a waiting draft and waits for a publish job like it does for an address job. `advance.ts`: a publish job counts as the author's work, and the author's branch holds while she has a waiting draft or is `byHand`.
 
@@ -21187,7 +21187,7 @@ index 68cd305..53d54f2 100644
    if (chat.addressPasses >= roundLimit(ctx)) {
 ```
 
-- [ ] **Step 5: Results: a draft waits, a publish job ends**
+- [x] **Step 5: Results: a draft waits, a publish job ends**
 
 `results.ts`: a draft-mode result joins `chat.drafts` and calls `advance`; a publish job's push applies the draft (`onPublished`); `branch_moved` and `setup_failed` on a publish job discard the draft (`DRAFT_OUT_OF_DATE`); any other publish failure leaves it waiting; `applyReview` and `applyAddress` take an `AppliedJob` so a draft can be applied under its own job id.
 
@@ -21327,7 +21327,7 @@ index cdf5fdd..9fbebac 100644
      p.attention = 'failed';
 ```
 
-- [ ] **Step 6: Auto, Send and Discard**
+- [x] **Step 6: Auto, Send and Discard**
 
 Create `drafts.ts` and wire the three events into `decide`:
 
@@ -21455,7 +21455,7 @@ index ac67970..3f564c8 100644
        const unhandled: never = event;
 ```
 
-- [ ] **Step 7: Hand the points back to the agent, and drop a leaving reviewer's draft**
+- [x] **Step 7: Hand the points back to the agent, and drop a leaving reviewer's draft**
 
 `byHand` clears when something new happens (a trusted comment or review, a reviewer's pushback, a push that isn't ours, Continue); `onReviewRequestRemoved` discards the leaving reviewer's draft.
 
@@ -21560,12 +21560,12 @@ index 025727a..c5a234d 100644
    advance(ctx);
 ```
 
-- [ ] **Step 8: Run them to see them pass**
+- [x] **Step 8: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: PASS, 185 tests (the 49 new ones and every older engine test). The server doesn't typecheck yet: `loadChat` doesn't fill `byHand`, `draftOfId` or `drafts` (Step 12).
 
-- [ ] **Step 9: Write the failing tests for the database side**
+- [x] **Step 9: Write the failing tests for the database side**
 
 Two tests go through the real dispatcher and the database. One checks that a new participant takes the Auto defaults from Settings, the other that a draft survives being saved and loaded: Discard on a reviewer's draft, and an author's Send, then Discard while the publish job is queued.
 
@@ -21655,12 +21655,12 @@ index 6b524b6..7a42518 100644
 +});
 ```
 
-- [ ] **Step 10: Run them to see them fail**
+- [x] **Step 10: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/route-event.db.test.ts src/chats/dispatch.db.test.ts`
 Expected: FAIL, 28 tests (4 pass, 32 in all). `loadChat` doesn't give the engine its `drafts`, so every dispatch throws `Cannot read properties of undefined (reading 'find')`, the two new tests among them.
 
-- [ ] **Step 11: The migration**
+- [x] **Step 11: The migration**
 
 In `apps/server/prisma/schema.prisma`:
 
@@ -21699,7 +21699,7 @@ ALTER TABLE "Job" ADD COLUMN     "draftOfId" TEXT;
 ALTER TABLE "Participant" ADD COLUMN     "byHand" BOOLEAN NOT NULL DEFAULT false;
 ```
 
-- [ ] **Step 12: Load, save and apply what the engine now asks for**
+- [x] **Step 12: Load, save and apply what the engine now asks for**
 
 `loadChat` reads `byHand` and `draftOfId` and fills `drafts`: a second query for finished jobs that are still drafts, oldest first, each result parsed with `JobResult` so a result stored before a field existed gets that field's default. `saveChatState` writes `byHand`. `applyCommands` writes `draftOfId` on a new job, and `set_apply_state` is a plain `job.update`.
 
@@ -21801,7 +21801,7 @@ index 199d314..8b727da 100644
 Run: `npm run test:db -w apps/server -- src/chats/route-event.db.test.ts src/chats/dispatch.db.test.ts`
 Expected: 31 pass, 1 fails (32 in all): the Auto defaults test, because leo's participant still gets `auto: true`. The new dispatcher tests pass now.
 
-- [ ] **Step 13: Carry each person's Auto defaults into the engine**
+- [x] **Step 13: Carry each person's Auto defaults into the engine**
 
 `withPeople` already looks up who is on Nitpilot; it now also reads their two Auto defaults and puts them on the `Person`. It selects the two columns on purpose: spreading `SETTINGS_COLUMNS` would also bring `dailyJobCap`.
 
@@ -21839,12 +21839,12 @@ index af58023..3246aed 100644
  
 ```
 
-- [ ] **Step 14: Run the database tests and typecheck**
+- [x] **Step 14: Run the database tests and typecheck**
 
 Run: `npm run test:db -w apps/server -- src/chats/route-event.db.test.ts src/chats/dispatch.db.test.ts && npm run typecheck -w apps/server`
 Expected: PASS, 32 tests; typecheck clean.
 
-- [ ] **Step 15: The spec**
+- [x] **Step 15: The spec**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, §8's `Participant` row gains `byHand`, and §9 "Drafts" now says what happens when the draft commit is gone from the laptop (`setup_failed`), when a publish job fails for good, when Discard comes while the publish job is queued or running, and when a reviewer leaves while their draft waits:
 
@@ -21875,7 +21875,7 @@ index 2c29af4..94214aa 100644
    2. Load the chat's state.
 ```
 
-- [ ] **Step 16: Run everything, then commit**
+- [x] **Step 16: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 61, CLI 301 passed + 14 skipped, server 876, web 158; end to end 5; Playwright 6; typecheck, lint and build clean.

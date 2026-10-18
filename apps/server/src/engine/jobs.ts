@@ -1,51 +1,63 @@
 import type { JobType } from '@nitpilot/protocol';
 import { emit, system, type Ctx } from './context';
-import { activeJobFor, activeJobs, onNitpilot } from './state';
-import type { JobView, ParticipantState } from './types';
+import { activeJobFor, activeJobs, isAuthorJob, onNitpilot, participant, waitingDraftFor } from './state';
+import type { Command, DraftState, JobView, ParticipantState } from './types';
 
-/** Auto is on when the team allows it and the person has it on (personal Auto is always on in Plan 1). */
+/**
+ * Auto is on when the team allows it and the person has it on (spec §9 "Auto"). A team rule that forbids an auto
+ * mode (`auto.review` / `auto.address: false` in .nitpilot.yml) wins over the switch.
+ */
 export function autoFor(ctx: Ctx, p: ParticipantState, jobType: JobType): boolean {
   const teamAllows = jobType === 'address' ? ctx.rules.auto.address : ctx.rules.auto.review;
   return teamAllows && p.auto;
 }
 
 /**
- * Queue a job for a participant. Returns false when they can't take one: they're not on
+ * Queue an agent job for a participant. Returns false when they can't take one: they're not on
  * Nitpilot, or they already have an active job (at most one each, spec §9.4).
  */
 export function enqueueJob(ctx: Ctx, p: ParticipantState, jobType: JobType, sinceSha: string | null): boolean {
   if (!onNitpilot(p) || activeJobFor(ctx.chat, p)) return false;
   const applyState = autoFor(ctx, p, jobType) ? 'pending' : 'draft';
+  addJob(ctx, p, { jobType, sinceSha, applyState, draftOfId: null });
+  if (p.attention === 'failed' || p.attention === 'manual_review') p.attention = 'none';
+  return true;
+}
+
+type NewJob = Pick<Extract<Command, { type: 'enqueue_job' }>, 'jobType' | 'sinceSha' | 'applyState' | 'draftOfId'>;
+
+/** Queue a job, with no checks: the caller made them. */
+export function addJob(ctx: Ctx, p: ParticipantState, job: NewJob): void {
   // Add it to the working copy too, so later rules in this same decide() call see it.
   // The id is a placeholder; the dispatcher creates the real row from the command.
   ctx.chat.jobs.push({
     id: `new:${ctx.commands.length}`,
     participantGithubId: p.githubId,
     role: p.role,
-    jobType,
+    jobType: job.jobType,
     status: 'queued',
     round: ctx.chat.round,
     attempt: 0,
     refundedAttempts: 0,
     headSha: ctx.chat.headSha,
-    applyState,
+    applyState: job.applyState,
+    draftOfId: job.draftOfId,
   });
-  if (p.attention === 'failed' || p.attention === 'manual_review') p.attention = 'none';
-  emit(ctx, {
-    type: 'enqueue_job',
-    participant: { githubId: p.githubId, role: p.role },
-    jobType,
-    round: ctx.chat.round,
-    sinceSha,
-    applyState,
-  });
-  return true;
+  emit(ctx, { type: 'enqueue_job', participant: { githubId: p.githubId, role: p.role }, round: ctx.chat.round, ...job });
 }
 
 export function cancelJobs(ctx: Ctx, jobs: JobView[], reason: string): void {
   if (jobs.length === 0) return;
   for (const j of jobs) j.status = 'cancelled';
   emit(ctx, { type: 'cancel_jobs', jobIds: jobs.map((j) => j.id), reason });
+}
+
+/** A draft was sent (`applied`) or discarded: it stops waiting, and its owner has nothing left to decide about it. */
+export function settleDraft(ctx: Ctx, draft: DraftState, applyState: 'applied' | 'discarded'): void {
+  ctx.chat.drafts = ctx.chat.drafts.filter((d) => d.jobId !== draft.jobId);
+  emit(ctx, { type: 'set_apply_state', jobId: draft.jobId, applyState });
+  const owner = participant(ctx.chat, draft.participantGithubId, draft.role);
+  if (owner?.attention === 'drafts') owner.attention = 'none';
 }
 
 /**
@@ -56,8 +68,10 @@ export function startReview(ctx: Ctx, reviewer: ParticipantState, opts: { manual
   const chat = ctx.chat;
   if (chat.phase === 'closed' || chat.isDraft) return false;
   if (!reviewer.requested || !onNitpilot(reviewer)) return false;
-  // While the author's agent is fixing, wait: reviews start after that pass (results.ts).
-  if (activeJobs(chat).some((j) => j.jobType === 'address')) return false;
+  // Their agent's last review waits as a draft: they Send or Discard it first (spec §9 "Drafts").
+  if (waitingDraftFor(chat, reviewer)) return false;
+  // While the author's agent is fixing (or her drafted fixes are being pushed), wait: reviews start after that pass (results.ts).
+  if (activeJobs(chat).some(isAuthorJob)) return false;
 
   if (!chat.trusted && !opts.manual) {
     if (reviewer.attention !== 'manual_review') {

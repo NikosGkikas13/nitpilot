@@ -22,14 +22,21 @@ function peopleIn(event: DomainEvent): Person[] {
 }
 
 /**
- * Fill in who uses Nitpilot (`userId`), and trust the bots the team listed in `trusted_bots`.
- * Platform adapters don't know about Nitpilot accounts; this is where they're added.
+ * Fill in who uses Nitpilot (`userId`) and their Auto defaults for new chats (`autoDefaults`, from Settings), and
+ * trust the bots the team listed in `trusted_bots`. Platform adapters don't know about Nitpilot accounts; this is
+ * where they're added.
  */
 export async function withPeople(event: DomainEvent, rules: TeamRules): Promise<DomainEvent> {
   const githubIds = peopleIn(event).map((p) => p.githubId);
-  const users = githubIds.length ? await prisma.user.findMany({ where: { githubId: { in: githubIds } }, select: { id: true, githubId: true } }) : [];
-  const userIdOf = new Map(users.map((u) => [u.githubId, u.id]));
-  const fill = (p: Person): Person => ({ ...p, userId: p.isBot ? null : (userIdOf.get(p.githubId) ?? null) });
+  const users = githubIds.length
+    ? await prisma.user.findMany({ where: { githubId: { in: githubIds } }, select: { id: true, githubId: true, autoReview: true, autoAddress: true } })
+    : [];
+  const userOf = new Map(users.map((u) => [u.githubId, u]));
+  const fill = (p: Person): Person => {
+    const user = p.isBot ? undefined : userOf.get(p.githubId);
+    if (!user) return { ...p, userId: null };
+    return { ...p, userId: user.id, autoDefaults: { review: user.autoReview, address: user.autoAddress } };
+  };
   const trusted = (p: Person, already: boolean) => already || (p.isBot && rules.trusted_bots.includes(p.login));
   const comment = (c: ExternalComment): ExternalComment => ({ ...c, author: fill(c.author), trusted: trusted(c.author, c.trusted) });
 

@@ -1,6 +1,6 @@
 import { DEFAULT_RULES, type JobResult, type JobType, type NewPoint, type Role, type TeamRules } from '@nitpilot/protocol';
 import { decide } from './decide';
-import type { ChatState, Command, DecideOutput, DomainEvent, JobView, ParticipantState, Person, PointState } from './types';
+import type { ChatState, Command, DecideOutput, DomainEvent, DraftState, JobView, ParticipantState, Person, PointState } from './types';
 
 // Builders for engine tests. Each returns a fresh object; pass overrides for what a test cares about.
 
@@ -27,6 +27,7 @@ export function participantOf(p: Person, role: Role, over: Partial<ParticipantSt
     requested: role === 'reviewer',
     lastReviewedSha: null,
     attention: 'none',
+    byHand: false,
     ...over,
   };
 }
@@ -46,6 +47,7 @@ export function chatState(over: Partial<ChatState> = {}): ChatState {
     participants: [],
     points: [],
     jobs: [],
+    drafts: [],
     ...over,
   };
 }
@@ -93,8 +95,14 @@ export function jobOf(id: string, p: Person, role: Role, jobType: JobType, over:
     refundedAttempts: 0,
     headSha: 'head1',
     applyState: 'pending',
+    draftOfId: null,
     ...over,
   };
+}
+
+/** A finished job of `p`'s that waits as a draft. Pair it with `attention: 'drafts'` on the participant, as the engine leaves them. */
+export function draftOf(jobId: string, p: Person, role: Role, jobType: JobType, over: Partial<DraftState> = {}): DraftState {
+  return { jobId, participantGithubId: p.githubId, role, jobType, headSha: 'head1', result: result(), ...over };
 }
 
 export function newPoint(over: Partial<NewPoint> = {}): NewPoint {

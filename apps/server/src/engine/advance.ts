@@ -1,7 +1,7 @@
 import { emit, system, type Ctx } from './context';
 import { enqueueJob, startReview } from './jobs';
 import { escalatePoints } from './points';
-import { activeJobs, author, isActionable, onNitpilot, reviewers, roundLimit } from './state';
+import { activeJobs, author, isActionable, isAuthorJob, onNitpilot, reviewers, roundLimit, waitingDraftFor } from './state';
 import type { ChatState, ParticipantState } from './types';
 
 /**
@@ -13,11 +13,12 @@ export function advance(ctx: Ctx): void {
   if (chat.phase === 'closed' || chat.isDraft) return;
 
   const active = activeJobs(chat);
-  if (active.some((j) => j.jobType !== 'address')) {
+  if (active.some((j) => !isAuthorJob(j))) {
     chat.phase = 'reviewing';
     return;
   }
-  if (active.some((j) => j.jobType === 'address')) {
+  // The author's agent is fixing, or her drafted fixes are being pushed.
+  if (active.length > 0) {
     chat.phase = 'addressing';
     return;
   }
@@ -46,7 +47,7 @@ export function advance(ctx: Ctx): void {
       // Catch them up first: a re-review since the commit they last saw, or, on an outside
       // contributor's PR, a request to start it by hand. A failed job or waiting drafts is left
       // for a person to decide.
-      const waitsForPerson = (r: ParticipantState) => r.attention === 'failed' || r.attention === 'drafts';
+      const waitsForPerson = (r: ParticipantState) => r.attention === 'failed' || waitingDraftFor(chat, r) !== undefined;
       const started = behind.filter((r) => !waitsForPerson(r)).map((r) => startReview(ctx, r)).some(Boolean);
       if (!started) chat.phase = 'idle';
       return;
@@ -56,8 +57,15 @@ export function advance(ctx: Ctx): void {
   }
 
   const a = author(chat);
-  if (!a || !onNitpilot(a)) {
-    chat.phase = 'addressing'; // the human author's turn
+  // The human author's turn: she isn't on Nitpilot, or she discarded her agent's drafted fixes and works on the
+  // points by hand (spec §9 "Drafts"). No agent pass runs, so the round limit doesn't apply.
+  if (!a || !onNitpilot(a) || a.byHand) {
+    chat.phase = 'addressing';
+    return;
+  }
+  // Her agent's drafted fixes wait for her to Send or Discard them: no other job of hers starts.
+  if (waitingDraftFor(chat, a)) {
+    chat.phase = 'addressing';
     return;
   }
   if (chat.addressPasses >= roundLimit(ctx)) {

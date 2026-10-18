@@ -1,7 +1,7 @@
 import { advance } from './advance';
 import { say, system, type Ctx, type Ev } from './context';
-import { cancelJobs, startReview } from './jobs';
-import { activeJobFor, activeJobs, author, ensureParticipant, participant, pointList, reviewers, who } from './state';
+import { cancelJobs, settleDraft, startReview } from './jobs';
+import { activeJobFor, activeJobs, author, ensureParticipant, participant, pointList, reviewers, waitingDraftFor, who } from './state';
 
 export function onPrOpened(ctx: Ctx, e: Ev<'pr_opened'>): void {
   // GitHub sends `opened` once, but a catch-up and a webhook can both meet a new PR. Only this adds the
@@ -74,6 +74,9 @@ export function onReviewRequestRemoved(ctx: Ctx, e: Ev<'review_request_removed'>
   // Their unresolved agent points are withdrawn (spec §9.2).
   const withdrawn = chat.points.filter((p) => p.raisedBy === r.githubId && p.origin === 'agent' && p.status !== 'resolved');
   for (const p of withdrawn) p.status = 'resolved';
+  // So is a draft of theirs that waits: only a reviewer can send it, and nothing is raised.
+  const draft = waitingDraftFor(chat, r);
+  if (draft) settleDraft(ctx, draft, 'discarded');
   const suffix = withdrawn.length > 0 ? `; ${pointList(withdrawn)} withdrawn` : '';
   system(ctx, `${r.login} is no longer a reviewer${suffix}`);
   advance(ctx);

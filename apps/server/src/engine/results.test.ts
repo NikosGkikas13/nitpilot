@@ -48,7 +48,7 @@ describe('review results (agent-to-agent)', () => {
     expect(out.chat.phase).toBe('addressing');
     expect(commandsOf(out, 'complete_job')[0]).toMatchObject({ jobId: 'job-r1', applyState: 'applied' });
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: maya.githubId, role: 'author' }, jobType: 'address', round: 1, sinceSha: null, applyState: 'pending', draftOfId: null },
     ]);
     expect(commandsOf(out, 'post_review')).toEqual([]);
     expect(commandsOf(out, 'upsert_summary')).toHaveLength(1);
@@ -93,7 +93,7 @@ describe('address results', () => {
     ]);
     expect(out.chat).toMatchObject({ round: 2, addressPasses: 1, phase: 'reviewing' });
     expect(commandsOf(out, 'enqueue_job')).toEqual([
-      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review', round: 2, sinceSha: 'head1', applyState: 'pending' },
+      { type: 'enqueue_job', participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review', round: 2, sinceSha: 'head1', applyState: 'pending', draftOfId: null },
     ]);
     expect(commandsOf(out, 'post_thread_replies')).toEqual([]);
   });

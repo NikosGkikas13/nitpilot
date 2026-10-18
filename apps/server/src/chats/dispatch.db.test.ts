@@ -114,3 +114,54 @@ describe('Dispatcher', () => {
     expect(await prisma.job.findFirstOrThrow({ where: { chatId: chat.id } })).toMatchObject({ userId: kim.id, type: 'review' });
   });
 });
+
+describe('Dispatcher, drafts (the plumbing for spec §9 "Drafts"; the rules are table-tested in engine/drafts.test.ts)', () => {
+  /** maya's PR reviewed by leo, with these Auto defaults for new chats. Every job finishes when `finish` is called. */
+  async function draftScene(defaults: { leoReview: boolean; mayaAddress: boolean }) {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const chat = await makeChat((await makeRepo()).id, { authorGithubId: maya.githubId });
+    const mayaP: Person = { githubId: maya.githubId, login: 'maya', isBot: false, userId: maya.id, autoDefaults: { review: true, address: defaults.mayaAddress } };
+    const leoP: Person = { githubId: leo.githubId, login: 'leo', isBot: false, userId: leo.id, autoDefaults: { review: defaults.leoReview, address: true } };
+    const dispatcher = new Dispatcher();
+    await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: mayaP, reviewers: [leoP] });
+    /** Run the queued job and report this result for it. */
+    const finish = async (result: ReturnType<typeof samples.jobResult>) => {
+      const job = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, status: 'queued' } });
+      await prisma.job.update({ where: { id: job.id }, data: { status: 'running', attempt: 1 } });
+      await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: job.id, attempt: 1, result });
+      return job;
+    };
+    const participant = (role: 'author' | 'reviewer') => prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role } });
+    return { chat, mayaP, leoP, dispatcher, finish, participant };
+  }
+
+  it("keeps leo's draft-mode review waiting; Discard marks it and counts as reviewed", async () => {
+    const { chat, leoP, dispatcher, finish, participant } = await draftScene({ leoReview: false, mayaAddress: true });
+    const review = await finish(samples.jobResult());
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: review.id } })).toMatchObject({ status: 'done', applyState: 'draft' });
+    expect(await prisma.point.count({ where: { chatId: chat.id } })).toBe(0);
+
+    await dispatcher.dispatch(chat.id, { type: 'draft_discard', who: leoP, jobId: review.id });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: review.id } })).toMatchObject({ applyState: 'discarded' });
+    expect(await participant('reviewer')).toMatchObject({ attention: 'none', lastReviewedSha: chat.headSha });
+  });
+
+  it("queues a publish job for maya's drafted fixes; Discard while it's queued cancels it and leaves the points to her", async () => {
+    const { chat, mayaP, dispatcher, finish, participant } = await draftScene({ leoReview: true, mayaAddress: false });
+    await finish(samples.jobResult());
+    const fixes = { ...samples.jobResult(), points: [], replies: [{ point: 1, resolution: 'fixed' as const, comment: 'Guarded.' }], draft: { sha: 'd'.repeat(40), from: chat.headSha, files: [], diff: null } };
+    const address = await finish(fixes);
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: address.id } })).toMatchObject({ type: 'address', status: 'done', applyState: 'draft' });
+
+    await dispatcher.dispatch(chat.id, { type: 'draft_send', who: mayaP, jobId: address.id });
+    const publish = await prisma.job.findFirstOrThrow({ where: { chatId: chat.id, status: 'queued' } });
+    expect(publish).toMatchObject({ type: 'publish', draftOfId: address.id, applyState: 'pending' });
+
+    await dispatcher.dispatch(chat.id, { type: 'draft_discard', who: mayaP, jobId: address.id });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: publish.id } })).toMatchObject({ status: 'cancelled', cancelReason: 'draft_discarded', activeFor: null });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: address.id } })).toMatchObject({ applyState: 'discarded' });
+    expect(await participant('author')).toMatchObject({ attention: 'none', byHand: true });
+    expect(await prisma.job.count({ where: { chatId: chat.id, status: 'queued' } })).toBe(0);
+  });
+});

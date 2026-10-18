@@ -31,7 +31,7 @@ export async function applyCommands(tx: Tx, chatId: string, commands: Command[],
         if (p.userId !== user.id) await tx.participant.update({ where: { id: p.id }, data: { userId: user.id } });
         const chat = await tx.prChat.findUniqueOrThrow({ where: { id: chatId }, select: { headSha: true } });
         await tx.job.create({
-          data: { chatId, participantId: p.id, activeFor: p.id, userId: user.id, type: cmd.jobType, round: cmd.round, headSha: chat.headSha, sinceSha: cmd.sinceSha, applyState: cmd.applyState, runAfter: now },
+          data: { chatId, participantId: p.id, activeFor: p.id, userId: user.id, type: cmd.jobType, round: cmd.round, headSha: chat.headSha, sinceSha: cmd.sinceSha, applyState: cmd.applyState, draftOfId: cmd.draftOfId, runAfter: now },
         });
         effects.jobsChanged = true;
         break;
@@ -57,6 +57,10 @@ export async function applyCommands(tx: Tx, chatId: string, commands: Command[],
         break;
       case 'fail_job':
         await tx.job.update({ where: { id: cmd.jobId }, data: { status: 'failed', failure: cmd.reason, activeFor: null, leaseExpiresAt: null } });
+        effects.jobsChanged = true;
+        break;
+      case 'set_apply_state':
+        await tx.job.update({ where: { id: cmd.jobId }, data: { applyState: cmd.applyState } });
         effects.jobsChanged = true;
         break;
       case 'schedule':
