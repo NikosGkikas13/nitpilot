@@ -1,14 +1,20 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { JobResult } from '@nitpilot/protocol';
 import { prisma } from '../../src/lib/prisma';
+import { GithubClient } from '../../src/platform/github/client';
+import { makeGithubSignIn } from '../db';
+import { fakeFetch } from '../fake-fetch';
 import { prEvent, pull } from '../fixtures/github';
+import { sessionCookieFor } from '../http';
 import { startE2e, waitFor, type E2e, type RunningCli } from './harness';
 
 let current: E2e | undefined;
 beforeEach(async () => {
   current = undefined; // if startE2e() throws, afterEach has nothing to close (and never closes the last test's)
-  current = await startE2e();
+  // GitHub lets anyone signed in read the repo, so the chat's own routes (Send) answer.
+  current = await startE2e({ github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })) });
 });
 afterEach(() => current?.close());
 /** The running end to end setup of this test. */
@@ -87,6 +93,47 @@ describe('Plan 1 end to end: when things go differently', () => {
       { sha: human, author: 'maya', job: '' },
       { sha: e2e.github.headSha, author: 'maya', job: '' },
     ]);
+    expect(await prisma.rawEvent.count({ where: { status: { not: 'processed' } } })).toBe(0);
+  });
+
+  it("keeps maya's fixes as a draft while her Auto-fix is off, and pushes them from her CLI when she presses Send; leo's re-review follows", async () => {
+    const e2e = running();
+    await prisma.user.update({ where: { id: e2e.users.maya.id }, data: { autoAddress: false } }); // her Settings, before the PR opens
+    const maya = await e2e.startCli('maya');
+    await e2e.startCli('leo');
+    // GitHub's webhook for the push, after it and before the result arrives (as in agent-to-agent.e2e.test.ts).
+    e2e.intercept(async (_conn, msg) => {
+      if (msg.t !== 'job.complete' || !msg.d.result.push) return;
+      const { from, to } = msg.d.result.push;
+      await e2e.deliver('pull_request', prEvent('synchronize', { before: from, after: to, pull: { head: { ...pull().head, sha: to } } }));
+    });
+    await e2e.openPr();
+
+    // The address pass runs, and its commit waits on maya's laptop: nothing reached the branch.
+    await waitFor(async () => (await jobOf('address')).some((j) => j.status === 'done' && j.applyState === 'draft'), "maya's fixes to wait as a draft", 60_000);
+    const address = (await jobOf('address'))[0]!;
+    const { draft } = JobResult.parse(address.result);
+    expect(draft).toMatchObject({ from: e2e.github.headSha, files: [{ path: 'src/orders.ts', adds: 1, dels: 1 }], diff: expect.stringContaining('+export const pageSize = 25;') });
+    expect(e2e.github.branchLog()[0]!.sha).toBe(e2e.github.headSha);
+    expect((await e2e.chat()).phase).toBe('addressing');
+
+    // maya presses Send in the web app.
+    await makeGithubSignIn(e2e.users.maya.id);
+    const chat = await e2e.chat();
+    const res = await fetch(`${e2e.url}/api/chats/${chat.id}/drafts/${address.id}/send`, { method: 'POST', headers: { cookie: await sessionCookieFor(e2e.users.maya.id), origin: e2e.url } });
+    expect(res.status).toBe(200);
+    await waitFor(async () => (await e2e.chat()).phase === 'ready', 'the chat to be ready', 60_000);
+
+    const done = await e2e.chat();
+    expect(done.jobs.map((j) => [j.type, j.status]).sort()).toEqual([['address', 'done'], ['publish', 'done'], ['re_review', 'done'], ['review', 'done']]);
+    expect(done.jobs.find((j) => j.type === 'address')!.applyState).toBe('applied');
+    expect(done.jobs.find((j) => j.type === 'publish')!.draftOfId).toBe(address.id);
+    // The drafted commit itself is on the branch: maya's, with the address job's trailer, on top of the PR's head.
+    expect(e2e.github.branchLog().slice(0, 2)).toEqual([
+      { sha: draft!.sha, author: 'maya', job: address.id },
+      { sha: e2e.github.headSha, author: 'maya', job: '' },
+    ]);
+    expect(maya.lines.join('\n')).toContain('→ publish of octo/sandbox#42');
     expect(await prisma.rawEvent.count({ where: { status: { not: 'processed' } } })).toBe(0);
   });
 });

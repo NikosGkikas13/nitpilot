@@ -24213,7 +24213,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Pruning removes only draft refs older than 14 days and leaves other refs alone.
 - e2e: Auto off for the author → the address result waits as a draft; Send (route) → the publish job runs on the author's CLI and the re-review follows.
 
-- [ ] **Step 1: Write the failing tests for describing and pruning drafts**
+- [x] **Step 1: Write the failing tests for describing and pruning drafts**
 
 Create `apps/cli/src/runner/draft.test.ts`:
 
@@ -24343,7 +24343,7 @@ describe('pruneOldDraftRefs', () => {
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail, then add `draft.ts`**
+- [x] **Step 2: Run them to see them fail, then add `draft.ts`**
 
 Run: `npm test -w apps/cli -- src/runner/draft.test.ts`
 Expected: FAIL: the file doesn't load (`Cannot find module './draft'`), so none of its 6 tests run.
@@ -24445,7 +24445,7 @@ export async function pruneOldDraftRefs(opts: PruneOptions): Promise<number> {
 Run: `npm test -w apps/cli -- src/runner/draft.test.ts`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 3: Write the failing tests for a draft address job's result**
+- [x] **Step 3: Write the failing tests for a draft address job's result**
 
 A draft address job's result must now name and describe the commit, and every path of `commitAndPush` answers with both `push` and `draft`:
 
@@ -24501,7 +24501,7 @@ index 36b3f48..ac422ba 100644
  
 ```
 
-- [ ] **Step 4: Run them to see them fail, then let `commitAndPush` describe the draft**
+- [x] **Step 4: Run them to see them fail, then let `commitAndPush` describe the draft**
 
 Run: `npm test -w apps/cli -- src/runner/push.test.ts`
 Expected: FAIL, 3 tests (11 pass): two get `{ push: null }` where `{ push: null, draft: null }` is expected, and the draft test gets `undefined` where the description is expected.
@@ -24643,7 +24643,7 @@ index 7834204..8b665a9 100644
 Run: `npm test -w apps/cli -- src/runner/push.test.ts`
 Expected: PASS, 14 tests.
 
-- [ ] **Step 5: Write the failing tests for a publish job**
+- [x] **Step 5: Write the failing tests for a publish job**
 
 Create `apps/cli/src/runner/publish.test.ts`:
 
@@ -24821,7 +24821,7 @@ describe('publishDraft', () => {
 });
 ```
 
-- [ ] **Step 6: Run them to see them fail, then add `publish.ts`**
+- [x] **Step 6: Run them to see them fail, then add `publish.ts`**
 
 Run: `npm test -w apps/cli -- src/runner/publish.test.ts`
 Expected: FAIL: the file doesn't load (`Cannot find module './publish'`), so none of its 12 tests run.
@@ -24959,7 +24959,7 @@ async function commitAt(place: GitPlace, ref: string): Promise<string | null> {
 Run: `npm test -w apps/cli -- src/runner/publish.test.ts`
 Expected: PASS, 12 tests.
 
-- [ ] **Step 7: Write the failing tests for the executor, the daemon and `start`**
+- [x] **Step 7: Write the failing tests for the executor, the daemon and `start`**
 
 The executor runs a publish job and no longer turns it down; a draft address job's result carries the description; a publish job doesn't count toward the daily cap; `start` prunes old draft refs:
 
@@ -25111,7 +25111,7 @@ index c18f748..76e982d 100644
      onTestFinished(() => hub.close());
 ```
 
-- [ ] **Step 8: Run them to see them fail, then wire it in**
+- [x] **Step 8: Run them to see them fail, then wire it in**
 
 Run: `npm test -w apps/cli -- src/runner/execute.test.ts src/daemon.test.ts src/commands/start.test.ts`
 Expected: FAIL, 6 tests (45 pass): in `execute.test.ts` the publish bundle is turned down with `unsupported_mode` where `repo_not_linked`, a completed push and a `setup_failed` failure are expected (3 tests), and the draft address job's result has no `draft`; in `daemon.test.ts` the publish job is turned down with `daily_cap`; in `start.test.ts` the 15-day-old draft ref is still there.
@@ -25302,7 +25302,7 @@ index 65ecbe1..c1dd26a 100644
 Run: `npm test -w apps/cli -- src/runner/draft.test.ts src/runner/publish.test.ts src/runner/push.test.ts src/runner/execute.test.ts src/daemon.test.ts src/commands/start.test.ts`
 Expected: PASS, 6 files, 83 tests.
 
-- [ ] **Step 9: The end to end scenario**
+- [x] **Step 9: The end to end scenario**
 
 This one checks Steps 1 to 8 together with the real server: maya's Auto-fix is off, her CLI drafts the fixes, the route sends them, her CLI pushes the draft, and leo's re-review follows. The `beforeEach` now gives the harness a GitHub client that lets anyone signed in read `octo/sandbox`, because the Send route asks GitHub about read access; the other four scenarios don't notice it. The harness itself is unchanged.
 
@@ -25384,7 +25384,7 @@ index 4fa6de9..af3dd2f 100644
 Run: `npm run test:e2e`
 Expected: PASS, 2 files, 6 tests (it was 5). It passes at once because the code it needs exists; with the CLI files of Steps 2 to 8 taken back to Task 16's, it fails with `draft` null on the address result (1 fails, 4 pass).
 
-- [ ] **Step 10: The explainers and the spec**
+- [x] **Step 10: The explainers and the spec**
 
 `docs/why/drafts-and-publish-jobs.md` gets a section on what happens on the laptop, and `docs/why/safe-git.md` one sentence:
 
@@ -25447,12 +25447,12 @@ index 40dd8e2..d6b7909 100644
  - `-c core.hooksPath=<empty dir>`
 ```
 
-- [ ] **Step 11: Run the full suite**
+- [x] **Step 11: Run the full suite**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 63, CLI 325 passed + 14 skipped, server 922, web 158; end to end 6; Playwright 6; typecheck and lint clean.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add apps/cli/src apps/server/test/e2e/scenarios.e2e.test.ts docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

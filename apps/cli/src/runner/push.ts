@@ -1,6 +1,7 @@
-import { BRAND, type AgentJobBundle, type PushInfo } from '@nitpilot/protocol';
+import { BRAND, type AgentJobBundle, type BundleGit, type DraftInfo, type PushInfo } from '@nitpilot/protocol';
 import type { JobIo } from '../daemon';
 import { remoteFor } from '../git/remotes';
+import { describeDraft, draftRef } from './draft';
 import { JobFailure } from './job-failure';
 import { safeGit, SafeGitError, type GitPlace } from './safe-git';
 import { scrubPlan } from './scrub';
@@ -21,11 +22,11 @@ export type PushContext = {
 };
 
 /**
- * Where an address job will push: the clone's remote for the PR's head repo (the author's fork, or
- * the repo itself). The executor asks before the agent runs, so a deleted fork or a missing remote
+ * Where an address job or a publish job will push: the clone's remote for the PR's head repo (the author's
+ * fork, or the repo itself). The executor asks before the agent runs, so a deleted fork or a missing remote
  * fails early with a clear reason, not after the work (spec §11 step 6).
  */
-export async function pushTarget(bundle: AgentJobBundle, place: GitPlace): Promise<string> {
+export async function pushTarget(bundle: { git: BundleGit }, place: GitPlace): Promise<string> {
   return pickPushRemote((await safeGit(place, ['remote', '-v'])).stdout, bundle.git.headRepoPath);
 }
 
@@ -36,13 +37,17 @@ export function pickPushRemote(remoteList: string, headRepoPath: string | null):
   throw new JobFailure('git_error', false, `No remote in your clone points at ${headRepoPath}. Add one (git remote add <name> <url>), then run \`${BRAND.cli} retry\`.`);
 }
 
+/** What an address job's commit became: pushed (`push`), kept as a draft (`draft`), or neither when nothing changed. */
+export type Committed = { push: PushInfo | null; draft: DraftInfo | null };
+
 /**
  * Commit what the agent changed and push it to the PR's branch (spec §11 step 6): your own git
  * identity, a `Nitpilot-Job` trailer, no hooks, and only after the server acked `job.pushing`. Never
  * forced: if someone pushed meanwhile, git refuses and the job fails with `branch_moved`. In draft
- * mode the commit stays on refs/nitpilot/drafts/<job> and nothing is pushed. See docs/why/safe-git.md.
+ * mode the commit stays on refs/nitpilot/drafts/<job>, nothing is pushed, and the result describes the
+ * commit (describeDraft). See docs/why/safe-git.md and docs/why/drafts-and-publish-jobs.md.
  */
-export async function commitAndPush(ctx: PushContext): Promise<{ push: PushInfo | null }> {
+export async function commitAndPush(ctx: PushContext): Promise<Committed> {
   try {
     return await commitThenPush(ctx);
   } catch (err) {
@@ -53,7 +58,7 @@ export async function commitAndPush(ctx: PushContext): Promise<{ push: PushInfo 
   }
 }
 
-async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }: PushContext): Promise<{ push: PushInfo | null }> {
+async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }: PushContext): Promise<Committed> {
   const git = (args: string[]) => safeGit(worktree.git, args);
   // Repo code runs in the worktree (setup, checks like `npm test`) and could commit by itself. Those
   // commits would be pushed without the trailer, or dropped as "no change", so stop. A rerun would run the same code.
@@ -61,15 +66,17 @@ async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }:
   if (head !== worktree.headSha) {
     throw new JobFailure('git_error', false, `Something other than ${BRAND.name} committed in the job's worktree (HEAD is ${head.slice(0, 7)}, not ${worktree.headSha.slice(0, 7)}), so nothing was pushed. Look at what ran there.`);
   }
-  if ((await git(['status', '--porcelain'])).stdout === '') return { push: null }; // the agent changed nothing
+  const nothing: Committed = { push: null, draft: null };
+  if ((await git(['status', '--porcelain'])).stdout === '') return nothing; // the agent changed nothing
   await git(['add', '-A']);
   await unstageAgentFiles(worktree.git, scrubPaths);
-  if ((await git(['diff', '--cached', '--name-only', '-z'])).stdout === '') return { push: null }; // only agent files changed
+  if ((await git(['diff', '--cached', '--name-only', '-z'])).stdout === '') return nothing; // only agent files changed
   await git(['commit', '-q', '--no-verify', '-m', `Address review feedback (round ${bundle.round})`, '--trailer', `${BRAND.commitTrailer}: ${bundle.jobId}`]);
   const to = (await git(['rev-parse', 'HEAD'])).stdout.trim();
   if (bundle.apply === 'draft') {
-    await git(['update-ref', `${BRAND.gitRefNamespace}/drafts/${bundle.jobId}`, to]);
-    return { push: null };
+    // Kept in the clone, where the worktree's cleanup leaves it, until the author sends it (a publish job) or it's pruned.
+    await git(['update-ref', draftRef(bundle.jobId), to]);
+    return { push: null, draft: await describeDraft(worktree.git, worktree.headSha, to) };
   }
   // The executor asks pushTarget before the agent runs, so an auto job always has a remote. Not having one is a bug.
   if (remote === null) throw new Error('An address job that pushes needs a remote (pushTarget).');
@@ -85,7 +92,7 @@ async function commitThenPush({ bundle, worktree, remote, scrubPaths, pushing }:
     }
     throw err;
   }
-  return { push: { from: worktree.headSha, to } };
+  return { push: { from: worktree.headSha, to }, draft: null };
 }
 
 /**
@@ -103,6 +110,6 @@ async function unstageAgentFiles(place: GitPlace, scrubPaths: readonly string[])
 }
 
 /** `git push --porcelain` marks a refused ref with `!`. "fetch first" and "non-fast-forward" mean the branch has commits we don't. */
-function rejectedBecauseMoved(porcelain: string): boolean {
+export function rejectedBecauseMoved(porcelain: string): boolean {
   return /^!\t.*\[rejected\] \((fetch first|non-fast-forward)\)/m.test(porcelain);
 }

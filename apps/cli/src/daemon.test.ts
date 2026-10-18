@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { JobBundle, RunningJob, ServerToCli } from '@nitpilot/protocol';
-import { jobBundle, jobResult, settings } from '@nitpilot/protocol/test-samples';
+import { jobBundle, jobResult, publishBundle, settings } from '@nitpilot/protocol/test-samples';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { recordOut } from '../test/out';
 import { startStubHub, type StubConnection } from '../test/stub-hub';
@@ -167,6 +167,22 @@ describe('startDaemon', () => {
     await handled(conn, notified);
     conn.send(assign(nth(7)));
     expect((await conn.next('job.reject')).d).toEqual({ jobId: 'job_7', attempt: 1, reason: 'daily_cap' });
+  });
+
+  it("runs a publish job when today's jobs are done, and doesn't count it: it runs no agent (spec §10)", async () => {
+    const configDir = tempDir();
+    writeFileSync(join(configDir, 'state.json'), JSON.stringify({ day: localDay(new Date()), jobs: 40 }));
+    const executor = vi.fn<JobExecutor>(async () => done);
+    const { hub, out } = await setup({ executor, configDir });
+    const { conn } = await welcomed(hub);
+    conn.send(assign(publishBundle()));
+    expect((await conn.next('job.complete')).d).toMatchObject({ jobId: 'job_9', attempt: 1 });
+    expect(executor).toHaveBeenCalledWith(publishBundle(), expect.anything());
+    expect(out.text()).toContain('→ publish of acme/shop-api#142 (attempt 1)');
+    conn.forget('ping');
+    expect((await conn.next('ping')).d.usedToday).toBe(40);
+    conn.send(assign()); // an agent job is still turned down
+    expect((await conn.next('job.reject')).d).toEqual({ ...JOB, reason: 'daily_cap' });
   });
 
   it('sends a change of stage at once, and the same stage at most every 2 s (spec §10)', async () => {

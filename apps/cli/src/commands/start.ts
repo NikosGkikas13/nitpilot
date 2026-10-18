@@ -6,6 +6,7 @@ import { startDaemon, type Daemon, type DaemonOptions, type JobExecutor } from '
 import { CliError } from '../errors';
 import { startMcpServer, type LocalMcpServer } from '../mcp/server';
 import { terminal, type Out } from '../out';
+import { DRAFT_KEEP_DAYS, pruneOldDraftRefs } from '../runner/draft';
 import { createExecutor } from '../runner/execute';
 import { emptyHooksDir } from '../runner/safe-git';
 import { cleanUpWorktrees } from '../runner/worktree';
@@ -23,8 +24,8 @@ export type StartDeps = {
 const noAgentYet: JobExecutor = async () => ({ kind: 'reject', reason: 'unsupported_mode' });
 
 /**
- * `nitpilot start` (spec §11): clean up what a crash left behind, start the local MCP server, then stay
- * connected and run jobs until Ctrl-C. Exits with 1 when the server sends it away.
+ * `nitpilot start` (spec §11): clean up what a crash left behind and drafts nobody sent, start the local MCP
+ * server, then stay connected and run jobs until Ctrl-C. Exits with 1 when the server sends it away.
  */
 export async function start(deps: StartDeps = {}): Promise<number> {
   const env = deps.env ?? process.env;
@@ -41,7 +42,10 @@ export async function start(deps: StartDeps = {}): Promise<number> {
     const found = await adapter.detect();
     if (!found.ok) throw new CliError(`${adapter.id} isn't ready: ${found.problem ?? 'unknown problem'} Run \`${BRAND.cli} doctor\`.`);
     // Worktrees a crash left behind go first, before any new job can start (spec §11 step 8).
-    await cleanUpWorktrees({ configDir: dir, repoPaths: Object.values(config.repos).map((repo) => repo.path), hooksDir: emptyHooksDir(dir), env });
+    const repoPaths = Object.values(config.repos).map((repo) => repo.path);
+    const hooksDir = emptyHooksDir(dir);
+    await cleanUpWorktrees({ configDir: dir, repoPaths, hooksDir, env });
+    await pruneDrafts({ repoPaths, hooksDir, env, out });
     mcp = await startMcpServer({ onError: (err) => out.error(`[mcp] ${err.message}`) });
     agent = { id: adapter.id, version: found.version ?? null, modes: [...adapter.modes] };
     executor = createExecutor({ config, configDir: dir, mcp, adapter, env });
@@ -65,5 +69,18 @@ export async function start(deps: StartDeps = {}): Promise<number> {
     process.off('SIGTERM', stop);
     deps.stop?.removeEventListener('abort', stop);
     await mcp?.close();
+  }
+}
+
+/**
+ * Delete the drafts nobody sent or discarded in DRAFT_KEEP_DAYS days (spec §11 "Publish jobs"). Housekeeping:
+ * whatever goes wrong is logged, and the daemon starts anyway.
+ */
+async function pruneDrafts(opts: { repoPaths: string[]; hooksDir: string; env: Record<string, string | undefined>; out: Out }): Promise<void> {
+  try {
+    const removed = await pruneOldDraftRefs({ repoPaths: opts.repoPaths, hooksDir: opts.hooksDir, now: new Date(), env: opts.env });
+    if (removed > 0) opts.out.log(`Removed ${removed} draft${removed === 1 ? '' : 's'} older than ${DRAFT_KEEP_DAYS} days.`);
+  } catch (err) {
+    opts.out.error(`[drafts] Couldn't remove old drafts: ${(err as Error).message}`);
   }
 }

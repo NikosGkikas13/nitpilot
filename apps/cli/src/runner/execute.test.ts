@@ -253,7 +253,52 @@ describe('createExecutor', () => {
     const { execute } = await executorFor(pr, { adapter: { ...fakeAdapter(), modes: ['reviewer'] } });
     expect(await execute({ ...pr.bundle, pr: { ...pr.bundle.pr, repoFullName: 'acme/other' } }, jobIo().io)).toEqual({ kind: 'reject', reason: 'repo_not_linked' });
     expect(await execute(addressJob(pr), jobIo().io)).toEqual({ kind: 'reject', reason: 'unsupported_mode' });
-    // Publish jobs aren't run yet (Task 17); the server doesn't queue any.
-    expect(await execute(publishBundle(), jobIo().io)).toEqual({ kind: 'reject', reason: 'unsupported_mode' });
+    expect(await execute({ ...publishBundle(), pr: { ...publishBundle().pr, repoFullName: 'acme/other' } }, jobIo().io)).toEqual({ kind: 'reject', reason: 'repo_not_linked' });
+  });
+
+  it("runs an address job with Auto off as a draft: commits, pushes nothing, and describes the commit in the result", async () => {
+    const pr = prRepo();
+    const { execute } = await executorFor(pr); // no overSsh: a draft needs no remote
+    const { io, pushes, stages } = jobIo();
+    const outcome = await execute(addressJob(pr, { apply: 'draft' }), io);
+    const sha = pr.git(pr.clone, 'rev-parse', `refs/nitpilot/drafts/${pr.bundle.jobId}`);
+    expect(outcome).toMatchObject({
+      kind: 'complete',
+      result: {
+        replies: [{ point: 1, resolution: 'fixed' }, { point: 2, resolution: 'answered' }],
+        push: null,
+        draft: { sha, from: pr.headSha, files: [{ path: 'src/orders.ts', adds: 1, dels: 1 }], diff: expect.stringContaining('+export const pageSize = 25;') },
+      },
+    });
+    expect(pushes).toEqual([]);
+    expect(stages).toEqual(['preparing', 'running_agent', 'pushing', 'finishing']);
+    expect(pr.git(pr.base, 'rev-parse', `refs/heads/${pr.bundle.git.headBranch}`)).toBe(pr.headSha);
+  });
+
+  it('runs a publish job with no worktree and no agent: pushes the draft and answers with the push alone', async () => {
+    const pr = prRepo();
+    const env = overSsh(pr);
+    const { execute, registrations, leftovers } = await executorFor(pr, { env });
+    const drafted = await execute(addressJob(pr, { apply: 'draft' }), jobIo().io);
+    if (drafted.kind !== 'complete' || !drafted.result.draft) throw new Error('expected a draft');
+    const { sha, from } = drafted.result.draft;
+    const before = registrations.length;
+
+    const { io, pushes, stages } = jobIo();
+    const publish = { ...publishBundle(), git: pr.bundle.git, draft: { jobId: pr.bundle.jobId, sha, from } };
+    expect(await execute(publish, io)).toEqual({ kind: 'complete', result: { summary: '', points: [], decisions: [], replies: [], push: { from, to: sha }, draft: null } });
+    expect(pushes).toEqual([{ from, to: sha }]);
+    expect(stages).toEqual(['pushing']);
+    expect(registrations).toHaveLength(before); // no agent ran
+    expect(leftovers()).toEqual([]);
+    expect(pr.git(pr.base, 'rev-parse', `refs/heads/${pr.bundle.git.headBranch}`)).toBe(sha);
+  });
+
+  it("fails a publish job whose draft isn't on this computer any more with setup_failed, not retryable", async () => {
+    const pr = prRepo();
+    // An agent that can only review still takes it: a publish job runs no agent, so it needs no mode.
+    const { execute } = await executorFor(pr, { env: overSsh(pr), adapter: { ...fakeAdapter(), modes: ['reviewer'] } });
+    const publish = { ...publishBundle(), git: pr.bundle.git, draft: { jobId: 'job_7', sha: 'c'.repeat(40), from: pr.headSha } };
+    expect(await execute(publish, jobIo().io)).toMatchObject({ kind: 'fail', reason: 'setup_failed', retryable: false, detail: expect.stringContaining("isn't on this computer any more") });
   });
 });

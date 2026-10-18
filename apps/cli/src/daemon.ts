@@ -37,7 +37,7 @@ export type JobIo = {
   signal: AbortSignal;
 };
 
-/** Runs one job. Task 17 builds the real one: worktree, MCP server, agent, push. */
+/** Runs one job: an agent job (worktree, MCP server, agent, push) or a publish job (push a draft). See runner/execute.ts. */
 export type JobExecutor = (bundle: JobBundle, io: JobIo) => Promise<JobOutcome>;
 
 /** Why the daemon stopped for good. Every other end of a connection is a reason to reconnect. */
@@ -234,7 +234,9 @@ export function startDaemon(opts: DaemonOptions): Daemon {
     const cap = settings?.dailyJobCap ?? 0;
     let outcome: JobOutcome;
     try {
-      if (counter.take(cap)) {
+      // The cap counts agent runs (spec §10 `usedToday`). A publish job runs no agent: it only pushes a draft that
+      // already counted, so it never takes from the day's count, even when the day's jobs are done.
+      if (bundle.type === 'publish' || counter.take(cap)) {
         out.log(`→ ${name} (attempt ${bundle.attempt})`);
         outcome = await execute(bundle, job);
       } else {

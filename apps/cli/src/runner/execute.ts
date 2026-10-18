@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { JobResult, NewPoint } from '@nitpilot/protocol';
+import type { JobResult, NewPoint, PublishBundle } from '@nitpilot/protocol';
 import { jobPrompt } from '../agents/prompt';
 import { agentBaseEnv, runAgent } from '../agents/runner';
 import type { AgentAdapter, AgentMode } from '../agents/types';
@@ -14,7 +14,8 @@ import type { JobRegistration, LocalMcpServer } from '../mcp/server';
 import { diffBaseSha, listChangedFiles } from '../mcp/tools/read';
 import { checkEnv, CHECK_TIMEOUT_MS, runInWorktree } from '../mcp/tools/run-check';
 import { JobFailure } from './job-failure';
-import { commitAndPush, pushTarget } from './push';
+import { publishDraft } from './publish';
+import { commitAndPush, pushTarget, type Committed } from './push';
 import { emptyHooksDir } from './safe-git';
 import { scrubPathsFor } from './scrub';
 import { snippetFor } from './snippets';
@@ -35,7 +36,8 @@ export type ExecutorDeps = {
 /**
  * The job executor (spec §11 steps 1–8): check the PR out, run the repo's setup (address jobs), give the
  * job its tools and token, run the agent, commit and push (address jobs), attach snippets, and answer.
- * The worktree is always removed afterwards. See docs/why/git-worktrees.md and docs/why/local-mcp-server.md.
+ * The worktree is always removed afterwards. A publish job only pushes a draft (publishDraft). See
+ * docs/why/git-worktrees.md, docs/why/local-mcp-server.md and docs/why/drafts-and-publish-jobs.md.
  */
 export function createExecutor(deps: ExecutorDeps): JobExecutor {
   const { config, configDir, adapter } = deps;
@@ -43,10 +45,10 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
   // Every agent's files go, not only this agent's: a PR's .env or AGENTS.md has no business in a job (spec §11 step 3).
   const scrubPaths = scrubPathsFor(adapter.scrubPaths);
   return async (bundle, io) => {
-    // A publish job runs no agent (spec §11 "Publish jobs"). The server doesn't queue any yet.
-    if (bundle.type === 'publish') return { kind: 'reject', reason: 'unsupported_mode' };
     const repo = Object.hasOwn(config.repos, bundle.pr.repoFullName) ? config.repos[bundle.pr.repoFullName]! : null;
     if (!repo) return { kind: 'reject', reason: 'repo_not_linked' };
+    // A publish job runs no agent, so it needs no agent mode (spec §11 "Publish jobs").
+    if (bundle.type === 'publish') return publish(bundle, repo.path, io);
     const mode: AgentMode = bundle.type === 'address' ? 'editor' : 'reviewer';
     if (!adapter.modes.includes(mode)) return { kind: 'reject', reason: 'unsupported_mode' };
 
@@ -66,22 +68,40 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
         return { kind: 'fail', reason: 'no_result', retryable: true, detail };
       }
 
-      let push = null;
+      let committed: Committed = { push: null, draft: null };
       if (bundle.type === 'address') {
         io.progress('pushing', bundle.apply === 'auto' ? 'Committing and pushing the fixes' : 'Committing the fixes as a draft');
         // A draft never pushes, so it has no remote (null); an auto job always has one, from pushTarget above.
-        ({ push } = await commitAndPush({ bundle, worktree, remote, scrubPaths, pushing: io.pushing }));
+        committed = await commitAndPush({ bundle, worktree, remote, scrubPaths, pushing: io.pushing });
       }
       io.progress('finishing', 'Sending the result');
-      return { kind: 'complete', result: await withSnippets(ctx, ctx.buffer.toJobResult(push)) };
+      return { kind: 'complete', result: await withSnippets(ctx, ctx.buffer.toJobResult(committed.push, committed.draft)) };
     } catch (err) {
       // A JobFailure is an answer in the protocol's words. Anything else is a bug: the daemon reports it as a crash.
-      if (err instanceof JobFailure) return { kind: 'fail', reason: err.reason, retryable: err.retryable, detail: err.message };
+      if (err instanceof JobFailure) return failureOf(err);
       throw err;
     } finally {
       await worktree?.cleanup();
     }
   };
+
+  /** Send an author's draft: push the commit their address job left in the clone, and answer with the push alone. */
+  async function publish(bundle: PublishBundle, clonePath: string, io: JobIo): Promise<JobOutcome> {
+    io.progress('pushing', 'Sending the drafted fixes');
+    try {
+      const { push } = await publishDraft(bundle, { clonePath, hooksDir: emptyHooksDir(configDir), pushing: io.pushing, signal: io.signal, env });
+      // The replies and the summary are the draft job's, which the server kept: this result only carries the push.
+      return { kind: 'complete', result: { summary: '', points: [], decisions: [], replies: [], push, draft: null } };
+    } catch (err) {
+      if (err instanceof JobFailure) return failureOf(err);
+      throw err;
+    }
+  }
+}
+
+/** A JobFailure as the daemon's answer, in the protocol's words. */
+function failureOf(err: JobFailure): JobOutcome {
+  return { kind: 'fail', reason: err.reason, retryable: err.retryable, detail: err.message };
 }
 
 /**

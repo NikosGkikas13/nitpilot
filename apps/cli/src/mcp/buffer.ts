@@ -1,4 +1,4 @@
-import type { JobResult, NewPoint, PointDecision, PointReply, PushInfo } from '@nitpilot/protocol';
+import type { DraftInfo, JobResult, NewPoint, PointDecision, PointReply, PushInfo } from '@nitpilot/protocol';
 
 /**
  * What the agent produced in one job, kept here until the job ends. Nothing reaches the server
@@ -48,11 +48,14 @@ export class ResultBuffer {
     return this.points.length === 0 && this.decisions.size === 0 && this.replies.size === 0 && this.summary === null;
   }
 
-  /** The job's result for `job.complete`. Without a `finish`, the summary is made from what the agent did (spec §11). */
-  toJobResult(push: PushInfo | null): JobResult {
+  /**
+   * The job's result for `job.complete`. Without a `finish`, the summary is made from what the agent did (spec §11).
+   * `push` is the commit an address job pushed; `draft` the one it kept as a draft (Auto off).
+   */
+  toJobResult(push: PushInfo | null, draft: DraftInfo | null = null): JobResult {
     const decisions = [...this.decisions.values()];
     const replies = [...this.replies.values()];
-    return { summary: this.summary ?? summarize(this.points.length, decisions, replies), points: [...this.points], decisions, replies, push, draft: null };
+    return { summary: this.summary ?? summarize(this.points.length, decisions, replies), points: [...this.points], decisions, replies, push, draft };
   }
 }
 

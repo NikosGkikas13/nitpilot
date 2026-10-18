@@ -32,7 +32,7 @@ For an address job, the CLI commits and pushes, never the agent:
 3. Before pushing, it sends `job.pushing` and waits for the server's ack. `stale` means the job was cancelled or handed out again meanwhile, so nothing is pushed.
 4. `git push` to the PR's branch, never forced. If someone pushed in the meantime, git refuses ("non-fast-forward"): the job fails with `branch_moved`, and the server runs it again on the new head. A teammate's commit is never overwritten.
 
-In draft mode (Auto off, Plan 2) the commit stays on `refs/nitpilot/drafts/<job>` in your clone, and nothing is pushed.
+In draft mode (Auto off, Plan 2) the commit stays on `refs/nitpilot/drafts/<job>` in your clone, and nothing is pushed. Sending it later (a publish job, `runner/publish.ts`) goes through the same safe git: no hooks, `--` before the remote, never forced. The draft's description diffs (`runner/draft.ts`) run with `--no-ext-diff --no-textconv`, like the agent's read tools.
 
 ## The React analogy
 

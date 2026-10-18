@@ -68,9 +68,9 @@ describe('commitAndPush', () => {
     const pr = prRepo();
     const { bundle, worktree } = await addressJob(pr);
     const pushing = vi.fn<JobIo['pushing']>();
-    expect(await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing })).toEqual({ push: null });
+    expect(await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing })).toEqual({ push: null, draft: null });
     writeFileSync(join(worktree.dir, '.mcp.json'), '{}\n'); // the agent's own file: not a change to the PR
-    expect(await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing })).toEqual({ push: null });
+    expect(await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing })).toEqual({ push: null, draft: null });
     expect(pushing).not.toHaveBeenCalled();
     expect(branchOf(pr)).toBe(pr.headSha);
   });
@@ -162,16 +162,30 @@ describe('commitAndPush', () => {
     expect(branchOf(pr)).toBe(pr.headSha);
   });
 
-  it('keeps a draft on refs/nitpilot/drafts/<job>, even after cleanup, and pushes nothing', async () => {
+  it('keeps a draft on refs/nitpilot/drafts/<job>, even after cleanup, pushes nothing, and describes the commit', async () => {
     const pr = prRepo();
     const { bundle, worktree } = await addressJob(pr, 'draft');
     writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
     const pushing = vi.fn<JobIo['pushing']>();
-    expect(await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing })).toEqual({ push: null });
+    const { push, draft } = await commitAndPush({ bundle, worktree, remote: pr.base, scrubPaths: SCRUB_PATHS, pushing });
     await worktree.cleanup();
+    expect(push).toBeNull();
     expect(pushing).not.toHaveBeenCalled();
     expect(branchOf(pr)).toBe(pr.headSha);
     expect(pr.git(pr.clone, 'show', '--name-only', '--format=', 'refs/nitpilot/drafts/job_1')).toBe('src/orders.ts');
+    expect(draft).toEqual({
+      sha: pr.git(pr.clone, 'rev-parse', 'refs/nitpilot/drafts/job_1'),
+      from: pr.headSha,
+      files: [{ path: 'src/orders.ts', adds: 1, dels: 1 }],
+      diff: expect.stringContaining('-export const pageSize = 50;\n+export const pageSize = 25;\n'),
+    });
+  });
+
+  it('makes no draft when the agent changed nothing: the result has no draft and no push', async () => {
+    const pr = prRepo();
+    const { bundle, worktree } = await addressJob(pr, 'draft');
+    expect(await commitAndPush({ bundle, worktree, remote: null, scrubPaths: SCRUB_PATHS, pushing: vi.fn() })).toEqual({ push: null, draft: null });
+    expect(pr.git(pr.clone, 'for-each-ref', 'refs/nitpilot/drafts')).toBe('');
   });
 });
 

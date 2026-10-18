@@ -35,6 +35,17 @@ It goes through the same machinery as any agent job (`docs/why/leases-and-fencin
 
 The bundle it gets is small (`jobs/bundle.ts`, `buildPublishBundle`): the PR, where to push, and `draft { jobId, sha, from }`. The CLI checks that the draft ref still points at `sha`, pushes it without forcing, and reports the push (`apps/cli/src/runner/publish.ts`). When the result arrives, the engine applies the draft's stored replies with that commit, exactly as an auto address pass would have been (`engine/results.ts`, `onPublished`), and the reviewers' re-review starts.
 
+## On the laptop: the draft ref, the description, and the push
+
+All of this is in `apps/cli/src/runner/`.
+
+- **Making the draft** (`push.ts`, `commitAndPush`): with Auto off the address job commits as usual, then points `refs/nitpilot/drafts/<job id>` at the commit instead of pushing. A ref is just a named pointer to a commit, like a branch that never shows up in `git branch`. Removing the job's worktree afterwards leaves it alone, so the commit survives in your clone.
+- **Describing it** (`draft.ts`, `describeDraft`): the server never sees your code, so the CLI tells it what the commit changes: `git diff --numstat -z` for the files and their added and removed lines, and `git diff` for the patch. Both run with `--no-ext-diff --no-textconv`, so no diff program from your git config or the repo's attributes runs (`docs/why/safe-git.md`). A patch over 200 KB is left out (`diff: null`); the card then shows the file list. An agent that changed nothing makes no commit, so the result has `draft: null`.
+- **Sending it** (`publish.ts`, `publishDraft`): no worktree and no agent. The CLI checks the ref still points at the draft's commit, asks the server (`job.pushing`), and runs `git push -- <remote> refs/nitpilot/drafts/<job>:refs/heads/<branch>`, never forced. Then it deletes the ref. If anything goes wrong the ref stays, so you can still look at the work (`git show refs/nitpilot/drafts/<job>`).
+- **A retry after a lost answer** (`publish.ts`, `branchIsAt`): if the CLI stops right after the push, the server never hears the result, and after the lease runs out it hands the job out again. By then the ref may be gone. So before calling the draft lost, the CLI asks the remote (`git ls-remote`) where the branch is: if it's already the draft's commit, the push happened, and the job completes with it without pushing again. Like a form whose "saved" response got lost: on retry you check whether the save went through before calling it failed. If the ref is still there, pushing again is harmless: git answers "up to date".
+- **Cleaning up** (`draft.ts`, `pruneOldDraftRefs`, run by `nitpilot start`): a draft nobody sent or discarded would sit in your clone forever, so each start deletes draft refs whose commit is more than 14 days old. Only refs under `refs/nitpilot/drafts/` are touched.
+- **The daily cap** (`daemon.ts`): a publish job runs no agent, so it never takes from the day's job count. Otherwise a person who used up their cap couldn't send work their agent had already done.
+
 ## "Out of date"
 
 Two failures mean the draft can never be sent (`engine/results.ts`, `DRAFT_OUT_OF_DATE` and `draftOutOfDate`):
