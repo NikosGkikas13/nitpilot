@@ -15,8 +15,9 @@ import { api, ApiError } from './client';
  *   page instead of buttons that can't work.
  * Only this chat is refreshed, the same way `live/apply.ts` finds it by its id; the other chats in the cache are fine.
  * `mutationKey` lets a field that was closed and opened again still see that a write of this kind is on its way.
+ * Exported for the Auto switch and the draft cards (api/drafts.ts).
  */
-function useChatWrite<V, R>(chatId: string, kind: string, send: (vars: V) => Promise<R>, done: (answer: R, vars: V) => string, afterSuccess?: (vars: V) => void) {
+export function useChatWrite<V, R>(chatId: string, kind: string, send: (vars: V) => Promise<R>, done: (answer: R, vars: V) => string, afterSuccess?: (vars: V) => void) {
   const toast = useToast();
   const queryClient = useQueryClient();
   return useMutation({
@@ -77,7 +78,7 @@ export function useReview(chatId: string) {
     chatId,
     'review',
     () => api.send('POST', `/api/chats/${chatId}/review`, undefined, ActionResponse),
-    () => 'Your agent will start the review.',
+    () => 'Your agent will start the review. Its points will wait as a draft for you to send.',
   );
 }
 

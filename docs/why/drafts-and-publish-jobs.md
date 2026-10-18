@@ -10,6 +10,8 @@ Nothing else stores drafts. The engine sees them in `ChatState.drafts` (`chats/l
 
 Think of it like a form with "Save draft": the work is done and kept, but nothing is submitted until you say so.
 
+Your switch isn't the only thing that makes a draft (`autoFor` in `engine/jobs.ts`). A team rule in `.nitpilot.yml` that forbids an auto mode wins over it, and so does the trust gate: on a PR from an outside contributor, a reviewer's review always waits as a draft, so a person reads what the agent made of a stranger's code before it's posted in their name (docs/why/prompt-injection.md). The author's side doesn't depend on trust.
+
 ## Why the author's commit stays on the laptop
 
 The server never touches code (spec §7): it has no clone, no git and no push access to your repo in your name. The CLI makes the commit in a worktree of your clone, and in draft mode it doesn't push: it keeps the commit at `refs/nitpilot/drafts/<job id>` in the linked clone and reports it in the result.

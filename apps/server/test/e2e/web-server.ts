@@ -76,10 +76,22 @@ control.post('/pr', async (c) => {
 });
 /**
  * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
- * People, their sign-ins and the installation stay.
+ * People, their sign-ins and the installation stay; their Settings go back to the defaults.
  */
 control.post('/reset', async (c) => {
   await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat" CASCADE');
+  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true } });
+  return c.body(null, 204);
+});
+/**
+ * Someone's defaults for new chats (their Settings page): with `autoReview` or `autoAddress` false, the PRs opened
+ * after this start with that person's Auto off, so their agent's work waits as drafts.
+ */
+control.post('/settings', async (c) => {
+  const { login, autoReview, autoAddress } = (await c.req.json()) as { login: 'maya' | 'leo'; autoReview?: boolean; autoAddress?: boolean };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
   return c.body(null, 204);
 });
 /** Each person's running CLI, started by a test. */

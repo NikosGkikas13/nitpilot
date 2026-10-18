@@ -8,12 +8,14 @@ import { useProgress } from '../../live/progress';
 import { agentName, personName } from '../../lib/names';
 import { itemTime } from '../../lib/time';
 import { severityCounts, timelineRows, withCommitHashes, type Glyph } from '../../lib/timeline';
+import { DraftCard } from './DraftCard';
 import { PointCard, type People } from './PointCard';
 import styles from './Timeline.module.css';
 
 /**
  * The chat's feed (handoff §2 "Timeline", the single-column layout): everyone left-aligned like an activity log,
- * point cards full width under the summary that raised them, and the live progress line at the end.
+ * point cards full width under the summary that raised them, waiting drafts under the line that says so, and the
+ * live progress line at the end.
  */
 export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlder: boolean; you: string; loadingEarlier: boolean; onLoadEarlier: () => void }) {
   const { view, items, you } = props;
@@ -28,7 +30,14 @@ export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlde
         </button>
       )}
       <ol className={styles.list}>
-        {timelineRows(items, view.points).map((row) => {
+        {timelineRows(items, view.points, view.drafts).map((row) => {
+          if (row.kind === 'draft') {
+            return (
+              <li key={`draft ${row.draft.jobId}`} className={styles.pointRow}>
+                <DraftCard draft={row.draft} view={view} you={you} canAct={view.permissions.drafts.includes(row.draft.jobId)} />
+              </li>
+            );
+          }
           if (row.kind === 'point') {
             return (
               <li key={`P${row.point.number}`} className={styles.pointRow}>

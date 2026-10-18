@@ -1,0 +1,260 @@
+/* handoff component sheet, "Draft": a dashed 1.5px card on the feed's background, 12px 14px. */
+.card {
+  border: 1.5px dashed var(--fg4);
+  border-radius: var(--radius-input);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eyebrow {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.ring {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--fg3);
+}
+
+.title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.summary {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.outcomes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.outcome {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.outcome + .outcome {
+  border-top: 1px solid var(--b2);
+}
+
+.outcomeHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg3);
+}
+
+.outcomeTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.ok {
+  color: var(--ok-fg);
+}
+
+.accent {
+  color: var(--acc-text);
+}
+
+.plain {
+  color: var(--fg2);
+}
+
+.warn {
+  color: var(--warn-fg);
+}
+
+.comment {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg2);
+  white-space: pre-wrap;
+}
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tooBig {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.fileRow {
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.fileRow + .fileRow {
+  border-top: 1px solid var(--b2);
+}
+
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg2);
+}
+
+.adds {
+  color: var(--ok-fg);
+}
+
+.dels {
+  color: var(--red-fg);
+}
+
+.see {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+
+/* "$ git show …  Copy", like the banners' commands. */
+.command {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.commandText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dollar,
+.copy {
+  flex: none;
+  color: var(--fg3);
+}
+
+.copy {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primary,
+.secondary {
+  height: 30px;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.primary {
+  padding: 0 14px;
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+  font-weight: 600;
+}
+
+.secondary {
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+  font-weight: 500;
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}

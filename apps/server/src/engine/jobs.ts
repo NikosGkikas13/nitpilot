@@ -5,11 +5,13 @@ import type { Command, DraftState, JobView, ParticipantState } from './types';
 
 /**
  * Auto is on when the team allows it and the person has it on (spec §9 "Auto"). A team rule that forbids an auto
- * mode (`auto.review` / `auto.address: false` in .nitpilot.yml) wins over the switch.
+ * mode (`auto.review` / `auto.address: false` in .nitpilot.yml) wins over the switch. So does the trust gate on the
+ * reviewer's side: on a PR from an outside contributor, a review always waits as a draft, so a person sees what the
+ * agent made of that code before anything is posted in their name (spec §6.1, §14).
  */
 export function autoFor(ctx: Ctx, p: ParticipantState, jobType: JobType): boolean {
-  const teamAllows = jobType === 'address' ? ctx.rules.auto.address : ctx.rules.auto.review;
-  return teamAllows && p.auto;
+  if (jobType === 'address') return ctx.rules.auto.address && p.auto;
+  return ctx.chat.trusted && ctx.rules.auto.review && p.auto;
 }
 
 /**

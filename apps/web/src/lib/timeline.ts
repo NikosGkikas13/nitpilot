@@ -1,4 +1,4 @@
-import type { PointView, Severity, TimelineItem } from '@nitpilot/protocol';
+import type { DraftView, PointView, Severity, TimelineItem } from '@nitpilot/protocol';
 
 /** What a system line starts with (handoff §2 "Timeline"): a dot, ✓ for ready or merged, a ring for waiting, the red diamond for an escalation. */
 export type Glyph = 'dot' | 'check' | 'ring' | 'diamond';
@@ -8,14 +8,17 @@ export type TimelineRow =
   | { kind: 'system'; item: TimelineItem; glyph: Glyph }
   | { kind: 'summary'; item: TimelineItem }
   | { kind: 'human'; item: TimelineItem }
-  | { kind: 'point'; point: PointView; thread: TimelineItem[] };
+  | { kind: 'point'; point: PointView; thread: TimelineItem[] }
+  | { kind: 'draft'; draft: DraftView };
 
 /**
  * The feed, in order (handoff §2): each point's card sits where it was raised, holding every later item about it
  * (agents' replies and decisions, people's replies in its GitHub thread). When the item that raised it is on an
- * older page that isn't loaded, the card sits where its thread starts.
+ * older page that isn't loaded, the card sits where its thread starts. A waiting draft's card sits right after the
+ * line that says its job's work waits as drafts (the first item whose `data.jobId` is the draft's job); when that line
+ * is on an older page, at the end, so a draft waiting for you is never out of sight.
  */
-export function timelineRows(items: TimelineItem[], points: PointView[]): TimelineRow[] {
+export function timelineRows(items: TimelineItem[], points: PointView[], drafts: DraftView[] = []): TimelineRow[] {
   const byNumber = new Map(points.map((p) => [p.number, p]));
   const threads = new Map<number, TimelineItem[]>();
   for (const item of items) {
@@ -23,6 +26,7 @@ export function timelineRows(items: TimelineItem[], points: PointView[]): Timeli
     threads.set(item.pointNumber, [...(threads.get(item.pointNumber) ?? []), item]);
   }
   const placed = new Set<number>();
+  const unplaced = new Map(drafts.map((d) => [d.jobId, d]));
   const rows: TimelineRow[] = [];
   for (const item of items) {
     const point = item.pointNumber === null ? undefined : byNumber.get(item.pointNumber);
@@ -33,12 +37,18 @@ export function timelineRows(items: TimelineItem[], points: PointView[]): Timeli
       placed.add(point.number);
     } else if (item.kind === 'system') {
       rows.push({ kind: 'system', item, glyph: systemGlyph(item.body) });
+      const draft = typeof item.data?.jobId === 'string' ? unplaced.get(item.data.jobId) : undefined;
+      if (draft) {
+        rows.push({ kind: 'draft', draft });
+        unplaced.delete(draft.jobId);
+      }
     } else if (item.kind === 'job_summary') {
       rows.push({ kind: 'summary', item });
     } else {
       rows.push({ kind: 'human', item });
     }
   }
+  for (const draft of unplaced.values()) rows.push({ kind: 'draft', draft });
   return rows;
 }
 

@@ -172,7 +172,7 @@ describe('Chat (handoff §2)', () => {
     renderApp(PATH);
     const card = await screen.findByRole('region', { name: 'First-time contributor' });
     await userEvent.click(within(card).getByRole('button', { name: 'Review' }));
-    expect(await screen.findByText('Your agent will start the review.')).toBeInTheDocument();
+    expect(await screen.findByText('Your agent will start the review. Its points will wait as a draft for you to send.')).toBeInTheDocument();
     expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/chats/chat_142/review') && init?.method === 'POST')).toBe(true);
   });
 

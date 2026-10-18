@@ -193,12 +193,12 @@ describe('POST /api/chats/:id/points/:n/continue', () => {
 });
 
 describe('POST /api/chats/:id/review', () => {
-  it("starts the review of an outside contributor's PR for the requested reviewer, once", async () => {
+  it("starts the review of an outside contributor's PR for the requested reviewer, once, as a draft whatever his Auto-review", async () => {
     const { chat, post, users } = await scene({ trusted: false });
     expect(await prisma.job.count({ where: { chatId: chat.id } })).toBe(0);
     const res = await post('leo', `/api/chats/${chat.id}/review`);
     expect(res.status).toBe(200);
-    expect(await prisma.job.findFirst({ where: { chatId: chat.id } })).toMatchObject({ type: 'review', status: 'queued', userId: users.leo.id });
+    expect(await prisma.job.findFirst({ where: { chatId: chat.id } })).toMatchObject({ type: 'review', status: 'queued', userId: users.leo.id, applyState: 'draft' });
     const again = await post('leo', `/api/chats/${chat.id}/review`);
     expect(again.status).toBe(409);
     expect(await errorOf(again)).toEqual({ code: 'conflict', message: 'Your agent is already on it.' });
@@ -207,7 +207,8 @@ describe('POST /api/chats/:id/review', () => {
   it('answers 409 to a late press once the review has run: no second review, nothing new in the timeline', async () => {
     const { chat, post, users } = await scene({ trusted: false });
     expect((await post('leo', `/api/chats/${chat.id}/review`)).status).toBe(200);
-    await prisma.job.updateMany({ where: { chatId: chat.id }, data: { status: 'done', activeFor: null } });
+    // It ran: on an outside contributor's PR its result waits as leo's draft.
+    await prisma.job.updateMany({ where: { chatId: chat.id }, data: { status: 'done', activeFor: null, result: { summary: 'Nothing to raise.', points: [], decisions: [], replies: [], push: null } } });
     const before = { jobs: await prisma.job.count({ where: { chatId: chat.id } }), last: (await lastItem(chat.id)).seq };
     const late = await post('leo', `/api/chats/${chat.id}/review`);
     expect(late.status).toBe(409);

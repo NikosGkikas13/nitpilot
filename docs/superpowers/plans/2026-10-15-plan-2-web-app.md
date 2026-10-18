@@ -25485,7 +25485,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - An out-of-date draft disappears with the system line from the server; nothing on the client decides that.
 - The mockup's "Push 2 commits" button, "Edit" link, "Undo" action on the toast and "only visible to you" eyebrow aren't built: the spec and Task 16's `DraftView` say everyone in the chat sees the card, and no edit feature exists.
 
-- [ ] **Step 1: Write the failing tests for the trust gate**
+- [x] **Step 1: Write the failing tests for the trust gate**
 
 This part of the task changes Task 15's rule (`autoFor` in `engine/jobs.ts`), so it comes first, with its own RED and GREEN. The engine tests use the helpers already in `engine/auto.test.ts` from Task 15. A table of what a reviewer's agent does when a review is started by hand, then two checks around it:
 
@@ -25585,7 +25585,7 @@ index 2b136dc..ad1fc40 100644
  
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/auto.test.ts`
 Expected: FAIL, 3 failed and 17 passed (20): leo's untrusted review and untrusted re-review are queued with `applyState: 'pending'` (not `'draft'`), and the `auto_changed` test gets a `set_apply_state` to `pending`. The trusted row and the author's-side test pass already.
@@ -25596,7 +25596,7 @@ Expected: FAIL, 1 failed and 22 passed (23): the queued review has `applyState: 
 Run: `npm test -w apps/web -- src/routes/Chat/Chat.test.tsx`
 Expected: FAIL, 1 failed and 15 passed (16): "Your agent will start the review. Its points will wait as a draft for you to send." isn't found.
 
-- [ ] **Step 3: The trust gate in `autoFor`, and the Review toast**
+- [x] **Step 3: The trust gate in `autoFor`, and the Review toast**
 
 `autoFor` is the one place that asks "would this job apply at once?". The address side is as before; any other job also needs a trusted PR:
 
@@ -25640,7 +25640,7 @@ The toast in `api/actions.ts` (this is the only hunk of that file in this step; 
  
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine/auto.test.ts && npm run test:db -w apps/server -- src/http/routes/chat-actions.db.test.ts && npm test -w apps/web -- src/routes/Chat/Chat.test.tsx`
 Expected: PASS, 20, 23 and 16 tests.
@@ -25648,7 +25648,7 @@ Expected: PASS, 20, 23 and 16 tests.
 Run: `npm test -w apps/server`
 Expected: PASS, 927 tests (551 unit, 376 db).
 
-- [ ] **Step 5: The spec and the explainers say so**
+- [x] **Step 5: The spec and the explainers say so**
 
 The spec: §6.1 (what "trusted" means), §9 "Auto", §14 "Trust gate" and §16's tooltip note each get one clause:
 
@@ -25733,7 +25733,7 @@ index 5accef4..e877f48 100644
  The server never touches code (spec §7): it has no clone, no git and no push access to your repo in your name. The CLI makes the commit in a worktree of your clone, and in draft mode it doesn't push: it keeps the commit at `refs/nitpilot/drafts/<job id>` in the linked clone and reports it in the result.
 ```
 
-- [ ] **Step 6: Write the failing web tests**
+- [x] **Step 6: Write the failing web tests**
 
 Fixtures first: a draft commit's diff and file list, and one draft of each kind. They are plain data, so there is no RED for them:
 
@@ -26318,12 +26318,12 @@ describe('DraftCard: a reviewer draft', () => {
 });
 ```
 
-- [ ] **Step 7: Run them to see them fail**
+- [x] **Step 7: Run them to see them fail**
 
 Run: `npm test -w apps/web`
 Expected: FAIL, 6 test files failed; 12 tests failed and 158 passed (170). Four files don't load ("Failed to resolve import ./auto", "./diff", "./AutoSwitch", "./DiffView"), so their 21 tests don't run. `timeline.test.ts` has 2 failed (the draft row isn't there). `DraftCard.test.tsx` has 10 failed, all "Unable to find role=region and name Draft: …" (no card is drawn).
 
-- [ ] **Step 8: The Auto switch**
+- [x] **Step 8: The Auto switch**
 
 The pure part: which switch you get, and the one reason it may be off.
 
@@ -26698,7 +26698,7 @@ index c4408e9..aaedfe0 100644
 Run: `npm test -w apps/web -- src/lib/auto.test.ts src/routes/Chat/AutoSwitch.test.tsx`
 Expected: PASS, 14 tests (5 and 9).
 
-- [ ] **Step 9: The diff view**
+- [x] **Step 9: The diff view**
 
 The parsing is plain code with its own tests; the component only draws what it gives:
 
@@ -26981,7 +26981,7 @@ Create `apps/web/src/routes/Chat/DiffView.module.css`:
 Run: `npm test -w apps/web -- src/lib/diff.test.ts src/routes/Chat/DiffView.test.tsx`
 Expected: PASS, 7 tests (4 and 3).
 
-- [ ] **Step 10: Drafts in the feed**
+- [x] **Step 10: Drafts in the feed**
 
 ```diff
 diff --git a/apps/web/src/lib/timeline.ts b/apps/web/src/lib/timeline.ts
@@ -27047,7 +27047,7 @@ index d0730cf..dbf5302 100644
 Run: `npm test -w apps/web -- src/lib/timeline.test.ts`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 11: The draft card, drafted points, and the feed**
+- [x] **Step 11: The draft card, drafted points, and the feed**
 
 A drafted point has no number and no status until it is sent, so `PointCard` gets a `draft` mode:
 
@@ -27626,12 +27626,12 @@ index b26aa0e..387077b 100644
 Run: `npm test -w apps/web -- src/routes/Chat/DraftCard.test.tsx`
 Expected: PASS, 10 tests.
 
-- [ ] **Step 12: Run the web tests to see them pass**
+- [x] **Step 12: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web && npm run typecheck && npm run lint`
 Expected: PASS, 191 tests (28 files); typecheck and lint clean.
 
-- [ ] **Step 13: Auto-fix off, in a real browser (Playwright)**
+- [x] **Step 13: Auto-fix off, in a real browser (Playwright)**
 
 First the Playwright server's control API: `POST /settings` sets a person's defaults for PRs opened after it (the next step's browser look uses it), and `/reset` puts everyone's settings back to the defaults so tests don't leak into each other:
 
@@ -27715,12 +27715,12 @@ test("Auto-fix off: maya's agent drafts its fixes, she reads the diff and sends 
 });
 ```
 
-- [ ] **Step 14: Run Playwright**
+- [x] **Step 14: Run Playwright**
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 7 tests. Run `npm run test:e2e -w apps/web` twice more: `drafts.spec.ts` takes about 2.2 s, and the whole suite about 12 s; it must pass every time. Without the switch (Steps 8 to 11) it fails at its first check, the switch named "Auto-fix".
 
-- [ ] **Step 15: Look at it (controller, in the in-app browser)**
+- [x] **Step 15: Look at it (controller, in the in-app browser)**
 
 Start the Playwright server (launch config `nitpilot-e2e-web`, ports 4319 and 4320), then seed two PRs. #81 is leo's reviewer draft (his Auto-review is off when the PR opens). #82 is maya's author draft: leo reviews automatically, and maya's fixes wait because her Auto-fix is off:
 
@@ -27741,7 +27741,7 @@ Wait a few seconds, then sign in with the cookie from the last call (set it in t
 
 Sign in as leo (`curl -X POST $C/signin -d '{"login":"leo"}'`) and look at #81 at 375 px, light: his Auto-review switch is in the top row of the header, and the card shows the DRAFT point cards (the dashed chip, no status), the summary, Send and Discard. In dark, press Discard: "leo discarded the drafted review", the toast "Discarded. The review of this commit is yours now.", and "Ready for approval". The console has no errors. The `diff: null` card and the disabled tooltips are covered by component tests only (the fake agents make one-line edits, and no scenario uses an outside contributor's PR). Stop the server afterwards: it shares the test database with `npm test`.
 
-- [ ] **Step 16: Run everything, then commit**
+- [x] **Step 16: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 63, CLI 325 passed + 14 skipped, server 927, web 191; end to end 6; Playwright 7; typecheck and lint clean.

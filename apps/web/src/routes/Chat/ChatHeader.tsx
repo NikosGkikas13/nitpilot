@@ -1,8 +1,11 @@
 import type { ChatView } from '@nitpilot/protocol';
 import { Link } from 'react-router';
+import { useAutoSwitch } from '../../api/drafts';
 import { Ping } from '../../components/Ping/Ping';
+import { autoSwitchFor } from '../../lib/auto';
 import { agentName } from '../../lib/names';
 import { itemTime } from '../../lib/time';
+import { AutoSwitch } from './AutoSwitch';
 import styles from './ChatHeader.module.css';
 
 const ROLE = { author: 'Author', reviewer: 'Reviewer' } as const;
@@ -10,7 +13,8 @@ const ROLE = { author: 'Author', reviewer: 'Reviewer' } as const;
 /**
  * The chat's header (handoff §2 "Header"). Desktop: the title, your role, "Open on GitHub" and the details toggle;
  * then the repo and number, the branches, the round and the other side's agent. Phone: a back arrow, and the
- * same facts stacked, shrinking to one line once the feed scrolls (`collapsed`).
+ * same facts stacked, shrinking to one line once the feed scrolls (`collapsed`). Your Auto switch is in the top
+ * row on both, and stays there when the phone header shrinks.
  */
 export function ChatHeader(props: { view: ChatView; you: string; desktop: boolean; collapsed: boolean; details: { available: boolean; open: boolean; toggle: () => void } }) {
   const { view, you } = props;
@@ -24,6 +28,7 @@ export function ChatHeader(props: { view: ChatView; you: string; desktop: boolea
             <span className={styles.chevron} aria-hidden="true" />
           </Link>
           {props.collapsed ? <h1 className={styles.phoneTitleLine}>{view.title}</h1> : <span className={styles.phoneRef}>{ref}</span>}
+          <YourAutoSwitch view={view} you={you} />
         </div>
         {!props.collapsed && (
           <div className={styles.phoneFull}>
@@ -46,6 +51,7 @@ export function ChatHeader(props: { view: ChatView; you: string; desktop: boolea
       <div className={styles.topRow}>
         <h1 className={styles.title}>{view.title}</h1>
         {role && <span className={styles.roleChip}>{ROLE[role]}</span>}
+        <YourAutoSwitch view={view} you={you} />
         <a className={styles.button} href={view.url} target="_blank" rel="noreferrer">
           Open on GitHub{' '}
           <span className={styles.arrow} aria-hidden="true">
@@ -71,6 +77,14 @@ export function ChatHeader(props: { view: ChatView; you: string; desktop: boolea
       </div>
     </header>
   );
+}
+
+/** Your Auto switch for your role here (lib/auto.ts says whether there is one, and why it may be off). */
+function YourAutoSwitch({ view, you }: { view: ChatView; you: string }) {
+  const auto = useAutoSwitch(view.id);
+  const state = autoSwitchFor(view, you);
+  if (!state) return null;
+  return <AutoSwitch {...state} busy={auto.isPending} onToggle={(on) => auto.mutate({ role: state.role, on })} />;
 }
 
 /** One pip per allowed round (accent when used, all amber on the last round), then "Round 2 of 3". */

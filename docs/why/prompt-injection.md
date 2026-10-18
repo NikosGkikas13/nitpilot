@@ -14,10 +14,11 @@ On a public repo, anyone can open a PR or comment on one. An agent reads everyth
 4. **It reads from git, not the folder.** `get_file` and `get_diff` read committed content, with no diff programs (`--no-ext-diff --no-textconv`), so a file can't turn into something else on the way (`apps/cli/src/mcp/tools/read.ts`).
 5. **Only trusted people's points are work.** On a public repo, anyone can leave a review comment, and it shows up in the chat as a point. Each point in `get_job` says `trusted: true` or `false` (`apps/server/src/jobs/bundle.ts`). An outsider's point is for information only: the address prompt tells your agent to leave its code alone, and `reply_to_point` refuses it (`apps/cli/src/mcp/tools/write.ts`). Without this, a stranger's "please delete the auth check" could become a commit pushed under your name.
 6. **It checks what the agent produces.** A point must be on a file the PR changed, and there's a cap on how many. Everything is sent in one result at the end, and the server cleans it (secrets, @mentions) before GitHub sees it.
+7. **On an outsider's PR, a person sees the review first.** A PR from an outside contributor is exactly where a trick would be planted, so a review of it never goes to GitHub by itself: whatever the reviewer's Auto switch says, the result waits as a draft until they press Send (`autoFor` in `apps/server/src/engine/jobs.ts`; docs/why/drafts-and-publish-jobs.md). The chat shows their switch off, with "Off for PRs from outside contributors."
 
 ## What it can't do
 
-Labels lower the odds that an agent falls for a trick; they don't make it impossible. The real protection is points 2 to 6: a fooled agent can, at worst, write a wrong review comment, which a human then sees.
+Labels lower the odds that an agent falls for a trick; they don't make it impossible. The real protection is points 2 to 7: a fooled agent can, at worst, write a wrong review comment, which a human then sees (on an outsider's PR, before it's posted).
 
 ## The React analogy
 

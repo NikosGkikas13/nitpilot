@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { item, point } from '../test/chat';
+import { authorDraft, item, point, reviewerDraft } from '../test/chat';
 import { severityCounts, systemGlyph, timelineRows, withCommitHashes } from './timeline';
 
 describe('timelineRows', () => {
@@ -29,6 +29,25 @@ describe('timelineRows', () => {
     const items = [item(1, { kind: 'human', body: 'hi' }), item(2, { kind: 'point_raised', pointNumber: 7 }), item(3, { kind: 'point_reply', pointNumber: 7, body: 'Now 25.' })];
     const rows = timelineRows(items, []);
     expect(rows.map((r) => r.kind)).toEqual(['human']);
+  });
+});
+
+describe('timelineRows: drafts', () => {
+  const kinds = (rows: ReturnType<typeof timelineRows>) => rows.map((r) => (r.kind === 'draft' ? `draft ${r.draft.jobId}` : r.kind === 'point' ? `P${r.point.number}` : r.item.seq));
+
+  it("puts each waiting draft right after the line that says its job's work waits as drafts", () => {
+    const items = [
+      item(1, { body: 'Pull request opened by maya' }),
+      item(2, { body: "leo's agent finished; its work waits as drafts", data: { jobId: 'job_8' } }),
+      item(3, { kind: 'human', body: 'hi' }),
+      item(4, { body: "maya's agent finished; its work waits as drafts", data: { jobId: 'job_9' } }),
+    ];
+    expect(kinds(timelineRows(items, [], [reviewerDraft(), authorDraft()]))).toEqual([1, 2, 'draft job_8', 3, 4, 'draft job_9']);
+  });
+
+  it('puts a draft whose line is on an older page at the end, and no card for a line whose draft is gone', () => {
+    const items = [item(40, { kind: 'human', body: 'hi' }), item(41, { body: "leo's agent finished; its work waits as drafts", data: { jobId: 'job_7' } })];
+    expect(kinds(timelineRows(items, [], [authorDraft()]))).toEqual([40, 41, 'draft job_9']);
   });
 });
 

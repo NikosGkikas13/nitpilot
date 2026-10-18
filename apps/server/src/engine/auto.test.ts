@@ -132,3 +132,36 @@ describe('auto_changed', () => {
     expect(out.chat).toEqual(chat);
   });
 });
+
+describe("the trust gate wins over the switch (spec §6.1): a reviewer's work on an outside contributor's PR waits as a draft", () => {
+  /** An outside contributor's PR, or not: leo, Auto-review on, waits for someone to start his review. */
+  const waiting = (trusted: boolean, over: { lastReviewedSha?: string } = {}) =>
+    agentToAgent({ trusted, phase: 'ready', participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { attention: 'manual_review', ...over })] });
+
+  it.each([
+    { label: 'untrusted review', chat: waiting(false), jobType: 'review', applyState: 'draft' },
+    { label: 'untrusted re-review', chat: waiting(false, { lastReviewedSha: 'head0' }), jobType: 're_review', applyState: 'draft' },
+    { label: 'trusted review', chat: waiting(true), jobType: 'review', applyState: 'pending' },
+  ])("leo's $label, started by hand with Auto-review on, is queued as $applyState", ({ chat, jobType, applyState }) => {
+    const out = run(chat, { type: 'manual_review', reviewer: leo });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ jobType, applyState })]);
+  });
+
+  it('turning Auto-review on there leaves a queued review a draft', () => {
+    const chat = reviewQueued({ trusted: false, participants: [participantOf(maya, 'author'), participantOf(leo, 'reviewer', { auto: false })], jobs: [jobOf('job-r1', leo, 'reviewer', 'review', { status: 'queued', attempt: 0, applyState: 'draft' })] });
+    const out = run(chat, { type: 'auto_changed', who: leo, role: 'reviewer', on: true });
+    expect(out.chat.participants[1]!.auto).toBe(true);
+    expect(commandsOf(out, 'set_apply_state')).toEqual([]);
+  });
+
+  it("leaves the author's side alone: her Auto-fix still applies her agent's fixes", () => {
+    const chat = agentToAgent({
+      trusted: false,
+      phase: 'addressing',
+      participants: [participantOf(maya, 'author', { auto: false, byHand: true }), participantOf(leo, 'reviewer', { lastReviewedSha: 'head1' })],
+      points: [pointOf(1, leo)],
+    });
+    const out = run(chat, { type: 'auto_changed', who: maya, role: 'author', on: true });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ jobType: 'address', applyState: 'pending' })]);
+  });
+});

@@ -21,9 +21,11 @@ export type People = ReadonlyMap<string, { avatarUrl: string }>;
 
 /**
  * A review point (handoff §3, the key component): severity, category, where in the code, what's wrong, the code
- * around it, and the thread of replies and decisions. A resolved point starts collapsed to one line.
+ * around it, and the thread of replies and decisions. A resolved point starts collapsed to one line. A `draft` point
+ * (one a reviewer's agent drafted with Auto off, in its DraftCard) is marked Draft instead of a number and a status:
+ * it has neither until it's sent.
  */
-export function PointCard({ point, thread, you, people, repoUrl }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string }) {
+export function PointCard({ point, thread, you, people, repoUrl, draft = false }: { point: PointView; thread: TimelineItem[]; you: string; people: People; repoUrl: string; draft?: boolean }) {
   // Open unless resolved, until you toggle it. When the point's status changes (resolved by a person, reopened on
   // GitHub), the card follows the new status again.
   const [chosen, setChosen] = useState<{ status: PointView['status']; open: boolean } | null>(null);
@@ -43,7 +45,7 @@ export function PointCard({ point, thread, you, people, repoUrl }: { point: Poin
     setChosen({ status: point.status, open: next });
   }
   const severity = SEVERITY[point.severity];
-  const label = `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;
+  const label = draft ? `Draft, ${severity.word} ${point.category} point: ${point.title}` : `P${point.number}, ${severity.word} ${point.category} point, ${STATUS[point.status]}: ${point.title}`;
 
   if (!open) {
     return (
@@ -76,12 +78,14 @@ export function PointCard({ point, thread, you, people, repoUrl }: { point: Poin
             {severity.word}
           </span>
           <span className={styles.category}>{point.category}</span>
-          <span className={styles.id}>P{point.number}</span>
+          {draft ? <span className={styles.draft}>Draft</span> : <span className={styles.id}>P{point.number}</span>}
           <span className={styles.spacer} />
-          <span className={`${styles.status} ${styles[point.status]}`}>
-            <StatusGlyph status={point.status} />
-            {STATUS[point.status]}
-          </span>
+          {!draft && (
+            <span className={`${styles.status} ${styles[point.status]}`}>
+              <StatusGlyph status={point.status} />
+              {STATUS[point.status]}
+            </span>
+          )}
           {point.status === 'resolved' && (
             <button ref={collapseButton} type="button" className={styles.collapse} onClick={() => toggle(false)} aria-expanded="true" aria-label="Collapse point">
               ▴

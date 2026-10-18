@@ -1,0 +1,121 @@
+/* handoff component sheet, "Code snippet · diff": the snippet's box, one per file. */
+.diff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file {
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--code);
+}
+
+.head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: var(--surface);
+  color: var(--fg3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.head:hover {
+  background: var(--hover);
+}
+
+.head[aria-expanded='true'] {
+  border-bottom: 1px solid var(--b1);
+}
+
+.caret {
+  flex: none;
+  width: 10px;
+}
+
+.path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg2);
+}
+
+.adds {
+  color: var(--ok-fg);
+}
+
+/* The − of a diff is one of red's few uses (handoff tokens). */
+.dels {
+  color: var(--red-fg);
+}
+
+.code {
+  margin: 0;
+  overflow-x: auto;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.line {
+  display: flex;
+  min-width: max-content;
+}
+
+/* --fg4 is decoration only: a line's number, not its content. */
+.number {
+  flex: none;
+  width: 40px;
+  padding-right: 8px;
+  text-align: right;
+  color: var(--fg4);
+  user-select: none;
+}
+
+.sign {
+  flex: none;
+  width: 16px;
+  user-select: none;
+}
+
+.text {
+  white-space: pre;
+  padding-right: 14px;
+  font-family: inherit;
+  color: var(--fg1);
+}
+
+.add {
+  background: var(--ok-tint);
+}
+
+.add .sign {
+  color: var(--ok-fg);
+}
+
+.del {
+  background: var(--red-tint);
+}
+
+.del .sign {
+  color: var(--red-fg);
+}
+
+.hunk .text,
+.note .text {
+  color: var(--fg3);
+}
+
+.hunk {
+  background: var(--surface);
+}
