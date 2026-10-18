@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Nitpilot's app icon (handoff §9 "App icon"): a white mono "n" with a #a8e3ea diamond at the top right, on a #16707f
+    rounded square. The "n" is Fragment Mono's glyph as a path (no font needed), placed as in the handoff's 108px
+    splash icon. At 32px and below the diamond goes ("Drop the diamond below 32px"): as an image, this file's media
+    queries see its own size. apps/web/scripts/render-icons.ts makes every PNG from it.
+  -->
+  <style>
+    @media (max-width: 32px) {
+      .diamond { display: none; }
+    }
+  </style>
+  <rect class="plate" width="512" height="512" rx="118" fill="#16707f" />
+  <g class="glyph">
+    <path fill="#ffffff" d="M212.1 356.3L183.0 356.3L183.0 172.4L210.0 172.4L210.0 203.0Q220.9 186.1 235.1 176.6Q249.3 167.2 271.1 167.2Q287.2 167.2 300.4 172.6Q313.5 178.0 321.4 189.1Q329.3 200.1 329.3 217.3L329.3 356.3L300.2 356.3L300.2 228.9Q300.2 210.3 289.0 201.6Q277.8 192.8 262.3 192.8Q245.8 192.8 234.6 201.2Q223.4 209.6 217.8 223.3Q212.1 237.0 212.1 252.8L212.1 356.3Z" />
+    <path class="diamond" fill="#a8e3ea" d="M376.9 86.8L420.5 130.4L376.9 174L333.3 130.4Z" />
+  </g>
+</svg>

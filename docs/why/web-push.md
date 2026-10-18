@@ -6,7 +6,7 @@ The code: `apps/server/src/tasks/push-notifier.ts` (who gets what, and keeping t
 
 ## What a push service is
 
-A web page can't keep a connection open to our server once its tab is closed. Browsers solve that for every site at once: each browser keeps one connection to its maker's **push service** (Google's FCM for Chrome, Mozilla's for Firefox, Apple's for Safari). A site that wants to notify you sends its message to that service, and the service passes it on to your browser, which wakes the site's **service worker** (a small script the browser runs in the background, Task 20) to show it.
+A web page can't keep a connection open to our server once its tab is closed. Browsers solve that for every site at once: each browser keeps one connection to its maker's **push service** (Google's FCM for Chrome, Mozilla's for Firefox, Apple's for Safari). A site that wants to notify you sends its message to that service, and the service passes it on to your browser, which wakes the site's **service worker** (a small script the browser runs in the background: `docs/why/service-workers-and-pwa.md`) to show it.
 
 When you turn push on, the browser hands the page a **subscription**: an `endpoint` (a URL at the push service that means "this browser, this site") and two keys. The web app sends that to `POST /api/push/subscriptions`, and the server keeps one `PushSubscription` row per endpoint. Your laptop's Chrome and your phone are two rows.
 

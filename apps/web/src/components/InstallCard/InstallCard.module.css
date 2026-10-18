@@ -1,0 +1,88 @@
+/* handoff §9 "Desktop install prompt": 380px at the bottom left, 18px padding, 20px radius, a 52px icon. */
+.card {
+  position: fixed;
+  z-index: 20;
+  left: 24px;
+  bottom: 24px;
+  width: 380px;
+  padding: 18px;
+  border: 1px solid var(--b1);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 12px 36px rgba(16, 32, 24, 0.16);
+  display: flex;
+  gap: 14px;
+}
+
+.icon {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.lede {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg2);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.install,
+.later {
+  height: 38px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install {
+  padding: 0 16px;
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.later {
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+/* A phone: full width at the bottom, with the 16px gutter, above the home indicator. */
+@media (max-width: 759px) {
+  .card {
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+}

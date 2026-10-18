@@ -4,12 +4,18 @@
  * control API on a second port that only the tests use (sign someone in, and later: send webhooks, read
  * state). Playwright starts it (apps/web/playwright.config.ts); it is never imported by src/.
  *
+ * Push is on, with the env's VAPID keys or a pair made at start, so the web app offers it. No test sends a real push:
+ * sends are recorded and answered as delivered. Only `E2E_REAL_PUSH=1` (the live step in desktop Chrome, by hand)
+ * sends to the browser's real push service.
+ *
  * Run by hand: E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server
  */
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import webpush from 'web-push';
+import type { PushSend } from '../../src/tasks/web-push-send';
 import setupTestDatabase from '../global-setup';
 import { testDatabaseUrl } from '../test-database';
 import { TEST_ENV } from '../test-env';
@@ -32,11 +38,28 @@ const { fakeFetch } = await import('../fake-fetch');
 const { encrypt } = await import('../../src/lib/crypto');
 const { prisma } = await import('../../src/lib/prisma');
 const { GithubClient } = await import('../../src/platform/github/client');
+const { notificationText } = await import('../../src/tasks/handlers/notify');
+const { webPushSend } = await import('../../src/tasks/web-push-send');
+
+// The VAPID keys: the env's if it has all three, else a pair made now (any pair works for a test run).
+const env = process.env;
+const vapid =
+  env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT
+    ? { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
+    : { subject: 'mailto:e2e@example.com', ...webpush.generateVAPIDKeys() };
+/** Every push the server would have sent, in order. */
+const pushes: { endpoint: string; payload: string }[] = [];
+const recordPush: PushSend = async (target, payload) => {
+  pushes.push({ endpoint: target.endpoint, payload });
+  return { ok: true };
+};
+const realPush = env.E2E_REAL_PUSH === '1';
 
 const e2e = await startE2e({
   port: webPort,
   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
   github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
+  push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
 });
 // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
 const later = new Date(Date.now() + 365 * 86_400_000);
@@ -94,6 +117,19 @@ control.post('/settings', async (c) => {
   await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
   return c.body(null, 204);
 });
+/**
+ * Tell someone they're needed, through the server's real notifier (push first, then their CLI), with a sample "Ready
+ * for your approval" that opens the inbox. Answers who it reached and the pushes it recorded. The live step uses it,
+ * with E2E_REAL_PUSH=1, to see a notification arrive in desktop Chrome.
+ */
+control.post('/notify', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  const before = pushes.length;
+  const { reached } = await e2e.notifier.notify({ userIds: [user.id], kind: 'ready', chatId: 'sample-notification', ...notificationText('ready', 'octo/sandbox#1', []), url: `${e2e.url}/` });
+  return c.json({ reached: reached.map(() => login), recorded: pushes.slice(before) });
+});
 /** Each person's running CLI, started by a test. */
 const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
 /** Start someone's `nitpilot start` on the fake agent, with a scenario from apps/cli/src/agents/fake/scenarios. */
@@ -111,7 +147,7 @@ control.delete('/cli', async (c) => {
 });
 serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
 
-console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}`);
+console.log(`[web-e2e] app on ${e2e.url}, control API on http://127.0.0.1:${controlPort}${realPush ? ', sending real pushes' : ''}`);
 
 const stop = async () => {
   await e2e.close();

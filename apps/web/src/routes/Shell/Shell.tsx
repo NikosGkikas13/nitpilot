@@ -1,5 +1,7 @@
 import type { WebMe } from '@nitpilot/protocol';
 import { Outlet, useMatch, useNavigate } from 'react-router';
+import { InstallCard } from '../../components/InstallCard/InstallCard';
+import { HomeScreenSheetProvider } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
 import { ToastProvider } from '../../components/Toast/Toast';
 import { LiveProvider } from '../../live/LiveProvider';
 import { useEscapeBack } from '../../lib/keys';
@@ -12,14 +14,18 @@ import { UiStateProvider } from './UiState';
  * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
  * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
  * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
- * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts.
+ * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts. So do the two ways to
+ * install the app (handoff §9): the install card where the browser offers it, and the iPhone's Home Screen sheet.
  */
 export function Shell({ me }: { me: WebMe }) {
   return (
     <LiveProvider>
       <UiStateProvider>
         <ToastProvider>
-          <Layout me={me} />
+          <HomeScreenSheetProvider>
+            <Layout me={me} />
+            <InstallCard />
+          </HomeScreenSheetProvider>
         </ToastProvider>
       </UiStateProvider>
     </LiveProvider>

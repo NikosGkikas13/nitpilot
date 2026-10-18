@@ -30160,7 +30160,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Playwright `pwa.spec.ts`: the page links the manifest and `navigator.serviceWorker.ready` resolves with nothing blocked; `/manifest.webmanifest`, `/sw.js` and the icons answer 200 with the right types and `Cache-Control: no-cache` (Task 2's rule); Settings reads the real browser's push state. No test subscribes to push or sends one.
 - By hand (the browser look and the live step): Chrome's install offer and permission prompt can't be exercised in the in-app browser or in headless Chromium; the live step does them in desktop Chrome.
 
-- [ ] **Step 1: Write the failing tests for the service worker and the push helpers**
+- [x] **Step 1: Write the failing tests for the service worker and the push helpers**
 
 Four test files and one helper. The worker test loads `public/sw.js` as text and runs it with a pretend `self` (no real worker): it records the listeners the file adds, and stands in for notifications and open windows:
 
@@ -30648,12 +30648,12 @@ describe('turnPushOffBeforeSignOut', () => {
 ```
 
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm test -w apps/web`
 Expected: FAIL, 4 test files failed and 28 passed (32). The 197 existing tests still pass (`Tests 197 passed`), and the four new files fail to load, so none of their tests run: `src/sw.test.ts` ("ENOENT: no such file or directory, open '…/apps/web/public/sw.js'"), and `src/push/device.test.ts`, `register.test.ts` and `subscribe.test.ts` ("Failed to resolve import ./device", "./register", "./subscribe").
 
-- [ ] **Step 3: The service worker**
+- [x] **Step 3: The service worker**
 
 Plain JavaScript, no imports (a worker file in `public/` isn't bundled). Read the comments: they say why each choice was made:
 
@@ -30772,7 +30772,7 @@ Expected: PASS, 8 tests.
 Run: `npx eslint apps/web/public/sw.js apps/web/src/sw.test.ts`
 Expected: no output. (Without the `eslint.config.mjs` change, ESLint reports 15 errors in `sw.js`: `'self' is not defined` and `'URL' is not defined`.)
 
-- [ ] **Step 4: The device helpers and the registration**
+- [x] **Step 4: The device helpers and the registration**
 
 What a browser says about itself:
 
@@ -30862,7 +30862,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 Run: `npm test -w apps/web -- src/push/device.test.ts src/push/register.test.ts`
 Expected: PASS, 15 tests (12 and 3).
 
-- [ ] **Step 5: Subscribing**
+- [x] **Step 5: Subscribing**
 
 `pushState`, `turnPushOn`, `turnPushOff` and the sign-out version. The order of the awaits matters: the permission prompt comes first because Safari only shows it for a click. The long comments say the reasons:
 
@@ -30988,12 +30988,12 @@ export async function turnPushOffBeforeSignOut(ms = SIGN_OUT_WAIT_MS): Promise<v
 Run: `npm test -w apps/web -- src/sw.test.ts src/push`
 Expected: PASS, 37 tests in 4 files (8, 12, 3 and 14).
 
-- [ ] **Step 6: Typecheck and lint the push code**
+- [x] **Step 6: Typecheck and lint the push code**
 
 Run: `npm run typecheck -w apps/web && npx eslint apps/web/public apps/web/src/push apps/web/src/sw.test.ts apps/web/src/test/push.ts`
 Expected: no errors, no output from ESLint.
 
-- [ ] **Step 7: Write the failing manifest test**
+- [x] **Step 7: Write the failing manifest test**
 
 It reads the files the build copies to the root of `dist`, so it checks the real ones: the manifest against `BRAND`, the icon files against their claimed sizes, `apple-touch-icon.png` and `maskable-512.png` for an alpha channel (iOS fills transparency with black), and the new tags in `index.html`:
 
@@ -31091,12 +31091,12 @@ describe('index.html', () => {
 ```
 
 
-- [ ] **Step 8: Run it to see it fail**
+- [x] **Step 8: Run it to see it fail**
 
 Run: `npm test -w apps/web -- src/manifest.test.ts`
 Expected: FAIL, 1 test file failed and no tests run: "ENOENT: no such file or directory, open '…/apps/web/public/manifest.webmanifest'" (the file is read when the test file loads).
 
-- [ ] **Step 9: The icons**
+- [x] **Step 9: The icons**
 
 `icon.svg` is the one source. The "n" is Fragment Mono's glyph drawn as a path (taken once from the font file, so no font is needed to draw it and it looks the same everywhere), placed as in the handoff's 108 px splash icon. The `@media (max-width: 32px)` inside it hides the diamond at 32 px and below:
 
@@ -31280,7 +31280,7 @@ Rendering these again with the same Chromium gave byte-identical files to the bu
 Run: `npm run typecheck -w apps/web && npx eslint apps/web/scripts`
 Expected: no errors.
 
-- [ ] **Step 10: The manifest and `index.html`**
+- [x] **Step 10: The manifest and `index.html`**
 
 A static file, so `vite build` copies it to the root of `dist` as it is. It adds `id` and `scope` (so the installed app is one app whatever address opens it) and a description. The SVG isn't listed as an icon (Chrome wants PNGs here):
 
@@ -31336,7 +31336,7 @@ index eb45613..2155928 100644
 Run: `npm test -w apps/web -- src/manifest.test.ts`
 Expected: PASS, 5 tests.
 
-- [ ] **Step 11: Write the failing install card tests**
+- [x] **Step 11: Write the failing install card tests**
 
 The card reads a tiny store (`InstallPrompt`), so the tests build their own with a pretend `window`; no real browser event is needed. They cover: nothing before the offer, the offer that comes before the card is on screen, Install opening the browser's dialog once, Not now remembered (also without site data), and never inside the installed app:
 
@@ -31445,12 +31445,12 @@ describe('InstallCard (handoff §9 "Desktop install prompt")', () => {
 ```
 
 
-- [ ] **Step 12: Run it to see it fail**
+- [x] **Step 12: Run it to see it fail**
 
 Run: `npm test -w apps/web`
 Expected: FAIL, 1 test file failed and 33 passed (34); `Tests 239 passed`. `InstallCard.test.tsx` fails to load: "Failed to resolve import ./InstallCard". (The 239 are the 197 from before and the 42 of Steps 1 to 10.)
 
-- [ ] **Step 13: The install store, the remembered flags and the card**
+- [x] **Step 13: The install store, the remembered flags and the card**
 
 `install.ts` is a tiny store for the browser's install offer, which can come as soon as the page loads, long before anyone signs in. In React terms it's a one-value Zustand store that the card reads with `useSyncExternalStore`:
 
@@ -31706,7 +31706,7 @@ Expected: PASS, 7 tests.
 Run: `npm run typecheck -w apps/web && npx eslint apps/web/src`
 Expected: no errors.
 
-- [ ] **Step 14: Write the failing sheet and Settings tests**
+- [x] **Step 14: Write the failing sheet and Settings tests**
 
 The sheet is tested through the whole signed-in app (`renderApp`), pretending to be Safari on an iPhone: it opens by itself once with its steps and focus on Got it, is remembered, closes on Esc and on the backdrop, opens again from Settings with focus given back, and never opens elsewhere:
 
@@ -31942,12 +31942,12 @@ describe('SettingsPlaceholder: Sign out', () => {
 ```
 
 
-- [ ] **Step 15: Run them to see them fail**
+- [x] **Step 15: Run them to see them fail**
 
 Run: `npm test -w apps/web`
 Expected: FAIL, 2 test files failed and 34 passed (36); `Tests 246 passed`. Both new files fail to load: "Failed to resolve import ./IosHomeScreenSheet" (the Settings test imports its `HOME_SCREEN_SHEET_SEEN_KEY`), so none of their 14 tests run.
 
-- [ ] **Step 16: The Home Screen sheet**
+- [x] **Step 16: The Home Screen sheet**
 
 The provider decides whether the sheet opens by itself (an iPhone or iPad, not the Home Screen app, not seen before). It also gives Settings `open()`. The sheet is a modal dialog: focus goes to Got it and stays; Esc calls `stopPropagation()` because on a phone the Shell's `useEscapeBack` would otherwise also leave the page. In its CSS the pointer diamond is positioned to poke out below the sheet, the handoff fix named in Behavior:
 
@@ -32219,7 +32219,7 @@ Create `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.module.css
 Run: `npm test -w apps/web -- src/components/IosHomeScreenSheet src/routes/Settings`
 Expected: FAIL, 13 failed and 1 passed (14): the files load now, but nothing puts the provider in the app or the row on the Settings page yet (only "never opens on its own anywhere else" passes). Step 17 does both.
 
-- [ ] **Step 17: The Shell and the Settings row**
+- [x] **Step 17: The Shell and the Settings row**
 
 The Shell holds the sheet's provider and the install card, next to the toasts. The Settings placeholder gets the push row (`PushRow`, driven by `pushState()` in a query) and Sign out removes this browser's subscription first. `Pane.module.css` gets the two small classes the row uses (`.section`, `.heading`):
 
@@ -32424,12 +32424,12 @@ index b213a9e..5cba72d 100644
 Run: `npm test -w apps/web -- src/components/IosHomeScreenSheet src/routes/Settings`
 Expected: PASS, 14 tests (5 and 9).
 
-- [ ] **Step 18: Run all the web tests**
+- [x] **Step 18: Run all the web tests**
 
 Run: `npm test -w apps/web && npm run typecheck -w apps/web && npm run lint`
 Expected: PASS, 260 tests (36 files); typecheck and lint clean.
 
-- [ ] **Step 19: Register the worker, and keep the install offer from the start**
+- [x] **Step 19: Register the worker, and keep the install offer from the start**
 
 `main.tsx` starts listening for the install offer before React renders (the card reads it later) and registers the worker after the first render. The app works without a worker; only push and installing need it:
 
@@ -32470,7 +32470,7 @@ index 959f755..67e5c29 100644
 Run: `npm run build -w apps/web && ls apps/web/dist`
 Expected: the build succeeds and `dist` holds `assets`, `icons`, `index.html`, `manifest.webmanifest` and `sw.js`: the worker and the manifest are at the root, where the server's `no-cache` rule for files outside `assets/` (Task 2) applies to them.
 
-- [ ] **Step 20: Write the failing Playwright spec**
+- [x] **Step 20: Write the failing Playwright spec**
 
 A helper for the control API (`notify`), and the spec. It uses the real Chromium: the page links the manifest and the worker becomes active, with nothing blocked by the Content-Security-Policy; the files answer with the right types and `no-cache`; Settings reads the push state. Headless Chromium reports notifications as blocked whatever the test allows, so the Settings test checks the blocked sentence; that still proves the server's VAPID key reached the page and `pushState()` ran against Chromium's real APIs. It never subscribes: that would reach Google's push service. The on and off switch is covered by `subscribe.test.ts`, `SettingsPlaceholder.test.tsx` and the live step:
 
@@ -32548,12 +32548,12 @@ test("Settings reads push from the real browser; nobody subscribed means nothing
 ```
 
 
-- [ ] **Step 21: Run it to see it fail**
+- [x] **Step 21: Run it to see it fail**
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: FAIL, 1 failed and 9 passed (10). The first two `pwa.spec.ts` tests already pass, because the web app and the build are done. The third fails: `getByText("Notifications are blocked for this site. …")` is not found, since the Playwright server still has no VAPID key, so Settings says "Push isn't set up on this server." (Ports 4319 and 4320 must be free: `lsof -i :4319`.)
 
-- [ ] **Step 22: The Playwright server: push keys, a recording sender, and `POST /notify`**
+- [x] **Step 22: The Playwright server: push keys, a recording sender, and `POST /notify`**
 
 `startE2e` takes an optional `push` (the public key for the web app, and the sender the push notifier uses) and returns the `notifier` it built. Without `push` it behaves exactly as before, so the server's own end-to-end project is unchanged:
 
@@ -32708,12 +32708,12 @@ index 1797780..9f45cf2 100644
 ```
 
 
-- [ ] **Step 23: Run Playwright**
+- [x] **Step 23: Run Playwright**
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 10 tests (`pwa.spec.ts` takes well under a second per test; the whole suite about 12 s). Run `npm run test:e2e -w apps/web` twice more: it must pass every time.
 
-- [ ] **Step 24: The explainer, the pointer and the spec**
+- [x] **Step 24: The explainer, the pointer and the spec**
 
 The explainer a React developer reads first (`CLAUDE.md`): a service worker as an event handler the browser keeps after the tab unmounts, why a push needs one, what makes an app installable, and the iOS rule:
 
@@ -32820,7 +32820,7 @@ index f28db95..a11612d 100644
 ```
 
 
-- [ ] **Step 25: Look at it (controller, in the in-app browser)**
+- [x] **Step 25: Look at it (controller, in the in-app browser)**
 
 Start the Playwright server (launch config `nitpilot-e2e-web`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build -w apps/web`), without `E2E_REAL_PUSH`: nothing is sent to a real push service. Sign maya in and set her cookie in the tab, as in Task 18's look:
 
@@ -32877,7 +32877,7 @@ Ask the person before running this: it sends a real notification through Google'
 16. Installing the app. Reload the Nitpilot tab (**⌘R**). In Chrome's address bar, at the right end, an install icon (a small monitor with a down arrow) appears, and our "Install Nitpilot" card shows at the bottom left of the page. (If the card hasn't appeared, open DevTools → **Application** → **Manifest** and check that "Installability" lists no errors.) Click **Not now** on the card: it goes, and reloading the page doesn't bring it back. To see it again, DevTools → **Application** → **Storage** → **Clear site data**, then reload. Now click **Install** on the card. Chrome's own dialog says "Install app?" with "Nitpilot" and the icon: click **Install**. A separate window opens on maya's inbox, its title bar is teal (#16707f) and no install card shows inside it. Close that window; to remove the app, open it again, click the **⋮** menu in its title bar and choose **Uninstall Nitpilot…**.
 17. Clean up. In Chrome click the site-info icon left of the address bar → **Site settings** → **Reset permissions**. In the first terminal press **Ctrl+C** (this stops maya's CLI too). Check that `lsof -iTCP:4319 -iTCP:4320 -sTCP:LISTEN` prints nothing.
 
-- [ ] **Step 27: Run everything, then commit**
+- [x] **Step 27: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 79, CLI 333 passed + 14 skipped, server 971, web 260; end to end 6; Playwright 10; typecheck and lint clean.

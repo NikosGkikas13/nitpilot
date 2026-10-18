@@ -21,6 +21,7 @@ import { reportFailedWrite } from '../../src/tasks/handlers/failed-writes';
 import { createTaskHandlers } from '../../src/tasks/handlers/index';
 import { FallbackNotifier, type Notification } from '../../src/tasks/notifier';
 import { PushNotifier } from '../../src/tasks/push-notifier';
+import type { PushSend } from '../../src/tasks/web-push-send';
 import { TaskRunner } from '../../src/tasks/runner';
 import { CliHub, type MessageListener } from '../../src/ws/cli-hub';
 import { routeUpgrades } from '../../src/ws/upgrade-router';
@@ -44,16 +45,19 @@ export type RunningCli = { lines: string[]; configDir: string; agentStarted: boo
  * Plan 1 end to end (spec §19): the server, wired exactly like main.ts with GitHub replaced by
  * FakePlatform and local git folders, on a random port; and one `nitpilot start` per person, each with
  * its own config folder, clone and git identity, running the fake agent. The Playwright tests' server
- * (web-server.ts) passes a fixed port, the built web app, and a GithubClient that lets people read the test repo.
+ * (web-server.ts) passes a fixed port, the built web app, a GithubClient that lets people read the test repo, and
+ * `push`: a VAPID public key for the web app and the sender push uses (a recording fake, never a real push service
+ * in a test).
  */
-export async function startE2e(opts: { port?: number; webDistDir?: string; github?: GithubClient } = {}) {
+export async function startE2e(opts: { port?: number; webDistDir?: string; github?: GithubClient; push?: { vapidPublicKey: string; send: PushSend } } = {}) {
   await resetDb();
   const github = localGithub();
   const platform = new FakePlatform();
   const hub = new CliHub();
   const notified: Notification[] = [];
-  // As main.ts builds it on a server without VAPID keys: push is off, so every CLI alerts.
-  const realNotifier = new FallbackNotifier(new PushNotifier(null), new CliNotifier(hub));
+  // As main.ts builds it. Without `push` it's a server without VAPID keys: push is off, so every CLI alerts.
+  const realNotifier = new FallbackNotifier(new PushNotifier(opts.push?.send ?? null), new CliNotifier(hub));
+  const vapidPublicKey = opts.push?.vapidPublicKey ?? null;
   const notifier = {
     notify: async (n: Notification) => {
       notified.push(n);
@@ -79,8 +83,8 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
   const access = new RepoAccess(githubApi);
   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
-  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey: null });
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
@@ -136,6 +140,8 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
       hub,
       webHub,
       notified,
+      /** The server's notifier, as the notify task uses it (push first, then the CLI). */
+      notifier,
       users,
       deliver,
       /** Run code on each CLI message before the server sees it. */

@@ -15,6 +15,16 @@ export default tseslint.config(
     ...reactHooks.configs.flat['recommended-latest'],
   },
   {
+    // The service worker is plain JavaScript that runs in the browser's worker, where `self` is the worker.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
+    // Run by hand with Node (npm run icons -w apps/web), not in the browser.
+    files: ['apps/web/scripts/**/*.ts'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // The engine is a pure function: same input, same output, no I/O.
     // See docs/why/pure-engine.md.
     // Engine files import each other as './x'; anything reached through '../' is outside the engine.

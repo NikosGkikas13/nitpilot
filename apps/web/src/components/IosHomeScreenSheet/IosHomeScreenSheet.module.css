@@ -1,0 +1,133 @@
+/* handoff §9 "iOS Home Screen hint": a bottom sheet, 8px from the edges, 28px radius, a grabber, over a dimmed page. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.sheet {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  /* An iPad in landscape: a sheet the width of a phone, centred. */
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 10px 20px 24px;
+  border-radius: 28px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grabber {
+  align-self: center;
+  width: 36px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--b1);
+}
+
+.head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.icon {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.lede {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--fg2);
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 15px;
+}
+
+.number {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gotIt {
+  height: 48px;
+  border: 1px solid var(--b1);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg1);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * The little diamond under the sheet, pointing down at Safari's toolbar. Half of it pokes out below the sheet. (The
+ * handoff's flow margins put it inside the sheet, over Got it's border; placed absolutely it does what it means.)
+ * An iPad has Share at the top: none there.
+ */
+.pointer {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface);
+  transform: rotate(45deg);
+}
+
+@media (min-width: 760px) {
+  .pointer {
+    display: none;
+  }
+}

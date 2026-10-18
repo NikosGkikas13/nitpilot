@@ -44,3 +44,13 @@ export function pageProblems(page: Page): string[] {
   page.on('pageerror', (err) => errors.push(err.message));
   return errors;
 }
+
+/**
+ * Tell someone they're needed, through the server's real notifier: a sample "Ready for your approval". Answers who it
+ * reached and the pushes the server recorded (the Playwright server never sends a real push).
+ */
+export async function notify(login: 'maya' | 'leo'): Promise<{ reached: string[]; recorded: { endpoint: string; payload: string }[] }> {
+  const res = await fetch(`${CONTROL_URL}/notify`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`notifying ${login} failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { reached: string[]; recorded: { endpoint: string; payload: string }[] };
+}
