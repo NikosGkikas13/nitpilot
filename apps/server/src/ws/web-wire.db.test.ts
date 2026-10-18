@@ -36,7 +36,7 @@ async function setup(opts: { loadItems?: LoadItems; catchUp?: LoadItems; github?
   const cliHub = new CliHub();
   const cliServer = await listen(cliHub);
   const web = await startWebHub({ access, loadItems: opts.catchUp ?? loadItemsAfter });
-  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, debounceMs: DEBOUNCE_MS, ...(opts.loadItems ? { loadItems: opts.loadItems } : {}) });
+  const live = wireWebHub({ webHub: web.hub, dispatcher, cliHub, access, vapidPublicKey: null, debounceMs: DEBOUNCE_MS, ...(opts.loadItems ? { loadItems: opts.loadItems } : {}) });
   stops.push(() => cliServer.close(), () => web.close(), () => live.stop());
 
   const [maya, leo, reader] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' }), await makeUser({ login: 'rae' })];

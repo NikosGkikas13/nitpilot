@@ -1,7 +1,16 @@
+import { createECDH } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getEnv, vapidDetails } from './env';
 
 afterEach(() => vi.unstubAllEnvs());
+
+/** A real VAPID key pair, as `npm run vapid:keys` makes one: P-256, public key uncompressed, both base64url. */
+function makeKeyPair() {
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  return { publicKey: ecdh.getPublicKey('base64url'), privateKey: ecdh.getPrivateKey('base64url') };
+}
+const pair = makeKeyPair();
 
 describe('getEnv', () => {
   it('reads the test environment', () => {
@@ -29,7 +38,7 @@ describe('getEnv', () => {
   });
 
   describe('Web Push keys', () => {
-    const keys = { VAPID_PUBLIC_KEY: 'BPublic', VAPID_PRIVATE_KEY: 'private', VAPID_SUBJECT: 'mailto:admin@example.com' };
+    const keys = { VAPID_PUBLIC_KEY: pair.publicKey, VAPID_PRIVATE_KEY: pair.privateKey, VAPID_SUBJECT: 'mailto:admin@example.com' };
     const stub = (values: Record<string, string>) => Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
 
     it('are optional: without them push is off', () => {
@@ -41,7 +50,7 @@ describe('getEnv', () => {
 
     it('turn push on when all three are set, with a mailto: or https: subject', () => {
       stub(keys);
-      expect(vapidDetails(getEnv())).toEqual({ publicKey: 'BPublic', privateKey: 'private', subject: 'mailto:admin@example.com' });
+      expect(vapidDetails(getEnv())).toEqual({ publicKey: pair.publicKey, privateKey: pair.privateKey, subject: 'mailto:admin@example.com' });
       vi.stubEnv('VAPID_SUBJECT', 'https://nitpilot.dev');
       expect(vapidDetails(getEnv())?.subject).toBe('https://nitpilot.dev');
     });
@@ -49,6 +58,24 @@ describe('getEnv', () => {
     it('are all or none', () => {
       stub({ VAPID_PUBLIC_KEY: keys.VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: keys.VAPID_PRIVATE_KEY });
       expect(() => getEnv()).toThrow(/VAPID_SUBJECT: set all three of VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT, or none/);
+    });
+
+    // A bad key would make every send fail on our side (web-push only checks the keys inside sendNotification), so the
+    // server refuses to start instead.
+    const NOT_A_PAIR = /VAPID_PUBLIC_KEY: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY aren't one key pair \(npm run vapid:keys makes a pair\)/;
+
+    it("refuse a private key with one character mistyped", () => {
+      // A middle character: the last one of a base64url key carries bits that decoding ignores.
+      const typo = pair.privateKey[10] === 'A' ? 'B' : 'A';
+      stub({ ...keys, VAPID_PRIVATE_KEY: pair.privateKey.slice(0, 10) + typo + pair.privateKey.slice(11) });
+      expect(() => getEnv()).toThrow(NOT_A_PAIR);
+    });
+
+    it('refuse a public key from another pair, and keys that are not keys at all', () => {
+      stub({ ...keys, VAPID_PUBLIC_KEY: makeKeyPair().publicKey });
+      expect(() => getEnv()).toThrow(NOT_A_PAIR);
+      stub({ ...keys, VAPID_PUBLIC_KEY: 'BPublic', VAPID_PRIVATE_KEY: 'private' });
+      expect(() => getEnv()).toThrow(NOT_A_PAIR);
     });
 
     it('refuse a subject that is neither mailto: nor https:', () => {

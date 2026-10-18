@@ -35,8 +35,30 @@ export function actorOf(event: DomainEvent): string | null {
       return event.author.githubId;
     case 'manual_review':
       return event.reviewer.githubId;
-    default:
+    // From GitHub, an agent or a timer: nobody in Nitpilot acted.
+    case 'pr_opened':
+    case 'pr_reopened':
+    case 'pr_ready':
+    case 'pr_to_draft':
+    case 'pr_closed':
+    case 'pr_retargeted':
+    case 'review_requested':
+    case 'review_request_removed':
+    case 'head_updated':
+    case 'external_comment':
+    case 'external_comment_deleted':
+    case 'external_review_submitted':
+    case 'thread_resolved':
+    case 'thread_unresolved':
+    case 'job_completed':
+    case 'job_failed':
+    case 'timer':
+    case 'write_failed':
       return null;
+    default: {
+      const unhandled: never = event;
+      return unhandled;
+    }
   }
 }
 

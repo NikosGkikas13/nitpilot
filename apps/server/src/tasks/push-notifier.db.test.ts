@@ -13,8 +13,10 @@ beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => {}));
 afterEach(() => vi.restoreAllMocks());
 
 const OK: PushResult = { ok: true };
-const GONE: PushResult = { ok: false, gone: true, error: 'the push service answered 410' };
-const DOWN: PushResult = { ok: false, gone: false, error: 'the push service answered 503' };
+const GONE: PushResult = { ok: false, gone: true, answered: true, error: 'the push service answered 410' };
+const DOWN: PushResult = { ok: false, gone: false, answered: true, error: 'the push service answered 503' };
+/** No reply at all (our network is down, a key is bad): not the subscription's fault. */
+const NO_ANSWER: PushResult = { ok: false, gone: false, answered: false, error: 'getaddrinfo ENOTFOUND push.example.com' };
 
 /** A pretend push service: each endpoint answers what the test says (OK if it says nothing). It records every send. */
 function fakePush(answers: Record<string, PushResult> = {}) {
@@ -90,7 +92,7 @@ describe('PushNotifier', () => {
     expect(await stillThere(sub.id)).toBe(false);
   });
 
-  it('keeps going for everyone else when one send throws', async () => {
+  it("keeps going for everyone else when one send throws, and doesn't hold it against the subscription", async () => {
     const [maya, leo] = [await makeUser(), await makeUser()];
     const [broken, fine] = [await subscribe(maya.id), await subscribe(leo.id)];
     const send: PushSend = async (sub) => {
@@ -98,8 +100,17 @@ describe('PushNotifier', () => {
       return OK;
     };
     expect(await new PushNotifier(send).notify(ready([maya.id, leo.id]))).toEqual({ reached: [leo.id] });
-    expect(await failCountOf(broken.id)).toBe(1);
+    expect(await failCountOf(broken.id)).toBe(0);
     expect(await stillThere(fine.id)).toBe(true);
+  });
+
+  it('never counts a send that got no answer against a subscription: it stays, and the person is not reached', async () => {
+    const maya = await makeUser();
+    const sub = await subscribe(maya.id);
+    const notifier = new PushNotifier(fakePush({ [sub.endpoint]: NO_ANSWER }).send);
+    for (let i = 0; i < MAX_PUSH_FAILURES + 1; i++) expect(await notifier.notify(ready([maya.id]))).toEqual({ reached: [] });
+    expect(await stillThere(sub.id)).toBe(true);
+    expect(await failCountOf(sub.id)).toBe(0);
   });
 
   it('reaches nobody and leaves the subscriptions alone when push is off (no VAPID keys)', async () => {

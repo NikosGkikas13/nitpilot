@@ -12,6 +12,8 @@ When you turn push on, the browser hands the page a **subscription**: an `endpoi
 
 In React terms: the endpoint is like a callback ref someone gave you. You can't call into their component, but you can call the function they handed you, and it runs on their side.
 
+Because the server POSTs to whatever endpoint a browser hands it, `isPushEndpoint` (in the protocol package) only accepts an `https:` address whose host is a name, not an IP address and not `localhost`: otherwise a signed-in user could make the server call its own neighbours (`127.0.0.1`, a cloud's `169.254.169.254`). It checks the URL only, so it can't see where a public name resolves. But the send is https with certificate checking, so a name that points at a private address only gets a TLS failure unless that address serves a valid certificate for the name, and the server reads nothing from the answer but its status.
+
 ## What VAPID keys prove
 
 Anyone who learns an endpoint could POST to it. So the push service only accepts messages signed by the site the browser subscribed for. That's **VAPID**: the server has a key pair (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` in `.env`, made once with `npm run vapid:keys`). The browser subscribes with the public key (the web app gets it from `GET /api/me`, `push.vapidPublicKey`), and every send is signed with the private key. The push service checks the signature against the key the subscription was made with. `VAPID_SUBJECT` is a `mailto:` or `https:` contact the push service can use if our server misbehaves.
@@ -30,7 +32,7 @@ Two more options on every send: the push service keeps a message for a phone tha
 
 The push service answers each send. `201`: delivered (or queued for a sleeping phone). `404` or `410`: **this subscription doesn't exist any more**. The person cleared the site's data, took back the permission, or uninstalled the browser. It won't come back, so the row is deleted at once.
 
-Anything else (`429` too many requests, `500`, a timeout) may pass, so it only adds 1 to the row's `failCount`. A success sets it back to 0. A row that fails 5 times in a row is deleted, so a dead endpoint that never says 410 doesn't get tried forever.
+Any other answer from the push service (`429` too many requests, `500`) may pass, so it only adds 1 to the row's `failCount`. A success sets it back to 0. A row that gets 5 failed answers in a row is deleted, so a dead endpoint that never says 410 doesn't get tried forever. A send that got **no answer** (a timeout, a network error) doesn't count: that is usually our own side (the server's network is down), and five of those would otherwise wipe everyone's subscriptions. For the same reason the keys are checked at start-up: a `VAPID_PRIVATE_KEY` that isn't the pair of `VAPID_PUBLIC_KEY` stops the server from starting, instead of making every send fail later.
 
 A failed send never stops the others: each subscription is tried on its own, and the notify task fails (and is retried) only if the database does. A retry can push a second time to someone the first attempt already reached; that's accepted, since it needs a database failure in the middle of a send.
 

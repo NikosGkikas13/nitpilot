@@ -369,7 +369,8 @@ model GithubWrite {
 /// One browser or device that asked for Web Push (Plan 2, spec §8; docs/why/web-push.md). `endpoint` is the push
 /// service's address for it; `p256dh` and `auth` are the keys the payload is encrypted with, so only that browser can
 /// read it. `label` names it on the Settings page ("Chrome on macOS"). A 404 or 410 from the push service deletes the
-/// row; other failures add 1 to `failCount`, a success sets it back to 0, and the fifth failure in a row deletes it.
+/// row; other answers from the push service add 1 to `failCount` (no answer at all counts for nothing), a success sets
+/// it back to 0, and the fifth failed answer in a row deletes it.
 model PushSubscription {
   id        String   @id @default(cuid())
   userId    String

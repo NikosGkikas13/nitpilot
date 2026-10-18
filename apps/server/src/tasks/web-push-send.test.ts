@@ -17,18 +17,20 @@ describe('webPushSend', () => {
   });
 
   it.each([404, 410])('calls a subscription gone when the push service answers %i', async (status) => {
-    expect(await webPushSend(vapid, answering(status))(sub, '{}')).toEqual({ ok: false, gone: true, error: `the push service answered ${status}` });
+    expect(await webPushSend(vapid, answering(status))(sub, '{}')).toEqual({ ok: false, gone: true, answered: true, error: `the push service answered ${status}` });
   });
 
   it('calls any other answer a failure that may pass, with what the service said', async () => {
-    expect(await webPushSend(vapid, answering(429, 'Too many requests'))(sub, '{}')).toEqual({ ok: false, gone: false, error: 'the push service answered 429: Too many requests' });
-    expect(await webPushSend(vapid, answering(500))(sub, '{}')).toEqual({ ok: false, gone: false, error: 'the push service answered 500' });
+    expect(await webPushSend(vapid, answering(429, 'Too many requests'))(sub, '{}')).toEqual({ ok: false, gone: false, answered: true, error: 'the push service answered 429: Too many requests' });
+    expect(await webPushSend(vapid, answering(500))(sub, '{}')).toEqual({ ok: false, gone: false, answered: true, error: 'the push service answered 500' });
   });
 
-  it('turns a network error or a timeout into a failure, never a throw', async () => {
+  // `answered: false` means no reply came back, which is usually our side (the network, a bad key), so it isn't held
+  // against the subscription.
+  it('turns a network error or a timeout into an unanswered failure, never a throw', async () => {
     const timedOut = vi.fn(async () => {
       throw new Error('Socket timeout');
     });
-    expect(await webPushSend(vapid, timedOut)(sub, '{}')).toEqual({ ok: false, gone: false, error: 'Socket timeout' });
+    expect(await webPushSend(vapid, timedOut)(sub, '{}')).toEqual({ ok: false, gone: false, answered: false, error: 'Socket timeout' });
   });
 });

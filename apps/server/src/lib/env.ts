@@ -1,7 +1,24 @@
+import { createECDH } from 'node:crypto';
 import { z } from 'zod';
 
 /** An optional value: left empty (`NAME=` in .env) counts as not set. */
 const optionalText = z.string().optional().transform((value) => value?.trim() || undefined);
+
+/**
+ * Is this public key the private key's own? A bad key would make every send fail on our side (web-push only checks the
+ * keys inside `sendNotification`), so the server refuses to start with one instead of failing at the first notification.
+ */
+function isVapidKeyPair(publicKey: string, privateKey: string): boolean {
+  const privateBytes = Buffer.from(privateKey, 'base64url');
+  if (privateBytes.length !== 32 || Buffer.from(publicKey, 'base64url').length !== 65) return false;
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(privateBytes);
+    return ecdh.getPublicKey('base64url') === publicKey;
+  } catch {
+    return false;
+  }
+}
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -41,6 +58,9 @@ const EnvSchema = z.object({
     return set === 0 || set === 3;
   },
   { path: ['VAPID_SUBJECT'], message: 'set all three of VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT, or none (npm run vapid:keys makes a key pair)' },
+).refine(
+  (env) => !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT || isVapidKeyPair(env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY),
+  { path: ['VAPID_PUBLIC_KEY'], message: "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY aren't one key pair (npm run vapid:keys makes a pair)" },
 );
 
 export type Env = z.infer<typeof EnvSchema>;

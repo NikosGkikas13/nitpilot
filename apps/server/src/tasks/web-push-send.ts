@@ -6,9 +6,11 @@ export type PushTarget = { endpoint: string; keys: { p256dh: string; auth: strin
 
 /**
  * How a send went. `gone`: the push service says this subscription no longer exists (404 or 410: site data cleared,
- * permission revoked, the browser uninstalled), so the row should be deleted. Any other failure may pass.
+ * permission revoked, the browser uninstalled), so the row should be deleted. `answered`: the push service replied
+ * with an HTTP status; false means no reply came back (a network error, a timeout, a key the encryption refused), which
+ * is usually our own side and so isn't held against the subscription.
  */
-export type PushResult = { ok: true } | { ok: false; gone: boolean; error: string };
+export type PushResult = { ok: true } | { ok: false; gone: boolean; answered: boolean; error: string };
 
 /** Send one encrypted Web Push. Never throws: a failure is an answer. Tests pass a fake; production uses `webPushSend`. */
 export type PushSend = (target: PushTarget, payload: string) => Promise<PushResult>;
@@ -33,10 +35,10 @@ export function webPushSend(vapid: VapidDetails, sendNotification = webpush.send
       if (err instanceof webpush.WebPushError) {
         const gone = err.statusCode === 404 || err.statusCode === 410;
         const said = err.body ? `: ${err.body.slice(0, 200)}` : '';
-        return { ok: false, gone, error: `the push service answered ${err.statusCode}${said}` };
+        return { ok: false, gone, answered: true, error: `the push service answered ${err.statusCode}${said}` };
       }
-      // A network error, a timeout, or keys the encryption refused.
-      return { ok: false, gone: false, error: err instanceof Error ? err.message : String(err) };
+      // A network error, a timeout, or keys the encryption refused: no answer from the push service.
+      return { ok: false, gone: false, answered: false, error: err instanceof Error ? err.message : String(err) };
     }
   };
 }

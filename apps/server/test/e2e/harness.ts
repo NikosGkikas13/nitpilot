@@ -79,7 +79,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   const githubApi = opts.github ?? new GithubClient(fakeFetch({}));
   const access = new RepoAccess(githubApi);
   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
-  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access });
+  const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey: null });
   const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;

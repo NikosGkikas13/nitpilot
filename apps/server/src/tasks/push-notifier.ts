@@ -13,8 +13,9 @@ type Subscription = { id: string; userId: string; endpoint: string; p256dh: stri
 /**
  * Web Push notifications (spec §16, docs/why/web-push.md): each notification goes to every browser and device a
  * person subscribed, one after another. One that arrives reaches the person. A subscription the push service calls
- * gone (404 or 410) is deleted; any other failure counts against it, and the fifth in a row deletes it (a success
- * starts the count again). A failed send never stops the others: only a database error fails the notify task, which
+ * gone (404 or 410) is deleted; any other answer from the push service counts against it, and the fifth in a row
+ * deletes it (a success starts the count again). A send that got no answer doesn't count, since that's usually our own
+ * network or a bad key, and five of those would otherwise wipe everyone's subscriptions. A failed send never stops the others: only a database error fails the notify task, which
  * is then retried, and may push a second time to someone it already reached (accepted: rare, and harmless).
  *
  * `send` is null when the server has no VAPID keys: push is off, nobody is reached, and the rows are left alone.
@@ -42,7 +43,7 @@ export class PushNotifier implements Notifier {
     try {
       return await send({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, message);
     } catch (err) {
-      return { ok: false, gone: false, error: err instanceof Error ? err.message : String(err) };
+      return { ok: false, gone: false, answered: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 }
@@ -58,6 +59,11 @@ async function record(sub: Subscription, result: PushResult): Promise<void> {
   }
   if (result.gone) {
     await prisma.pushSubscription.deleteMany({ where: { id: sub.id } });
+    return;
+  }
+  if (!result.answered) {
+    // Nothing came back from the push service: usually our own network, so the subscription isn't blamed.
+    console.warn(`[push] couldn't reach the push service for a subscription of user ${sub.userId}: ${result.error} (not counted against it)`);
     return;
   }
   console.warn(`[push] a subscription of user ${sub.userId} failed: ${result.error}`);

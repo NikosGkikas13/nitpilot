@@ -44,6 +44,9 @@ export type WebMe = z.infer<typeof WebMe>;
  * call its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …): a blind SSRF. Real push services are all
  * https names (fcm.googleapis.com, web.push.apple.com, updates.push.services.mozilla.com, …). `new URL` writes every
  * IPv4 form (`2130706433`, `0x7f.1`) as dotted digits and keeps IPv6 in brackets, so those two shapes cover them.
+ * This checks the URL only: it can't see where a public name resolves. But the send is https with certificate
+ * checking, so a name pointing at a private address only gets a TLS failure unless that address serves a valid
+ * certificate for the name, and the server reads nothing from the answer but its status.
  */
 export function isPushEndpoint(value: string): boolean {
   let url: URL;
