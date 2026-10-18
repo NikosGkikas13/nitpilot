@@ -1,11 +1,17 @@
-import { AgentJobBundle } from '@nitpilot/protocol';
+import { AgentJobBundle, JobResult, PublishBundle, type JobBundle } from '@nitpilot/protocol';
 import { prRefOf } from '../chats/refs';
 import { rulesFromJson } from '../chats/rules';
 import { prisma } from '../lib/prisma';
 import type { PlatformReads } from '../platform/types';
 
+/** What the assigner sends for a job (spec §10 `job.assign`): a publish bundle for a publish job, an agent bundle otherwise. */
+export async function bundleFor(jobId: string, platform: Pick<PlatformReads, 'gitSpec'>): Promise<JobBundle> {
+  const { type } = await prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { type: true } });
+  return type === 'publish' ? buildPublishBundle(jobId, platform) : buildJobBundle(jobId, platform);
+}
+
 /**
- * Everything the CLI needs to run one job, in one message (spec §10 `job.assign`): the PR, how to
+ * Everything the CLI needs to run one agent job, in one message (spec §10 `job.assign`): the PR, how to
  * fetch its code, the points with their threads, the human notes and the team rules. It's built
  * right after the job was assigned, so `attempt` and `headSha` are the ones the CLI must use.
  */
@@ -80,5 +86,30 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
       .filter((m) => m.kind === 'human' && m.pointNumber === null)
       .map((m) => ({ author: m.authorLogin ?? 'unknown', body: m.body, at: m.createdAt.toISOString() })),
     rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review },
+  });
+}
+
+/**
+ * What the CLI needs to push an author's drafted fixes (spec §11 "Publish jobs"): the draft commit, which stays in that
+ * laptop's clone at `refs/nitpilot/drafts/<draft job>`, the head it was made on, and where to push. No agent runs,
+ * so there are no points or rules. The commit's sha comes from the draft job's stored result (`result.draft`).
+ */
+export async function buildPublishBundle(jobId: string, platform: Pick<PlatformReads, 'gitSpec'>): Promise<PublishBundle> {
+  const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId }, include: { chat: { include: { repo: true } } } });
+  if (!job.draftOfId) throw new Error(`publish job ${jobId} names no draft`);
+  const draftJob = await prisma.job.findUniqueOrThrow({ where: { id: job.draftOfId }, select: { id: true, result: true } });
+  // Parsed, so a result stored before drafts existed reads as `draft: null`.
+  const draft = JobResult.parse(draftJob.result).draft;
+  // Send applies a draft without a commit at once and never queues a publish job for it (engine/drafts.ts), so this is a bug.
+  if (!draft) throw new Error(`draft job ${draftJob.id} has no draft commit`);
+  const { chat } = job;
+
+  return PublishBundle.parse({
+    jobId: job.id,
+    attempt: job.attempt,
+    type: 'publish',
+    pr: { repoFullName: chat.repo.fullName, number: chat.number, headRef: chat.headRef, url: chat.url },
+    git: platform.gitSpec({ ref: prRefOf(chat), headRef: chat.headRef, headRepoFullName: chat.headRepoFullName }),
+    draft: { jobId: draftJob.id, sha: draft.sha, from: draft.from },
   });
 }

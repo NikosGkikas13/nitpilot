@@ -5,10 +5,11 @@ const NOW = new Date('2026-10-15T12:00:00.000Z');
 const LAST_SEEN = new Date('2026-10-15T09:30:00.000Z');
 const REPO = 'octo/sandbox';
 
-const job = (over: Partial<ActiveJob> = {}): ActiveJob => ({ login: 'leo', userId: 'user-leo', status: 'queued', runAfter: NOW, failure: null, ...over });
+const job = (over: Partial<ActiveJob> = {}): ActiveJob => ({ login: 'leo', userId: 'user-leo', status: 'queued', runAfter: NOW, failure: null, onlyTokenId: null, ...over });
 const online = (...linked: string[][]): Presence => ({ connected: linked.map((repos) => new Set(repos)), lastSeenAt: NOW });
 const offline = (lastSeenAt: Date | null): Presence => ({ connected: [], lastSeenAt });
 
+/** `presence` is keyed by user id, or by `<user id>/<token id>` for one device of theirs. */
 function facts(over: Partial<ActivityFacts> = {}, presence: Record<string, Presence> = {}): ActivityFacts {
   return {
     phase: 'reviewing',
@@ -16,7 +17,7 @@ function facts(over: Partial<ActivityFacts> = {}, presence: Record<string, Prese
     author: 'maya',
     reviewerToAnswer: null,
     jobs: [],
-    presence: (userId) => presence[userId] ?? offline(null),
+    presence: (userId, onlyTokenId) => presence[onlyTokenId ? `${userId}/${onlyTokenId}` : userId] ?? offline(null),
     now: NOW,
     ...over,
   };
@@ -55,6 +56,14 @@ describe('deriveActivity (spec §9.1)', () => {
   it('shows the agent that waits when another is working', () => {
     const jobs = [job({ status: 'running' }), job({ login: 'sam', userId: 'user-sam' })];
     expect(deriveActivity(facts({ jobs }, { 'user-sam': offline(LAST_SEEN) }))).toEqual({ kind: 'agent_waiting', who: 'sam', why: 'offline', offlineSince: LAST_SEEN });
+  });
+
+  it("waits offline for a publish job while the laptop with the draft is away, even though another of maya's CLIs is online (Review Focus 4)", () => {
+    const publish = job({ login: 'maya', userId: 'user-maya', onlyTokenId: 'token-laptop' });
+    const presence = { 'user-maya': online([REPO]), 'user-maya/token-laptop': offline(LAST_SEEN) };
+    expect(deriveActivity(facts({ jobs: [publish] }, presence))).toEqual({ kind: 'agent_waiting', who: 'maya', why: 'offline', offlineSince: LAST_SEEN });
+    // Once that laptop is back, with the repo linked, the draft is being sent.
+    expect(deriveActivity(facts({ jobs: [publish] }, { ...presence, 'user-maya/token-laptop': online([REPO]) }))).toEqual({ kind: 'agent_working', who: 'maya' });
   });
 
   it('names the running agent before a queued one that could start too', () => {

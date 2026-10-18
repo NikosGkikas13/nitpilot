@@ -1,5 +1,7 @@
-import type {
-  ActivityView, Attention, Category, ChatResponse, ChatView, EscalationReason, ParticipantView, Phase, PointOrigin, PointStatus, PointView, Resolution, Role, Severity, Side, Snippet,
+import {
+  JobResult,
+  type ActivityView, type AgentJobType, type Attention, type Category, type ChatResponse, type ChatView, type DraftView, type EscalationReason, type ParticipantView, type Phase,
+  type PointOrigin, type PointStatus, type PointView, type Resolution, type Role, type Severity, type Side, type Snippet,
 } from '@nitpilot/protocol';
 import type { Point, PrChat } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
@@ -15,8 +17,8 @@ export type ChatViewer = { githubId: string };
 
 /**
  * One chat as `viewer` sees it (spec §10 `GET /api/chats/:owner/:repo/:number`, handoff §2): the PR, its people
- * and their agents right now, the points, the team rules. Read fresh each time, like the inbox: presence and
- * activity change without any event (docs/why/n-plus-one-queries.md keeps the number of queries fixed).
+ * and their agents right now, the points, the waiting drafts, the team rules. Read fresh each time, like the inbox:
+ * presence and activity change without any event (docs/why/n-plus-one-queries.md keeps the number of queries fixed).
  */
 export async function loadChatView(chatId: string, viewer: ChatViewer, clis: LiveClis, now = new Date()): Promise<ChatView> {
   const chat = await prisma.prChat.findUniqueOrThrow({
@@ -25,9 +27,17 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
       repo: true,
       participants: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } },
       points: { orderBy: { number: 'asc' } },
-      jobs: { where: { status: 'running' }, select: { participantId: true } },
+      // The jobs at work (queued or running) and the drafts waiting for their owner, oldest first.
+      jobs: {
+        where: { OR: [{ status: { in: ['queued', 'running'] } }, { status: 'done', applyState: 'draft' }] },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, participantId: true, status: true, type: true, headSha: true, createdAt: true, result: true, draftOfId: true, participant: { select: { githubId: true, login: true, role: true } } },
+      },
     },
   });
+  const running = chat.jobs.filter((j) => j.status === 'running');
+  const active = chat.jobs.filter((j) => j.status === 'queued' || j.status === 'running');
+  const waitingDrafts = chat.jobs.filter((j) => j.status === 'done');
   const users = await prisma.user.findMany({ where: { githubId: { in: chat.participants.map((p) => p.githubId) } }, select: { id: true, githubId: true, avatarUrl: true } });
   const userOf = new Map(users.map((u) => [u.githubId, u]));
   const [activity, failure, seen] = await Promise.all([
@@ -51,7 +61,8 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
       isBot: p.isBot,
       onNitpilot: user !== undefined,
       requested: p.requested,
-      agent: user ? { online, offlineSince: online ? null : (lastSeen(user.id)?.toISOString() ?? null), working: chat.jobs.some((j) => j.participantId === p.id) } : null,
+      auto: p.auto,
+      agent: user ? { online, offlineSince: online ? null : (lastSeen(user.id)?.toISOString() ?? null), working: running.some((j) => j.participantId === p.id) } : null,
     };
   });
 
@@ -80,8 +91,21 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     participants,
     activity: activityView(activity),
     points: chat.points.map((p) => pointView(chat, p, loginOf(p.raisedByGithubId))),
+    // Everyone who reads the chat sees them; Send and Discard are only the owner's (`permissions.drafts`).
+    drafts: waitingDrafts.map((d): DraftView => ({
+      jobId: d.id,
+      owner: d.participant.login,
+      role: d.participant.role as Role,
+      jobType: d.type as AgentJobType,
+      headSha: d.headSha,
+      createdAt: d.createdAt.toISOString(),
+      // Parsed, so a result stored before a field existed gets that field's default (`draft: null`).
+      result: JobResult.parse(d.result),
+      // Being sent: an author's publish job for it is queued or running (spec §9 "Drafts").
+      sending: active.some((j) => j.draftOfId === d.id),
+    })),
     rules: { maxRounds: rules.max_rounds, alwaysEscalate: rules.always_escalate, autoReview: rules.auto.review, autoAddress: rules.auto.address, error: chat.repo.rulesError },
-    permissions: permissionsFor(viewer, permissionFacts(chat)),
+    permissions: permissionsFor(viewer, permissionFacts({ ...chat, waitingDrafts })),
     summaryUrl: chat.summaryCommentId ? `${chat.url}#issuecomment-${chat.summaryCommentId}` : null,
     lastSeq: chat.lastSeq,
   };

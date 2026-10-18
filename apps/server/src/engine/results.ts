@@ -90,7 +90,7 @@ export function applyReview(ctx: Ctx, job: AppliedJob, reviewer: ParticipantStat
   }
 }
 
-function applyAddress(ctx: Ctx, job: AppliedJob, authorP: ParticipantState, result: JobResult): void {
+export function applyAddress(ctx: Ctx, job: AppliedJob, authorP: ParticipantState, result: JobResult): void {
   const chat = ctx.chat;
   const commit = result.push?.to ?? null;
   // Our own push: move the head now, so the re-review queued below runs on the pushed commit instead
@@ -146,12 +146,23 @@ const WAIT_MS: Partial<Record<FailureReason, number>> = {
 const QUIET_WAITS: readonly FailureReason[] = ['stale_head'];
 /**
  * A publish job that fails like this won't work if tried again: the drafted fixes are out of date (spec §9 "Drafts").
- * The CLI reports `setup_failed` when the draft commit is no longer in that clone (spec §11 "Publish jobs").
+ * The CLI reports `setup_failed`, not retryable, when the draft commit is no longer in that clone (spec §11 "Publish
+ * jobs"); `draftOutOfDate` says when each one applies.
  */
-const DRAFT_OUT_OF_DATE: Partial<Record<FailureReason, string>> = {
+export const DRAFT_OUT_OF_DATE: Partial<Record<FailureReason, string>> = {
   branch_moved: 'the branch moved',
   setup_failed: 'the draft commit is gone from that computer',
 };
+
+/**
+ * Why this publish job failure makes the draft out of date, or undefined when the usual retries apply. A moved branch
+ * always does. A `setup_failed` does only when it isn't retryable (the CLI's missing or moved draft ref): a retryable
+ * one, such as the server failing to build the bundle, may work next time, and the draft keeps waiting.
+ */
+function draftOutOfDate(e: Ev<'job_failed'>): string | undefined {
+  if (e.reason === 'setup_failed' && e.retryable) return undefined;
+  return DRAFT_OUT_OF_DATE[e.reason];
+}
 
 export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const chat = ctx.chat;
@@ -161,7 +172,7 @@ export function onJobFailed(ctx: Ctx, e: Ev<'job_failed'>): void {
   const p = participant(chat, job.participantGithubId, job.role);
   const name = p ? `${p.login}'s agent` : 'An agent';
 
-  const outOfDate = job.jobType === 'publish' ? DRAFT_OUT_OF_DATE[e.reason] : undefined;
+  const outOfDate = job.jobType === 'publish' ? draftOutOfDate(e) : undefined;
   if (outOfDate) {
     job.status = 'failed';
     emit(ctx, { type: 'fail_job', jobId: job.id, reason: e.reason });

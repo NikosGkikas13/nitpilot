@@ -266,6 +266,17 @@ describe('wireWebHub: progress lines', () => {
     await leoTab.nothing('job.progress');
   });
 
+  it("says a publish job is sending: it runs no agent, it pushes the author's drafted fixes", async () => {
+    const { repo, chat, maya, leo, tab, open, cliServer } = await setup();
+    const leoTab = await tab(leo);
+    await open();
+    const author = await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } });
+    const publish = await prisma.job.create({ data: { chatId: chat.id, participantId: author.id, userId: maya.id, type: 'publish', status: 'running', attempt: 1, round: 1, headSha: chat.headSha } });
+    const cli = await TestCli.online(cliServer.url, (await makeCliToken(maya.id)).raw, { repos: [repo.fullName] });
+    cli.send({ v: 1, t: 'job.progress', d: { jobId: publish.id, attempt: 1, stage: 'pushing', text: 'pushing the drafted fixes' } });
+    expect((await leoTab.next('job.progress')).d).toEqual({ chatId: chat.id, who: 'maya', action: 'sending', stage: 'pushing', text: 'pushing the drafted fixes' });
+  });
+
   it("drops progress a CLI sends for someone else's job", async () => {
     const { repo, chat, maya, leo, tab, open, cliServer } = await setup();
     const mayaTab = await tab(maya);

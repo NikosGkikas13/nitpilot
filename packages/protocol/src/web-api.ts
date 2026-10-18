@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MeResponse } from './api';
-import { Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
-import { Snippet } from './job-result';
+import { AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+import { JobResult, Snippet } from './job-result';
 
 // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
 // answer with these, as the CLI does with api.ts.
@@ -120,6 +120,11 @@ export const ParticipantView = z.object({
   onNitpilot: z.boolean(),
   /** A reviewer the author asked for. */
   requested: z.boolean(),
+  /**
+   * Their Auto switch in this chat, in this role (spec §9 "Auto"): off means their agent's work waits as a draft. It's
+   * what they set; a team rule in `.nitpilot.yml` can still forbid the auto mode (`rules.autoReview` / `autoAddress`).
+   */
+  auto: z.boolean(),
   agent: z.object({ online: z.boolean(), offlineSince: z.string().nullable(), working: z.boolean() }).nullable(),
 });
 export type ParticipantView = z.infer<typeof ParticipantView>;
@@ -160,8 +165,32 @@ export const Permissions = z.object({
   review: z.boolean(),
   /** Run your failed job again. */
   retry: z.boolean(),
+  /** The roles whose Auto switch you may flip: your own. */
+  auto: z.array(Role),
+  /** The waiting drafts you may Send or Discard, by job id: your agent's. */
+  drafts: z.array(z.string()),
 });
 export type Permissions = z.infer<typeof Permissions>;
+
+/**
+ * Work an agent finished with Auto off, waiting for its owner to Send or Discard it (spec §9 "Drafts"). Everyone who
+ * reads the chat sees it; only the owner gets the buttons (`Permissions.drafts`). `result` is what the agent produced:
+ * a reviewer's points and decisions, or an author's replies with `result.draft`, the commit that stays on the laptop
+ * that made it. `sending` is true while the publish job that pushes an author's draft is queued or running.
+ */
+export const DraftView = z.object({
+  jobId: z.string(),
+  /** Whose agent made it: a GitHub login. */
+  owner: z.string(),
+  role: Role,
+  jobType: AgentJobType,
+  /** The head commit the agent worked on. */
+  headSha: z.string(),
+  createdAt: z.string(),
+  result: JobResult,
+  sending: z.boolean(),
+});
+export type DraftView = z.infer<typeof DraftView>;
 
 /**
  * A chat as the person reading it sees it (spec §10, handoff §2): the PR, the people and their agents, the
@@ -197,6 +226,8 @@ export const ChatView = z.object({
   participants: z.array(ParticipantView),
   activity: ActivityView,
   points: z.array(PointView),
+  /** The drafts waiting for their owners, oldest first. */
+  drafts: z.array(DraftView),
   rules: z.object({
     maxRounds: z.number().int().positive(),
     alwaysEscalate: z.array(Category),
@@ -221,7 +252,11 @@ export type ChatResponse = z.infer<typeof ChatResponse>;
 export const NoteRequest = z.object({ body: z.string().trim().min(1).max(4000) });
 export type NoteRequest = z.infer<typeof NoteRequest>;
 
-/** What a chat write answers when it worked (notes, Resolve, Continue, Review). The change itself arrives on `/ws/web`. */
+/** `PUT /api/chats/:id/auto`: turn your Auto switch for one of your roles in this chat on or off. */
+export const AutoRequest = z.object({ role: Role, on: z.boolean() });
+export type AutoRequest = z.infer<typeof AutoRequest>;
+
+/** What a chat write answers when it worked (notes, Resolve, Continue, Review, Auto, Send, Discard). The change itself arrives on `/ws/web`. */
 export const ActionResponse = z.object({ ok: z.literal(true) });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

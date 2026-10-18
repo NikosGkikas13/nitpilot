@@ -20,13 +20,14 @@ export function chatView(over: Partial<ChatView> = {}): ChatView {
     merged: false, closed: false, trusted: true, isDraft: false,
     viewer: { role: 'author', attention: 'none', failure: null },
     participants: [
-      { githubId: '1001', login: 'maya', avatarUrl: 'https://avatars.githubusercontent.com/u/1001', role: 'author', isBot: false, onNitpilot: true, requested: false, agent: { online: true, offlineSince: null, working: false } },
-      { githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, agent: { online: true, offlineSince: null, working: false } },
+      { githubId: '1001', login: 'maya', avatarUrl: 'https://avatars.githubusercontent.com/u/1001', role: 'author', isBot: false, onNitpilot: true, requested: false, auto: true, agent: { online: true, offlineSince: null, working: false } },
+      { githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, auto: true, agent: { online: true, offlineSince: null, working: false } },
     ],
     activity: { kind: 'none', who: null, why: null, offlineSince: null },
     points: [],
+    drafts: [],
     rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
-    permissions: { note: true, resolve: [], continue: [], review: false, retry: false },
+    permissions: { note: true, resolve: [], continue: [], review: false, retry: false, auto: ['author'], drafts: [] },
     summaryUrl: null, lastSeq: 0, ...over,
   };
 }

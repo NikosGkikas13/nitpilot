@@ -32,12 +32,15 @@ export const ChatState = message('chat.state', z.object({ chatId: z.string(), vi
  */
 export const ChatError = message('chat.error', z.object({ chatId: z.string(), code: z.enum(['not_found', 'reauth', 'unavailable']) }));
 
-/** A line of what an agent is doing right now (spec §10 `job.progress`, forwarded from its CLI; never stored). */
+/**
+ * A line of what an agent is doing right now (spec §10 `job.progress`, forwarded from its CLI; never stored). `action`
+ * is the job's kind of work: `sending` is a publish job, which runs no agent and pushes the author's drafted fixes.
+ */
 export const WebJobProgress = message('job.progress', z.object({
   chatId: z.string(),
   /** Whose agent: a GitHub login. */
   who: z.string(),
-  action: z.enum(['reviewing', 'fixing']),
+  action: z.enum(['reviewing', 'fixing', 'sending']),
   stage: z.enum(['preparing', 'running_agent', 'pushing', 'finishing']),
   text: z.string(),
 }));

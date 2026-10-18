@@ -17,13 +17,15 @@ The route sees that the event changed nothing (no timeline item) and answers `40
 
 Retry works the same way: the second of two Retry presses finds nothing failed any more, and since its job is already queued or running, gets "Your agent is already on it."
 
+Drafts too (`http/routes/chat-drafts.ts`, [drafts-and-publish-jobs.md](drafts-and-publish-jobs.md)). The first Send on an author's draft queues the publish job that pushes it; the second finds that job and changes nothing: "That draft is already being sent." Send or Discard on a draft that was already sent, discarded or went out of date says which. Discard while the publish job is still queued cancels it; once it runs, the push may be under way, so the second press is "That draft is being sent right now, so it can't be discarded." A second Auto switch to the same value is "Auto-fix is already off."
+
 ## Why 409 and not 403
 
 `403 Forbidden` means "you may never do this here" (you didn't raise P1, so you can't resolve it). `409 Conflict` means "you could have, but the chat moved on". The role check (`chats/permissions.ts`) deliberately doesn't look at a point's status, so a late click is always a 409 with an explanation, never a confusing "you're not allowed".
 
 ## Where it's tested
 
-`chat-actions.db.test.ts` sends two Resolves, two Continues and two Retries with `Promise.all`, and checks that exactly one is a 200, the other a 409, and that the chat changed once.
+`chat-actions.db.test.ts` sends two Resolves, two Continues and two Retries with `Promise.all`, and checks that exactly one is a 200, the other a 409, and that the chat changed once. `chat-drafts.db.test.ts` does the same with two Sends, and checks that only one publish job was queued.
 
 ## The React analogy
 

@@ -49,9 +49,11 @@ Every change also passes one pure function that knows the roles, `can` (`chats/p
 | Continue an escalated point | the author, or the reviewer who raised it | 403 |
 | Review an outside contributor's PR | a requested reviewer | 403 |
 | Retry a failed job | only the person whose agent's job failed (the author, or a reviewer who is still requested); a failed post to GitHub isn't helped by a retry, so no button | 409 "Nothing of yours failed on this PR." (Plan 1's answer) |
+| Switch Auto (`PUT /api/chats/:id/auto`) | only your own switch, for a role you have here: Auto-fix as the author, Auto-review as a reviewer (one who is no longer requested still has theirs) | 403 |
+| Send or Discard a draft | only the person whose agent made it (`http/routes/chat-drafts.ts`); everyone who reads the chat sees the draft, without the buttons | 403 |
 | Anything, on a closed PR | nobody | 409 "This PR is closed, so its chat is read-only." |
 
-Someone who can read the repo but isn't in the chat reads along, and can't act. `can` looks only at who you are, not at a point's status: if the point was resolved a moment ago, that's a race the engine notices, and the answer is a 409 that says what happened (`races-and-conflicts.md`), not a 403.
+Someone who can read the repo but isn't in the chat reads along, and can't act. `can` looks only at who you are, not at a point's status or whether a draft still waits: if the point was resolved or the draft sent a moment ago, that's a race the engine notices, and the answer is a 409 that says what happened (`races-and-conflicts.md`), not a 403. The draft's owner is read from its job row, so Send on a draft discarded a moment ago gets that 409, not a 403.
 
 **Retry from the CLI keeps Plan 1's rule.** `nitpilot retry` sends the CLI token, and the route doesn't ask GitHub about the repo for it: the only thing it can do is run your own failed job again, and a CLI whose owner's GitHub sign-in expired could otherwise never retry. From the browser, Retry is checked like every other write.
 

@@ -1,6 +1,6 @@
 import type { Dispatcher } from '../chats/dispatch';
 import { JobAssigner } from '../jobs/assign';
-import { buildJobBundle } from '../jobs/bundle';
+import { bundleFor } from '../jobs/bundle';
 import { CatchUp } from '../jobs/catch-up';
 import { cancelMessage, Leases } from '../jobs/leases';
 import type { PlatformReads } from '../platform/types';
@@ -22,7 +22,7 @@ export type CliHubDeps = {
  * main.ts and the tests both call this, so the tests run exactly the wiring production runs.
  */
 export function wireCliHub({ hub, dispatcher, platform, now = () => new Date() }: CliHubDeps) {
-  const assigner = new JobAssigner(hub, (jobId) => buildJobBundle(jobId, platform), now);
+  const assigner = new JobAssigner(hub, (jobId) => bundleFor(jobId, platform), now);
   const leases = new Leases(hub, dispatcher.dispatch, now);
   const catchUp = new CatchUp({ platform, dispatch: dispatcher.dispatch });
 

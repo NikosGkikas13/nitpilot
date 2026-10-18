@@ -7,6 +7,7 @@ import { chatAccess } from '../../chats/access';
 import type { Dispatch } from '../../chats/dispatch';
 import { failureKind } from '../../chats/failed-flags';
 import { can, permissionFacts, type ChatAction, type PermissionFacts } from '../../chats/permissions';
+import { AUTO_NAME } from '../../engine/drafts';
 import { activeJobFor } from '../../engine/state';
 import type { ChatState, DecideOutput, Person } from '../../engine/types';
 import { getEnv } from '../../lib/env';
@@ -14,7 +15,7 @@ import { prisma } from '../../lib/prisma';
 import { HttpError } from '../errors';
 import { askingGithub, readable } from './chats';
 
-type Ctx = Context<{ Variables: UserVariables }>;
+export type Ctx = Context<{ Variables: UserVariables }>;
 
 /**
  * The chat's writes (spec §10 "Chat writes"): notes, Resolve, Continue, Review and Retry. Each one, in order: who
@@ -27,18 +28,8 @@ export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch 
 
   /** The chat, if this person may do this in it now; otherwise the error that says why not. */
   async function allowed(c: Ctx, action: ChatAction): Promise<{ chatId: string; who: Person }> {
-    const user = c.get('user');
-    const chatId = c.req.param('id')!;
-    readable(await askingGithub(() => chatAccess(user, chatId, deps.access)));
-    const chat = await prisma.prChat.findUnique({ where: { id: chatId }, include: { participants: { include: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }, points: true } });
-    if (!chat) throw new HttpError('not_found', 'No such chat.');
-    const facts = permissionFacts(chat);
-    if ((action.kind === 'resolve' || action.kind === 'continue') && !facts.points.some((p) => p.number === action.point)) {
-      throw new HttpError('not_found', 'No such point.');
-    }
-    if (facts.closed) throw new HttpError('conflict', CLOSED);
-    if (!can(user, facts, action)) throw new HttpError('forbidden', forbidden(action, facts));
-    return { chatId, who: personOf(user) };
+    const chatId = await readableChat(c, deps.access);
+    return { chatId, who: await mayAct(c, chatId, action) };
   }
 
   app.post('/api/chats/:id/notes', requireUser, requireSameOrigin, async (c) => {
@@ -113,9 +104,44 @@ export function chatActionRoutes(deps: { access: RepoAccess; dispatch: Dispatch 
   return app;
 }
 
-const CLOSED = 'This PR is closed, so its chat is read-only.';
+/**
+ * The chat in the path (`:id`), if GitHub shows this person its repo; otherwise the 404 (no such chat, or you can't see
+ * it) or the 401 `reauth` that says why not (docs/why/chat-access-rules.md). Shared with routes/chat-drafts.ts.
+ */
+export async function readableChat(c: Ctx, access: RepoAccess): Promise<string> {
+  const chatId = c.req.param('id')!;
+  readable(await askingGithub(() => chatAccess(c.get('user'), chatId, access)));
+  return chatId;
+}
 
-function ok(c: Ctx): Response {
+/**
+ * This person, if their role lets them do this in the chat now (`can`); otherwise a 404 for a point that doesn't
+ * exist, a 409 on a closed PR, or a 403 that says who may. Call it after `readableChat`.
+ */
+export async function mayAct(c: Ctx, chatId: string, action: ChatAction): Promise<Person> {
+  const user = c.get('user');
+  const chat = await prisma.prChat.findUnique({
+    where: { id: chatId },
+    include: {
+      participants: { include: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } },
+      points: true,
+      jobs: { where: { status: 'done', applyState: 'draft' }, select: { id: true, participant: { select: { githubId: true } } } },
+    },
+  });
+  if (!chat) throw new HttpError('not_found', 'No such chat.');
+  const facts = permissionFacts({ ...chat, waitingDrafts: chat.jobs });
+  if ((action.kind === 'resolve' || action.kind === 'continue') && !facts.points.some((p) => p.number === action.point)) {
+    throw new HttpError('not_found', 'No such point.');
+  }
+  if (facts.closed) throw new HttpError('conflict', CLOSED);
+  if (!can(user, facts, action)) throw new HttpError('forbidden', forbidden(action, facts));
+  return personOf(user);
+}
+
+export const CLOSED = 'This PR is closed, so its chat is read-only.';
+
+/** The answer of a chat write that changed the chat (spec §10). */
+export function ok(c: Ctx): Response {
   const body: ActionResponse = { ok: true };
   return c.json(body);
 }
@@ -148,6 +174,10 @@ function forbidden(action: ChatAction, facts: PermissionFacts): string {
       return 'Only a requested reviewer can start the review, and only on a PR from an outside contributor.';
     case 'retry':
       return 'Nothing of yours failed on this PR.';
+    case 'auto':
+      return `You aren't ${action.role === 'author' ? 'the author' : 'a reviewer'} of this PR, so there's no ${AUTO_NAME[action.role]} of yours to switch.`;
+    case 'draft':
+      return 'Only the person whose agent made a draft can send or discard it.';
   }
 }
 

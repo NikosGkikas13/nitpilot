@@ -13,17 +13,20 @@ export type Activity =
   | { kind: 'human_turn'; who: string }
   | { kind: 'none' };
 
-/** A queued or running job, and whose agent it's for. */
-export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: FailureReason | null };
+/**
+ * A queued or running job, and whose agent it's for. `onlyTokenId` is the one CLI device that can take it: for a
+ * publish job, the laptop that made the draft (spec §9.4); null for any of the person's CLIs.
+ */
+export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: FailureReason | null; onlyTokenId: string | null };
 
-/** A person's CLIs: the repos each connected one has linked, and when any of them was last seen. */
+/** A person's CLIs (or one device of theirs): the repos each connected one has linked, and when it was last seen. */
 export type Presence = { connected: ReadonlySet<string>[]; lastSeenAt: Date | null };
 
 /**
- * The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. `usedToday` is how many agent runs
- * that CLI started today (its last ping said so).
+ * The connected CLIs. The CLI hub is one (ws/cli-hub.ts); tests pass a stand-in. `tokenId` names the device;
+ * `usedToday` is how many agent runs that CLI started today (its last ping said so).
  */
-export type LiveClis = { connectionsFor(userId: string): readonly { repos: ReadonlySet<string>; usedToday: number }[] };
+export type LiveClis = { connectionsFor(userId: string): readonly { tokenId: string; repos: ReadonlySet<string>; usedToday: number }[] };
 
 export type ActivityFacts = {
   phase: Phase;
@@ -34,7 +37,8 @@ export type ActivityFacts = {
   reviewerToAnswer: string | null;
   /** Queued and running jobs, oldest first. */
   jobs: ActiveJob[];
-  presence: (userId: string) => Presence;
+  /** The person's CLIs, or only the device `onlyTokenId` names. */
+  presence: (userId: string, onlyTokenId: string | null) => Presence;
   now: Date;
 };
 
@@ -54,10 +58,13 @@ export function deriveActivity(f: ActivityFacts): Activity {
   return { kind: 'none' };
 }
 
-/** Why a queued job can't go to a CLI now, or null when one can take it. */
+/**
+ * Why a queued job can't go to a CLI now, or null when one can take it. A job only one device can take waits for
+ * that device: another of the person's CLIs being online doesn't help it.
+ */
 function waitingFor(job: ActiveJob, f: ActivityFacts): Activity | null {
   if (job.status !== 'queued') return null;
-  const presence = f.presence(job.userId);
+  const presence = f.presence(job.userId, job.onlyTokenId);
   if (presence.connected.length === 0) return { kind: 'agent_waiting', who: job.login, why: 'offline', offlineSince: presence.lastSeenAt };
   if (!presence.connected.some((repos) => repos.has(f.repoFullName))) return { kind: 'agent_waiting', who: job.login, why: 'repo_not_linked' };
   if (job.failure !== null && LIMITS.has(job.failure) && job.runAfter > f.now) return { kind: 'agent_waiting', who: job.login, why: 'cap_reached' };
@@ -72,8 +79,9 @@ export async function loadActivity(chatId: string, clis: LiveClis, now = new Dat
 
 /**
  * The activity of many chats, by chat id, for the inbox. The number of queries doesn't grow with the number
- * of chats: one read of the chats with their people, points and jobs, and one of when each person's CLIs were
- * last seen (docs/why/n-plus-one-queries.md). A chat id that doesn't exist is left out.
+ * of chats: one read of the chats with their people, points and jobs, one of when each person's CLIs were
+ * last seen, and, when publish jobs are waiting, one of the devices that made their drafts
+ * (docs/why/n-plus-one-queries.md). A chat id that doesn't exist is left out.
  */
 export async function loadActivities(chatIds: string[], clis: LiveClis, now = new Date()): Promise<Map<string, Activity>> {
   if (chatIds.length === 0) return new Map();
@@ -91,7 +99,12 @@ export async function loadActivities(chatIds: string[], clis: LiveClis, now = ne
   // When each of them was last seen: the newest lastSeenAt of their CLI tokens (spec §8).
   const seen = userIds.length > 0 ? await prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: userIds } }, _max: { lastSeenAt: true } }) : [];
   const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
-  const presence = (userId: string): Presence => ({ connected: clis.connectionsFor(userId).map((c) => c.repos), lastSeenAt: lastSeen(userId) });
+  const devices = await draftDevices(chats.flatMap((chat) => chat.jobs.map((j) => j.draftOfId)));
+  const presence = (userId: string, onlyTokenId: string | null): Presence => {
+    const connected = clis.connectionsFor(userId).filter((c) => onlyTokenId === null || c.tokenId === onlyTokenId);
+    const lastSeenAt = onlyTokenId === null ? lastSeen(userId) : (devices.lastSeen.get(onlyTokenId) ?? null);
+    return { connected: connected.map((c) => c.repos), lastSeenAt };
+  };
 
   const activities = new Map<string, Activity>();
   for (const chat of chats) {
@@ -103,13 +116,38 @@ export async function loadActivities(chatIds: string[], clis: LiveClis, now = ne
         repoFullName: chat.repo.fullName,
         author: loginOf(chat.authorGithubId),
         reviewerToAnswer: chat.points[0] ? loginOf(chat.points[0].raisedByGithubId) : null,
-        jobs: chat.jobs.map((j) => ({ login: j.participant.login, userId: j.userId, status: j.status as ActiveJob['status'], runAfter: j.runAfter, failure: failureOf(j.failure) })),
+        jobs: chat.jobs.map((j) => ({
+          login: j.participant.login,
+          userId: j.userId,
+          status: j.status as ActiveJob['status'],
+          runAfter: j.runAfter,
+          failure: failureOf(j.failure),
+          onlyTokenId: j.draftOfId ? (devices.ofDraft.get(j.draftOfId) ?? null) : null,
+        })),
         presence,
         now,
       }),
     );
   }
   return activities;
+}
+
+/**
+ * For publish jobs (`draftOfId` set): the device that made each draft (`ofDraft`, draft job id → CLI token id), and
+ * when that device was last seen (`lastSeen`, token id → time). One query, and none without publish jobs.
+ */
+async function draftDevices(draftOfIds: (string | null)[]): Promise<{ ofDraft: Map<string, string>; lastSeen: Map<string, Date | null> }> {
+  const ids = draftOfIds.filter((id): id is string => id !== null);
+  const ofDraft = new Map<string, string>();
+  const lastSeen = new Map<string, Date | null>();
+  if (ids.length === 0) return { ofDraft, lastSeen };
+  const drafts = await prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, cliTokenId: true, cliToken: { select: { lastSeenAt: true } } } });
+  for (const d of drafts) {
+    if (!d.cliTokenId) continue;
+    ofDraft.set(d.id, d.cliTokenId);
+    lastSeen.set(d.cliTokenId, d.cliToken?.lastSeenAt ?? null);
+  }
+  return { ofDraft, lastSeen };
 }
 
 /** The stored failure as a FailureReason, or null for one this version doesn't know. */

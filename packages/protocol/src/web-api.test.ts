@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
-import { settings } from './test-samples';
-import { ActionResponse, ChatResponse, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, Settings, WebMe, type ChatView, type InboxRow } from './web-api';
+import { jobResult, settings } from './test-samples';
+import { ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, Settings, WebMe, type ChatView, type InboxRow } from './web-api';
 
 describe('web API bodies', () => {
   const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12 };
@@ -42,7 +42,7 @@ describe('web API bodies', () => {
       author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'escalated', round: 2, maxRounds: 3,
       merged: false, closed: false, trusted: true, isDraft: false,
       viewer: { role: 'reviewer', attention: 'decision', failure: null },
-      participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
+      participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, auto: false, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
       activity: { kind: 'none', who: null, why: null, offlineSince: null },
       points: [{
         number: 1, raisedBy: { githubId: '1002', login: 'leo' }, origin: 'agent', path: 'src/orders/list.ts', line: 48, side: 'RIGHT',
@@ -51,7 +51,8 @@ describe('web API bodies', () => {
         status: 'escalated', authorResolution: null, escalationReason: 'category', trusted: true, round: 1,
       }],
       rules: { maxRounds: 3, alwaysEscalate: ['security'], autoReview: true, autoAddress: true, error: null },
-      permissions: { note: true, resolve: [1], continue: [1], review: false, retry: false },
+      drafts: [{ jobId: 'job_7', owner: 'leo', role: 'reviewer', jobType: 're_review', headSha: 'c'.repeat(40), createdAt: '2026-10-16T18:00:00.000Z', result: jobResult(), sending: false }],
+      permissions: { note: true, resolve: [1], continue: [1], review: false, retry: false, auto: ['reviewer'], drafts: ['job_7'] },
       summaryUrl: null, lastSeq: 7,
     };
     const body = { view, items: [], hasOlder: false };
@@ -67,5 +68,19 @@ describe('web API bodies', () => {
     expect(() => NoteRequest.parse({ body: 'x'.repeat(4001) })).toThrow();
     expect(() => NoteRequest.parse({ body: ' \n ' })).toThrow();
     expect(ActionResponse.parse({ ok: true })).toEqual({ ok: true });
+  });
+
+  it('switches Auto for one role, on or off', () => {
+    expect(AutoRequest.parse({ role: 'author', on: false })).toEqual({ role: 'author', on: false });
+    expect(() => AutoRequest.parse({ role: 'owner', on: true })).toThrow();
+    expect(() => AutoRequest.parse({ role: 'reviewer' })).toThrow();
+  });
+
+  it("reads a draft whose result was stored before drafts existed (Plan 1's rows have no draft commit), and never a publish job", () => {
+    const plan1Result: Record<string, unknown> = { ...jobResult() };
+    delete plan1Result.draft;
+    const draft = { jobId: 'job_7', owner: 'maya', role: 'author', jobType: 'address', headSha: 'c'.repeat(40), createdAt: '2026-10-16T18:00:00.000Z', result: plan1Result, sending: true };
+    expect(DraftView.parse(draft).result.draft).toBeNull();
+    expect(() => DraftView.parse({ ...draft, jobType: 'publish' })).toThrow();
   });
 });

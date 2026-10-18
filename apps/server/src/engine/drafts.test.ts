@@ -128,6 +128,23 @@ describe('Send on an author draft', () => {
     expect(out.chat.phase).toBe('addressing');
   });
 
+  it('applies a draft with no commit at once (the agent only answered or declined): nothing to push, so no publish job', () => {
+    const answered = result({ summary: 'Answered both.', replies: [{ point: 1, resolution: 'answered', comment: 'It is guarded upstream.' }, { point: 2, resolution: 'declined', comment: 'The name is on purpose.' }], push: null, draft: null });
+    const out = run(authorDraft({ drafts: [draftOf('job-a1', maya, 'author', 'address', { result: answered })] }), send());
+    expect(commandsOf(out, 'enqueue_job').filter((c) => c.jobType === 'publish')).toEqual([]);
+    expect(commandsOf(out, 'set_apply_state')).toEqual([{ type: 'set_apply_state', jobId: 'job-a1', applyState: 'applied' }]);
+    // As an auto address pass that changed no file: the summary and the replies, with no commit.
+    expect(bodies(out)[0]).toBe('maya sent the drafted replies');
+    expect(out.timeline[1]).toMatchObject({ kind: 'job_summary', jobId: 'job-a1', body: 'Answered both.', data: { jobType: 'address', push: null } });
+    expect(out.timeline.filter((i) => i.kind === 'point_reply').map((i) => i.data)).toEqual([
+      { resolution: 'answered', commit: null },
+      { resolution: 'declined', commit: null },
+    ]);
+    expect(out.chat).toMatchObject({ headSha: 'head1', addressPasses: 1, round: 2, drafts: [] });
+    expect(out.chat.participants[0]!.attention).toBe('none');
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ participant: { githubId: leo.githubId, role: 'reviewer' }, jobType: 're_review' })]);
+  });
+
   it('when the publish job pushes, applies the stored replies with the pushed commit and starts the re-review', () => {
     const push = { from: 'head1', to: 'abc1234def' };
     const out = run(publishing('running'), { type: 'job_completed', jobId: 'job-p1', attempt: 1, result: result({ summary: 'Pushed.', push }) });
@@ -148,10 +165,12 @@ describe('Send on an author draft', () => {
   });
 
   it.each([
-    ['branch_moved', 'The drafted fixes are out of date: the branch moved'],
-    ['setup_failed', 'The drafted fixes are out of date: the draft commit is gone from that computer'],
-  ] as const)('%s: the draft is out of date, and the chat carries on with a new address pass', (reason, line) => {
-    const out = run(publishing('running'), { type: 'job_failed', jobId: 'job-p1', attempt: 1, reason, retryable: true });
+    ['branch_moved', true, 'The drafted fixes are out of date: the branch moved'],
+    ['branch_moved', false, 'The drafted fixes are out of date: the branch moved'],
+    // The CLI's draft ref is missing or moved (spec §11): it won't work again.
+    ['setup_failed', false, 'The drafted fixes are out of date: the draft commit is gone from that computer'],
+  ] as const)('%s (retryable: %s): the draft is out of date, and the chat carries on with a new address pass', (reason, retryable, line) => {
+    const out = run(publishing('running'), { type: 'job_failed', jobId: 'job-p1', attempt: 1, reason, retryable });
     expect(commandsOf(out, 'retry_job')).toEqual([]);
     expect(commandsOf(out, 'fail_job')).toEqual([{ type: 'fail_job', jobId: 'job-p1', reason }]);
     expect(commandsOf(out, 'set_apply_state')).toEqual([{ type: 'set_apply_state', jobId: 'job-a1', applyState: 'discarded' }]);
@@ -161,6 +180,16 @@ describe('Send on an author draft', () => {
     expect(out.chat.participants[0]).toMatchObject({ attention: 'none', byHand: false });
     // Auto-fix is still off, so the new pass makes a new draft.
     expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ jobType: 'address', applyState: 'draft', draftOfId: null })]);
+  });
+
+  it('retries a setup_failed that may work next time (the server could not build the bundle), and the draft keeps waiting', () => {
+    const out = run(publishing('running'), { type: 'job_failed', jobId: 'job-p1', attempt: 1, reason: 'setup_failed', retryable: true });
+    expect(commandsOf(out, 'retry_job')).toEqual([expect.objectContaining({ jobId: 'job-p1', refundAttempt: false, reason: 'setup_failed' })]);
+    expect(commandsOf(out, 'fail_job')).toEqual([]);
+    expect(commandsOf(out, 'set_apply_state')).toEqual([]);
+    expect(bodies(out)).toEqual([]);
+    expect(out.chat.drafts.map((d) => d.jobId)).toEqual(['job-a1']);
+    expect(out.chat.participants[0]!.attention).toBe('drafts');
   });
 
   it('follows the usual retries for any other failure', () => {

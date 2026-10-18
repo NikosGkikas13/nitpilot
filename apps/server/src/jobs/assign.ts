@@ -4,7 +4,7 @@ import type { CliConnection, CliHub } from '../ws/cli-hub';
 
 /**
  * The agent mode each job type needs (spec §12.2): reviews only read, address jobs edit files. A publish job runs no
- * agent (null). Until publish jobs are routed to the device that holds the draft, the assigner leaves them queued.
+ * agent (null): it goes to the device that made its draft instead (`draftDevices`).
  */
 const MODE_FOR: Record<JobType, AgentMode | null> = { review: 'reviewer', re_review: 'reviewer', address: 'editor', publish: null };
 
@@ -81,11 +81,15 @@ export class JobAssigner {
       include: { chat: { select: { headSha: true, repo: { select: { fullName: true } } } } },
     });
     const load = await runningPerCli(clis);
+    const devices = await draftDevices(jobs);
 
     let assigned = 0;
     for (const job of jobs) {
+      // What this CLI must be able to do: run the agent mode the job needs, or, for a publish job, be the laptop
+      // whose clone holds the draft commit (spec §9.4). A publish job whose draft has no device can go nowhere.
       const mode = MODE_FOR[job.type as JobType];
-      if (!mode) continue; // a publish job: nothing hands one out yet
+      const device = job.draftOfId ? devices.get(job.draftOfId) : undefined;
+      const fits = (c: CliConnection) => (mode ? c.agent.modes.includes(mode) : c.tokenId === device);
       // Pick from `clis`, the snapshot `load` was counted for, not from the hub's live list: a CLI that
       // connected mid-pass has no count here (its hello wakes the assigner, so the next pass has it). A
       // snapshot connection that was replaced or dropped since is skipped: it has a dead socket.
@@ -94,10 +98,10 @@ export class JobAssigner {
           c.userId === job.userId &&
           this.hub.connection(c.tokenId) === c &&
           c.repos.has(job.chat.repo.fullName) &&
-          c.agent.modes.includes(mode) &&
+          fits(c) &&
           (load.get(c.tokenId) ?? 0) < c.concurrency,
       );
-      // No CLI can take it now (offline, repo not linked there, agent can't, or busy): it waits.
+      // No CLI can take it now (offline, repo not linked there, agent can't, not the draft's device, or busy): it waits.
       if (!cli) continue;
       // Compare-and-swap: only a job that is still queued can be taken, so it goes out once. A queued
       // job follows the PR's latest head; once running it stays on that commit (spec §9.4).
@@ -145,6 +149,18 @@ export class JobAssigner {
       }
     }
   }
+}
+
+/**
+ * For the publish jobs among `jobs`: the device (CLI token id) that made each one's draft, by draft job id. The
+ * draft job keeps the token of the CLI that ran it, so no column of its own pins the device. One query, none without
+ * publish jobs.
+ */
+async function draftDevices(jobs: { draftOfId: string | null }[]): Promise<Map<string, string>> {
+  const ids = jobs.map((j) => j.draftOfId).filter((id): id is string => id !== null);
+  if (ids.length === 0) return new Map();
+  const drafts = await prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, cliTokenId: true } });
+  return new Map(drafts.flatMap((d) => (d.cliTokenId ? [[d.id, d.cliTokenId] as const] : [])));
 }
 
 /** How many jobs each connected CLI is running, counted in the database (the source of truth). */

@@ -195,3 +195,72 @@ describe('cancels', () => {
     expect((await mayaCli.next('job.assign')).d.bundle).toMatchObject({ type: 'address', pr: { headSha: 'd'.repeat(40) } });
   });
 });
+
+describe('drafts and publish jobs (spec §9 "Drafts", §11 "Publish jobs")', () => {
+  const draftSha = 'd'.repeat(40);
+
+  /**
+   * maya has Auto-fix off. leo's review raised P1, maya's agent fixed it, and its commit waits on her laptop as a
+   * draft. She pressed Send, and the publish job went to that laptop.
+   */
+  async function sending() {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const mayaCli = await TestCli.online(s.url, (await makeCliToken(maya.id)).raw, { repos: [repo.fullName] });
+    const leoCli = await TestCli.online(s.url, (await makeCliToken(leo.id)).raw, { repos: [repo.fullName] });
+    const mayaP = { ...personOf(maya), autoDefaults: { review: true, address: false } };
+    await s.dispatcher.dispatch(chat.id, { type: 'pr_opened', author: mayaP, reviewers: [personOf(leo)] });
+    const review = (await leoCli.next('job.assign')).d.bundle;
+    leoCli.send(complete({ jobId: review.jobId, attempt: review.attempt }, samples.jobResult()));
+    await leoCli.next('ack');
+
+    const address = (await mayaCli.next('job.assign')).d.bundle;
+    expect(address).toMatchObject({ type: 'address', apply: 'draft' });
+    const draft = { sha: draftSha, from: chat.headSha, files: [{ path: 'src/orders.ts', adds: 3, dels: 1 }], diff: 'diff --git a/src/orders.ts b/src/orders.ts\n' };
+    const fixes: JobResult = { ...samples.jobResult(), points: [], replies: [{ point: 1, resolution: 'fixed', comment: 'Added the empty check.' }], draft };
+    mayaCli.send(complete({ jobId: address.jobId, attempt: address.attempt }, fixes, 'c2'));
+    expect((await mayaCli.next('ack')).d).toEqual({ status: 'applied' });
+
+    await s.dispatcher.dispatch(chat.id, { type: 'draft_send', who: mayaP, jobId: address.jobId });
+    const bundle = (await mayaCli.next('job.assign')).d.bundle;
+    const publish: RunningJob = { jobId: bundle.jobId, attempt: bundle.attempt };
+    const draftRow = () => prisma.job.findUniqueOrThrow({ where: { id: address.jobId } });
+    return { chat, mayaCli, leoCli, draft, address, bundle, publish, draftRow };
+  }
+
+  it('keeps the draft commit a CLI reports with a draft-mode result, as it sent it', async () => {
+    const { draft, draftRow } = await sending();
+    expect(await draftRow()).toMatchObject({ status: 'done', applyState: 'draft', result: expect.objectContaining({ draft }) });
+  });
+
+  it("applies the drafted replies with the pushed commit once the publish job reports its push, and starts leo's re-review", async () => {
+    const { chat, mayaCli, leoCli, address, bundle, publish, draftRow } = await sending();
+    expect(bundle).toMatchObject({ type: 'publish', draft: { jobId: address.jobId, sha: draftSha, from: chat.headSha } });
+    mayaCli.send({ v: 1, t: 'job.pushing', id: 'p1', d: { ...publish, from: chat.headSha, to: draftSha } });
+    expect((await mayaCli.next('ack')).d).toEqual({ status: 'applied' });
+    const pushed: JobResult = { summary: '', points: [], decisions: [], replies: [], push: { from: chat.headSha, to: draftSha }, draft: null };
+    mayaCli.send(complete(publish, pushed, 'c3'));
+    expect((await mayaCli.next('ack')).d).toEqual({ status: 'applied' });
+
+    expect(await draftRow()).toMatchObject({ applyState: 'applied' });
+    expect(await prisma.point.findFirstOrThrow({ where: { chatId: chat.id, number: 1 } })).toMatchObject({ status: 'addressed', authorResolution: 'fixed' });
+    expect((await prisma.prChat.findUniqueOrThrow({ where: { id: chat.id } })).headSha).toBe(draftSha);
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: chat.id, role: 'author' } })).toMatchObject({ attention: 'none' });
+    expect((await leoCli.next('job.assign')).d.bundle).toMatchObject({ type: 're_review', sinceSha: chat.headSha, pr: { headSha: draftSha } });
+  });
+
+  it('marks the draft out of date when the branch moved, and carries on with a new draft for maya', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { chat, mayaCli, publish, draftRow } = await sending();
+    mayaCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...publish, reason: 'branch_moved', retryable: false, detail: 'non-fast-forward' } });
+    expect((await mayaCli.next('ack')).d).toEqual({ status: 'applied' });
+
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: publish.jobId } })).toMatchObject({ status: 'failed', failure: 'branch_moved' });
+    expect(await draftRow()).toMatchObject({ applyState: 'discarded' });
+    expect(await prisma.message.findFirst({ where: { chatId: chat.id, body: 'The drafted fixes are out of date: the branch moved' } })).not.toBeNull();
+    // Auto-fix is still off: the next address pass runs, and its result waits as a draft again.
+    expect((await mayaCli.next('job.assign')).d.bundle).toMatchObject({ type: 'address', apply: 'draft' });
+  });
+});

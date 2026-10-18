@@ -15,8 +15,13 @@ import type { WebHub } from './web-hub';
 /** Commits close together make one `chat.state`: it goes this long after the first of them. Every item still goes. */
 export const STATE_DEBOUNCE_MS = 100;
 
+type Action = 'reviewing' | 'fixing' | 'sending';
+
 /** What a progress line needs to know about a job: its chat, whose it is, and what kind of work. */
-type JobInfo = { chatId: string; userId: string; login: string; action: 'reviewing' | 'fixing' };
+type JobInfo = { chatId: string; userId: string; login: string; action: Action };
+
+/** What each kind of job is doing, for "leo's agent is reviewing…". A publish job runs no agent: it sends a draft. */
+const ACTION: Record<JobType, Action> = { review: 'reviewing', re_review: 'reviewing', address: 'fixing', publish: 'sending' };
 
 export type WebWiring = {
   webHub: WebHub;
@@ -122,7 +127,7 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, debounceMs = ST
     if (kept) return kept;
     const job = await prisma.job.findUnique({ where: { id: jobId }, select: { chatId: true, userId: true, type: true, participant: { select: { login: true } } } });
     if (!job) return null;
-    const info: JobInfo = { chatId: job.chatId, userId: job.userId, login: job.participant.login, action: (job.type as JobType) === 'address' ? 'fixing' : 'reviewing' };
+    const info: JobInfo = { chatId: job.chatId, userId: job.userId, login: job.participant.login, action: ACTION[job.type as JobType] };
     jobs.set(jobId, info);
     return info;
   }

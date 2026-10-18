@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { can, permissionsFor, type ChatAction, type PermissionFacts } from './permissions';
 
 // maya's PR, reviewed by leo (requested) and nina (no longer requested). P1 is leo's agent's point, P2 a GitHub
-// comment of leo's, both escalated. sam can read the repo but isn't in the chat.
+// comment of leo's, both escalated. leo's agent's re-review waits as a draft (job_7). sam can read the repo but isn't
+// in the chat.
 const maya = { githubId: 'gh-maya' };
 const leo = { githubId: 'gh-leo' };
 const nina = { githubId: 'gh-nina' };
@@ -23,6 +24,7 @@ function facts(over: Partial<PermissionFacts> = {}): PermissionFacts {
       { number: 2, raisedBy: leo.githubId, origin: 'github', status: 'escalated' },
       { number: 3, raisedBy: leo.githubId, origin: 'agent', status: 'open' },
     ],
+    drafts: [{ jobId: 'job_7', owner: leo.githubId }],
     ...over,
   };
 }
@@ -92,11 +94,22 @@ const rows: [string, { githubId: string }, PermissionFacts, ChatAction, boolean]
   ["the person whose GitHub post failed (not their agent) retries: it wouldn't help", leo, failedPosting, { kind: 'retry' }, false],
   ['a reviewer who is no longer requested retries their failed job: the engine would not run it', nina, failedAndRemoved, { kind: 'retry' }, false],
   ['someone with nothing failed retries', leo, facts(), { kind: 'retry' }, false],
+  ['the author switches Auto-fix', maya, facts(), { kind: 'auto', role: 'author' }, true],
+  ['a reviewer switches Auto-review', leo, facts(), { kind: 'auto', role: 'reviewer' }, true],
+  ['a reviewer who is no longer requested switches their own Auto-review', nina, facts(), { kind: 'auto', role: 'reviewer' }, true],
+  ['a reviewer switches Auto-fix (a role they do not have)', leo, facts(), { kind: 'auto', role: 'author' }, false],
+  ['the author switches Auto-review (a role she does not have)', maya, facts(), { kind: 'auto', role: 'reviewer' }, false],
+  ['someone who only reads along switches Auto', sam, facts(), { kind: 'auto', role: 'reviewer' }, false],
+  ["the owner sends or discards their agent's draft", leo, facts(), { kind: 'draft', owner: leo.githubId }, true],
+  ["the author sends or discards leo's draft", maya, facts(), { kind: 'draft', owner: leo.githubId }, false],
+  ["someone who only reads along sends or discards leo's draft", sam, facts(), { kind: 'draft', owner: leo.githubId }, false],
   ['the author sends a note on a closed PR', maya, facts({ closed: true }), { kind: 'note' }, false],
   ['the raiser resolves P1 on a closed PR', leo, facts({ closed: true }), { kind: 'resolve', point: 1 }, false],
   ['the author continues P1 on a closed PR', maya, facts({ closed: true }), { kind: 'continue', point: 1 }, false],
   ['a requested reviewer starts a review on a closed PR', leo, { ...untrusted(), closed: true }, { kind: 'review' }, false],
   ['the person whose job failed retries on a closed PR', leo, { ...failed, closed: true }, { kind: 'retry' }, false],
+  ['the author switches Auto-fix on a closed PR', maya, facts({ closed: true }), { kind: 'auto', role: 'author' }, false],
+  ['the owner sends their draft on a closed PR', leo, facts({ closed: true }), { kind: 'draft', owner: leo.githubId }, false],
 ];
 
 describe('can (spec §16 "Who can act in a chat")', () => {
@@ -107,9 +120,20 @@ describe('can (spec §16 "Who can act in a chat")', () => {
 
 describe('permissionsFor', () => {
   it('lists what each person may do now: Resolve and Continue only on escalated points', () => {
-    expect(permissionsFor(leo, facts())).toEqual({ note: true, resolve: [1], continue: [1, 2], review: false, retry: false });
-    expect(permissionsFor(maya, facts())).toEqual({ note: true, resolve: [], continue: [1, 2], review: false, retry: false });
-    expect(permissionsFor(sam, facts())).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
+    expect(permissionsFor(leo, facts())).toEqual({ note: true, resolve: [1], continue: [1, 2], review: false, retry: false, auto: ['reviewer'], drafts: ['job_7'] });
+    expect(permissionsFor(maya, facts())).toEqual({ note: true, resolve: [], continue: [1, 2], review: false, retry: false, auto: ['author'], drafts: [] });
+    expect(permissionsFor(sam, facts())).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] });
+  });
+
+  it('offers the Auto switch for each role you have, and Send / Discard only on your own waiting drafts', () => {
+    const both = facts({
+      participants: [
+        { githubId: maya.githubId, role: 'author', requested: false, attention: 'drafts', agentFailed: false },
+        { githubId: maya.githubId, role: 'reviewer', requested: true, attention: 'none', agentFailed: false },
+      ],
+      drafts: [{ jobId: 'job_8', owner: maya.githubId }, { jobId: 'job_7', owner: leo.githubId }],
+    });
+    expect(permissionsFor(maya, both)).toMatchObject({ auto: ['author', 'reviewer'], drafts: ['job_8'] });
   });
 
   it('offers Review while the reviewer still has to start it, and Retry to the person whose job failed', () => {
@@ -121,6 +145,6 @@ describe('permissionsFor', () => {
   });
 
   it('offers nothing on a closed PR', () => {
-    expect(permissionsFor(leo, facts({ closed: true }))).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false });
+    expect(permissionsFor(leo, facts({ closed: true }))).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] });
   });
 });

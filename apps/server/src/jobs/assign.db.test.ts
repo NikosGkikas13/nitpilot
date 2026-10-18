@@ -1,7 +1,9 @@
 import { CLOSE_CODES, LEASE_SEC } from '@nitpilot/protocol';
+import * as samples from '@nitpilot/protocol/test-samples';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf, resetDb } from '../../test/db';
 import { sleep, startCliServer, TestCli, type CliServer } from '../../test/ws';
+import { loadActivity } from '../chats/activity';
 import { prisma } from '../lib/prisma';
 import { JobAssigner } from './assign';
 
@@ -44,6 +46,24 @@ async function online(user: User, over: Parameters<typeof TestCli.online>[2] = {
 
 const statusOf = async (jobId: string) => (await prisma.job.findUniqueOrThrow({ where: { id: jobId } })).status;
 
+/**
+ * maya's drafted fixes, made on her laptop and kept there (spec §11 draft mode), and the publish job that sends them,
+ * queued. She also has a desktop. Neither is online yet.
+ */
+async function draftToSend() {
+  const maya = await makeUser({ login: 'maya' });
+  const repo = await makeRepo();
+  const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+  const laptop = await makeCliToken(maya.id);
+  const desktop = await makeCliToken(maya.id);
+  const draft = await queueJob(chat.id, maya, 'author', 'address');
+  const result = { ...samples.jobResult(), points: [], replies: [{ point: 1, resolution: 'fixed' as const, comment: 'Guarded.' }], draft: { sha: 'd'.repeat(40), from: 'a'.repeat(40), files: [], diff: null } };
+  await prisma.job.update({ where: { id: draft.id }, data: { status: 'done', activeFor: null, attempt: 1, cliTokenId: laptop.id, applyState: 'draft', result } });
+  const publish = await queueJob(chat.id, maya, 'author', 'publish');
+  await prisma.job.update({ where: { id: publish.id }, data: { draftOfId: draft.id } });
+  return { maya, repo, chat, laptop, desktop, draft, publish };
+}
+
 describe('JobAssigner', () => {
   it("gives a queued job to its owner's CLI when it connects: running, attempt 1, a 90-second lease", async () => {
     const { leo, repo, job } = await leoWithAJob();
@@ -67,15 +87,33 @@ describe('JobAssigner', () => {
     expect((await cli.next('job.assign')).d.bundle).toMatchObject({ type: 'review', you: { login: 'leo', role: 'reviewer' } });
   });
 
-  it('leaves a publish job queued: nothing routes one to a CLI yet', async () => {
-    const maya = await makeUser({ login: 'maya' });
-    const repo = await makeRepo();
-    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
-    const job = await queueJob(chat.id, maya, 'author', 'publish');
-    const cli = await online(maya, { repos: [repo.fullName] });
+  it('gives a publish job to the laptop that made the draft, whatever its agent can do (spec §9.4)', async () => {
+    const { repo, laptop, draft, publish } = await draftToSend();
+    // A publish job runs no agent, so an agent that can only review doesn't matter.
+    const cli = await TestCli.online(s.url, laptop.raw, { repos: [repo.fullName], agent: { id: 'fake', version: null, modes: ['reviewer'] } });
+    expect((await cli.next('job.assign')).d.bundle).toMatchObject({ jobId: publish.id, attempt: 1, type: 'publish', draft: { jobId: draft.id, sha: 'd'.repeat(40), from: 'a'.repeat(40) } });
+    expect(await prisma.job.findUniqueOrThrow({ where: { id: publish.id } })).toMatchObject({ status: 'running', cliTokenId: laptop.id });
+  });
+
+  it("leaves a publish job queued while only maya's other device is online, and says her laptop is offline (Review Focus 4)", async () => {
+    const { repo, chat, laptop, desktop, publish } = await draftToSend();
+    const laptopSeen = new Date('2026-10-16T18:04:00.000Z');
+    await prisma.cliToken.update({ where: { id: laptop.id }, data: { lastSeenAt: laptopSeen } });
+    const desktopCli = await TestCli.online(s.url, desktop.raw, { repos: [repo.fullName] });
+    await s.settle();
+    await desktopCli.nothing('job.assign');
+    expect(await statusOf(publish.id)).toBe('queued');
+    // The desktop being online doesn't count: the draft commit is only on the laptop, last seen at laptopSeen.
+    expect(await loadActivity(chat.id, s.hub, clock)).toEqual({ kind: 'agent_waiting', who: 'maya', why: 'offline', offlineSince: laptopSeen });
+  });
+
+  it("leaves a publish job queued while the laptop with the draft doesn't have the repo linked", async () => {
+    const { chat, laptop, publish } = await draftToSend();
+    const cli = await TestCli.online(s.url, laptop.raw, { repos: ['someone/else'] });
     await s.settle();
     await cli.nothing('job.assign');
-    expect(await statusOf(job.id)).toBe('queued');
+    expect(await statusOf(publish.id)).toBe('queued');
+    expect(await loadActivity(chat.id, s.hub, clock)).toEqual({ kind: 'agent_waiting', who: 'maya', why: 'repo_not_linked' });
   });
 
   it("never gives a job to someone else's CLI", async () => {

@@ -2,7 +2,7 @@ import type { Role } from '@nitpilot/protocol';
 import { advance } from './advance';
 import { emit, system, type Ctx, type Ev } from './context';
 import { addJob, autoFor, cancelJobs, settleDraft } from './jobs';
-import { applyReview } from './results';
+import { applyAddress, applyReview } from './results';
 import { activeJobFor, activeJobs, participant } from './state';
 import type { DraftState, Person } from './types';
 
@@ -11,7 +11,7 @@ import type { DraftState, Person } from './types';
 // changed" into a 409. What happens to a publish job's push or failure is in results.ts, with the other job results.
 
 /** What the switch is called on each side, as on the Settings page. */
-const AUTO_NAME: Record<Role, string> = { reviewer: 'Auto-review', author: 'Auto-fix' };
+export const AUTO_NAME: Record<Role, string> = { reviewer: 'Auto-review', author: 'Auto-fix' };
 
 /**
  * A person turns their Auto switch on or off in this chat, for a role they have. A job of theirs that is still queued
@@ -41,7 +41,8 @@ export function onAutoChanged(ctx: Ctx, e: Ev<'auto_changed'>): void {
 /**
  * Send: a reviewer's draft is applied exactly as a finished auto job would have been. An author's draft commit is on
  * the laptop that made it, so a publish job pushes it (spec §11 "Publish jobs"), and the draft waits until that job
- * ends (results.ts).
+ * ends (results.ts). An author's draft with no commit (the agent only answered or declined) has nothing to push: it
+ * is applied at once, like an auto address pass that changed no file.
  */
 export function onDraftSend(ctx: Ctx, e: Ev<'draft_send'>): void {
   const draft = ownDraft(ctx, e.who, e.jobId);
@@ -57,6 +58,13 @@ export function onDraftSend(ctx: Ctx, e: Ev<'draft_send'>): void {
   }
   // Already being sent: a second press changes nothing.
   if (activeJobFor(ctx.chat, p)) return;
+  if (!draft.result.draft) {
+    system(ctx, `${p.login} sent the drafted replies`, { jobId: draft.jobId });
+    settleDraft(ctx, draft, 'applied');
+    applyAddress(ctx, { id: draft.jobId, jobType: draft.jobType, headSha: draft.headSha }, p, { ...draft.result, push: null });
+    advance(ctx);
+    return;
+  }
   addJob(ctx, p, { jobType: 'publish', sinceSha: null, applyState: 'pending', draftOfId: draft.jobId });
   // "is sending": the publish job is queued, and the laptop with the draft may be offline. The banner says whether it runs.
   system(ctx, `${p.login} is sending the drafted fixes`, { jobId: draft.jobId });

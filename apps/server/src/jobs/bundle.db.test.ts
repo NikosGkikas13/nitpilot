@@ -5,7 +5,7 @@ import { Dispatcher } from '../chats/dispatch';
 import type { Prisma } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import { FakePlatform } from '../platform/fake/fake-platform';
-import { buildJobBundle } from './bundle';
+import { buildJobBundle, buildPublishBundle, bundleFor } from './bundle';
 
 const platform = new FakePlatform();
 
@@ -128,5 +128,50 @@ describe('buildJobBundle', () => {
     const { chat, review } = await scene();
     await prisma.prChat.update({ where: { id: chat.id }, data: { headRepoFullName: null } });
     expect((await buildJobBundle(review.id, platform)).git.headRepoPath).toBeNull();
+  });
+});
+
+describe('buildPublishBundle (spec §11 "Publish jobs")', () => {
+  /** maya's agent fixed leo's point with Auto-fix off, so its commit waits on her laptop; she pressed Send. The publish job is running. */
+  async function sending() {
+    const maya = await makeUser({ login: 'maya' });
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const dispatcher = new Dispatcher();
+    const mayaP = { ...personOf(maya), autoDefaults: { review: true, address: false } };
+    await dispatcher.dispatch(chat.id, { type: 'pr_opened', author: mayaP, reviewers: [personOf(leo)] });
+    const review = await running(chat.id, 'review');
+    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: review.id, attempt: 1, result: samples.jobResult() });
+    const address = await running(chat.id, 'address');
+    const draft = { sha: 'd'.repeat(40), from: chat.headSha, files: [{ path: 'src/orders.ts', adds: 3, dels: 1 }], diff: null };
+    const fixes = { ...samples.jobResult(), points: [], replies: [{ point: 1, resolution: 'fixed' as const, comment: 'Added the empty check.' }], draft };
+    await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: address.id, attempt: 1, result: fixes });
+    await dispatcher.dispatch(chat.id, { type: 'draft_send', who: mayaP, jobId: address.id });
+    return { repo, chat, address, review, publish: await running(chat.id, 'publish') };
+  }
+
+  it('names the draft commit, the head it was made on, and where to push it', async () => {
+    const { repo, chat, address, publish } = await sending();
+    expect(await buildPublishBundle(publish.id, platform)).toEqual({
+      jobId: publish.id,
+      attempt: 1,
+      type: 'publish',
+      pr: { repoFullName: repo.fullName, number: chat.number, headRef: chat.headRef, url: chat.url },
+      git: { baseCloneUrl: `https://github.com/${repo.fullName}.git`, fetchRef: `refs/pull/${chat.number}/head`, headRepoPath: repo.fullName, headBranch: chat.headRef },
+      draft: { jobId: address.id, sha: 'd'.repeat(40), from: chat.headSha },
+    });
+  });
+
+  it("can't be built when the draft has no commit (a result from a CLI that didn't report one)", async () => {
+    const { address, publish } = await sending();
+    await prisma.job.update({ where: { id: address.id }, data: { result: { ...samples.jobResult(), draft: null } } });
+    await expect(buildPublishBundle(publish.id, platform)).rejects.toThrow(/no draft commit/);
+  });
+
+  it('is what the assigner sends for a publish job, and an agent bundle for any other', async () => {
+    const { review, publish } = await sending();
+    expect((await bundleFor(publish.id, platform)).type).toBe('publish');
+    expect((await bundleFor(review.id, platform)).type).toBe('review');
   });
 });

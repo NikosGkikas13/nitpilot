@@ -21917,7 +21917,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 The steps go from the engine outwards: the two engine rules, the protocol, the permissions, the chat view, the activity, the assigner and the bundle, the progress line, the routes, the web fixtures, the docs, and then one full run and the commit. Each group is test, run it red, code, run it green. The workspace typecheck is not clean in between (the protocol's new fields reach the server and the web fixtures one group at a time); it is clean again at Step 33.
 
-- [ ] **Step 1: Two engine rules found while wiring the routes: write the failing tests**
+- [x] **Step 1: Two engine rules found while wiring the routes: write the failing tests**
 
 These two rules belong to Task 15's engine files (`engine/drafts.ts` and `engine/results.ts`), but only wiring the routes showed they were missing, so they are their own step here. The first table row for `setup_failed` now says `retryable: false` (the CLI's draft ref is gone, spec §11), and a new test says that a retryable one is retried and the draft keeps waiting. The second new test is Send on a draft the agent made no commit for.
 
@@ -21986,12 +21986,12 @@ index 78a4cfc..8c5ae70 100644
      expect(commandsOf(out, 'retry_job')).toEqual([expect.objectContaining({ jobId: 'job-p1', refundAttempt: false, reason: 'timeout' })]);
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/engine/drafts.test.ts`
 Expected: FAIL, 2 failed, 35 passed (37): "applies a draft with no commit at once" (the engine queued a publish job) and "retries a setup_failed that may work next time" (it got `fail_job` and `set_apply_state discarded` instead of `retry_job`). The new `branch_moved` row with `retryable: false` and the `setup_failed` row pass already.
 
-- [ ] **Step 3: Make the two rules true**
+- [x] **Step 3: Make the two rules true**
 
 `draftOutOfDate` says why a publish job's failure makes the draft out of date, and nothing for a retryable `setup_failed`, so the usual retries apply. `onDraftSend` applies a draft with no commit at once, the way an auto address pass that pushed nothing does (`applyAddress`, now exported, with `push: null`), with its own timeline line "maya sent the drafted replies". `AUTO_NAME` and `DRAFT_OUT_OF_DATE` are exported too: the routes in Step 31 use the engine's own words for their 409 and 403 sentences.
 
@@ -22096,12 +22096,12 @@ index 200b7b8..b76c8fd 100644
    system(ctx, `${p.login} is sending the drafted fixes`, { jobId: draft.jobId });
 ```
 
-- [ ] **Step 4: Run the engine's tests to see them pass**
+- [x] **Step 4: Run the engine's tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/engine`
 Expected: PASS, 188 tests in 11 files (Task 15 ended at 185).
 
-- [ ] **Step 5: Write the failing protocol tests**
+- [x] **Step 5: Write the failing protocol tests**
 
 The chat round trip gets `drafts`, `auto` on a participant and the two new permissions; `AutoRequest` and `DraftView` are new. A draft whose result was stored before drafts existed (Plan 1's rows have no `draft` key) must still parse, and a publish job is never a draft. A publish job's progress line says `sending`.
 
@@ -22176,12 +22176,12 @@ index 0de86e4..79a4a45 100644
      for (const msg of sent) expect(ServerToWeb.parse(JSON.parse(JSON.stringify(msg)))).toEqual(msg);
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 4 failed, 59 passed (63): the chat round trip (`drafts`, `auto` and the permissions are dropped), `AutoRequest` and `DraftView` don't exist, and `sending` is not a `job.progress` action.
 
-- [ ] **Step 7: Add the schemas**
+- [x] **Step 7: Add the schemas**
 
 `DraftView.jobType` is `AgentJobType`, so the schema refuses a publish job. `createdAt` is when the draft job was queued; the web app puts the card at the "…its work waits as drafts" line, so the time doesn't position it.
 
@@ -22295,12 +22295,12 @@ index bc313bf..87a5960 100644
  }));
 ```
 
-- [ ] **Step 8: Run the protocol tests to see them pass**
+- [x] **Step 8: Run the protocol tests to see them pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 63 tests.
 
-- [ ] **Step 9: Write the failing permissions tests**
+- [x] **Step 9: Write the failing permissions tests**
 
 Two new kinds of action. `auto` is allowed when you have that role in the chat (a reviewer who is no longer requested keeps their own switch). `draft` carries the draft's owner, read from the job row by the route, and is allowed for the owner only: `can` never needs every finished job of the chat, and a draft that was sent or discarded a moment ago is still a 409 from the engine, not a 403.
 
@@ -22384,12 +22384,12 @@ index d427fdd..c3a8897 100644
  });
 ```
 
-- [ ] **Step 10: Run them to see them fail**
+- [x] **Step 10: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts`
 Expected: FAIL, 12 failed, 32 passed (44): the nine new rows on an open PR return `undefined` (an action `can` doesn't know), and the three `permissionsFor` expectations lack `auto` and `drafts`. The two new closed-PR rows pass already, because `can` says no first.
 
-- [ ] **Step 11: Teach `can` and `permissionsFor` about Auto and drafts**
+- [x] **Step 11: Teach `can` and `permissionsFor` about Auto and drafts**
 
 `permissionFacts` now takes the waiting drafts as well. Until the callers pass them (Steps 15 and 31), anything that builds a chat view fails.
 
@@ -22493,12 +22493,12 @@ index e2edd05..760dbc3 100644
  }
 ```
 
-- [ ] **Step 12: Run the permissions tests to see them pass**
+- [x] **Step 12: Run the permissions tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/chats/permissions.test.ts`
 Expected: PASS, 44 tests.
 
-- [ ] **Step 13: Write the failing chat view tests**
+- [x] **Step 13: Write the failing chat view tests**
 
 The existing view tests expect `auto` and `drafts` in `permissions`; the stand-in CLI gains a `tokenId`; four new tests cover the drafts (one for leo's reviewer draft, one for maya's author draft with a publish job queued, and an old sent one and a discarded one that must not show).
 
@@ -22617,12 +22617,12 @@ index d39ca09..2e09903 100644
      const { chat, leo, clis } = await scene();
 ```
 
-- [ ] **Step 14: Run them to see them fail**
+- [x] **Step 14: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts`
 Expected: FAIL, 13 failed (13): every view test, old and new, stops at `Cannot read properties of undefined (reading 'map')`, because `permissionFacts` (Step 11) now reads `waitingDrafts` and `loadChatView` doesn't pass it yet.
 
-- [ ] **Step 15: Put the drafts, the Auto switch and the new permissions in the view**
+- [x] **Step 15: Put the drafts, the Auto switch and the new permissions in the view**
 
 One query reads the jobs at work and the drafts waiting (an `OR`), and the code splits them, so the number of queries per view is unchanged. `JobResult.parse` fills `draft: null` for a result stored before drafts existed.
 
@@ -22706,12 +22706,12 @@ index a2a597a..ee57253 100644
    };
 ```
 
-- [ ] **Step 16: Run the view tests to see them pass**
+- [x] **Step 16: Run the view tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/chats/views.db.test.ts`
 Expected: PASS, 13 tests.
 
-- [ ] **Step 17: Write the failing activity test**
+- [x] **Step 17: Write the failing activity test**
 
 A pure test of **Review Focus 4**: a publish job pinned to maya's laptop waits "offline since …" for that laptop while her desktop is online, and is "working" once the laptop is back. `presence` now takes the device. The `/api/me` stand-in gains a `tokenId` (a type change only; its test passes before and after).
 
@@ -22775,12 +22775,12 @@ index 6662e24..60cef7d 100644
    });
 ```
 
-- [ ] **Step 18: Run it to see it fail**
+- [x] **Step 18: Run it to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/chats/activity.test.ts`
 Expected: FAIL, 1 failed, 10 passed (11): the publish job test gets `agent_working` (today any online CLI of maya's counts).
 
-- [ ] **Step 19: Make activity know which device a job waits for**
+- [x] **Step 19: Make activity know which device a job waits for**
 
 `loadActivities` adds one query (`draftDevices`: the draft job's CLI token and when that device was last seen) and only when a chat has a publish job, so the "three chats, as many queries as one" test still holds.
 
@@ -22911,12 +22911,12 @@ index 585f154..29102fd 100644
    const parsed = FailureReason.safeParse(stored);
 ```
 
-- [ ] **Step 20: Run the activity and view tests to see them pass**
+- [x] **Step 20: Run the activity and view tests to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/chats/activity.test.ts && npm run test:db -w apps/server -- src/chats/activity.db.test.ts src/chats/views.db.test.ts src/http/routes/me.db.test.ts`
 Expected: PASS, 11 unit tests, then 24 database tests in 3 files.
 
-- [ ] **Step 21: Write the failing assigner, bundle and handler tests**
+- [x] **Step 21: Write the failing assigner, bundle and handler tests**
 
 `assign.db.test.ts`: the Task 14 guard "leaves a publish job queued: nothing routes one to a CLI yet" is replaced by three tests: the publish job goes to the laptop that made the draft (even with an agent that can only review), stays queued while only maya's desktop is online and the chat says her laptop is offline (**Review Focus 4**), and stays queued while the laptop doesn't have the repo linked. `bundle.db.test.ts`: the publish bundle, a draft with no commit, and `bundleFor`. `handlers.db.test.ts`: through the real hub and dispatcher, the CLI's draft is stored as sent, a publish job's push applies the stored replies and starts the re-review, and `branch_moved` makes the draft out of date. These last three exercise code that already exists (`recordPush`, `onPublished`), so they only fail while the publish job is never handed out.
 
@@ -23148,12 +23148,12 @@ index a231bd5..dd6f90a 100644
 +});
 ```
 
-- [ ] **Step 22: Run them to see them fail**
+- [x] **Step 22: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/jobs/assign.db.test.ts src/jobs/bundle.db.test.ts src/ws/handlers.db.test.ts`
 Expected: FAIL, 7 failed, 38 passed (45): in `assign.db.test.ts` 1 failed, 17 passed (the publish job is never handed out; the two "stays queued" tests pass already, and the activity half of Review Focus 4 is Step 19's); in `bundle.db.test.ts` 3 failed, 7 passed (`buildPublishBundle` and `bundleFor` are not functions); in `handlers.db.test.ts` 3 failed, 14 passed (the scene waits for a publish `job.assign` that never comes).
 
-- [ ] **Step 23: Build the publish bundle and route a publish job to its device**
+- [x] **Step 23: Build the publish bundle and route a publish job to its device**
 
 `bundleFor` picks the builder by `Job.type`; `buildJobBundle` keeps returning `AgentJobBundle`, so no existing bundle test needs narrowing. `buildPublishBundle` reads the draft's sha from the draft job's stored result and treats a missing commit as a bug (Send never queues a publish job for one, Step 3). In the assigner a publish job `fits` only the connection whose `tokenId` is the draft job's `cliTokenId`; the concurrency check still applies. A draft job with no token leaves the publish job queued for good.
 
@@ -23302,12 +23302,12 @@ index 600a736..26c143a 100644
  
 ```
 
-- [ ] **Step 24: Run them to see them pass**
+- [x] **Step 24: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/jobs/assign.db.test.ts src/jobs/bundle.db.test.ts src/ws/handlers.db.test.ts`
 Expected: PASS, 45 tests in 3 files.
 
-- [ ] **Step 25: Write the failing progress-line test**
+- [x] **Step 25: Write the failing progress-line test**
 
 A CLI sends `job.progress` for a running publish job; a web tab must see `action: 'sending'`, not "reviewing".
 
@@ -23336,12 +23336,12 @@ index 5126649..179ffc2 100644
      const mayaTab = await tab(maya);
 ```
 
-- [ ] **Step 26: Run it to see it fail**
+- [x] **Step 26: Run it to see it fail**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
 Expected: FAIL, 1 failed, 12 passed (13): the new test gets `action: 'reviewing'`.
 
-- [ ] **Step 27: Say "sending" for a publish job**
+- [x] **Step 27: Say "sending" for a publish job**
 
 ```diff
 diff --git a/apps/server/src/ws/web-wire.ts b/apps/server/src/ws/web-wire.ts
@@ -23374,12 +23374,12 @@ index 8814d5c..ef7bdb4 100644
    }
 ```
 
-- [ ] **Step 28: Run it to see it pass**
+- [x] **Step 28: Run it to see it pass**
 
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
 Expected: PASS, 13 tests.
 
-- [ ] **Step 29: Write the failing route tests**
+- [x] **Step 29: Write the failing route tests**
 
 `chat-drafts.db.test.ts` covers: Send on leo's reviewer draft (its point enters the chat and maya's agent is asked to fix it); Send on maya's author draft (a publish job is queued, and a second press is a 409, **Review Focus 3**); Send on a draft with no commit (applied at once, no publish job); Send on a draft already sent, discarded, or gone out of date; a retryable `setup_failed` that failed for good keeps the draft waiting and is called "discarded", not "out of date", once maya discards it; someone else's draft 403, a reader without repo access 404, a job that isn't a draft 404, another Origin 403, a closed PR 409; Discard of a reviewer's draft, of an author's while the publish job waits (the job is cancelled), once it runs (409), by someone else and twice; and `PUT auto` (turned on with a timeline line, already on 409, a role you don't have 403, another Origin 403, a bad body 400, a closed PR 409).
 
@@ -23659,12 +23659,12 @@ describe('PUT /api/chats/:id/auto', () => {
 });
 ```
 
-- [ ] **Step 30: Run them to see them fail**
+- [x] **Step 30: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/chat-drafts.db.test.ts`
 Expected: FAIL, 17 failed (17): the routes don't exist, so the requests get 404 where the tests expect 200, 403 or 409.
 
-- [ ] **Step 31: Split the write guard, and add the routes**
+- [x] **Step 31: Split the write guard, and add the routes**
 
 `chat-actions.ts`: the old `allowed` helper becomes two exported steps, `readableChat` (read access, giving the chat id) and `mayAct` (load the facts, then 404 for a point that isn't there, 409 on a closed PR, 403 from `can`, giving the `Person`), because the draft routes need the draft lookup (a 404) between the two. `mayAct` also loads the waiting drafts for the facts. `forbidden` gets a sentence for the two new actions. W4's routes behave as before.
 
@@ -23902,12 +23902,12 @@ index b5c6311..68d91d4 100644
    app.route('/', setupRoutes(deps));
 ```
 
-- [ ] **Step 32: Run the route tests to see them pass**
+- [x] **Step 32: Run the route tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/chat-drafts.db.test.ts src/http/routes/chat-actions.db.test.ts`
 Expected: PASS, 40 tests in 2 files (W4's 23 route tests pass unchanged).
 
-- [ ] **Step 33: Update the web fixtures**
+- [x] **Step 33: Update the web fixtures**
 
 The web app's test fixtures build a `ChatView`, so they need the new fields (`auto` on each participant, `drafts`, and `auto` and `drafts` in `permissions`). Vitest doesn't type-check, so the web tests pass before and after; the check is the typecheck.
 
@@ -24004,7 +24004,7 @@ index 9720c91..cb38c0d 100644
 Run: `npm run typecheck && npm test -w apps/web`
 Expected: typecheck clean; web 158 passed.
 
-- [ ] **Step 34: The drafts explainer**
+- [x] **Step 34: The drafts explainer**
 
 CLAUDE.md asks for an explainer when a backend concept first shows up. A draft, a publish job and "out of date" are new, and the publish job reuses leases and fencing (`docs/why/leases-and-fencing.md`).
 
@@ -24075,7 +24075,7 @@ Send and Discard go through the dispatcher like every chat write, under the chat
 A draft is a filled-in form kept in state instead of submitted: it's on screen (for everyone in the chat), and only Send submits it. The publish job is like a mutation that can only run in one particular browser tab, because only that tab holds the data it needs: if that tab is closed, the mutation waits.
 ```
 
-- [ ] **Step 35: Add drafts to the access-rules and races explainers**
+- [x] **Step 35: Add drafts to the access-rules and races explainers**
 
 ```diff
 diff --git a/docs/why/chat-access-rules.md b/docs/why/chat-access-rules.md
@@ -24121,7 +24121,7 @@ index 6f139ed..ee6f7aa 100644
  
 ```
 
-- [ ] **Step 36: The spec**
+- [x] **Step 36: The spec**
 
 Four places in `docs/superpowers/specs/2026-10-07-nitpilot-design.md` change: §9 "Send" (a draft with no commit is applied at once; a retryable `setup_failed` follows the usual retries), §9.1 Activity (a publish job waits for its own device), §10 `job.progress` (`sending`), and §10 "Answers of the chat writes" (the draft and Auto 409s).
 
@@ -24168,12 +24168,12 @@ index 94214aa..40dd8e2 100644
  - CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve`.
 ```
 
-- [ ] **Step 37: Run everything**
+- [x] **Step 37: Run everything**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 63, CLI 301 passed + 14 skipped, server 922, web 158; end to end 5; Playwright 6; typecheck, lint and build clean.
 
-- [ ] **Step 38: Commit**
+- [x] **Step 38: Commit**
 
 ```bash
 git add packages/protocol/src apps/server/src apps/web/src docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

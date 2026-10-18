@@ -7,7 +7,7 @@ import { fakeApi, renderApp, type Answer } from '../../test/render';
 
 const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0 };
 const PATH = '/c/acme/shop-api/142';
-const none: Permissions = { note: true, resolve: [], continue: [], review: false, retry: false };
+const none: Permissions = { note: true, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] };
 
 /** maya's PR, read by leo: P1 (leo's agent's security point) and P2 (a disagreement) need a person. */
 function escalatedView(permissions: Partial<Permissions>): Partial<ChatView> {

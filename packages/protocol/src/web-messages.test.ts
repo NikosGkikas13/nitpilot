@@ -30,6 +30,8 @@ describe('/ws/web messages', () => {
       { v: 1, t: 'chat.items', d: { chatId: 'chat_1', items: [item], lastSeq: 3 } },
       { v: 1, t: 'chat.error', d: { chatId: 'chat_1', code: 'reauth' } },
       { v: 1, t: 'job.progress', d: { chatId: 'chat_1', who: 'leo', action: 'reviewing', stage: 'running_agent', text: 'reading src/orders.ts' } },
+      // A publish job runs no agent: the author's CLI is sending her drafted fixes.
+      { v: 1, t: 'job.progress', d: { chatId: 'chat_1', who: 'maya', action: 'sending', stage: 'pushing', text: 'pushing the drafted fixes' } },
       { v: 1, t: 'inbox.upsert', d: { chatId: 'chat_1', rows: [] } },
     ];
     for (const msg of sent) expect(ServerToWeb.parse(JSON.parse(JSON.stringify(msg)))).toEqual(msg);
