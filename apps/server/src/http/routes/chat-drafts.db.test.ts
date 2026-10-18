@@ -2,7 +2,7 @@ import type { JobResult } from '@nitpilot/protocol';
 import * as samples from '@nitpilot/protocol/test-samples';
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../../../test/app';
-import { makeChat, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../../test/db';
+import { makeChat, makeGithubSignIn, makeMessage, makeRepo, makeUser, personOf } from '../../../test/db';
 import { fakeFetch, json } from '../../../test/fake-fetch';
 import { sessionCookieFor } from '../../../test/http';
 import { Dispatcher } from '../../chats/dispatch';
@@ -136,6 +136,20 @@ describe('POST /api/chats/:id/drafts/:jobId/send', () => {
     expect(await errorOf(res)).toEqual({ code: 'conflict', message: 'That draft is out of date: the branch moved.' });
   });
 
+  it("skips an earlier line about the draft whose reason doesn't make it out of date, and still finds the real one", async () => {
+    const { chat, dispatcher, send, address } = await fixesDraft();
+    // A system line about this draft with a failure reason DRAFT_OUT_OF_DATE has no sentence for, older than the real one.
+    const earlier = await makeMessage(chat.id, null, 'An earlier note about this draft');
+    await prisma.message.update({ where: { id: earlier.id }, data: { data: { jobId: address.id, reason: 'crash' } } });
+    expect((await send('maya', address.id)).status).toBe(200);
+    const [publish] = await publishJobs(address.id);
+    await prisma.job.update({ where: { id: publish!.id }, data: { status: 'running', attempt: 1 } });
+    await dispatcher.dispatch(chat.id, { type: 'job_failed', jobId: publish!.id, attempt: 1, reason: 'branch_moved', retryable: false });
+    const res = await send('maya', address.id);
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', message: 'That draft is out of date: the branch moved.' });
+  });
+
   it('keeps the draft waiting when its publish job fails for good on a retryable setup_failed, and calls it discarded, not out of date, once maya discards it', async () => {
     const { chat, dispatcher, send, discard, address } = await fixesDraft();
     expect((await send('maya', address.id)).status).toBe(200);
@@ -221,6 +235,15 @@ describe('POST /api/chats/:id/drafts/:jobId/discard', () => {
     expect(res.status).toBe(409);
     expect(await errorOf(res)).toEqual({ code: 'conflict', message: "That draft is being sent right now, so it can't be discarded." });
     expect(await job(address.id)).toMatchObject({ applyState: 'draft' });
+  });
+
+  it('answers 409 to Discard on a draft that was already sent', async () => {
+    const { discard, send, review } = await reviewDraft();
+    expect((await send('leo', review.id)).status).toBe(200);
+    const res = await discard('leo', review.id);
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toEqual({ code: 'conflict', message: 'That draft was already sent.' });
+    expect(await job(review.id)).toMatchObject({ applyState: 'applied' });
   });
 
   it("refuses someone else's draft (403), and answers 409 to a second Discard", async () => {

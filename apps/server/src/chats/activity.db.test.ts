@@ -48,6 +48,21 @@ describe('loadActivity (spec §9.1)', () => {
   });
 });
 
+describe('loadActivity: a publish job whose draft has no device', () => {
+  it("says offline, not working, even with one of the person's CLIs online: no CLI can take it (the assigner leaves it queued)", async () => {
+    const maya = await makeUser({ login: 'maya' });
+    const repo = await makeRepo();
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    const mayaP = await prisma.participant.create({ data: { chatId: chat.id, githubId: maya.githubId, role: 'author', userId: maya.id, login: 'maya' } });
+    const job = (type: string, over: object) => prisma.job.create({ data: { chatId: chat.id, participantId: mayaP.id, userId: maya.id, type, round: 1, headSha: chat.headSha, ...over } });
+    // The draft job kept no CLI token (cliTokenId null), so no device holds its commit.
+    const draft = await job('address', { status: 'done', attempt: 1, applyState: 'draft', cliTokenId: null });
+    await job('publish', { status: 'queued', activeFor: mayaP.id, draftOfId: draft.id });
+    const clis: LiveClis = { connectionsFor: (userId) => (userId === maya.id ? [{ tokenId: 'some-device', repos: new Set([repo.fullName]), usedToday: 0 }] : []) };
+    expect(await loadActivity(chat.id, clis)).toEqual({ kind: 'agent_waiting', who: 'maya', why: 'offline', offlineSince: null });
+  });
+});
+
 describe('loadActivities (many chats at once, for the inbox)', () => {
   it('gives each chat the answer loadActivity gives it', async () => {
     const seen = new Date('2026-10-15T09:30:00.000Z');

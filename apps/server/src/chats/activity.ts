@@ -14,8 +14,16 @@ export type Activity =
   | { kind: 'none' };
 
 /**
- * A queued or running job, and whose agent it's for. `onlyTokenId` is the one CLI device that can take it: for a
- * publish job, the laptop that made the draft (spec §9.4); null for any of the person's CLIs.
+ * A token id no CLI has. A publish job whose draft job kept no device (its `cliTokenId` is null) can be taken by no CLI:
+ * the assigner leaves it queued for good (jobs/assign.ts). Naming this as its `onlyTokenId` makes its presence read
+ * "offline, never seen", the same as the assigner's view, instead of "any of the person's CLIs".
+ */
+export const NO_DEVICE = 'no-device';
+
+/**
+ * A queued or running job, and whose agent it's for. `onlyTokenId` says which CLI can take it: null means any of the
+ * person's CLIs; a token id means only that device (a publish job: the laptop that made the draft, spec §9.4);
+ * `NO_DEVICE` means none.
  */
 export type ActiveJob = { login: string; userId: string; status: 'queued' | 'running'; runAfter: Date; failure: FailureReason | null; onlyTokenId: string | null };
 
@@ -37,7 +45,7 @@ export type ActivityFacts = {
   reviewerToAnswer: string | null;
   /** Queued and running jobs, oldest first. */
   jobs: ActiveJob[];
-  /** The person's CLIs, or only the device `onlyTokenId` names. */
+  /** The person's CLIs when `onlyTokenId` is null, otherwise only the device it names (`NO_DEVICE` names none: always offline). */
   presence: (userId: string, onlyTokenId: string | null) => Presence;
   now: Date;
 };
@@ -122,7 +130,7 @@ export async function loadActivities(chatIds: string[], clis: LiveClis, now = ne
           status: j.status as ActiveJob['status'],
           runAfter: j.runAfter,
           failure: failureOf(j.failure),
-          onlyTokenId: j.draftOfId ? (devices.ofDraft.get(j.draftOfId) ?? null) : null,
+          onlyTokenId: j.draftOfId ? (devices.ofDraft.get(j.draftOfId) ?? NO_DEVICE) : null,
         })),
         presence,
         now,

@@ -252,10 +252,11 @@ describe('drafts and publish jobs (spec §9 "Drafts", §11 "Publish jobs")', () 
   });
 
   it('marks the draft out of date when the branch moved, and carries on with a new draft for maya', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { chat, mayaCli, publish, draftRow } = await sending();
     mayaCli.send({ v: 1, t: 'job.fail', id: 'f1', d: { ...publish, reason: 'branch_moved', retryable: false, detail: 'non-fast-forward' } });
     expect((await mayaCli.next('ack')).d).toEqual({ status: 'applied' });
+    expect(warned).toHaveBeenCalledWith(`[cli] maya/test laptop: job ${publish.jobId} attempt 1 failed (branch_moved, ack applied): "non-fast-forward"`);
 
     expect(await prisma.job.findUniqueOrThrow({ where: { id: publish.jobId } })).toMatchObject({ status: 'failed', failure: 'branch_moved' });
     expect(await draftRow()).toMatchObject({ applyState: 'discarded' });

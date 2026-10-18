@@ -29,7 +29,7 @@ export class JobAssigner {
 
   constructor(
     private readonly hub: CliHub,
-    private readonly buildBundle: (jobId: string) => Promise<JobBundle>,
+    private readonly buildBundle: (jobId: string, type: JobType) => Promise<JobBundle>,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -113,7 +113,7 @@ export class JobAssigner {
       load.set(cli.tokenId, (load.get(cli.tokenId) ?? 0) + 1);
       assigned += 1;
       // The swap just added 1 to the attempt we read.
-      await this.send(cli, { jobId: job.id, chatId: job.chatId, attempt: job.attempt + 1 });
+      await this.send(cli, { jobId: job.id, chatId: job.chatId, attempt: job.attempt + 1 }, job.type as JobType);
     }
     return assigned;
   }
@@ -123,10 +123,10 @@ export class JobAssigner {
    * job back to the engine, which decides on a retry). If the CLI left before the message went out, the
    * job stays `running` with nobody working on it until its lease runs out, and then it goes back to the queue.
    */
-  private async send(cli: CliConnection, job: AssignedJob): Promise<void> {
+  private async send(cli: CliConnection, job: AssignedJob, type: JobType): Promise<void> {
     let bundle: JobBundle;
     try {
-      bundle = await this.buildBundle(job.jobId);
+      bundle = await this.buildBundle(job.jobId, type);
     } catch (err) {
       console.error(`[assign] could not build the bundle for job ${job.jobId}:`, err);
       await this.tellBundleFailed(job);

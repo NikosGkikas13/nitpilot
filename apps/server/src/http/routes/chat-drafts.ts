@@ -95,7 +95,10 @@ async function outOfDateReason(chatId: string, draftId: string): Promise<string 
   const lines = await prisma.message.findMany({ where: { chatId, kind: 'system', data: { path: ['jobId'], equals: draftId } }, select: { data: true } });
   for (const { data } of lines) {
     const reason = FailureReason.safeParse((data as { reason?: unknown } | null)?.reason);
-    if (reason.success) return DRAFT_OUT_OF_DATE[reason.data];
+    // A reason that doesn't make a draft out of date (a line about something else that happened to it): keep looking.
+    if (!reason.success) continue;
+    const sentence = DRAFT_OUT_OF_DATE[reason.data];
+    if (sentence) return sentence;
   }
   return undefined;
 }

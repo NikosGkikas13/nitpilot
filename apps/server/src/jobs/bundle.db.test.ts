@@ -171,7 +171,7 @@ describe('buildPublishBundle (spec §11 "Publish jobs")', () => {
 
   it('is what the assigner sends for a publish job, and an agent bundle for any other', async () => {
     const { review, publish } = await sending();
-    expect((await bundleFor(publish.id, platform)).type).toBe('publish');
-    expect((await bundleFor(review.id, platform)).type).toBe('review');
+    expect((await bundleFor(publish.id, 'publish', platform)).type).toBe('publish');
+    expect((await bundleFor(review.id, 'review', platform)).type).toBe('review');
   });
 });

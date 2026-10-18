@@ -1,12 +1,14 @@
-import { AgentJobBundle, JobResult, PublishBundle, type JobBundle } from '@nitpilot/protocol';
+import { AgentJobBundle, JobResult, PublishBundle, type JobBundle, type JobType } from '@nitpilot/protocol';
 import { prRefOf } from '../chats/refs';
 import { rulesFromJson } from '../chats/rules';
 import { prisma } from '../lib/prisma';
 import type { PlatformReads } from '../platform/types';
 
-/** What the assigner sends for a job (spec §10 `job.assign`): a publish bundle for a publish job, an agent bundle otherwise. */
-export async function bundleFor(jobId: string, platform: Pick<PlatformReads, 'gitSpec'>): Promise<JobBundle> {
-  const { type } = await prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { type: true } });
+/**
+ * What the assigner sends for a job (spec §10 `job.assign`): a publish bundle for a publish job, an agent bundle
+ * otherwise. The assigner already has the job's `type`, so it passes it in.
+ */
+export async function bundleFor(jobId: string, type: JobType, platform: Pick<PlatformReads, 'gitSpec'>): Promise<JobBundle> {
   return type === 'publish' ? buildPublishBundle(jobId, platform) : buildJobBundle(jobId, platform);
 }
 
