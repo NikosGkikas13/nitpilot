@@ -40,6 +40,7 @@ const { prisma } = await import('../../src/lib/prisma');
 const { GithubClient } = await import('../../src/platform/github/client');
 const { notificationText } = await import('../../src/tasks/handlers/notify');
 const { webPushSend } = await import('../../src/tasks/web-push-send');
+const { generateToken } = await import('../../src/lib/tokens');
 
 // The VAPID keys: the env's if it has all three, else a pair made now (any pair works for a test run).
 const env = process.env;
@@ -99,11 +100,11 @@ control.post('/pr', async (c) => {
 });
 /**
  * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
- * People, their sign-ins and the installation stay; their Settings go back to the defaults.
+ * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults.
  */
 control.post('/reset', async (c) => {
   await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
-  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true } });
+  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40 } });
   return c.body(null, 204);
 });
 /**
@@ -116,6 +117,24 @@ control.post('/settings', async (c) => {
   if (!user) return c.json({ error: `no test user "${login}"` }, 400);
   await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
   return c.body(null, 204);
+});
+/**
+ * Give someone a device without running a CLI: a CLI token row named `name`, as `nitpilot login` makes one (its raw
+ * token is thrown away; nothing connects with it). `lastSeenAt` (ISO) makes it look used, and `agent` remembered from
+ * a hello. Answers its id. The Settings page lists it, offline; Revoke removes it.
+ */
+control.post('/cli-token', async (c) => {
+  const { login, name, lastSeenAt, agent } = (await c.req.json()) as { login: 'maya' | 'leo'; name: string; lastSeenAt?: string; agent?: { id: string; version: string | null } };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  const token = generateToken();
+  const row = await prisma.cliToken.create({
+    data: {
+      userId: user.id, name, tokenHash: token.hash, prefix: token.prefix,
+      lastSeenAt: lastSeenAt ? new Date(lastSeenAt) : null, agentId: agent?.id ?? null, agentVersion: agent?.version ?? null,
+    },
+  });
+  return c.json({ id: row.id });
 });
 /**
  * Give someone a push subscription without a browser: a row for a made-up endpoint, so the notifier has somewhere to

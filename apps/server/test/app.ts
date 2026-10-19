@@ -16,7 +16,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
     dispatch: new Dispatcher().dispatch,
     // No CLI is connected.
-    clis: { connectionsFor: () => [], sendSettings: () => 0 },
+    clis: { connectionsFor: () => [], sendSettings: () => 0, closeToken: () => false },
     access: over.access ?? new RepoAccess(github),
     platform: new FakePlatform(),
     // No VAPID keys: push is off, as on a server that hasn't set them.

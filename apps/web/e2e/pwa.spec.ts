@@ -40,7 +40,8 @@ test("Settings reads push from the real browser, and the notifier pushes to a su
   // Chromium's real APIs. Headless Chromium always blocks notifications, whatever the test allows, so this is the
   // "denied" state; the switch itself is checked by hand (the live step). Never subscribe here: that reaches
   // Google's push service.
-  await expect(page.getByText("Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page.")).toBeVisible();
+  await expect(page.getByText("Blocked in your browser's settings. Allow notifications for this site there, then reload this page.")).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Push notifications' })).toHaveCount(0);
   // The server side of push, through the recording sender: with a subscription on file (seeded, since this browser
   // can't subscribe), the notifier pushes to it and reaches maya. Never a real push service.
   await resetChats();

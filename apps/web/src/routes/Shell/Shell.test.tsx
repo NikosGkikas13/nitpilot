@@ -16,6 +16,7 @@ function serve() {
   fakeApi({
     'GET /api/me': (): Answer => [200, me],
     'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    'GET /api/devices': (): Answer => [200, { devices: [] }],
     ...chatRoutes([{ repo: 'acme/shop-api', number: 139, title: 'Fix race in session refresh' }]),
   });
 }
@@ -62,12 +63,13 @@ describe('Shell (handoff "App shell and layout")', () => {
     expect(screen.queryByRole('heading', { name: 'Fix race in session refresh' })).not.toBeInTheDocument();
   });
 
-  it('keeps Sign out on the Settings page, reached from your avatar', async () => {
+  it('opens Settings from your avatar, as a page of its own (no inbox beside it), with Sign out', async () => {
     fakeViewport(true);
     serve();
     renderApp('/');
     await userEvent.click(await screen.findByRole('link', { name: 'Settings · maya' }));
-    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   });
 });

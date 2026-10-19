@@ -1,0 +1,401 @@
+/* handoff §7 "Settings" (NitpilotScreens screen=settings): a page of its own, the top bar, a 180px sticky section nav
+   on a desktop, and 18px-radius cards whose rows have 14px vertical padding and --b2 dividers. */
+.page {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--b1);
+  background: var(--side);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: var(--acc-text);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.back:hover {
+  background: var(--hover);
+}
+
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  gap: 40px;
+  padding: clamp(16px, 2.6vw, 32px) 20px 40px;
+}
+
+.nav {
+  flex: none;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 20px;
+  align-self: flex-start;
+}
+
+.navLink {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  color: var(--fg2);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  background: var(--hover);
+}
+
+.navLink[aria-current='true'] {
+  background: var(--muted);
+  color: var(--fg1);
+}
+
+.sections {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* The nav scrolls a section to the top of the page: leave a little room above its heading. */
+  scroll-margin-top: 20px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.card {
+  padding: 0 16px;
+  border: 1px solid var(--b1);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+
+.row + .row,
+.list > .row + .row {
+  border-top: 1px solid var(--b2);
+}
+
+/* A row with the laptop outline: a little more room before the text, as drawn. */
+.row:has(.laptop) {
+  gap: 14px;
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+/* One sentence alone in a card (loading, nothing yet, what to install). */
+.line {
+  margin: 0;
+  padding: 14px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.version {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--fg3);
+}
+
+/* The laptop outline beside a device: --fg2 online, --fg3 otherwise. */
+.laptop {
+  flex: none;
+  box-sizing: border-box;
+  width: 34px;
+  height: 26px;
+  border: 2px solid var(--fg3);
+  border-radius: 6px;
+}
+
+.laptop[data-online] {
+  border-color: var(--fg2);
+}
+
+/* Chips: 26px in the Agent rows, 20px beside a device's name. Always a glyph and a word. */
+.chip {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.smallChip {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.quiet {
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.revoke {
+  color: var(--red-fg);
+}
+
+/* The iPhone tip: an --acc-tint box with the accent diamond. */
+.tip {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--acc-tint);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.tipDiamond {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: var(--acc);
+  transform: rotate(45deg);
+}
+
+.tipBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg1);
+}
+
+.error {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--fg2);
+}
+
+/* The daily cap: its text and usage bar, and the −/+ stepper. */
+.capRow {
+  flex-wrap: wrap;
+}
+
+.capText {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.usage {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+}
+
+/* At or over the cap: amber (a limit reached is not an escalation, so never red). */
+.usage[data-full] {
+  background: var(--warn);
+}
+
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.stepper[aria-busy='true'] {
+  cursor: progress;
+}
+
+.step {
+  width: 44px;
+  height: 40px;
+  border: 0;
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.step:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.step:disabled {
+  color: var(--fg3);
+  cursor: not-allowed;
+}
+
+/* The focus ring sits inside the stepper's rounded box, which clips what's outside. */
+.step:focus-visible {
+  outline-offset: -2px;
+}
+
+.capValue {
+  width: 48px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+.account {
+  flex-wrap: wrap;
+}
+
+.signOut {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* Fixed near the bottom of the window: the toast sits 8px above this line, 96px up (handoff "Toasts"). */
+.toasts {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 88px;
+  height: 0;
+}
+
+@media (max-width: 759px) {
+  .topBar {
+    padding: 10px 16px;
+  }
+
+  .body {
+    padding: 16px 16px 40px;
+  }
+}

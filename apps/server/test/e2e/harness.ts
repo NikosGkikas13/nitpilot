@@ -84,7 +84,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
   const access = new RepoAccess(githubApi);
   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
   const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey });
-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, meUpdates: live, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
   const clis: RunningCli[] = [];
   let server: Server | null = null;
   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */

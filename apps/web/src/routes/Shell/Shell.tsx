@@ -1,7 +1,7 @@
 import type { WebMe } from '@nitpilot/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { Outlet, useMatch, useNavigate } from 'react-router';
+import { Outlet, useMatch, useNavigate, useOutletContext } from 'react-router';
 import { InstallCard } from '../../components/InstallCard/InstallCard';
 import { HomeScreenSheetProvider } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
 import { ToastProvider } from '../../components/Toast/Toast';
@@ -14,13 +14,13 @@ import styles from './Shell.module.css';
 import { UiStateProvider } from './UiState';
 
 /**
- * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
- * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
- * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
- * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts. So do the two ways to
- * install the app (handoff §9): the install card where the browser offers it, and the iPhone's Home Screen sheet.
+ * The signed-in app, around every page: one `/ws/web` socket keeps it all live (live/LiveProvider.tsx), and the pages
+ * read who you are from the outlet (`useOutletContext<WebMe>()`). What the inbox and the composer remember lives here,
+ * above both (UiState.tsx), and so do the toasts. So do the two ways to install the app (handoff §9): the install
+ * card where the browser offers it, and the iPhone's Home Screen sheet. The pages are the inbox layout below and
+ * Settings, a page of its own (routes/Settings/Settings.tsx).
  */
-export function Shell({ me }: { me: WebMe }) {
+export function SignedIn({ me }: { me: WebMe }) {
   const queryClient = useQueryClient();
   const userId = me.id;
   const vapidPublicKey = me.push.vapidPublicKey;
@@ -43,7 +43,7 @@ export function Shell({ me }: { me: WebMe }) {
       <UiStateProvider>
         <ToastProvider>
           <HomeScreenSheetProvider>
-            <Layout me={me} />
+            <Outlet context={me} />
             <InstallCard />
           </HomeScreenSheetProvider>
         </ToastProvider>
@@ -52,7 +52,12 @@ export function Shell({ me }: { me: WebMe }) {
   );
 }
 
-function Layout({ me }: { me: WebMe }) {
+/**
+ * The inbox and the page that's open (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside it.
+ * Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back.
+ */
+export function InboxLayout() {
+  const me = useOutletContext<WebMe>();
   const desktop = useIsDesktop();
   const atInbox = useMatch('/') !== null;
   const navigate = useNavigate();

@@ -8,6 +8,7 @@ import { getEnv } from '../lib/env';
 import type { AppAuth } from '../platform/github/app-auth';
 import type { GithubClient } from '../platform/github/client';
 import type { PlatformReads } from '../platform/types';
+import type { MeUpdates } from '../ws/web-wire';
 import { SERVER_VERSION } from '../version';
 import { errorBody, onError } from './errors';
 import { authRoutes } from './routes/auth';
@@ -16,6 +17,7 @@ import { chatDraftRoutes } from './routes/chat-drafts';
 import { chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
 import { cliApproveRoutes } from './routes/cli-approve';
+import { deviceRoutes, type DeviceClis } from './routes/devices';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
 import { pushRoutes } from './routes/push';
@@ -30,8 +32,8 @@ export type AppDeps = {
   appAuth: AppAuth;
   ingest: Ingest;
   dispatch: Dispatch;
-  /** The connected CLIs (the CLI hub): who is online, and where new settings go. */
-  clis: LiveClis & SettingsSender;
+  /** The connected CLIs (the CLI hub): who is online, where new settings go, and hanging up on a revoked device. */
+  clis: LiveClis & SettingsSender & DeviceClis;
   /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
   access: RepoAccess;
   /** GitHub reads with the app's installation token (the chat screen's file list). */
@@ -40,6 +42,8 @@ export type AppDeps = {
   vapidPublicKey: string | null;
   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
   webSockets?: { closeSession(tokenHash: string): void };
+  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes. */
+  meUpdates?: MeUpdates;
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
   webDistDir?: string;
 };
@@ -54,7 +58,8 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', authRoutes(deps));
   app.route('/', meRoutes(deps));
   app.route('/', settingsRoutes(deps));
-  app.route('/', pushRoutes());
+  app.route('/', pushRoutes(deps));
+  app.route('/', deviceRoutes(deps));
   app.route('/', inboxRoutes(deps));
   app.route('/', chatRoutes(deps));
   app.route('/', chatActionRoutes(deps));

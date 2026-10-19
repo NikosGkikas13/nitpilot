@@ -51,7 +51,7 @@ async function setup(opts: { loadItems?: LoadItems; catchUp?: LoadItems; github?
     return t;
   };
   const open = () => dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
-  return { repo, chat, maya, leo, reader, dispatcher, cliServer, tab, open };
+  return { repo, chat, maya, leo, reader, dispatcher, cliServer, live, tab, open };
 }
 
 describe('wireWebHub: after a commit (spec §10)', () => {
@@ -251,6 +251,30 @@ describe('wireWebHub: CLIs coming and going', () => {
 
     cli.close();
     expect(agentOf((await mayaTab.next('chat.state')).d.view)).toBe(false);
+  });
+});
+
+describe('wireWebHub: sendMeUpdate, after a write to your own things (settings, devices, push)', () => {
+  it("sends that person's open tabs a fresh me.update, and nobody else's", async () => {
+    const { maya, leo, live, tab } = await setup();
+    const [mayaTab, leoTab] = [await tab(maya, false), await tab(leo, false)];
+    await prisma.user.update({ where: { id: maya.id }, data: { dailyJobCap: 25 } });
+    await live.sendMeUpdate(maya.id);
+    expect((await mayaTab.next('me.update')).d.me).toMatchObject({ login: 'maya', settings: { dailyJobCap: 25 } });
+    await leoTab.nothing('me.update');
+  });
+
+  it('reads nothing for someone with no tab open, and never throws: a failed read is logged', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { maya, leo, live, tab } = await setup();
+    const read = vi.spyOn(prisma.user, 'findUniqueOrThrow');
+    await live.sendMeUpdate(leo.id);
+    expect(read).not.toHaveBeenCalled();
+    const mayaTab = await tab(maya, false);
+    read.mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(live.sendMeUpdate(maya.id)).resolves.toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('me.update'), expect.anything());
+    await mayaTab.nothing('me.update');
   });
 });
 

@@ -1,5 +1,5 @@
 import { Settings, WebMe } from '@nitpilot/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeCliToken, makeUser } from '../../../test/db';
 import { sessionCookieFor } from '../../../test/http';
@@ -22,11 +22,12 @@ async function scene() {
   const [maya, leo] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' })];
   const laptop = await TestCli.online(server.url, (await makeCliToken(maya.id)).raw);
   const leosCli = await TestCli.online(server.url, (await makeCliToken(leo.id)).raw);
-  const app = testApp({ clis: hub });
+  const sendMeUpdate = vi.fn(async () => {});
+  const app = testApp({ clis: hub, meUpdates: { sendMeUpdate } });
   const cookie = await sessionCookieFor(maya.id);
   const put = (body: unknown, origin = ORIGIN) =>
     app.request('/api/me/settings', { method: 'PUT', headers: { cookie, origin, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  return { maya, laptop, leosCli, app, cookie, put };
+  return { maya, laptop, leosCli, app, cookie, put, sendMeUpdate };
 }
 
 const savedSettings = async (userId: string) =>
@@ -96,5 +97,14 @@ describe('PUT /api/me/settings', () => {
     expect(((await res.json()) as { error: { message: string } }).error.message).toBe('Sign in with GitHub first.');
     expect(await savedSettings(maya.id)).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 40 });
     await laptop.nothing('settings');
+  });
+
+  it("tells your open tabs (me.update), so every tab's Settings page shows the new settings; not after a refusal", async () => {
+    const { maya, put, sendMeUpdate } = await scene();
+    expect((await put({ autoReview: true, autoAddress: true, dailyJobCap: 4 })).status).toBe(400);
+    expect(sendMeUpdate).not.toHaveBeenCalled();
+    expect((await put({ autoReview: true, autoAddress: false, dailyJobCap: 45 })).status).toBe(200);
+    expect(sendMeUpdate).toHaveBeenCalledTimes(1);
+    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
   });
 });

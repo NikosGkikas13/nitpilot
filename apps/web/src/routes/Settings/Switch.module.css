@@ -1,0 +1,44 @@
+/* handoff §7: a 46×28 track (--b1 off, --acc on) and a white 22px thumb that slides 18px. */
+.switch {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--b1);
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--acc);
+}
+
+.switch[aria-busy='true'] {
+  cursor: progress;
+}
+
+.thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms;
+}
+
+.switch[aria-checked='true'] .thumb {
+  transform: translateX(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .thumb {
+    transition: none;
+  }
+}

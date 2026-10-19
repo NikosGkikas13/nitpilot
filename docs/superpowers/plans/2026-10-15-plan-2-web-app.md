@@ -32996,7 +32996,7 @@ docs/why/revoking-devices.md, docs/why/onboarding-facts.md (docs/why/cli-login.m
 
 The steps go from the inside out: the protocol, the database, the CLI hub, the web wire, the device routes, the `me.update` after personal writes, the control API, then the web (small helpers, the page's tests, the page), the Playwright spec, the docs, a look in the browser, one full run and the commit. The server's db tests are run per group until Step 13. The workspace typecheck is not clean in between (Step 10 leaves one error that Step 12 fixes); it is clean again at Step 13 and Step 17.
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 `DeviceView` and `DevicesResponse` are what `GET /api/devices` answers. The test round-trips a device that is online with its agent and one that never connected, and refuses an agent id the protocol doesn't know.
 
@@ -33037,7 +33037,7 @@ index 67321b2..b1f398b 100644
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 1 failed, 79 passed (80) in 1 of 8 files: the new test (`DevicesResponse` doesn't exist).
 
-- [ ] **Step 2: Add the shapes to the protocol**
+- [x] **Step 2: Add the shapes to the protocol**
 
 Modify `packages/protocol/src/web-api.ts`:
 
@@ -33085,7 +33085,7 @@ index 4db12c3..38a6116 100644
 Run: `npm test -w packages/protocol`
 Expected: PASS, 80 tests in 8 files.
 
-- [ ] **Step 3: Let a device token remember its last hello**
+- [x] **Step 3: Let a device token remember its last hello**
 
 Three new columns on `CliToken` (spec §8): what the device's last hello said, so the Settings page can show an offline computer's agent. `prisma format` re-aligns the whole `CliToken` model, so the diff shows more lines than the three new fields.
 
@@ -33132,7 +33132,7 @@ index d73636f..55ff8b2 100644
  /// The `nitpilot login` handshake. The device code is stored only as a hash.
 ```
 
-- [ ] **Step 4: Generate the migration and the client**
+- [x] **Step 4: Generate the migration and the client**
 
 Run: `npm run db:migrate -w apps/server -- --name cli_token_last_hello`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client; until you do, every CLI hello fails with a 1011 because `prisma.cliToken.update` doesn't know the new columns).
 Expected: a new folder `apps/server/prisma/migrations/<timestamp>_cli_token_last_hello/` (the folder name carries your own timestamp) with this `migration.sql`, "Your database is now in sync with your schema." and "Generated Prisma Client".
@@ -33146,7 +33146,7 @@ ADD COLUMN     "agentVersion" TEXT,
 ADD COLUMN     "repos" TEXT[] DEFAULT ARRAY[]::TEXT[];
 ```
 
-- [ ] **Step 5: Write the failing CLI hub tests**
+- [x] **Step 5: Write the failing CLI hub tests**
 
 Two things on the hub. A hello is remembered on the token (its agent and its repos), and it is saved **before** presence fires: the test reads the row from inside the presence listener. And `closeToken` hangs up on one device with the code and reason it is given, forgets it at once, and reports it gone exactly once. The test file imports `SIGNED_OUT_REASON`, the sentence the hub already sends for a revoked token, now exported so the route can use the same one.
 
@@ -33229,7 +33229,7 @@ index 44a4974..859632c 100644
 Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
 Expected: FAIL, 3 failed, 19 passed (22): the row has no agent or repos yet, and `hub.closeToken is not a function` (twice). The "no modes" test already passes: the new columns' defaults are the same answer.
 
-- [ ] **Step 6: Remember the hello, add `closeToken`**
+- [x] **Step 6: Remember the hello, add `closeToken`**
 
 `usableAgent` is the rule "an agent with no modes counts as no agent" in one place; it is used for a live connection (the devices route) and for what the token remembers. `rememberHello` runs inside `register()` right after the user is read and before the connection is registered, which keeps the hub's rule that nothing is awaited after registration.
 
@@ -33324,7 +33324,7 @@ index 05b145c..9ac9ea6 100644
 Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
 Expected: PASS, 22 tests.
 
-- [ ] **Step 7: Write the failing `sendMeUpdate` tests**
+- [x] **Step 7: Write the failing `sendMeUpdate` tests**
 
 `sendMeUpdate(userId)` sends a person's open tabs a fresh `me.update`. It reads nothing when they have no tab open, and a failed read is logged, never thrown (a write that already succeeded must not turn into a 500). The test's `setup()` now also hands back `live`, the wiring.
 
@@ -33380,7 +33380,7 @@ index 028b167..d30c092 100644
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
 Expected: FAIL, 2 failed, 13 passed (15): `live.sendMeUpdate is not a function`.
 
-- [ ] **Step 8: Add `sendMeUpdate` to the web wiring**
+- [x] **Step 8: Add `sendMeUpdate` to the web wiring**
 
 The presence handler (a CLI coming or going) now uses it too, so there is one place that builds a `me.update`. `wireWebHub` returns `WebWired`.
 
@@ -33451,7 +33451,7 @@ index d2db73c..8f09ffe 100644
 Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
 Expected: PASS, 15 tests.
 
-- [ ] **Step 9: Write the failing device route tests**
+- [x] **Step 9: Write the failing device route tests**
 
 maya has a laptop (online, on Claude Code), a desk (offline, remembers Gemini CLI) and a revoked token; leo has a laptop. `test/app.ts` gives the default test app a `closeToken` that does nothing, and `me.db.test.ts`'s hand-made `clis` gains the `agent` and `closeToken` the type now asks for.
 
@@ -33608,7 +33608,7 @@ index 5ae870c..d432095 100644
 Run: `npm run test:db -w apps/server -- src/http/routes/devices.db.test.ts src/http/routes/me.db.test.ts`
 Expected: FAIL, 6 failed, 5 passed (11) in 2 files: the five device tests that call a route that doesn't exist answer 404, and one fails to parse an empty answer. The "404 for another person's device" test passes already, since the missing route is a 404 too; it is only meaningful once the route exists. `me.db.test.ts` passes.
 
-- [ ] **Step 10: Add the device routes**
+- [x] **Step 10: Add the device routes**
 
 `GET` joins the live connections to the token rows. `DELETE` is one `updateMany` that only matches your own, not yet revoked token, so a double click, someone else's id and an unknown id are all the same 404 and nothing is changed twice. Then it hangs up on the device and tells your tabs. `app.ts` mounts the routes and passes `deps` to `pushRoutes`, which doesn't take it yet.
 
@@ -33744,7 +33744,7 @@ Expected: PASS, 11 tests in 2 files.
 Run: `npm run typecheck -w apps/server`
 Expected: FAIL, exactly 1 error, fixed in Step 12: `src/http/app.ts` (`pushRoutes` takes no arguments yet).
 
-- [ ] **Step 11: Write the failing `me.update` tests for settings and push**
+- [x] **Step 11: Write the failing `me.update` tests for settings and push**
 
 After a settings save, a push subscribe and a push unsubscribe the person's tabs get a `me.update`; after a refused request (a cap of 4, a bad endpoint) they don't.
 
@@ -33850,7 +33850,7 @@ index 2ad0b12..5805bdb 100644
 Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/http/routes/push.db.test.ts`
 Expected: FAIL, 2 failed, 14 passed (16) in 2 files: `sendMeUpdate` is never called.
 
-- [ ] **Step 12: Call `sendMeUpdate`, and wire it in**
+- [x] **Step 12: Call `sendMeUpdate`, and wire it in**
 
 `main.ts` and the end-to-end harness pass the wiring (`live`) as `meUpdates`, the way they already pass `webSockets`.
 
@@ -33979,7 +33979,7 @@ index a0653a3..8d069f4 100644
 Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/http/routes/push.db.test.ts`
 Expected: PASS, 16 tests in 2 files.
 
-- [ ] **Step 13: Add the control API's devices, then run the server**
+- [x] **Step 13: Add the control API's devices, then run the server**
 
 The Playwright server (`test/e2e/web-server.ts`) is what the end-to-end specs and the browser look talk to. `POST /cli-token` writes a CLI token row without running a CLI (its raw token is thrown away), so a spec can show and revoke an offline computer; `/reset` also puts the daily cap back to 40, since the Settings spec changes it.
 
@@ -34042,7 +34042,7 @@ index 620aacd..7bee73c 100644
 Run: `npm run typecheck -w apps/server && npm test -w apps/server`
 Expected: typecheck clean; PASS, 989 tests in 83 files.
 
-- [ ] **Step 14: Write the failing `lastSeen` and `me.update` tests (web)**
+- [x] **Step 14: Write the failing `lastSeen` and `me.update` tests (web)**
 
 Modify `apps/web/src/lib/time.test.ts`:
 
@@ -34100,7 +34100,7 @@ index 17858e2..32e3800 100644
 Run: `npm test -w apps/web -- src/lib/time.test.ts src/live/apply.test.ts`
 Expected: FAIL, 2 failed, 10 passed (12) in 2 files: `lastSeen is not a function`, and `invalidateQueries` is not called with `['devices']`.
 
-- [ ] **Step 15: Add `lastSeen`, the `['devices']` refetch, the agent names and the 40 px avatar**
+- [x] **Step 15: Add `lastSeen`, the `['devices']` refetch, the agent names and the 40 px avatar**
 
 `AGENT_NAME` names the three agents for the Agent section (no label helper existed). The avatar gets the 40 px size the Account card draws.
 
@@ -34194,7 +34194,7 @@ index 0687b42..ffd36a4 100644
 Run: `npm test -w apps/web -- src/lib/time.test.ts src/live/apply.test.ts`
 Expected: PASS, 12 tests in 2 files.
 
-- [ ] **Step 16: Write the failing page tests**
+- [x] **Step 16: Write the failing page tests**
 
 Four new test files (the page and its nav and Account, Devices, Notifications, Defaults) and a shared helper, `src/test/settings.ts`: `serveSettings` fakes the server the page talks to, `device()` builds a `DeviceView`. The Shell and Home Screen sheet tests change where they look for the page ("Settings", not "Signed in as @maya"), and the placeholder's own test goes: its push, sign-out and iPhone tests live on in `Notifications.test.tsx` and `Settings.test.tsx`.
 
@@ -34825,7 +34825,7 @@ index eb9217b..eeebd55 100644
 Run: `npm test -w apps/web`
 Expected: FAIL, 32 failed, 263 passed (295) in 6 of 39 files: `Defaults.test.tsx` 7, `Devices.test.tsx` 7, `Notifications.test.tsx` 8, `Settings.test.tsx` 7, `IosHomeScreenSheet.test.tsx` 2, `Shell.test.tsx` 1. Causes: no regions "Devices", "Defaults for new chats" or "Notifications", no "Settings" heading or "‹ Inbox", and the old placeholder still at `/settings` (inside the inbox layout). The three Account tests (sign out) pass already, since the placeholder has Sign out too.
 
-- [ ] **Step 17: Build the page**
+- [x] **Step 17: Build the page**
 
 In this order, all in one step because the files lean on each other:
 
@@ -36076,7 +36076,7 @@ Create `apps/web/src/routes/Settings/Settings.module.css`:
 Run: `npm test -w apps/web && npm run typecheck`
 Expected: PASS, 295 tests in 39 files; typecheck clean in all four workspaces.
 
-- [ ] **Step 18: The Playwright spec**
+- [x] **Step 18: The Playwright spec**
 
 `settings.spec.ts` signs in as maya: the stepper's + saves and the value survives a reload; a seeded computer (`addDevice`, the control API's `/cli-token`) is revoked and is gone after a reload. `pwa.spec.ts`'s Settings check moves to the new "Blocked" sentence and asserts that no switch is drawn.
 
@@ -36173,7 +36173,7 @@ With the page from Step 17 in place:
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 12 tests (10 before this task, plus the 2 new ones).
 
-- [ ] **Step 19: The explainer and the spec**
+- [x] **Step 19: The explainer and the spec**
 
 `docs/why/revoking-devices.md` is new. The spec gets the three `CliToken` fields (§8), `me.update` after personal writes and the Devices routes (§10), and the Settings page as its own page (§16).
 
@@ -36261,7 +36261,7 @@ index b6672d1..ca9268f 100644
    2. Install the GitHub App.
 ```
 
-- [ ] **Step 20: Look at it (controller, in the in-app browser)**
+- [x] **Step 20: Look at it (controller, in the in-app browser)**
 
 Run `npm run build`, then the Playwright server (launch config `nitpilot-e2e-web`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server`). Seed it and sign maya in, as in Task 18's look:
 
@@ -36289,7 +36289,7 @@ curl -s -XPOST $C/settings -d '{"login":"maya","autoAddress":false}'
 - **Empty states.** `curl -s -XPOST $C/reset`, `curl -s -XDELETE $C/cli -d '{"login":"maya"}'`, and remove the seeded computers by revoking them: "No computers yet. Run `npx nitpilot login` on one to connect it." and "Install Claude Code, then run `nitpilot start`."
 - Not exercised in the look: turning push on (the permission is always denied there) and Sign out (it would end the session).
 
-- [ ] **Step 21: Run everything, then commit**
+- [x] **Step 21: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 80, CLI 333 passed + 14 skipped, server 989, web 295; end to end 6; Playwright 12; typecheck, lint and build clean, with no new warnings.

@@ -17,7 +17,7 @@ describe('GET /api/me', () => {
 
   it('says whether any of your CLIs is connected', async () => {
     const user = await makeUser({ login: 'maya-online' });
-    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2 }] : []), sendSettings: () => 0 };
+    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2, agent: { id: 'fake' as const, version: null, modes: [] } }] : []), sendSettings: () => 0, closeToken: () => false };
     const res = await testApp({ clis }).request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
     expect(await res.json()).toMatchObject({ agentOnline: true, usedToday: 2 });
   });

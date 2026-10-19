@@ -58,4 +58,11 @@ describe('applyServerMessage', () => {
     applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me } });
     expect(queryClient.getQueryData(['me'])).toBe(me);
   });
+
+  it('reads your devices again after a me.update (one came online, went away, or was revoked)', () => {
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['devices'] });
+  });
 });

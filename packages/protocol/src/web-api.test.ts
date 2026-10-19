@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
-  ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, PushSubscriptionRequest,
-  PushUnsubscribeRequest, Settings, WebMe, type ChatView, type InboxRow,
+  ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+  PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
@@ -125,5 +125,14 @@ describe('web API bodies', () => {
       expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { p256dh: subscription.keys.p256dh } }).success).toBe(false);
       expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { ...subscription.keys, auth: 'not base64url!' } }).success).toBe(false);
     });
+  });
+
+  it("round-trips the Settings page's devices: one online with its agent, one never connected", () => {
+    const devices: DeviceView[] = [
+      { id: 'tok_1', name: "Maya's MacBook Pro", lastSeenAt: '2026-10-18T16:04:00.000Z', online: true, agent: { id: 'claude-code', version: '2.1.290' } },
+      { id: 'tok_2', name: 'maya-linux-desk', lastSeenAt: null, online: false, agent: null },
+    ];
+    expect(DevicesResponse.parse(JSON.parse(JSON.stringify({ devices })))).toEqual({ devices });
+    expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'copilot', version: null } }] }).success).toBe(false);
   });
 });

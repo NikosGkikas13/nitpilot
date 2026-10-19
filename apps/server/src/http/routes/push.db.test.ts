@@ -1,5 +1,5 @@
 import { ActionResponse, WebMe } from '@nitpilot/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeCliToken, makeUser, uid } from '../../../test/db';
 import { sessionCookieFor } from '../../../test/http';
@@ -17,12 +17,13 @@ const subscription = (over: { endpoint?: string; label?: string } = {}) => ({
 /** maya, signed in to the web app, and requests to the push routes with her cookie. */
 async function scene(over: { vapidPublicKey?: string | null } = {}) {
   const maya = await makeUser({ login: 'maya' });
-  const app = testApp(over);
+  const sendMeUpdate = vi.fn(async () => {});
+  const app = testApp({ ...over, meUpdates: { sendMeUpdate } });
   const cookie = await sessionCookieFor(maya.id);
   const call = (method: 'POST' | 'DELETE', body: unknown, headers: Record<string, string> = { cookie, origin: ORIGIN }) =>
     app.request('/api/push/subscriptions', { method, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
   const me = async (asCookie = cookie) => WebMe.parse(await (await app.request('/api/me', { headers: { cookie: asCookie } })).json());
-  return { maya, app, cookie, call, me };
+  return { maya, app, cookie, call, me, sendMeUpdate };
 }
 
 const rowsOf = (userId: string) => prisma.pushSubscription.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
@@ -107,6 +108,21 @@ describe('DELETE /api/push/subscriptions', () => {
     await call('POST', sub);
     expect((await call('DELETE', { endpoint: sub.endpoint }, { cookie, origin: 'https://evil.example' })).status).toBe(403);
     expect(await rowsOf(maya.id)).toHaveLength(1);
+  });
+});
+
+describe('after a push subscription changes', () => {
+  it("tells your open tabs (me.update), so another tab's Settings page sees push.subscribed change; not after a refusal", async () => {
+    const { maya, call, sendMeUpdate } = await scene({ vapidPublicKey: 'BPublicKey' });
+    const sub = subscription();
+    await call('POST', sub);
+    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
+    sendMeUpdate.mockClear();
+    await call('DELETE', { endpoint: sub.endpoint });
+    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
+    sendMeUpdate.mockClear();
+    expect((await call('POST', subscription({ endpoint: 'http://127.0.0.1/push' }))).status).toBe(400);
+    expect(sendMeUpdate).not.toHaveBeenCalled();
   });
 });
 

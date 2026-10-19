@@ -2,6 +2,7 @@ import { PushSubscriptionRequest, PushUnsubscribeRequest, type ActionResponse } 
 import { Hono } from 'hono';
 import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
 import { prisma } from '../../lib/prisma';
+import type { MeUpdates } from '../../ws/web-wire';
 import { HttpError } from '../errors';
 
 /**
@@ -10,7 +11,7 @@ import { HttpError } from '../errors';
  * token is answered as if no one were signed in, like `PUT /api/me/settings`. The endpoint is checked by the schema
  * (an https name, never an IP address or localhost), since the server will POST to it.
  */
-export function pushRoutes(): Hono<{ Variables: UserVariables }> {
+export function pushRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
   const ok: ActionResponse = { ok: true };
 
@@ -25,6 +26,8 @@ export function pushRoutes(): Hono<{ Variables: UserVariables }> {
       create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth, label },
       update: { userId, p256dh: keys.p256dh, auth: keys.auth, label, failCount: 0 },
     });
+    // Your other tabs learn that you now have a subscription (`push.subscribed`).
+    await deps.meUpdates?.sendMeUpdate(userId);
     return c.json(ok);
   });
 
@@ -33,7 +36,10 @@ export function pushRoutes(): Hono<{ Variables: UserVariables }> {
     const { endpoint } = PushUnsubscribeRequest.parse(await c.req.json());
     // Only your own: someone else's endpoint is left alone, with the same answer, so this never says whose it is.
     // Removing one that is already gone is fine too: the switch is off either way.
-    await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: c.get('user').id } });
+    const userId = c.get('user').id;
+    await prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
+    // Maybe that was your last one: your open tabs read `push.subscribed` again.
+    await deps.meUpdates?.sendMeUpdate(userId);
     return c.json(ok);
   });
 

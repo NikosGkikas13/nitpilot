@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { itemTime, rowTime, useNow } from './time';
+import { itemTime, lastSeen, rowTime, useNow } from './time';
 
 // Local times, so the test reads the same in every time zone.
 const now = new Date(2026, 9, 15, 18, 30); // Thursday 15 October 2026, 18:30
@@ -43,5 +43,16 @@ describe('useNow (the clock the inbox rows read)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('lastSeen (a device on the Settings page: "Last seen …")', () => {
+  const now = new Date(2026, 9, 18, 19, 30);
+  it('says the time today, then yesterday, then how many days ago, then the date after a month', () => {
+    expect(lastSeen(new Date(2026, 9, 18, 18, 4).toISOString(), now)).toBe('18:04');
+    expect(lastSeen(new Date(2026, 9, 17, 23, 50).toISOString(), now)).toBe('yesterday');
+    expect(lastSeen(new Date(2026, 9, 15, 9, 0).toISOString(), now)).toBe('3 days ago');
+    expect(lastSeen(new Date(2026, 8, 19, 9, 0).toISOString(), now)).toBe('29 days ago');
+    expect(lastSeen(new Date(2026, 8, 3, 9, 0).toISOString(), now)).toBe('Sep 3');
   });
 });

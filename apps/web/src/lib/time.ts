@@ -30,6 +30,19 @@ export function itemTime(iso: string, now = new Date()): string {
   return `${at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${clock}`;
 }
 
+/**
+ * When a device last said anything, for "Last seen …" on the Settings page: "18:04" today, "yesterday", "3 days ago"
+ * within a month, then "Sep 3". In the reader's own time zone.
+ */
+export function lastSeen(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
+  if (days <= 0) return `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 /** The time now, moving on every minute, so times like "now" and "16:40" stay true while the page is open. */
 export function useNow(everyMs = 60_000): Date {
   const [now, setNow] = useState(() => new Date());

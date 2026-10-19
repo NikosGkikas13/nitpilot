@@ -9,7 +9,7 @@ import { HOME_SCREEN_SHEET_SEEN_KEY } from './IosHomeScreenSheet';
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
 
 function serve() {
-  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
+  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }], 'GET /api/devices': (): Answer => [200, { devices: [] }] });
 }
 
 const NAME = 'Add Nitpilot to your Home Screen';
@@ -61,7 +61,7 @@ describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
     // On a phone Esc also means "back to the inbox"; the sheet keeps it.
-    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Show me how' }));
     await userEvent.click(screen.getByTestId('sheet-backdrop'));
@@ -78,7 +78,7 @@ describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
     act(() => sheet.focus());
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
   });
 
   it('opens again from Settings, and gives focus back to the button that opened it', async () => {

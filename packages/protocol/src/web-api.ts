@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MeResponse } from './api';
-import { AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+import { AgentId, AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
 import { JobResult, Snippet } from './job-result';
 
 // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
@@ -37,6 +37,25 @@ export const WebMe = MeResponse.extend({
   push: z.object({ vapidPublicKey: z.string().nullable(), subscribed: z.boolean() }),
 });
 export type WebMe = z.infer<typeof WebMe>;
+
+/**
+ * One of your computers on the Settings page (`GET /api/devices`): a CLI token that `nitpilot login` made and nobody
+ * revoked. `name` is the one the CLI gave when it logged in. `online` while its `nitpilot start` is connected;
+ * `lastSeenAt` is when it last said anything (null: never connected). `agent` is the coding agent it reported in its
+ * hello: the live one while online, else the one it remembered from its last hello (null: none yet, or one with no
+ * modes). The Agent section is worked out from these on the page.
+ */
+export const DeviceView = z.object({
+  id: z.string(),
+  name: z.string(),
+  lastSeenAt: z.string().nullable(),
+  online: z.boolean(),
+  agent: z.object({ id: AgentId, version: z.string().nullable() }).nullable(),
+});
+export type DeviceView = z.infer<typeof DeviceView>;
+
+export const DevicesResponse = z.object({ devices: z.array(DeviceView) });
+export type DevicesResponse = z.infer<typeof DevicesResponse>;
 
 /**
  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import styles from './Avatar.module.css';
 
 /** The handoff's avatar sizes, and the size of the initials in each. */
-const INITIALS_PX = { 22: 9.5, 28: 10.5, 30: 11, 32: 11, 38: 13 } as const;
+const INITIALS_PX = { 22: 9.5, 28: 10.5, 30: 11, 32: 11, 38: 13, 40: 13 } as const;
 
 /**
  * A person's GitHub picture in a circle, or their initials when there is none or it doesn't load.

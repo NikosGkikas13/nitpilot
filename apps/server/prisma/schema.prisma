@@ -61,17 +61,22 @@ model WebSession {
 
 /// One per CLI device. Only the sha256 of the token is stored.
 model CliToken {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  tokenHash  String    @unique
-  prefix     String
-  lastSeenAt DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  jobs       Job[]
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  tokenHash    String    @unique
+  prefix       String
+  lastSeenAt   DateTime?
+  revokedAt    DateTime?
+  /// What the device said in its last hello, for the Settings page while it's offline (spec §8): its coding agent
+  /// (null when it reported none it could use) and the repos linked on it.
+  agentId      String?
+  agentVersion String?
+  repos        String[]  @default([])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  jobs         Job[]
 }
 
 /// The `nitpilot login` handshake. The device code is stored only as a hash.

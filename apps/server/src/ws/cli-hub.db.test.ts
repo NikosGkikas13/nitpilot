@@ -5,7 +5,7 @@ import { makeCliToken, makeUser } from '../../test/db';
 import { sessionCookieFor } from '../../test/http';
 import { hello, listen, ping, sleep, startCliServer, TestCli, upgradeStatus } from '../../test/ws';
 import { prisma } from '../lib/prisma';
-import { CliHub, type PresenceChange } from './cli-hub';
+import { CliHub, SIGNED_OUT_REASON, type PresenceChange } from './cli-hub';
 
 const running: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -291,5 +291,59 @@ describe("a device's usage today", () => {
     desktop.close();
     await vi.waitFor(() => expect(server.hub.connectionsFor(user.id)).toHaveLength(1));
     expect((await me()).usedToday).toBe(3);
+  });
+});
+
+describe('what a device remembers from its last hello (the Settings page, spec §8 `CliToken`)', () => {
+  const remembered = (tokenId: string) =>
+    prisma.cliToken.findUniqueOrThrow({ where: { id: tokenId }, select: { agentId: true, agentVersion: true, repos: true } });
+
+  it('saves the agent and the linked repos before anyone hears the device came online', async () => {
+    const hub = new CliHub();
+    const { token } = await device();
+    // What a presence listener (the web app's me.update) reads when the device comes online.
+    const seenAtPresence: unknown[] = [];
+    hub.onPresence((e) => void remembered(e.tokenId).then((row) => seenAtPresence.push(row)));
+    const { url } = await hubOnPort(hub);
+    await TestCli.online(url, token.raw, { agent: { id: 'claude-code', version: '2.1.290', modes: ['reviewer', 'editor'] }, repos: ['acme/shop-api', 'acme/web'] });
+    const saved = { agentId: 'claude-code', agentVersion: '2.1.290', repos: ['acme/shop-api', 'acme/web'] };
+    expect(await remembered(token.id)).toEqual(saved);
+    await vi.waitFor(() => expect(seenAtPresence).toEqual([saved]));
+  });
+
+  it('remembers no agent when the hello says it can do nothing (no modes), and replaces what an earlier hello said', async () => {
+    const { url } = await hubOnPort();
+    const { token } = await device();
+    const first = await TestCli.online(url, token.raw, { agent: { id: 'gemini-cli', version: '0.9.0', modes: ['reviewer'] }, repos: ['acme/shop-api'] });
+    first.close();
+    await first.closed;
+    await TestCli.online(url, token.raw, { agent: { id: 'claude-code', version: null, modes: [] }, repos: [] });
+    expect(await remembered(token.id)).toEqual({ agentId: null, agentVersion: null, repos: [] });
+  });
+});
+
+describe('closeToken (a device revoked on the Settings page)', () => {
+  it("closes that device's socket with the code and reason given, forgets it at once, and says it went away", async () => {
+    const { hub, url } = await hubOnPort();
+    const changes: PresenceChange[] = [];
+    hub.onPresence((e) => changes.push(e));
+    const { user, token } = await device();
+    const laptop = await TestCli.online(url, token.raw);
+    const desktop = await TestCli.online(url, (await makeCliToken(user.id)).raw, { device: 'desktop' });
+    expect(hub.closeToken(token.id, CLOSE_CODES.reauth, SIGNED_OUT_REASON)).toBe(true);
+    expect(hub.connection(token.id)).toBeUndefined();
+    expect(changes.at(-1)).toEqual({ userId: user.id, tokenId: token.id, change: 'disconnected' });
+    expect(await laptop.closed).toEqual({ code: CLOSE_CODES.reauth, reason: SIGNED_OUT_REASON });
+    // The other device stays, and the old socket's close event doesn't report the device gone a second time.
+    await sleep(50);
+    expect(hub.connectionsFor(user.id).map((c) => c.device)).toEqual(['desktop']);
+    expect(changes.filter((c) => c.change === 'disconnected')).toHaveLength(1);
+    desktop.close();
+  });
+
+  it('returns false for a device that is not connected', async () => {
+    const { hub } = await hubOnPort();
+    const { token } = await device();
+    expect(hub.closeToken(token.id, CLOSE_CODES.reauth, 'signed out')).toBe(false);
   });
 });

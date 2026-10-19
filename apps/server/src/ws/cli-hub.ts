@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import {
-  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli, type Settings,
+  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type AgentId, type AgentMode, type ServerToCli, type Settings,
 } from '@nitpilot/protocol';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { authenticateCliToken, touchCliToken, type CliAuth } from '../auth/cli-token';
@@ -16,6 +16,8 @@ const HELLO_TIMEOUT_MS = 10_000;
 const CLOSE_POLICY = 1008;
 /** WebSocket's "internal error" close code: the server failed; the CLI reconnects and tries again. */
 const CLOSE_SERVER_ERROR = 1011;
+/** The close reason for a revoked token (with code 4401): the CLI shows it and stops. The Settings page's Revoke uses it too. */
+export const SIGNED_OUT_REASON = `This device was signed out. Run \`${BRAND.cli} login\`.`;
 
 type Hello = Extract<CliToServer, { t: 'hello' }>;
 
@@ -103,6 +105,20 @@ export class CliHub {
     return sent;
   }
 
+  /**
+   * Hang up on the device with this token (the Settings page revoked it: `DELETE /api/devices/:id`). It's forgotten at
+   * once, like a silent one in `dropSilent`, so nothing more is sent to it and anyone watching hears it went away now,
+   * not when its socket finishes closing. False when it isn't connected.
+   */
+  closeToken(tokenId: string, code: number, reason: string): boolean {
+    const conn = this.byToken.get(tokenId);
+    if (!conn) return false;
+    this.byToken.delete(tokenId);
+    conn.close(code, reason);
+    this.presenceChanged(conn, 'disconnected');
+    return true;
+  }
+
   /** Close every socket. With 1012 on shutdown, the CLIs reconnect. */
   closeAll(code: number, reason = ''): void {
     for (const ws of this.wss.clients) ws.close(code, reason);
@@ -155,7 +171,7 @@ export class CliHub {
         if (!msg) return;
         // Checked on every message, so a revoked token is noticed at once. It also keeps lastSeenAt fresh.
         if (!(await touchCliToken(auth.tokenId))) {
-          ws.close(CLOSE_CODES.reauth, `This device was signed out. Run \`${BRAND.cli} login\`.`);
+          ws.close(CLOSE_CODES.reauth, SIGNED_OUT_REASON);
           return;
         }
         if (!conn) {
@@ -210,6 +226,9 @@ export class CliHub {
       return null;
     }
     const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { login: true, ...SETTINGS_COLUMNS } });
+    // Remember what the device said (spec §8 `CliToken`), so the Settings page can show its agent while it's offline.
+    // Before it's registered below: a me.update that follows its coming online reads these fresh.
+    await rememberHello(auth.tokenId, hello);
     const conn: CliConnection = {
       tokenId: auth.tokenId,
       userId: auth.userId,
@@ -294,4 +313,21 @@ function readMessage(data: RawData, isBinary: boolean): CliToServer | null {
     return null;
   }
   return parsed.data;
+}
+
+/**
+ * The agent a hello reports, as the Settings page shows it: null when the CLI can use it for nothing (no modes, e.g.
+ * Claude Code installed but not signed in). Used for a live connection and for what a token remembers.
+ */
+export function usableAgent(agent: { id: AgentId; version: string | null; modes: readonly AgentMode[] }): { id: AgentId; version: string | null } | null {
+  return agent.modes.length > 0 ? { id: agent.id, version: agent.version } : null;
+}
+
+/** Save the parts of a hello the Settings page shows for a device that's offline: its agent and its linked repos. */
+async function rememberHello(tokenId: string, hello: Hello): Promise<void> {
+  const agent = usableAgent(hello.d.agent);
+  await prisma.cliToken.update({
+    where: { id: tokenId },
+    data: { agentId: agent?.id ?? null, agentVersion: agent?.version ?? null, repos: hello.d.repos },
+  });
 }

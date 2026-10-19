@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
 
   const app = createApp({
-    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, vapidPublicKey: vapid?.publicKey ?? null,
+    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, meUpdates: live, vapidPublicKey: vapid?.publicKey ?? null,
   });
   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.log(`Nitpilot server listening on http://localhost:${info.port}`);

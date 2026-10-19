@@ -60,3 +60,13 @@ export async function notify(login: 'maya' | 'leo'): Promise<{ reached: string[]
   if (!res.ok) throw new Error(`notifying ${login} failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as { reached: string[]; recorded: { endpoint: string; payload: string }[] };
 }
+
+/**
+ * Give someone a computer without running a CLI: a CLI token row named `name` (offline; `lastSeenAt` ISO makes it look
+ * used). Answers its id. Revoking it on the Settings page removes it.
+ */
+export async function addDevice(device: { login: 'maya' | 'leo'; name: string; lastSeenAt?: string; agent?: { id: string; version: string | null } }): Promise<string> {
+  const res = await fetch(`${CONTROL_URL}/cli-token`, { method: 'POST', body: JSON.stringify(device) });
+  if (!res.ok) throw new Error(`adding ${device.login}'s device failed: ${res.status} ${await res.text()}`);
+  return ((await res.json()) as { id: string }).id;
+}
