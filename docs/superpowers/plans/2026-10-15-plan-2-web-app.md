@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1–W6 at step level; W7 and W8 at task level.** W6 (Tasks 19–20) was written at step level on 2026-10-18 against the branch at `3285e9b`; see "Checked against the code (W6)". W5 (Tasks 14–18) was written at step level on 2026-10-18 against the branch at `03241c8`; see "Checked against the code (W5)". W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1–W7 at step level; W8 at task level.** W7 (Tasks 21–23) was written at step level on 2026-10-19 against the branch at `e6a779f`; see "Checked against the code (W7)". W6 (Tasks 19–20) was written at step level on 2026-10-18 against the branch at `3285e9b`; see "Checked against the code (W6)". W5 (Tasks 14–18) was written at step level on 2026-10-18 against the branch at `03241c8`; see "Checked against the code (W5)". W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -282,6 +282,43 @@ W6 was written at step level on 2026-10-18, against branch `plan-2-web-app` at `
 - Task 20: no `pushsubscriptionchange` handler; no Android badge icon; no iOS startup images.
 - Noticed in the browser look: the sheet's icon appears a moment after the sheet opens; on a phone the install card keeps the desktop sentence ("Its own window next to your editor…"); the placeholder's iOS tip is plain text (Task 21's Notifications section has the tinted box); the install card covers the inbox's keyboard hints until it is dismissed.
 - From W4 and W5, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing (`lib/viewport.ts`), the failure reason in the failed banner, a publish crash plus a push on top, `pr_retargeted` with a queued review, no chat banner for a waiting draft.
+
+## Checked against the code (W7)
+
+W7 was written at step level on 2026-10-19, against branch `plan-2-web-app` at `e6a779f` (W6 done, with its fix rounds; PR #2 still open for W5). Its code was built and run in a scratch worktree first, one task at a time, on a database of its own (protocol 79 → 80 → 81 → 82, CLI 333 passed + 14 skipped unchanged, server 974 → 989 → 1007 → 1021, web 272 → 295 → 307 → 319, end to end 6, Playwright 10 → 12 → 14 → 16; typecheck, lint and build clean after each task), and every code block below was generated from those tested commits by a script: whole files for new ones, `git diff` for changed ones, `git rm` for deleted ones. Each step's "Expected: FAIL" counts, Playwright's included, were checked by applying only that step's tests (and what they need to run) to the commit before it. No new dependencies. Each task was looked at in the in-app browser at 1280 px and 375 px, light and dark: Settings with an online and an offline computer, the stepper saving, Revoke and its toast, the iPhone tip and sheet; the checklist at 1 of 5, ticking to 2 of 5 when the tab comes back after the app was installed and to 5 of 5 live when maya's CLI started; the approve card pending, approved (the CLI's poll then got its token), denied, not found and expired. Where W7 differs from the task-level text, and why:
+
+**Task 21 (Settings)**
+- **Ruling (controller): Settings and Setup are full pages, not panes beside the inbox.** The handoff draws Settings with its own "‹ Inbox" top bar and Setup centered. `Shell` splits into `SignedIn` (every provider it had: the live socket, the UI state, toasts, the Home Screen sheet, the install card, `resyncPush`) and `InboxLayout` (the inbox beside the page, for `/`, `/c/…` and `*`); `/settings` and `/setup` sit beside `InboxLayout` under `SignedIn`. `SettingsPlaceholder` is deleted; its push switch, iOS tip and sign-out moved into the new sections.
+- **Ruling (controller): a CLI token remembers its last hello** (`CliToken.agentId`, `agentVersion`, `repos`; one migration), written on every hello before the presence event fires. That replaces the task-level "(or one did since the server started)" memory: Settings can show the agent of a computer that's off ("○ Not connected"), and the checklist's repo and agent ticks stay after `nitpilot start` stops. An agent that reported no modes counts as no agent, live or remembered (builder's ruling, accepted).
+- **Shapes are smaller than the task-level text (YAGNI):** `DeviceView = { id, name, lastSeenAt, online, agent }`, with no `prefix` or `repos` (the handoff's row shows neither), and **no `WebMe.agents`**: the Agent section is worked out on the page from the devices ("Used on <device names>").
+- **Devices:** an "Online" chip instead of the handoff's "This device" (the server can't know which computer the browser is on); online first, then by last seen; "Last seen 18:04", "yesterday", "N days ago", "Sep 3", or "Never connected". **Revoke has no confirm** (the handoff draws none, and logging in again undoes it). Both device routes take the session cookie only; another person's, an unknown or an already revoked device is the same 404. `CliHub.closeToken` closes that CLI with 4401 and reports it gone at once, so the `me.update` that follows already says the agent is offline.
+- **Ruling (controller): `sendMeUpdate(userId)`** (`ws/web-wire.ts`) sends the person's open tabs a fresh `me.update` after their own writes too: saving settings, revoking a device, subscribing or unsubscribing push (W6's deferred item), and (Task 22) a CLI login's first poll. The web app's `me.update` also refetches `['devices']` and `['onboarding']`. This settles W5's "no `me.update` after a settings change".
+- **Defaults save at once:** each press sends the whole settings, the controls are busy until the answer and show the value on its way, a refusal is an error toast. The usage bar turns amber at or over the cap. `usedToday` isn't pushed live: the page reads `me` again when it opens.
+- **Files the text didn't list:** one `Settings.module.css` plus `Switch.module.css`, `Section.tsx` and `Switch.tsx` (the sections share rows, chips and cards), `src/test/settings.ts`, `lib/time.ts` `lastSeen`, `lib/names.ts` `AGENT_NAME`, a 40 px `Avatar`. The "Blocked" sentence gains its how-to: "Blocked in your browser's settings. Allow notifications for this site there, then reload this page." The Playwright control API gains `POST /cli-token`.
+
+**Task 22 (onboarding)**
+- **Ruling (controller): onboarding is its own read, `GET /api/onboarding`, not part of `WebMe`.** "App installed" asks GitHub (up to 15 s), and `/api/me` is the app's first query. `WebMe` gains only `onboarded`; there is no `WebMe.appSlug` (the slug, `deviceName` and `publicReposOnly` come with the facts) and no `signedIn` flag (being able to call the route says it). Spec §10 says so.
+- **Ruling (controller): where each tick comes from.** An unrevoked CLI token; a token whose remembered repos aren't empty; a token with a remembered agent; GitHub listing an installation of the app for the person. A "yes, installed" is kept 5 minutes; a "no" isn't kept, so coming back from GitHub's install tab re-checks at once; a GitHub error counts as no and never fails the read. **Done is stored** (`User.onboardedAt`, set the first time all steps hold), so a stopped CLI doesn't untick a finished checklist and later reads don't ask GitHub. No backfill: an existing user's first visit to `/setup` sets it.
+- **Ruling (controller): a sign-in lands on `/setup` while you're not set up** and `next` is the default `/` (every sign-in until done, decided from `onboardedAt` with no GitHub call); `/github/setup` redirects to `/setup`. A finished checklist shows "Open your inbox" instead of "Skip for now"; Settings has a "Finish setting up" card until then.
+- **The checklist:** the first unfinished row is active (spinner, Copy or "Install on GitHub" in a new tab); later rows show their command without Copy, in `--fg3` (the prototype's 55% opacity fails AA). Row 4 says "It's ticked off once `nitpilot start` connects.", since the server only hears about repos in a CLI's hello, so rows 4 and 5 tick together. Row 5's chips say "Claude Code · detected automatically" and "Gemini CLI · coming later" (Gemini is on hold). Copy the ruling didn't give comes from the prototype where it has it (each done line, row 3's "Connected: <device>").
+- **New:** `BRAND.hostedDomain` for the public-repos note (shown only with `PUBLIC_REPOS_ONLY`), and `pollCliLogin(deviceCode, now, onTokenCreated?)`, so the CLI route can send `me.update` without `cli-login.ts` importing anything from the sockets. The command is `npx ${BRAND.npmPackage} login`.
+- **Playwright:** the pretend GitHub now answers a real OAuth round trip as a newcomer, `sam`, so a first sign-in can be tested; the control API gains `POST /installations` and `POST /forget-devices`, and `/reset` clears `onboardedAt` and the installations. The spec comes right after the platform step, so its RED is real. Eleven web test fixtures gain `onboarded: true`.
+
+**Task 23 (device approval; the server pages go)**
+- **Ruling (controller): the approve routes take the session cookie only**; a POST on a code that's no longer pending answers 200 with how it stands (a double click or an old tab just shows what happened); `pending` past its time reads `expired`, `consumed` reads `approved`; an unknown code is a 404, shown as "Code not found" with the login command (the handoff draws no such state).
+- **The device row shows the name and "requested HH:MM" only:** the login request carries no OS or CLI version (adding them needs a field on `POST /api/cli/login`). `startCliLogin` now saves `createdAt: now`, so `requestedAt` and `expiresAt` come from one clock.
+- **The approve page is a route of its own**, outside the signed-in app: signed out it sends the browser to GitHub's sign-in with `next`; it opens no socket. It's **lazy-loaded**, because with it the main bundle crossed Vite's 500 kB warning (the build must print no new warning). `lib/browser.ts` exists so a test can see the redirect. The countdown uses the browser's clock; the server still decides whether a late Approve is too late. Not found and Expired end with the command block with Copy.
+- **Deleted:** `cli-approve.tsx`, `pages/approve.tsx`, `pages/layout.tsx` (their tests lived in `cli.db.test.ts` and moved to the new API), the server's JSX settings, and Vite's `/cli/` proxy entry. `/cli/approve` is served by the SPA fallback with the CSP header (a new `spa.test.ts` case). `http/errors.ts` was already JSON only; the CLI needed no change.
+- The explainer is `docs/why/cli-login.md`, extended (it already covered the device flow), not a new `device-login.md`.
+
+**Deferred**
+- The main bundle is 0.2 kB under Vite's 500 kB warning: the next code that lands in it trips the warning (lazy-load Settings or Setup then, or raise `chunkSizeWarningLimit`).
+- No live `usedToday` (Settings reads it when it opens); no scroll-spy in the Settings nav; the Auto-fix hint is the handoff's fixed "Off: fixes wait as drafts for you to send".
+- The approve page hears a decision made elsewhere only when its tab comes back into view; no rate limit on reading codes (signed-in only, 8 letters, 10 minutes: Plan 1's page had the same).
+- A revoked computer that holds a draft's publish job leaves that job waiting until the draft is discarded.
+- No installed-repo list on the checklist; the public-repos note can't be seen on the Playwright server (its test env forces the setting off; unit-tested).
+- Playwright: one writer saw a single unnamed failure in one run of 16 (three later runs green): watch for a flake.
+- From W4–W6, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing, the failure reason in the failed banner, a publish crash plus a push on top, `pr_retargeted` with a queued review, no chat banner for a waiting draft, the Home Screen sheet's icon appearing late, Task 20's live step.
 
 ## How to work in this repo
 
@@ -32894,76 +32931,7448 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Milestone W7: Settings, onboarding and device approval
 
-W7 finishes the screens: Settings, the onboarding checklist that ticks itself off, and CLI device approval in the web app. The last server-rendered pages are removed.
+W7 finishes the screens: the Settings page (your computers with Revoke, your agents, push, the defaults for new chats and the daily cap, sign out), the setup checklist that ticks itself off as each step completes, and CLI device approval as a page of the web app. The last server-rendered pages are removed: from W7 on, every HTML answer is the web app's `index.html`.
 
 **Files at the end of W7:**
 ```
 apps/server/src/
-  http/routes/{devices,onboarding,cli-requests}.ts
-  platform/github/reads.ts       userInstallations (with the user's token)
-  (deleted) http/pages/*, http/routes/cli-approve.tsx, the JSX settings in tsconfig
-apps/web/src/routes/{Settings,Setup,Approve}/…
+  http/routes/devices.ts         GET /api/devices, DELETE /api/devices/:id (cookie only; revoke closes that CLI with 4401)
+  http/routes/onboarding.ts      GET /api/onboarding (the checklist's facts)
+  http/routes/cli-requests.ts    GET/POST /api/cli/requests/:userCode (the approve page's reads and decisions)
+  auth/onboarding.ts             OnboardingFacts: where each tick comes from; a "yes, installed" kept 5 minutes
+  ws/cli-hub.ts                  each CLI token remembers its last hello (agent, repos); closeToken
+  ws/web-wire.ts                 sendMeUpdate: me.update after your own writes and a CLI login, not only presence
+  platform/github/reads.ts       userInstallations (GET /user/installations with the person's token)
+  http/routes/auth.ts, setup.ts  a sign-in that isn't set up yet, and /github/setup, land on /setup
+  prisma: CliToken.agentId/agentVersion/repos, User.onboardedAt
+  (deleted) http/routes/cli-approve.tsx, http/pages/{approve,layout}.tsx, the JSX settings in tsconfig.json
+packages/protocol/src/           DeviceView, DevicesResponse, Onboarding, WebMe.onboarded, CliRequestView, CliRequestDecision, BRAND.hostedDomain
+apps/web/src/
+  routes/Shell/Shell.tsx         SignedIn (every provider) and InboxLayout (the inbox beside the page)
+  routes/Settings/{Settings,Section,Switch,Devices,Agent,Notifications,Defaults,Account}.tsx   (SettingsPlaceholder deleted)
+  routes/Setup/{Setup,ChecklistRow,CommandBlock}.tsx
+  routes/Approve/Approve.tsx     lazy-loaded, outside the signed-in app
+  api/{settings,onboarding,cli-requests}.ts, lib/browser.ts
+  e2e/{settings,setup,approve}.spec.ts
+docs/why/revoking-devices.md, docs/why/onboarding-facts.md (docs/why/cli-login.md extended)
 ```
 
 ### Task 21: Settings page
 
 **Files:**
-- Create: `apps/server/src/http/routes/devices.ts` and `devices.db.test.ts`, `apps/web/src/routes/Settings/{Settings.tsx,Devices.tsx,Agent.tsx,Notifications.tsx,Defaults.tsx,Account.tsx,*.module.css,*.test.tsx}`, `apps/web/src/api/settings.ts`.
-- Modify: `packages/protocol/src/web-api.ts` (`DeviceView`, `DevicesResponse`, `WebMe.agents`), `apps/server/src/ws/cli-hub.ts` (`closeToken(tokenId, code)`), `apps/server/src/http/app.ts`, `apps/web/src/app.tsx`.
+- Create (server): `apps/server/src/http/routes/devices.ts` and `devices.db.test.ts`, `apps/server/prisma/migrations/<timestamp>_cli_token_last_hello/migration.sql` (generated).
+- Create (web): `apps/web/src/api/settings.ts`, `apps/web/src/test/settings.ts`, `apps/web/src/routes/Settings/{Section.tsx,Switch.tsx,Devices.tsx,Agent.tsx,Notifications.tsx,Defaults.tsx,Account.tsx,Settings.module.css,Switch.module.css}`, `apps/web/src/routes/Settings/{Settings,Devices,Notifications,Defaults}.test.tsx`, `apps/web/e2e/settings.spec.ts`.
+- Create (docs): `docs/why/revoking-devices.md`.
+- Modify (protocol): `packages/protocol/src/web-api.ts` and `web-api.test.ts` (`DeviceView`, `DevicesResponse`).
+- Modify (server): `apps/server/prisma/schema.prisma` (`CliToken.agentId`, `agentVersion`, `repos`), `apps/server/src/ws/cli-hub.ts` and `cli-hub.db.test.ts` (`closeToken`, `SIGNED_OUT_REASON`, `usableAgent`, remembering the hello), `apps/server/src/ws/web-wire.ts` and `web-wire.db.test.ts` (`sendMeUpdate`, `MeUpdates`, `WebWired`), `apps/server/src/http/app.ts`, `apps/server/src/http/routes/{settings.ts,settings.db.test.ts,push.ts,push.db.test.ts,me.db.test.ts}`, `apps/server/src/main.ts`, `apps/server/test/app.ts`, `apps/server/test/e2e/{harness.ts,web-server.ts}`.
+- Modify (web): `apps/web/src/app.tsx`, `apps/web/src/routes/Shell/{Shell.tsx,Shell.test.tsx,Pane.module.css}`, `apps/web/src/routes/Home/Home.tsx`, `apps/web/src/live/{apply.ts,apply.test.ts}`, `apps/web/src/lib/{time.ts,time.test.ts,names.ts}`, `apps/web/src/components/Avatar/Avatar.tsx`, `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx`, `apps/web/e2e/{control.ts,pwa.spec.ts}`.
+- Delete: `apps/web/src/routes/Settings/SettingsPlaceholder.tsx` and `SettingsPlaceholder.test.tsx`.
+- Modify (docs): `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§8, §10, §16).
 
 **Interfaces:**
-- Consumes: `PUT /api/me/settings` (Task 14), `pushState`/`turnPushOn`/`turnPushOff` (Task 20), `POST /auth/logout`.
-- Produces: `GET /api/devices` → `{ devices: DeviceView[] }` with `DeviceView = { id; name; prefix; lastSeenAt: string | null; online: boolean; agent: { id: AgentId; version: string | null } | null; repos: string[] }` (agent and repos from the live connection; revoked tokens left out). `DELETE /api/devices/:id` → 204: sets `revokedAt` and closes that CLI's socket with 4401 (log in again). `WebMe.agents: { id: AgentId; version: string | null; online: boolean }[]` (distinct agents across your CLIs).
+- Consumes: `PUT /api/me/settings` (Task 14); `pushState`, `turnPushOn`, `turnPushOff`, `turnPushOffBeforeSignOut`, `useHomeScreenSheet().open()` and the `['pushState']` query (Task 20); `POST /auth/logout`; `requireUser`, `requireSameOrigin`, `HttpError`, `loadWebMe`, `wireWebHub`, `CliHub` (W3, W5, Plan 1); `AgentId` and `CLOSE_CODES` (protocol); `Avatar`, `Toast`, `useIsDesktop`, `useEscapeBack`.
+- Produces (database): `CliToken` gains `agentId String?`, `agentVersion String?` and `repos String[] @default([])`: what the device's last hello said, written on every hello, before the presence event fires.
+- Produces (protocol): `DeviceView = { id: string; name: string; lastSeenAt: string | null; online: boolean; agent: { id: AgentId; version: string | null } | null }` and `DevicesResponse = { devices: DeviceView[] }`. There is no `prefix`, no `repos` and no `WebMe.agents` (controller's rulings); the Agent section is worked out on the page.
+- Produces (server):
+  - `GET /api/devices` → `DevicesResponse`: your CLI tokens that aren't revoked, oldest first. `agent` is the live connection's agent while the device is online and the remembered one otherwise. `DELETE /api/devices/:id` → 204: sets `revokedAt`, closes that CLI's socket with 4401 and the reason `SIGNED_OUT_REASON`, tells your tabs. Both take the session cookie only (a CLI token or no session → 401); DELETE also checks the Origin (403). Another person's device, an unknown id and one already revoked are the same 404, "No such device.".
+  - `deviceRoutes(deps: { clis: DeviceClis; meUpdates?: MeUpdates })` and `type DeviceClis = { connectionsFor(userId): readonly { tokenId; agent: { id; version; modes } }[]; closeToken(tokenId, code, reason): boolean }` (`http/routes/devices.ts`).
+  - `CliHub.closeToken(tokenId: string, code: number, reason: string): boolean` (false when that device isn't connected), `SIGNED_OUT_REASON` (the sentence the hub already used for a revoked token), `usableAgent(agent): { id; version } | null` (null when the agent has no modes) (`ws/cli-hub.ts`).
+  - `type MeUpdates = { sendMeUpdate(userId: string): Promise<void> }`, `type WebWired = MeUpdates & { stop(): void }`; `wireWebHub(...)` now returns `WebWired` (`ws/web-wire.ts`). `AppDeps.meUpdates?: MeUpdates`, passed by `main.ts` and the end-to-end harness. `sendMeUpdate` skips the database read when the person has no tab open, and never throws (it logs). It is called after `PUT /api/me/settings`, `DELETE /api/devices/:id`, `POST /api/push/subscriptions` and `DELETE /api/push/subscriptions`; Task 22 calls it after a CLI login's first successful poll.
+  - Control API (Playwright server): `POST /cli-token { login, name, lastSeenAt?, agent? }` → `{ id }`; `/reset` also puts `dailyJobCap` back to 40.
+- Produces (web): `Settings` (the page, `/settings`), `SignedIn` and `InboxLayout` (`routes/Shell/Shell.tsx`; pages read `me` with `useOutletContext<WebMe>()`), `Switch` (46×28 `role="switch"`), `Section`, `useDevices()`, `useRevokeDevice()`, `useSaveSettings()` (`api/settings.ts`), `agentsFrom(devices)` (`Agent.tsx`), `sortDevices(devices)` (`Devices.tsx`), `AGENT_NAME` (`lib/names.ts`), `lastSeen(iso, now?)` (`lib/time.ts`); the `me.update` handler also invalidates `['devices']`. Test helpers `serveSettings`, `device`, `settingsMe`, `sent` (`src/test/settings.ts`), `addDevice()` (`e2e/control.ts`).
 
-**Behavior** (handoff §7):
-- Desktop 180 px section nav (Devices, Agent, Notifications, Defaults, Account); phone: stacked cards; "‹ Inbox" top bar.
-- Devices: name, "Last seen …" or "Online", **Revoke** (red text, outlined), then the toast "Revoked. That computer has to log in again." (no Undo: the token is gone). The handoff's "This device" chip is about the browser's own computer, which the server can't know: it is dropped, and online devices get an "Online" chip instead (recorded as a deviation in the step-level notes).
-- Agent: each reported agent with its version and a `✓ Online` / "Not connected" chip; with none: "Install Claude Code, then run `nitpilot start`."
-- Notifications: the Push switch (46×28) from `pushState`; the iOS tip when `needs_home_screen`; "Blocked in your browser's settings" when denied.
-- Defaults: Auto-review and Auto-fix switches, the daily cap stepper (−/+ by 5, 5–200) with "Max 40 agent runs per day · 12 used today" and the usage bar; saved at once.
-- Account: avatar, name/login, mono `github.com/<login>`, **Sign out** (POST `/auth/logout`, then the landing).
+**Behavior** (handoff §7, spec §10 and §16):
+- Settings is a page of its own, not a pane beside the inbox. Desktop: a top bar with "‹ Inbox" (goes to `/`) and "Settings", a sticky 180 px section nav (Devices, Agent, Notifications, Defaults, Account) and the section cards. Phone: the cards stacked, no nav; Esc goes back to `/`. A nav click scrolls to that section and highlights it (no scroll-spy, no `#` in the address).
+- **Devices:** one row per computer, online ones first, then the newest `lastSeenAt`. An online computer shows an "Online" chip (a dot and the word) in place of the handoff's "This device" chip: the server can't know which computer the browser is on. An offline one shows "Last seen 18:04" (today), "Last seen yesterday", "Last seen 3 days ago" (under 30 days), "Last seen Sep 3", or "Never connected". **Revoke** (red text, outlined, 36 px) has no confirm; it is busy while on its way; then the toast "Revoked. That computer has to log in again." and the list is read again. With no computers: "No computers yet. Run `npx nitpilot login` on one to connect it." (from `BRAND`).
+- **Agent:** one row per agent the devices report: "Claude Code", "Gemini CLI" or "Fake agent", its version in mono (`v2.1.290`), "Used on <device names>", and a chip: `✓ Online` when any device with that agent is online, else `○ Not connected`. With none: "Install Claude Code, then run `nitpilot start`.".
+- **Notifications:** the 46×28 "Push notifications" switch, driven by `pushState`; on turns push on, off turns it off, busy while working. On an iPhone that can't subscribe yet there is no switch: an accent-tinted tip with **Show me how**, which opens the Home Screen sheet. Blocked: "Blocked in your browser's settings. Allow notifications for this site there, then reload this page."
+- **Defaults:** Auto-review and Auto-fix switches, and the daily cap stepper (− and + move by 5, between 5 and 200; − is disabled at 5, + at 200), "Max 40 agent runs per day · 12 used today" and the usage bar (accent; amber at or over the cap). Every press saves the whole `Settings` at once. While a save is on its way all three controls are busy and ignore presses, and the stepper already shows the new number. A refused save is an error toast and `['me']` is read again. The page reads `['me']` again when it opens, so "used today" is fresh.
+- **Account:** the avatar, your login as the name, mono `github.com/<login>`, and **Sign out**: busy, push turned off for this browser first, then the form POST to `/auth/logout`.
+- **Remembering the hello:** when a CLI says hello, the server saves its agent (only when it has at least one mode, else null) and its linked repos on its token, before anyone is told it came online. So the Settings page shows an offline computer's agent too. `repos` is saved now and read from Task 22 on.
+- **Revoking:** the token stops working at once; if that computer's `nitpilot start` is connected, its socket is closed with 4401 and the sentence "This device was signed out. Run `nitpilot login`.", and everyone watching hears it went offline now. Your other tabs get a `me.update` and read the devices again.
+- Explainer `docs/why/revoking-devices.md` (what a CLI token is, why revoking closes the socket with 4401, why the server can't tell "this device").
 
-**Tests this task must include:**
-- `devices.db.test.ts`: lists only your own unrevoked devices with live agent info; revoking another user's device → 404; revoking closes the socket with 4401; another Origin → 403.
-- `Defaults.test.tsx`: the stepper stops at 5 and 200, steps by 5, saves; switches save.
-- `Notifications.test.tsx`: each `pushState` shows its control or message.
-- `Devices.test.tsx`: Revoke calls the route and the device disappears after refetch.
+**Tests this task must include:** `devices.db.test.ts` (lists only your own unrevoked devices with live agent info, a never-connected device, 404 for another person's, an unknown and a revoked one, revoking closes the socket with 4401 and tells your tabs, another Origin 403, a CLI token and no session 401); `cli-hub.db.test.ts` (remembers the hello before presence, no modes → no agent, `closeToken`); `web-wire.db.test.ts` (`sendMeUpdate`); the settings and push routes call `sendMeUpdate`; `Defaults.test.tsx` (the stepper stops at 5 and 200, steps by 5, saves; the switches save; busy while saving); `Notifications.test.tsx` (each `pushState` shows its control or message); `Devices.test.tsx` (Revoke calls the route and the device disappears after the refetch); `Settings.test.tsx` (the page, the nav, Account and Sign out); `time.test.ts` (`lastSeen`); `apply.test.ts` (`me.update` invalidates `['devices']`); `e2e/settings.spec.ts`.
+
+The steps go from the inside out: the protocol, the database, the CLI hub, the web wire, the device routes, the `me.update` after personal writes, the control API, then the web (small helpers, the page's tests, the page), the Playwright spec, the docs, a look in the browser, one full run and the commit. The server's db tests are run per group until Step 13. The workspace typecheck is not clean in between (Step 10 leaves one error that Step 12 fixes); it is clean again at Step 13 and Step 17.
+
+- [ ] **Step 1: Write the failing protocol test**
+
+`DeviceView` and `DevicesResponse` are what `GET /api/devices` answers. The test round-trips a device that is online with its agent and one that never connected, and refuses an agent id the protocol doesn't know.
+
+Modify `packages/protocol/src/web-api.test.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.test.ts b/packages/protocol/src/web-api.test.ts
+index 67321b2..b1f398b 100644
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
+ import { MeResponse } from './api';
+ import { jobResult, settings } from './test-samples';
+ import {
+-  ActionResponse, AutoRequest, ChatResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest, PushSubscriptionRequest,
+-  PushUnsubscribeRequest, Settings, WebMe, type ChatView, type InboxRow,
++  ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
++  PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+ } from './web-api';
+ 
+ describe('web API bodies', () => {
+@@ -126,4 +126,13 @@ describe('web API bodies', () => {
+       expect(PushSubscriptionRequest.safeParse({ ...subscription, keys: { ...subscription.keys, auth: 'not base64url!' } }).success).toBe(false);
+     });
+   });
++
++  it("round-trips the Settings page's devices: one online with its agent, one never connected", () => {
++    const devices: DeviceView[] = [
++      { id: 'tok_1', name: "Maya's MacBook Pro", lastSeenAt: '2026-10-18T16:04:00.000Z', online: true, agent: { id: 'claude-code', version: '2.1.290' } },
++      { id: 'tok_2', name: 'maya-linux-desk', lastSeenAt: null, online: false, agent: null },
++    ];
++    expect(DevicesResponse.parse(JSON.parse(JSON.stringify({ devices })))).toEqual({ devices });
++    expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'copilot', version: null } }] }).success).toBe(false);
++  });
+ });
+```
+
+Run: `npm test -w packages/protocol`
+Expected: FAIL, 1 failed, 79 passed (80) in 1 of 8 files: the new test (`DevicesResponse` doesn't exist).
+
+- [ ] **Step 2: Add the shapes to the protocol**
+
+Modify `packages/protocol/src/web-api.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.ts b/packages/protocol/src/web-api.ts
+index 4db12c3..38a6116 100644
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -1,6 +1,6 @@
+ import { z } from 'zod';
+ import { MeResponse } from './api';
+-import { AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
++import { AgentId, AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+ import { JobResult, Snippet } from './job-result';
+ 
+ // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
+@@ -38,6 +38,25 @@ export const WebMe = MeResponse.extend({
+ });
+ export type WebMe = z.infer<typeof WebMe>;
+ 
++/**
++ * One of your computers on the Settings page (`GET /api/devices`): a CLI token that `nitpilot login` made and nobody
++ * revoked. `name` is the one the CLI gave when it logged in. `online` while its `nitpilot start` is connected;
++ * `lastSeenAt` is when it last said anything (null: never connected). `agent` is the coding agent it reported in its
++ * hello: the live one while online, else the one it remembered from its last hello (null: none yet, or one with no
++ * modes). The Agent section is worked out from these on the page.
++ */
++export const DeviceView = z.object({
++  id: z.string(),
++  name: z.string(),
++  lastSeenAt: z.string().nullable(),
++  online: z.boolean(),
++  agent: z.object({ id: AgentId, version: z.string().nullable() }).nullable(),
++});
++export type DeviceView = z.infer<typeof DeviceView>;
++
++export const DevicesResponse = z.object({ devices: z.array(DeviceView) });
++export type DevicesResponse = z.infer<typeof DevicesResponse>;
++
+ /**
+  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
+  * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
+```
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 80 tests in 8 files.
+
+- [ ] **Step 3: Let a device token remember its last hello**
+
+Three new columns on `CliToken` (spec §8): what the device's last hello said, so the Settings page can show an offline computer's agent. `prisma format` re-aligns the whole `CliToken` model, so the diff shows more lines than the three new fields.
+
+Modify `apps/server/prisma/schema.prisma`:
+
+```diff
+diff --git a/apps/server/prisma/schema.prisma b/apps/server/prisma/schema.prisma
+index d73636f..55ff8b2 100644
+--- a/apps/server/prisma/schema.prisma
++++ b/apps/server/prisma/schema.prisma
+@@ -61,17 +61,22 @@ model WebSession {
+ 
+ /// One per CLI device. Only the sha256 of the token is stored.
+ model CliToken {
+-  id         String    @id @default(cuid())
+-  userId     String
+-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+-  name       String
+-  tokenHash  String    @unique
+-  prefix     String
+-  lastSeenAt DateTime?
+-  revokedAt  DateTime?
+-  createdAt  DateTime  @default(now())
+-  updatedAt  DateTime  @updatedAt
+-  jobs       Job[]
++  id           String    @id @default(cuid())
++  userId       String
++  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
++  name         String
++  tokenHash    String    @unique
++  prefix       String
++  lastSeenAt   DateTime?
++  revokedAt    DateTime?
++  /// What the device said in its last hello, for the Settings page while it's offline (spec §8): its coding agent
++  /// (null when it reported none it could use) and the repos linked on it.
++  agentId      String?
++  agentVersion String?
++  repos        String[]  @default([])
++  createdAt    DateTime  @default(now())
++  updatedAt    DateTime  @updatedAt
++  jobs         Job[]
+ }
+ 
+ /// The `nitpilot login` handshake. The device code is stored only as a hash.
+```
+
+- [ ] **Step 4: Generate the migration and the client**
+
+Run: `npm run db:migrate -w apps/server -- --name cli_token_last_hello`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client; until you do, every CLI hello fails with a 1011 because `prisma.cliToken.update` doesn't know the new columns).
+Expected: a new folder `apps/server/prisma/migrations/<timestamp>_cli_token_last_hello/` (the folder name carries your own timestamp) with this `migration.sql`, "Your database is now in sync with your schema." and "Generated Prisma Client".
+
+The generated `migration.sql` (the scratch commit's folder was `20261019150650_cli_token_last_hello`):
+
+```sql
+-- AlterTable
+ALTER TABLE "CliToken" ADD COLUMN     "agentId" TEXT,
+ADD COLUMN     "agentVersion" TEXT,
+ADD COLUMN     "repos" TEXT[] DEFAULT ARRAY[]::TEXT[];
+```
+
+- [ ] **Step 5: Write the failing CLI hub tests**
+
+Two things on the hub. A hello is remembered on the token (its agent and its repos), and it is saved **before** presence fires: the test reads the row from inside the presence listener. And `closeToken` hangs up on one device with the code and reason it is given, forgets it at once, and reports it gone exactly once. The test file imports `SIGNED_OUT_REASON`, the sentence the hub already sends for a revoked token, now exported so the route can use the same one.
+
+Modify `apps/server/src/ws/cli-hub.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/ws/cli-hub.db.test.ts b/apps/server/src/ws/cli-hub.db.test.ts
+index 44a4974..859632c 100644
+--- a/apps/server/src/ws/cli-hub.db.test.ts
++++ b/apps/server/src/ws/cli-hub.db.test.ts
+@@ -5,7 +5,7 @@ import { makeCliToken, makeUser } from '../../test/db';
+ import { sessionCookieFor } from '../../test/http';
+ import { hello, listen, ping, sleep, startCliServer, TestCli, upgradeStatus } from '../../test/ws';
+ import { prisma } from '../lib/prisma';
+-import { CliHub, type PresenceChange } from './cli-hub';
++import { CliHub, SIGNED_OUT_REASON, type PresenceChange } from './cli-hub';
+ 
+ const running: { close(): Promise<void> }[] = [];
+ afterEach(async () => {
+@@ -293,3 +293,57 @@ describe("a device's usage today", () => {
+     expect((await me()).usedToday).toBe(3);
+   });
+ });
++
++describe('what a device remembers from its last hello (the Settings page, spec §8 `CliToken`)', () => {
++  const remembered = (tokenId: string) =>
++    prisma.cliToken.findUniqueOrThrow({ where: { id: tokenId }, select: { agentId: true, agentVersion: true, repos: true } });
++
++  it('saves the agent and the linked repos before anyone hears the device came online', async () => {
++    const hub = new CliHub();
++    const { token } = await device();
++    // What a presence listener (the web app's me.update) reads when the device comes online.
++    const seenAtPresence: unknown[] = [];
++    hub.onPresence((e) => void remembered(e.tokenId).then((row) => seenAtPresence.push(row)));
++    const { url } = await hubOnPort(hub);
++    await TestCli.online(url, token.raw, { agent: { id: 'claude-code', version: '2.1.290', modes: ['reviewer', 'editor'] }, repos: ['acme/shop-api', 'acme/web'] });
++    const saved = { agentId: 'claude-code', agentVersion: '2.1.290', repos: ['acme/shop-api', 'acme/web'] };
++    expect(await remembered(token.id)).toEqual(saved);
++    await vi.waitFor(() => expect(seenAtPresence).toEqual([saved]));
++  });
++
++  it('remembers no agent when the hello says it can do nothing (no modes), and replaces what an earlier hello said', async () => {
++    const { url } = await hubOnPort();
++    const { token } = await device();
++    const first = await TestCli.online(url, token.raw, { agent: { id: 'gemini-cli', version: '0.9.0', modes: ['reviewer'] }, repos: ['acme/shop-api'] });
++    first.close();
++    await first.closed;
++    await TestCli.online(url, token.raw, { agent: { id: 'claude-code', version: null, modes: [] }, repos: [] });
++    expect(await remembered(token.id)).toEqual({ agentId: null, agentVersion: null, repos: [] });
++  });
++});
++
++describe('closeToken (a device revoked on the Settings page)', () => {
++  it("closes that device's socket with the code and reason given, forgets it at once, and says it went away", async () => {
++    const { hub, url } = await hubOnPort();
++    const changes: PresenceChange[] = [];
++    hub.onPresence((e) => changes.push(e));
++    const { user, token } = await device();
++    const laptop = await TestCli.online(url, token.raw);
++    const desktop = await TestCli.online(url, (await makeCliToken(user.id)).raw, { device: 'desktop' });
++    expect(hub.closeToken(token.id, CLOSE_CODES.reauth, SIGNED_OUT_REASON)).toBe(true);
++    expect(hub.connection(token.id)).toBeUndefined();
++    expect(changes.at(-1)).toEqual({ userId: user.id, tokenId: token.id, change: 'disconnected' });
++    expect(await laptop.closed).toEqual({ code: CLOSE_CODES.reauth, reason: SIGNED_OUT_REASON });
++    // The other device stays, and the old socket's close event doesn't report the device gone a second time.
++    await sleep(50);
++    expect(hub.connectionsFor(user.id).map((c) => c.device)).toEqual(['desktop']);
++    expect(changes.filter((c) => c.change === 'disconnected')).toHaveLength(1);
++    desktop.close();
++  });
++
++  it('returns false for a device that is not connected', async () => {
++    const { hub } = await hubOnPort();
++    const { token } = await device();
++    expect(hub.closeToken(token.id, CLOSE_CODES.reauth, 'signed out')).toBe(false);
++  });
++});
+```
+
+Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
+Expected: FAIL, 3 failed, 19 passed (22): the row has no agent or repos yet, and `hub.closeToken is not a function` (twice). The "no modes" test already passes: the new columns' defaults are the same answer.
+
+- [ ] **Step 6: Remember the hello, add `closeToken`**
+
+`usableAgent` is the rule "an agent with no modes counts as no agent" in one place; it is used for a live connection (the devices route) and for what the token remembers. `rememberHello` runs inside `register()` right after the user is read and before the connection is registered, which keeps the hub's rule that nothing is awaited after registration.
+
+Modify `apps/server/src/ws/cli-hub.ts`:
+
+```diff
+diff --git a/apps/server/src/ws/cli-hub.ts b/apps/server/src/ws/cli-hub.ts
+index 05b145c..9ac9ea6 100644
+--- a/apps/server/src/ws/cli-hub.ts
++++ b/apps/server/src/ws/cli-hub.ts
+@@ -1,7 +1,7 @@
+ import type { IncomingMessage } from 'node:http';
+ import type { Duplex } from 'node:stream';
+ import {
+-  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type ServerToCli, type Settings,
++  BRAND, CLOSE_CODES, CliToServer, LEASE_SEC, MAX_MESSAGE_BYTES, PING_SEC, PROTOCOL_VERSION, type AgentId, type AgentMode, type ServerToCli, type Settings,
+ } from '@nitpilot/protocol';
+ import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+ import { authenticateCliToken, touchCliToken, type CliAuth } from '../auth/cli-token';
+@@ -16,6 +16,8 @@ const HELLO_TIMEOUT_MS = 10_000;
+ const CLOSE_POLICY = 1008;
+ /** WebSocket's "internal error" close code: the server failed; the CLI reconnects and tries again. */
+ const CLOSE_SERVER_ERROR = 1011;
++/** The close reason for a revoked token (with code 4401): the CLI shows it and stops. The Settings page's Revoke uses it too. */
++export const SIGNED_OUT_REASON = `This device was signed out. Run \`${BRAND.cli} login\`.`;
+ 
+ type Hello = Extract<CliToServer, { t: 'hello' }>;
+ 
+@@ -103,6 +105,20 @@ export class CliHub {
+     return sent;
+   }
+ 
++  /**
++   * Hang up on the device with this token (the Settings page revoked it: `DELETE /api/devices/:id`). It's forgotten at
++   * once, like a silent one in `dropSilent`, so nothing more is sent to it and anyone watching hears it went away now,
++   * not when its socket finishes closing. False when it isn't connected.
++   */
++  closeToken(tokenId: string, code: number, reason: string): boolean {
++    const conn = this.byToken.get(tokenId);
++    if (!conn) return false;
++    this.byToken.delete(tokenId);
++    conn.close(code, reason);
++    this.presenceChanged(conn, 'disconnected');
++    return true;
++  }
++
+   /** Close every socket. With 1012 on shutdown, the CLIs reconnect. */
+   closeAll(code: number, reason = ''): void {
+     for (const ws of this.wss.clients) ws.close(code, reason);
+@@ -155,7 +171,7 @@ export class CliHub {
+         if (!msg) return;
+         // Checked on every message, so a revoked token is noticed at once. It also keeps lastSeenAt fresh.
+         if (!(await touchCliToken(auth.tokenId))) {
+-          ws.close(CLOSE_CODES.reauth, `This device was signed out. Run \`${BRAND.cli} login\`.`);
++          ws.close(CLOSE_CODES.reauth, SIGNED_OUT_REASON);
+           return;
+         }
+         if (!conn) {
+@@ -210,6 +226,9 @@ export class CliHub {
+       return null;
+     }
+     const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { login: true, ...SETTINGS_COLUMNS } });
++    // Remember what the device said (spec §8 `CliToken`), so the Settings page can show its agent while it's offline.
++    // Before it's registered below: a me.update that follows its coming online reads these fresh.
++    await rememberHello(auth.tokenId, hello);
+     const conn: CliConnection = {
+       tokenId: auth.tokenId,
+       userId: auth.userId,
+@@ -295,3 +314,20 @@ function readMessage(data: RawData, isBinary: boolean): CliToServer | null {
+   }
+   return parsed.data;
+ }
++
++/**
++ * The agent a hello reports, as the Settings page shows it: null when the CLI can use it for nothing (no modes, e.g.
++ * Claude Code installed but not signed in). Used for a live connection and for what a token remembers.
++ */
++export function usableAgent(agent: { id: AgentId; version: string | null; modes: readonly AgentMode[] }): { id: AgentId; version: string | null } | null {
++  return agent.modes.length > 0 ? { id: agent.id, version: agent.version } : null;
++}
++
++/** Save the parts of a hello the Settings page shows for a device that's offline: its agent and its linked repos. */
++async function rememberHello(tokenId: string, hello: Hello): Promise<void> {
++  const agent = usableAgent(hello.d.agent);
++  await prisma.cliToken.update({
++    where: { id: tokenId },
++    data: { agentId: agent?.id ?? null, agentVersion: agent?.version ?? null, repos: hello.d.repos },
++  });
++}
+```
+
+Run: `npm run test:db -w apps/server -- src/ws/cli-hub.db.test.ts`
+Expected: PASS, 22 tests.
+
+- [ ] **Step 7: Write the failing `sendMeUpdate` tests**
+
+`sendMeUpdate(userId)` sends a person's open tabs a fresh `me.update`. It reads nothing when they have no tab open, and a failed read is logged, never thrown (a write that already succeeded must not turn into a 500). The test's `setup()` now also hands back `live`, the wiring.
+
+Modify `apps/server/src/ws/web-wire.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/ws/web-wire.db.test.ts b/apps/server/src/ws/web-wire.db.test.ts
+index 028b167..d30c092 100644
+--- a/apps/server/src/ws/web-wire.db.test.ts
++++ b/apps/server/src/ws/web-wire.db.test.ts
+@@ -51,7 +51,7 @@ async function setup(opts: { loadItems?: LoadItems; catchUp?: LoadItems; github?
+     return t;
+   };
+   const open = () => dispatcher.dispatch(chat.id, { type: 'pr_opened', author: personOf(maya), reviewers: [personOf(leo)] });
+-  return { repo, chat, maya, leo, reader, dispatcher, cliServer, tab, open };
++  return { repo, chat, maya, leo, reader, dispatcher, cliServer, live, tab, open };
+ }
+ 
+ describe('wireWebHub: after a commit (spec §10)', () => {
+@@ -254,6 +254,30 @@ describe('wireWebHub: CLIs coming and going', () => {
+   });
+ });
+ 
++describe('wireWebHub: sendMeUpdate, after a write to your own things (settings, devices, push)', () => {
++  it("sends that person's open tabs a fresh me.update, and nobody else's", async () => {
++    const { maya, leo, live, tab } = await setup();
++    const [mayaTab, leoTab] = [await tab(maya, false), await tab(leo, false)];
++    await prisma.user.update({ where: { id: maya.id }, data: { dailyJobCap: 25 } });
++    await live.sendMeUpdate(maya.id);
++    expect((await mayaTab.next('me.update')).d.me).toMatchObject({ login: 'maya', settings: { dailyJobCap: 25 } });
++    await leoTab.nothing('me.update');
++  });
++
++  it('reads nothing for someone with no tab open, and never throws: a failed read is logged', async () => {
++    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
++    const { maya, leo, live, tab } = await setup();
++    const read = vi.spyOn(prisma.user, 'findUniqueOrThrow');
++    await live.sendMeUpdate(leo.id);
++    expect(read).not.toHaveBeenCalled();
++    const mayaTab = await tab(maya, false);
++    read.mockRejectedValueOnce(new Error('database unavailable'));
++    await expect(live.sendMeUpdate(maya.id)).resolves.toBeUndefined();
++    expect(log).toHaveBeenCalledWith(expect.stringContaining('me.update'), expect.anything());
++    await mayaTab.nothing('me.update');
++  });
++});
++
+ describe('wireWebHub: progress lines', () => {
+   it("forwards a CLI's progress to the chat's followers, as whose agent and doing what", async () => {
+     const { repo, chat, maya, leo, tab, open, cliServer } = await setup();
+```
+
+Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
+Expected: FAIL, 2 failed, 13 passed (15): `live.sendMeUpdate is not a function`.
+
+- [ ] **Step 8: Add `sendMeUpdate` to the web wiring**
+
+The presence handler (a CLI coming or going) now uses it too, so there is one place that builds a `me.update`. `wireWebHub` returns `WebWired`.
+
+Modify `apps/server/src/ws/web-wire.ts`:
+
+```diff
+diff --git a/apps/server/src/ws/web-wire.ts b/apps/server/src/ws/web-wire.ts
+index d2db73c..8f09ffe 100644
+--- a/apps/server/src/ws/web-wire.ts
++++ b/apps/server/src/ws/web-wire.ts
+@@ -38,13 +38,23 @@ export type WebWiring = {
+ /**
+  * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
+  * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
+- * gets `me.update`, and the chats where their agent has work or shows its presence are sent again. A CLI's progress
++ * gets `me.update` (so do the person's tabs after the routes' personal writes, `sendMeUpdate`), and the chats where their agent has work or shows its presence are sent again. A CLI's progress
+  * lines go to the chat's followers. A chat's items and views go out in order; its inbox rows go out in order among
+  * themselves, but apart, so a slow GitHub check for a row never holds back an item. A failure is logged and never
+  * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
+  * tests call this, so the tests run what production runs.
+  */
+-export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): { stop(): void } {
++/**
++ * Send someone's open tabs a fresh `me.update` (who they are, their settings, push, their agent's presence). The
++ * routes that change those call it after saving (settings, devices, push subscriptions), so every tab of theirs
++ * shows the change, not only the one that made it. Resolves once sent; never throws: a failure is logged.
++ */
++export type MeUpdates = { sendMeUpdate(userId: string): Promise<void> };
++
++/** What the wiring hands back: `sendMeUpdate` for the HTTP routes (http/app.ts `AppDeps.meUpdates`), `stop` for shutdown. */
++export type WebWired = MeUpdates & { stop(): void };
++
++export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): WebWired {
+   // Work under one key goes out in order: a chat's items before the state that follows them (and its inbox rows apart, under `inbox:<chatId>`).
+   const perChat = new KeyedLock();
+   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+@@ -140,9 +150,19 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey,
+     stateSoon(chatId);
+   });
+ 
++  async function sendMeUpdate(userId: string): Promise<void> {
++    // Nobody to tell: skip the read.
++    if (!webHub.connected(userId)) return;
++    try {
++      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub, vapidPublicKey) } });
++    } catch (err) {
++      console.error(`[web-wire] could not send a me.update to user ${userId}:`, err);
++    }
++  }
++
+   cliHub.onPresence(({ userId }) => {
+     void (async () => {
+-      webHub.sendToUser(userId, { v: 1, t: 'me.update', d: { me: await loadWebMe(userId, cliHub, vapidPublicKey) } });
++      await sendMeUpdate(userId);
+       for (const chatId of await chatsShowingAgentOf(userId, webHub.followedChats())) stateSoon(chatId);
+     })().catch((err) => console.error('[web-wire] presence update failed:', err));
+   });
+@@ -156,6 +176,7 @@ export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey,
+   });
+ 
+   return {
++    sendMeUpdate,
+     stop(): void {
+       for (const timer of timers.values()) clearTimeout(timer);
+       timers.clear();
+```
+
+Run: `npm run test:db -w apps/server -- src/ws/web-wire.db.test.ts`
+Expected: PASS, 15 tests.
+
+- [ ] **Step 9: Write the failing device route tests**
+
+maya has a laptop (online, on Claude Code), a desk (offline, remembers Gemini CLI) and a revoked token; leo has a laptop. `test/app.ts` gives the default test app a `closeToken` that does nothing, and `me.db.test.ts`'s hand-made `clis` gains the `agent` and `closeToken` the type now asks for.
+
+Create `apps/server/src/http/routes/devices.db.test.ts`:
+
+```ts
+import { CLOSE_CODES, DevicesResponse } from '@nitpilot/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeCliToken, makeUser } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+import { listen, TestCli } from '../../../test/ws';
+import { prisma } from '../../lib/prisma';
+import { CliHub, SIGNED_OUT_REASON } from '../../ws/cli-hub';
+
+const ORIGIN = 'http://localhost:8787';
+
+const servers: { close(): Promise<void> }[] = [];
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => server.close()));
+});
+
+/**
+ * maya, signed in to the web app, with three CLI tokens: her laptop (online, on Claude Code), her desk (offline, it
+ * remembers Gemini CLI from its last hello) and an old one she revoked. leo has a laptop of his own, online.
+ */
+async function scene() {
+  const hub = new CliHub();
+  const server = await listen(hub);
+  servers.push(server);
+  const [maya, leo] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' })];
+  const laptop = await makeCliToken(maya.id);
+  await prisma.cliToken.update({ where: { id: laptop.id }, data: { name: "Maya's MacBook Pro" } });
+  const laptopCli = await TestCli.online(server.url, laptop.raw, { agent: { id: 'claude-code', version: '2.1.290', modes: ['reviewer', 'editor'] } });
+  const desk = await makeCliToken(maya.id);
+  const deskSeen = new Date('2026-10-15T09:30:00.000Z');
+  await prisma.cliToken.update({ where: { id: desk.id }, data: { name: 'maya-linux-desk', lastSeenAt: deskSeen, agentId: 'gemini-cli', agentVersion: '0.9.0' } });
+  await makeCliToken(maya.id, { revoked: true });
+  const leosLaptop = await makeCliToken(leo.id);
+  await TestCli.online(server.url, leosLaptop.raw);
+  const sendMeUpdate = vi.fn(async () => {});
+  const app = testApp({ clis: hub, meUpdates: { sendMeUpdate } });
+  const cookie = await sessionCookieFor(maya.id);
+  const list = async (headers: Record<string, string> = { cookie }) => app.request('/api/devices', { headers });
+  const revoke = (id: string, headers: Record<string, string> = { cookie, origin: ORIGIN }) => app.request(`/api/devices/${id}`, { method: 'DELETE', headers });
+  return { hub, maya, leo, laptop, laptopCli, desk, deskSeen, leosLaptop, app, cookie, list, revoke, sendMeUpdate };
+}
+
+const revokedAt = async (tokenId: string) => (await prisma.cliToken.findUniqueOrThrow({ where: { id: tokenId } })).revokedAt;
+
+describe('GET /api/devices', () => {
+  it('lists only your own devices that are not revoked: the online one with its live agent, the offline one with the agent it remembers', async () => {
+    const { laptop, desk, deskSeen, list } = await scene();
+    const res = await list();
+    expect(res.status).toBe(200);
+    const { devices } = DevicesResponse.parse(await res.json());
+    expect(devices).toEqual([
+      { id: laptop.id, name: "Maya's MacBook Pro", lastSeenAt: expect.any(String), online: true, agent: { id: 'claude-code', version: '2.1.290' } },
+      { id: desk.id, name: 'maya-linux-desk', lastSeenAt: deskSeen.toISOString(), online: false, agent: { id: 'gemini-cli', version: '0.9.0' } },
+    ]);
+  });
+
+  it('shows a device that never connected with no last-seen time and no agent', async () => {
+    const { maya, list } = await scene();
+    const fresh = await makeCliToken(maya.id);
+    const { devices } = DevicesResponse.parse(await (await list()).json());
+    expect(devices.find((d) => d.id === fresh.id)).toEqual({ id: fresh.id, name: 'test laptop', lastSeenAt: null, online: false, agent: null });
+  });
+
+  it("refuses a CLI's token like no sign-in at all, and no sign-in with a 401", async () => {
+    const { laptop, list } = await scene();
+    expect((await list({ authorization: `Bearer ${laptop.raw}` })).status).toBe(401);
+    expect((await list({})).status).toBe(401);
+  });
+});
+
+describe('DELETE /api/devices/:id', () => {
+  it('revokes the device, closes its socket with 4401 so it has to log in again, and tells your open tabs', async () => {
+    const { hub, maya, laptop, laptopCli, revoke, list, sendMeUpdate } = await scene();
+    const res = await revoke(laptop.id);
+    expect(res.status).toBe(204);
+    expect(await revokedAt(laptop.id)).not.toBeNull();
+    expect(await laptopCli.closed).toEqual({ code: CLOSE_CODES.reauth, reason: SIGNED_OUT_REASON });
+    // The hub forgets it at once: nothing more goes to that socket, and /api/me says the agent is offline.
+    expect(hub.connectionsFor(maya.id)).toEqual([]);
+    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
+    const { devices } = DevicesResponse.parse(await (await list()).json());
+    expect(devices.map((d) => d.id)).not.toContain(laptop.id);
+  });
+
+  it('revokes an offline device too: its token stops working', async () => {
+    const { desk, revoke } = await scene();
+    expect((await revoke(desk.id)).status).toBe(204);
+    expect(await revokedAt(desk.id)).not.toBeNull();
+  });
+
+  it("answers 404 for another person's device, an unknown one and one already revoked, and changes nothing", async () => {
+    const { hub, maya, leo, leosLaptop, revoke, sendMeUpdate } = await scene();
+    const old = await makeCliToken(maya.id, { revoked: true });
+    const before = await revokedAt(old.id);
+    for (const id of [leosLaptop.id, 'no-such-device', old.id]) expect((await revoke(id)).status).toBe(404);
+    expect(await revokedAt(leosLaptop.id)).toBeNull();
+    expect(await revokedAt(old.id)).toEqual(before);
+    expect(hub.connectionsFor(leo.id)).toHaveLength(1);
+    expect(sendMeUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a request from another site's page with a 403, a CLI's token and no sign-in with a 401", async () => {
+    const { laptop, cookie, revoke } = await scene();
+    expect((await revoke(laptop.id, { cookie, origin: 'https://evil.example' })).status).toBe(403);
+    expect((await revoke(laptop.id, { authorization: `Bearer ${laptop.raw}`, origin: ORIGIN })).status).toBe(401);
+    expect((await revoke(laptop.id, { origin: ORIGIN })).status).toBe(401);
+    expect(await revokedAt(laptop.id)).toBeNull();
+  });
+});
+```
+
+Modify `apps/server/test/app.ts`:
+
+```diff
+diff --git a/apps/server/test/app.ts b/apps/server/test/app.ts
+index 0f16e1e..ba6717a 100644
+--- a/apps/server/test/app.ts
++++ b/apps/server/test/app.ts
+@@ -16,7 +16,7 @@ export function testDeps(over: Partial<AppDeps> = {}): AppDeps {
+     ingest: createIngest(async () => ({ status: 'ignored', note: 'test' })),
+     dispatch: new Dispatcher().dispatch,
+     // No CLI is connected.
+-    clis: { connectionsFor: () => [], sendSettings: () => 0 },
++    clis: { connectionsFor: () => [], sendSettings: () => 0, closeToken: () => false },
+     access: over.access ?? new RepoAccess(github),
+     platform: new FakePlatform(),
+     // No VAPID keys: push is off, as on a server that hasn't set them.
+```
+
+Modify `apps/server/src/http/routes/me.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/me.db.test.ts b/apps/server/src/http/routes/me.db.test.ts
+index 5ae870c..d432095 100644
+--- a/apps/server/src/http/routes/me.db.test.ts
++++ b/apps/server/src/http/routes/me.db.test.ts
+@@ -17,7 +17,7 @@ describe('GET /api/me', () => {
+ 
+   it('says whether any of your CLIs is connected', async () => {
+     const user = await makeUser({ login: 'maya-online' });
+-    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2 }] : []), sendSettings: () => 0 };
++    const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2, agent: { id: 'fake' as const, version: null, modes: [] } }] : []), sendSettings: () => 0, closeToken: () => false };
+     const res = await testApp({ clis }).request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
+     expect(await res.json()).toMatchObject({ agentOnline: true, usedToday: 2 });
+   });
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/devices.db.test.ts src/http/routes/me.db.test.ts`
+Expected: FAIL, 6 failed, 5 passed (11) in 2 files: the five device tests that call a route that doesn't exist answer 404, and one fails to parse an empty answer. The "404 for another person's device" test passes already, since the missing route is a 404 too; it is only meaningful once the route exists. `me.db.test.ts` passes.
+
+- [ ] **Step 10: Add the device routes**
+
+`GET` joins the live connections to the token rows. `DELETE` is one `updateMany` that only matches your own, not yet revoked token, so a double click, someone else's id and an unknown id are all the same 404 and nothing is changed twice. Then it hangs up on the device and tells your tabs. `app.ts` mounts the routes and passes `deps` to `pushRoutes`, which doesn't take it yet.
+
+Create `apps/server/src/http/routes/devices.ts`:
+
+```ts
+import { AgentId, CLOSE_CODES, type AgentMode, type DeviceView, type DevicesResponse } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import { prisma } from '../../lib/prisma';
+import { SIGNED_OUT_REASON, usableAgent } from '../../ws/cli-hub';
+import type { MeUpdates } from '../../ws/web-wire';
+import { HttpError } from '../errors';
+
+/** What the devices routes need from the CLI hub (ws/cli-hub.ts): who is connected now, and a way to hang up on one. */
+export type DeviceClis = {
+  connectionsFor(userId: string): readonly { tokenId: string; agent: { id: AgentId; version: string | null; modes: readonly AgentMode[] } }[];
+  closeToken(tokenId: string, code: number, reason: string): boolean;
+};
+
+/**
+ * The Settings page's Devices section (spec §10 "Reads" and "Personal", docs/why/revoking-devices.md). A device is a
+ * CLI token that `nitpilot login` made. `GET /api/devices` lists yours that aren't revoked; `DELETE /api/devices/:id`
+ * revokes one: its token stops working at once, and if its `nitpilot start` is connected, the socket is closed with
+ * 4401, so the CLI stops and says to log in again. Only the web app's session cookie may do either (a CLI token is
+ * answered as if no one were signed in, like `PUT /api/me/settings`).
+ */
+export function deviceRoutes(deps: { clis: DeviceClis; meUpdates?: MeUpdates }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  app.get('/api/devices', requireUser, async (c) => {
+    if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    const userId = c.get('user').id;
+    const tokens = await prisma.cliToken.findMany({ where: { userId, revokedAt: null }, orderBy: { createdAt: 'asc' } });
+    const live = new Map(deps.clis.connectionsFor(userId).map((conn) => [conn.tokenId, conn]));
+    const devices: DeviceView[] = tokens.map((token) => {
+      const conn = live.get(token.id);
+      return {
+        id: token.id,
+        name: token.name,
+        lastSeenAt: token.lastSeenAt?.toISOString() ?? null,
+        online: conn !== undefined,
+        // Online: what it says now. Offline: what it said in its last hello.
+        agent: conn ? usableAgent(conn.agent) : rememberedAgent(token.agentId, token.agentVersion),
+      };
+    });
+    const body: DevicesResponse = { devices };
+    return c.json(body);
+  });
+
+  app.delete('/api/devices/:id', requireUser, requireSameOrigin, async (c) => {
+    if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    const userId = c.get('user').id;
+    const tokenId = c.req.param('id');
+    // Only your own, and only once: someone else's device, an unknown id and one already revoked are all the same 404,
+    // so this never says whose a device is.
+    const { count } = await prisma.cliToken.updateMany({ where: { id: tokenId, userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (count === 0) throw new HttpError('not_found', 'No such device.');
+    // A connected CLI would notice on its next message anyway (it pings every 25 s); this tells it now.
+    deps.clis.closeToken(tokenId, CLOSE_CODES.reauth, SIGNED_OUT_REASON);
+    await deps.meUpdates?.sendMeUpdate(userId);
+    return c.body(null, 204);
+  });
+
+  return app;
+}
+
+/** A remembered agent from the token's row, or null. A value this server no longer knows counts as none. */
+function rememberedAgent(agentId: string | null, version: string | null): DeviceView['agent'] {
+  const id = AgentId.safeParse(agentId);
+  return id.success ? { id: id.data, version } : null;
+}
+```
+
+Modify `apps/server/src/http/app.ts`:
+
+```diff
+diff --git a/apps/server/src/http/app.ts b/apps/server/src/http/app.ts
+index ad9b0f5..24c9363 100644
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -8,6 +8,7 @@ import { getEnv } from '../lib/env';
+ import type { AppAuth } from '../platform/github/app-auth';
+ import type { GithubClient } from '../platform/github/client';
+ import type { PlatformReads } from '../platform/types';
++import type { MeUpdates } from '../ws/web-wire';
+ import { SERVER_VERSION } from '../version';
+ import { errorBody, onError } from './errors';
+ import { authRoutes } from './routes/auth';
+@@ -16,6 +17,7 @@ import { chatDraftRoutes } from './routes/chat-drafts';
+ import { chatRoutes } from './routes/chats';
+ import { cliRoutes } from './routes/cli';
+ import { cliApproveRoutes } from './routes/cli-approve';
++import { deviceRoutes, type DeviceClis } from './routes/devices';
+ import { inboxRoutes } from './routes/inbox';
+ import { meRoutes } from './routes/me';
+ import { pushRoutes } from './routes/push';
+@@ -30,8 +32,8 @@ export type AppDeps = {
+   appAuth: AppAuth;
+   ingest: Ingest;
+   dispatch: Dispatch;
+-  /** The connected CLIs (the CLI hub): who is online, and where new settings go. */
+-  clis: LiveClis & SettingsSender;
++  /** The connected CLIs (the CLI hub): who is online, where new settings go, and hanging up on a revoked device. */
++  clis: LiveClis & SettingsSender & DeviceClis;
+   /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
+   access: RepoAccess;
+   /** GitHub reads with the app's installation token (the chat screen's file list). */
+@@ -40,6 +42,8 @@ export type AppDeps = {
+   vapidPublicKey: string | null;
+   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
+   webSockets?: { closeSession(tokenHash: string): void };
++  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes. */
++  meUpdates?: MeUpdates;
+   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
+   webDistDir?: string;
+ };
+@@ -54,7 +58,8 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', authRoutes(deps));
+   app.route('/', meRoutes(deps));
+   app.route('/', settingsRoutes(deps));
+-  app.route('/', pushRoutes());
++  app.route('/', pushRoutes(deps));
++  app.route('/', deviceRoutes(deps));
+   app.route('/', inboxRoutes(deps));
+   app.route('/', chatRoutes(deps));
+   app.route('/', chatActionRoutes(deps));
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/devices.db.test.ts src/http/routes/me.db.test.ts`
+Expected: PASS, 11 tests in 2 files.
+
+Run: `npm run typecheck -w apps/server`
+Expected: FAIL, exactly 1 error, fixed in Step 12: `src/http/app.ts` (`pushRoutes` takes no arguments yet).
+
+- [ ] **Step 11: Write the failing `me.update` tests for settings and push**
+
+After a settings save, a push subscribe and a push unsubscribe the person's tabs get a `me.update`; after a refused request (a cap of 4, a bad endpoint) they don't.
+
+Modify `apps/server/src/http/routes/settings.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/settings.db.test.ts b/apps/server/src/http/routes/settings.db.test.ts
+index f1b3329..c44eece 100644
+--- a/apps/server/src/http/routes/settings.db.test.ts
++++ b/apps/server/src/http/routes/settings.db.test.ts
+@@ -1,5 +1,5 @@
+ import { Settings, WebMe } from '@nitpilot/protocol';
+-import { afterEach, describe, expect, it } from 'vitest';
++import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { testApp } from '../../../test/app';
+ import { makeCliToken, makeUser } from '../../../test/db';
+ import { sessionCookieFor } from '../../../test/http';
+@@ -22,11 +22,12 @@ async function scene() {
+   const [maya, leo] = [await makeUser({ login: 'maya' }), await makeUser({ login: 'leo' })];
+   const laptop = await TestCli.online(server.url, (await makeCliToken(maya.id)).raw);
+   const leosCli = await TestCli.online(server.url, (await makeCliToken(leo.id)).raw);
+-  const app = testApp({ clis: hub });
++  const sendMeUpdate = vi.fn(async () => {});
++  const app = testApp({ clis: hub, meUpdates: { sendMeUpdate } });
+   const cookie = await sessionCookieFor(maya.id);
+   const put = (body: unknown, origin = ORIGIN) =>
+     app.request('/api/me/settings', { method: 'PUT', headers: { cookie, origin, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+-  return { maya, laptop, leosCli, app, cookie, put };
++  return { maya, laptop, leosCli, app, cookie, put, sendMeUpdate };
+ }
+ 
+ const savedSettings = async (userId: string) =>
+@@ -97,4 +98,13 @@ describe('PUT /api/me/settings', () => {
+     expect(await savedSettings(maya.id)).toEqual({ autoReview: true, autoAddress: true, dailyJobCap: 40 });
+     await laptop.nothing('settings');
+   });
++
++  it("tells your open tabs (me.update), so every tab's Settings page shows the new settings; not after a refusal", async () => {
++    const { maya, put, sendMeUpdate } = await scene();
++    expect((await put({ autoReview: true, autoAddress: true, dailyJobCap: 4 })).status).toBe(400);
++    expect(sendMeUpdate).not.toHaveBeenCalled();
++    expect((await put({ autoReview: true, autoAddress: false, dailyJobCap: 45 })).status).toBe(200);
++    expect(sendMeUpdate).toHaveBeenCalledTimes(1);
++    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
++  });
+ });
+```
+
+Modify `apps/server/src/http/routes/push.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/push.db.test.ts b/apps/server/src/http/routes/push.db.test.ts
+index 2ad0b12..5805bdb 100644
+--- a/apps/server/src/http/routes/push.db.test.ts
++++ b/apps/server/src/http/routes/push.db.test.ts
+@@ -1,5 +1,5 @@
+ import { ActionResponse, WebMe } from '@nitpilot/protocol';
+-import { describe, expect, it } from 'vitest';
++import { describe, expect, it, vi } from 'vitest';
+ import { testApp } from '../../../test/app';
+ import { makeCliToken, makeUser, uid } from '../../../test/db';
+ import { sessionCookieFor } from '../../../test/http';
+@@ -17,12 +17,13 @@ const subscription = (over: { endpoint?: string; label?: string } = {}) => ({
+ /** maya, signed in to the web app, and requests to the push routes with her cookie. */
+ async function scene(over: { vapidPublicKey?: string | null } = {}) {
+   const maya = await makeUser({ login: 'maya' });
+-  const app = testApp(over);
++  const sendMeUpdate = vi.fn(async () => {});
++  const app = testApp({ ...over, meUpdates: { sendMeUpdate } });
+   const cookie = await sessionCookieFor(maya.id);
+   const call = (method: 'POST' | 'DELETE', body: unknown, headers: Record<string, string> = { cookie, origin: ORIGIN }) =>
+     app.request('/api/push/subscriptions', { method, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+   const me = async (asCookie = cookie) => WebMe.parse(await (await app.request('/api/me', { headers: { cookie: asCookie } })).json());
+-  return { maya, app, cookie, call, me };
++  return { maya, app, cookie, call, me, sendMeUpdate };
+ }
+ 
+ const rowsOf = (userId: string) => prisma.pushSubscription.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
+@@ -110,6 +111,21 @@ describe('DELETE /api/push/subscriptions', () => {
+   });
+ });
+ 
++describe('after a push subscription changes', () => {
++  it("tells your open tabs (me.update), so another tab's Settings page sees push.subscribed change; not after a refusal", async () => {
++    const { maya, call, sendMeUpdate } = await scene({ vapidPublicKey: 'BPublicKey' });
++    const sub = subscription();
++    await call('POST', sub);
++    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
++    sendMeUpdate.mockClear();
++    await call('DELETE', { endpoint: sub.endpoint });
++    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
++    sendMeUpdate.mockClear();
++    expect((await call('POST', subscription({ endpoint: 'http://127.0.0.1/push' }))).status).toBe(400);
++    expect(sendMeUpdate).not.toHaveBeenCalled();
++  });
++});
++
+ describe('GET /api/me', () => {
+   it('has no Web Push public key when the server has no VAPID keys (push is off)', async () => {
+     const { me } = await scene();
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/http/routes/push.db.test.ts`
+Expected: FAIL, 2 failed, 14 passed (16) in 2 files: `sendMeUpdate` is never called.
+
+- [ ] **Step 12: Call `sendMeUpdate`, and wire it in**
+
+`main.ts` and the end-to-end harness pass the wiring (`live`) as `meUpdates`, the way they already pass `webSockets`.
+
+Modify `apps/server/src/http/routes/settings.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/settings.ts b/apps/server/src/http/routes/settings.ts
+index ff8056d..7f24f5f 100644
+--- a/apps/server/src/http/routes/settings.ts
++++ b/apps/server/src/http/routes/settings.ts
+@@ -3,6 +3,7 @@ import { Hono } from 'hono';
+ import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+ import { SETTINGS_COLUMNS, settingsOf } from '../../auth/users';
+ import { prisma } from '../../lib/prisma';
++import type { MeUpdates } from '../../ws/web-wire';
+ import { HttpError } from '../errors';
+ 
+ /** Where new settings go once they're saved: the person's connected CLIs (the CLI hub, ws/cli-hub.ts). */
+@@ -11,10 +12,10 @@ export type SettingsSender = { sendSettings(userId: string, settings: Settings):
+ /**
+  * `PUT /api/me/settings` (spec §10 "Personal"): the Settings page saves your Auto defaults and your daily job cap.
+  * They live on the server (spec §8 `User`), so every device of yours uses the same ones: each connected CLI gets them
+- * at once (`settings`), and one that's offline gets them in its next `welcome`. Only the web app's session cookie
++ * at once (`settings`), and one that's offline gets them in its next `welcome`; your open tabs get a `me.update`. Only the web app's session cookie
+  * may change them: a CLI's token is answered as if no one were signed in, since the CLI only follows them.
+  */
+-export function settingsRoutes(deps: { clis: SettingsSender }): Hono<{ Variables: UserVariables }> {
++export function settingsRoutes(deps: { clis: SettingsSender; meUpdates?: MeUpdates }): Hono<{ Variables: UserVariables }> {
+   const app = new Hono<{ Variables: UserVariables }>();
+ 
+   app.put('/api/me/settings', requireUser, requireSameOrigin, async (c) => {
+@@ -24,6 +25,8 @@ export function settingsRoutes(deps: { clis: SettingsSender }): Hono<{ Variables
+     const userId = c.get('user').id;
+     const saved = settingsOf(await prisma.user.update({ where: { id: userId }, data: settings, select: SETTINGS_COLUMNS }));
+     deps.clis.sendSettings(userId, saved);
++    // And each of your open tabs, so a second Settings page (or your phone) shows them too.
++    await deps.meUpdates?.sendMeUpdate(userId);
+     const body: Settings = saved;
+     return c.json(body);
+   });
+```
+
+Modify `apps/server/src/http/routes/push.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/push.ts b/apps/server/src/http/routes/push.ts
+index 081a6c1..767277b 100644
+--- a/apps/server/src/http/routes/push.ts
++++ b/apps/server/src/http/routes/push.ts
+@@ -2,6 +2,7 @@ import { PushSubscriptionRequest, PushUnsubscribeRequest, type ActionResponse }
+ import { Hono } from 'hono';
+ import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+ import { prisma } from '../../lib/prisma';
++import type { MeUpdates } from '../../ws/web-wire';
+ import { HttpError } from '../errors';
+ 
+ /**
+@@ -10,7 +11,7 @@ import { HttpError } from '../errors';
+  * token is answered as if no one were signed in, like `PUT /api/me/settings`. The endpoint is checked by the schema
+  * (an https name, never an IP address or localhost), since the server will POST to it.
+  */
+-export function pushRoutes(): Hono<{ Variables: UserVariables }> {
++export function pushRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: UserVariables }> {
+   const app = new Hono<{ Variables: UserVariables }>();
+   const ok: ActionResponse = { ok: true };
+ 
+@@ -25,6 +26,8 @@ export function pushRoutes(): Hono<{ Variables: UserVariables }> {
+       create: { userId, endpoint, p256dh: keys.p256dh, auth: keys.auth, label },
+       update: { userId, p256dh: keys.p256dh, auth: keys.auth, label, failCount: 0 },
+     });
++    // Your other tabs learn that you now have a subscription (`push.subscribed`).
++    await deps.meUpdates?.sendMeUpdate(userId);
+     return c.json(ok);
+   });
+ 
+@@ -33,7 +36,10 @@ export function pushRoutes(): Hono<{ Variables: UserVariables }> {
+     const { endpoint } = PushUnsubscribeRequest.parse(await c.req.json());
+     // Only your own: someone else's endpoint is left alone, with the same answer, so this never says whose it is.
+     // Removing one that is already gone is fine too: the switch is off either way.
+-    await prisma.pushSubscription.deleteMany({ where: { endpoint, userId: c.get('user').id } });
++    const userId = c.get('user').id;
++    await prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
++    // Maybe that was your last one: your open tabs read `push.subscribed` again.
++    await deps.meUpdates?.sendMeUpdate(userId);
+     return c.json(ok);
+   });
+ 
+```
+
+Modify `apps/server/src/main.ts`:
+
+```diff
+diff --git a/apps/server/src/main.ts b/apps/server/src/main.ts
+index da9dff4..dc48ce6 100644
+--- a/apps/server/src/main.ts
++++ b/apps/server/src/main.ts
+@@ -71,7 +71,7 @@ async function main(): Promise<void> {
+   const ingest = createIngest(createDeliveryHandler({ platform, dispatch: dispatcher.dispatch }));
+ 
+   const app = createApp({
+-    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, vapidPublicKey: vapid?.publicKey ?? null,
++    github, appAuth, ingest, dispatch: dispatcher.dispatch, clis: hub, access, platform, webSockets: webHub, meUpdates: live, vapidPublicKey: vapid?.publicKey ?? null,
+   });
+   const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+     console.log(`Nitpilot server listening on http://localhost:${info.port}`);
+```
+
+Modify `apps/server/test/e2e/harness.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/harness.ts b/apps/server/test/e2e/harness.ts
+index a0653a3..8d069f4 100644
+--- a/apps/server/test/e2e/harness.ts
++++ b/apps/server/test/e2e/harness.ts
+@@ -84,7 +84,7 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
+   const access = new RepoAccess(githubApi);
+   const webHub = new WebHub({ access, loadItems: loadItemsAfter });
+   const live = wireWebHub({ webHub, dispatcher, cliHub: hub, access, vapidPublicKey });
+-  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
++  const app = testApp({ ingest, dispatch: dispatcher.dispatch, clis: hub, access, webSockets: webHub, meUpdates: live, github: githubApi, platform, vapidPublicKey, ...(opts.webDistDir ? { webDistDir: opts.webDistDir } : {}) });
+   const clis: RunningCli[] = [];
+   let server: Server | null = null;
+   /** Stop everything started so far, then delete the pretend GitHub's folders. Also what a failed setup does. */
+```
+
+Run: `npm run test:db -w apps/server -- src/http/routes/settings.db.test.ts src/http/routes/push.db.test.ts`
+Expected: PASS, 16 tests in 2 files.
+
+- [ ] **Step 13: Add the control API's devices, then run the server**
+
+The Playwright server (`test/e2e/web-server.ts`) is what the end-to-end specs and the browser look talk to. `POST /cli-token` writes a CLI token row without running a CLI (its raw token is thrown away), so a spec can show and revoke an offline computer; `/reset` also puts the daily cap back to 40, since the Settings spec changes it.
+
+Modify `apps/server/test/e2e/web-server.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/web-server.ts b/apps/server/test/e2e/web-server.ts
+index 620aacd..7bee73c 100644
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -40,6 +40,7 @@ const { prisma } = await import('../../src/lib/prisma');
+ const { GithubClient } = await import('../../src/platform/github/client');
+ const { notificationText } = await import('../../src/tasks/handlers/notify');
+ const { webPushSend } = await import('../../src/tasks/web-push-send');
++const { generateToken } = await import('../../src/lib/tokens');
+ 
+ // The VAPID keys: the env's if it has all three, else a pair made now (any pair works for a test run).
+ const env = process.env;
+@@ -99,11 +100,11 @@ control.post('/pr', async (c) => {
+ });
+ /**
+  * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
+- * People, their sign-ins and the installation stay; their Settings go back to the defaults.
++ * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults.
+  */
+ control.post('/reset', async (c) => {
+   await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
+-  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true } });
++  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40 } });
+   return c.body(null, 204);
+ });
+ /**
+@@ -117,6 +118,24 @@ control.post('/settings', async (c) => {
+   await prisma.user.update({ where: { id: user.id }, data: { autoReview, autoAddress } });
+   return c.body(null, 204);
+ });
++/**
++ * Give someone a device without running a CLI: a CLI token row named `name`, as `nitpilot login` makes one (its raw
++ * token is thrown away; nothing connects with it). `lastSeenAt` (ISO) makes it look used, and `agent` remembered from
++ * a hello. Answers its id. The Settings page lists it, offline; Revoke removes it.
++ */
++control.post('/cli-token', async (c) => {
++  const { login, name, lastSeenAt, agent } = (await c.req.json()) as { login: 'maya' | 'leo'; name: string; lastSeenAt?: string; agent?: { id: string; version: string | null } };
++  const user = e2e.users[login];
++  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
++  const token = generateToken();
++  const row = await prisma.cliToken.create({
++    data: {
++      userId: user.id, name, tokenHash: token.hash, prefix: token.prefix,
++      lastSeenAt: lastSeenAt ? new Date(lastSeenAt) : null, agentId: agent?.id ?? null, agentVersion: agent?.version ?? null,
++    },
++  });
++  return c.json({ id: row.id });
++});
+ /**
+  * Give someone a push subscription without a browser: a row for a made-up endpoint, so the notifier has somewhere to
+  * send (the recording sender never contacts it). Cleared by /reset.
+```
+
+Run: `npm run typecheck -w apps/server && npm test -w apps/server`
+Expected: typecheck clean; PASS, 989 tests in 83 files.
+
+- [ ] **Step 14: Write the failing `lastSeen` and `me.update` tests (web)**
+
+Modify `apps/web/src/lib/time.test.ts`:
+
+```diff
+diff --git a/apps/web/src/lib/time.test.ts b/apps/web/src/lib/time.test.ts
+index 77f5d88..d02d20a 100644
+--- a/apps/web/src/lib/time.test.ts
++++ b/apps/web/src/lib/time.test.ts
+@@ -1,6 +1,6 @@
+ import { act, renderHook } from '@testing-library/react';
+ import { describe, expect, it, vi } from 'vitest';
+-import { itemTime, rowTime, useNow } from './time';
++import { itemTime, lastSeen, rowTime, useNow } from './time';
+ 
+ // Local times, so the test reads the same in every time zone.
+ const now = new Date(2026, 9, 15, 18, 30); // Thursday 15 October 2026, 18:30
+@@ -45,3 +45,14 @@ describe('useNow (the clock the inbox rows read)', () => {
+     }
+   });
+ });
++
++describe('lastSeen (a device on the Settings page: "Last seen …")', () => {
++  const now = new Date(2026, 9, 18, 19, 30);
++  it('says the time today, then yesterday, then how many days ago, then the date after a month', () => {
++    expect(lastSeen(new Date(2026, 9, 18, 18, 4).toISOString(), now)).toBe('18:04');
++    expect(lastSeen(new Date(2026, 9, 17, 23, 50).toISOString(), now)).toBe('yesterday');
++    expect(lastSeen(new Date(2026, 9, 15, 9, 0).toISOString(), now)).toBe('3 days ago');
++    expect(lastSeen(new Date(2026, 8, 19, 9, 0).toISOString(), now)).toBe('29 days ago');
++    expect(lastSeen(new Date(2026, 8, 3, 9, 0).toISOString(), now)).toBe('Sep 3');
++  });
++});
+```
+
+Modify `apps/web/src/live/apply.test.ts`:
+
+```diff
+diff --git a/apps/web/src/live/apply.test.ts b/apps/web/src/live/apply.test.ts
+index 17858e2..32e3800 100644
+--- a/apps/web/src/live/apply.test.ts
++++ b/apps/web/src/live/apply.test.ts
+@@ -58,4 +58,11 @@ describe('applyServerMessage', () => {
+     applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me } });
+     expect(queryClient.getQueryData(['me'])).toBe(me);
+   });
++
++  it('reads your devices again after a me.update (one came online, went away, or was revoked)', () => {
++    const queryClient = new QueryClient();
++    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
++    applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
++    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['devices'] });
++  });
+ });
+```
+
+Run: `npm test -w apps/web -- src/lib/time.test.ts src/live/apply.test.ts`
+Expected: FAIL, 2 failed, 10 passed (12) in 2 files: `lastSeen is not a function`, and `invalidateQueries` is not called with `['devices']`.
+
+- [ ] **Step 15: Add `lastSeen`, the `['devices']` refetch, the agent names and the 40 px avatar**
+
+`AGENT_NAME` names the three agents for the Agent section (no label helper existed). The avatar gets the 40 px size the Account card draws.
+
+Modify `apps/web/src/lib/time.ts`:
+
+```diff
+diff --git a/apps/web/src/lib/time.ts b/apps/web/src/lib/time.ts
+index ee45158..8ecc10b 100644
+--- a/apps/web/src/lib/time.ts
++++ b/apps/web/src/lib/time.ts
+@@ -30,6 +30,19 @@ export function itemTime(iso: string, now = new Date()): string {
+   return `${at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${clock}`;
+ }
+ 
++/**
++ * When a device last said anything, for "Last seen …" on the Settings page: "18:04" today, "yesterday", "3 days ago"
++ * within a month, then "Sep 3". In the reader's own time zone.
++ */
++export function lastSeen(iso: string, now = new Date()): string {
++  const at = new Date(iso);
++  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
++  if (days <= 0) return `${pad(at.getHours())}:${pad(at.getMinutes())}`;
++  if (days === 1) return 'yesterday';
++  if (days < 30) return `${days} days ago`;
++  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
++}
++
+ /** The time now, moving on every minute, so times like "now" and "16:40" stay true while the page is open. */
+ export function useNow(everyMs = 60_000): Date {
+   const [now, setNow] = useState(() => new Date());
+```
+
+Modify `apps/web/src/live/apply.ts`:
+
+```diff
+diff --git a/apps/web/src/live/apply.ts b/apps/web/src/live/apply.ts
+index ebd1e6d..e4bb3d0 100644
+--- a/apps/web/src/live/apply.ts
++++ b/apps/web/src/live/apply.ts
+@@ -40,6 +40,8 @@ export function applyServerMessage(queryClient: QueryClient, msg: ServerToWeb):
+       return;
+     case 'me.update':
+       queryClient.setQueryData(['me'], msg.d.me);
++      // Something about you changed (a device came or went, or was revoked): the Settings page's devices may have too.
++      void queryClient.invalidateQueries({ queryKey: ['devices'] });
+       return;
+   }
+ }
+```
+
+Modify `apps/web/src/lib/names.ts`:
+
+```diff
+diff --git a/apps/web/src/lib/names.ts b/apps/web/src/lib/names.ts
+index d91cdfd..3116781 100644
+--- a/apps/web/src/lib/names.ts
++++ b/apps/web/src/lib/names.ts
+@@ -1,3 +1,5 @@
++import type { AgentId } from '@nitpilot/protocol';
++
+ /** How the chat names a person's agent (handoff "Who did what"): "Your agent" for yours, "leo's agent" for theirs. */
+ export function agentName(login: string, yourLogin: string): string {
+   return login === yourLogin ? 'Your agent' : `${login}'s agent`;
+@@ -7,3 +9,6 @@ export function agentName(login: string, yourLogin: string): string {
+ export function personName(login: string, yourLogin: string): string {
+   return login === yourLogin ? 'You' : login;
+ }
++
++/** A coding agent's name, as the Settings page's Agent section shows it. */
++export const AGENT_NAME: Record<AgentId, string> = { 'claude-code': 'Claude Code', 'gemini-cli': 'Gemini CLI', fake: 'Fake agent' };
+```
+
+Modify `apps/web/src/components/Avatar/Avatar.tsx`:
+
+```diff
+diff --git a/apps/web/src/components/Avatar/Avatar.tsx b/apps/web/src/components/Avatar/Avatar.tsx
+index 0687b42..ffd36a4 100644
+--- a/apps/web/src/components/Avatar/Avatar.tsx
++++ b/apps/web/src/components/Avatar/Avatar.tsx
+@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
+ import styles from './Avatar.module.css';
+ 
+ /** The handoff's avatar sizes, and the size of the initials in each. */
+-const INITIALS_PX = { 22: 9.5, 28: 10.5, 30: 11, 32: 11, 38: 13 } as const;
++const INITIALS_PX = { 22: 9.5, 28: 10.5, 30: 11, 32: 11, 38: 13, 40: 13 } as const;
+ 
+ /**
+  * A person's GitHub picture in a circle, or their initials when there is none or it doesn't load.
+```
+
+Run: `npm test -w apps/web -- src/lib/time.test.ts src/live/apply.test.ts`
+Expected: PASS, 12 tests in 2 files.
+
+- [ ] **Step 16: Write the failing page tests**
+
+Four new test files (the page and its nav and Account, Devices, Notifications, Defaults) and a shared helper, `src/test/settings.ts`: `serveSettings` fakes the server the page talks to, `device()` builds a `DeviceView`. The Shell and Home Screen sheet tests change where they look for the page ("Settings", not "Signed in as @maya"), and the placeholder's own test goes: its push, sign-out and iPhone tests live on in `Notifications.test.tsx` and `Settings.test.tsx`.
+
+Delete the placeholder's test: `git rm apps/web/src/routes/Settings/SettingsPlaceholder.test.tsx`.
+
+Create `apps/web/src/test/settings.ts`:
+
+```ts
+import type { DeviceView, WebMe } from '@nitpilot/protocol';
+import { VAPID_KEY } from './push';
+import { fakeApi, type Answer } from './render';
+
+/** maya, as the Settings page reads her: the default settings, 12 agent runs today, and a server with push keys. */
+export const settingsMe: WebMe = {
+  id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true,
+  settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 12, push: { vapidPublicKey: VAPID_KEY, subscribed: false },
+};
+
+/** One of maya's computers; pass only what a test cares about. */
+export function device(over: Partial<DeviceView> = {}): DeviceView {
+  return { id: 'tok_1', name: "Maya's MacBook Pro", lastSeenAt: new Date().toISOString(), online: true, agent: { id: 'claude-code', version: '2.1.290' }, ...over };
+}
+
+type Route = () => Answer | Promise<Answer>;
+
+/**
+ * The server the Settings page talks to: you (`me`), an empty inbox, your devices, and the push routes (both ok).
+ * `routes` adds or replaces any of them. Returns the fetch mock.
+ */
+export function serveSettings(opts: { me?: WebMe | Route; devices?: DeviceView[] | Route; routes?: Record<string, Route> } = {}) {
+  const me = opts.me ?? settingsMe;
+  const devices = opts.devices ?? [];
+  return fakeApi({
+    'GET /api/me': typeof me === 'function' ? me : (): Answer => [200, me],
+    'GET /api/inbox': (): Answer => [200, { rows: [] }],
+    'GET /api/devices': typeof devices === 'function' ? devices : (): Answer => [200, { devices }],
+    'POST /api/push/subscriptions': (): Answer => [200, { ok: true }],
+    'DELETE /api/push/subscriptions': (): Answer => [200, { ok: true }],
+    ...opts.routes,
+  });
+}
+
+/** The requests sent to a path, as "METHOD body". */
+export function sent(fetch: ReturnType<typeof fakeApi>, path: string): string[] {
+  return fetch.mock.calls.filter(([url]) => String(url) === path).map(([, init]) => `${init?.method ?? 'GET'} ${String(init?.body ?? '')}`);
+}
+```
+
+Create `apps/web/src/routes/Settings/Settings.test.tsx`:
+
+```tsx
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as subscribe from '../../push/subscribe';
+import { ENDPOINT, fakeBrowser } from '../../test/push';
+import { fakeViewport, renderApp } from '../../test/render';
+import { sent, serveSettings, settingsMe } from '../../test/settings';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const SECTIONS = ['Devices', 'Agent', 'Notifications', 'Defaults for new chats', 'Account'];
+
+describe('Settings (handoff §7): the page', () => {
+  it('is a page of its own on a desktop: "‹ Inbox", the title, the section nav and the five sections, without the inbox', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '‹ Inbox' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
+    const nav = within(screen.getByRole('navigation', { name: 'Settings sections' }));
+    expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual(['Devices', 'Agent', 'Notifications', 'Defaults', 'Account']);
+    expect(nav.getByRole('link', { name: 'Devices' })).toHaveAttribute('aria-current', 'true');
+    for (const name of SECTIONS) expect(screen.getByRole('region', { name })).toBeInTheDocument();
+  });
+
+  it('highlights the section you pick in the nav', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    const nav = within(await screen.findByRole('navigation', { name: 'Settings sections' }));
+    await userEvent.click(nav.getByRole('link', { name: 'Defaults' }));
+    expect(nav.getByRole('link', { name: 'Defaults' })).toHaveAttribute('aria-current', 'true');
+    expect(nav.getByRole('link', { name: 'Devices' })).not.toHaveAttribute('aria-current');
+    expect(nav.getByRole('link', { name: 'Defaults' })).toHaveAttribute('href', '#defaults');
+  });
+
+  it('goes back to the inbox with "‹ Inbox"', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('link', { name: '‹ Inbox' }));
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+  });
+
+  it('stacks the cards on a phone, with no nav, and Esc goes back to the inbox', async () => {
+    fakeViewport(false);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    expect(await screen.findByRole('region', { name: 'Devices' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Settings sections' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it('asks for you again when it opens, so the usage today is fresh', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    const fetch = serveSettings();
+    renderApp('/settings');
+    await screen.findByRole('region', { name: 'Defaults for new chats' });
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url) === '/api/me').length).toBe(2));
+  });
+
+  it('reads the devices again when the server says something about you changed (me.update)', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    const fetch = serveSettings();
+    const { sockets } = renderApp('/settings');
+    await screen.findByRole('region', { name: 'Devices' });
+    await waitFor(() => expect(sent(fetch, '/api/devices')).toHaveLength(1));
+    sockets.last().receive({ v: 1, t: 'me.update', d: { me: settingsMe } });
+    await waitFor(() => expect(sent(fetch, '/api/devices')).toHaveLength(2));
+  });
+});
+
+describe('Account (handoff §7)', () => {
+  it('shows who you are on GitHub', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    const account = within(await screen.findByRole('region', { name: 'Account' }));
+    expect(account.getByRole('img', { name: 'maya' })).toHaveTextContent('MA');
+    expect(account.getByText('maya')).toBeInTheDocument();
+    expect(account.getByText('github.com/maya')).toBeInTheDocument();
+  });
+
+  it("signs out after removing this browser's push subscription, so a shared browser stops getting your notifications", async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser({ permission: 'granted' });
+    await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4]) });
+    const fetch = serveSettings();
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(browser.pushManager.current).toBeNull();
+    expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
+    expect(submit.mock.contexts[0]).toHaveAttribute('action', '/auth/logout');
+    expect(submit.mock.contexts[0]).toHaveAttribute('method', 'post');
+  });
+
+  it('ignores a second press while it is signing out', async () => {
+    fakeViewport(true);
+    fakeBrowser({ permission: 'granted' });
+    serveSettings();
+    let finish: () => void = () => {};
+    const wait = vi.spyOn(subscribe, 'turnPushOffBeforeSignOut').mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    const button = await screen.findByRole('button', { name: 'Sign out' });
+    await userEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    await userEvent.click(button);
+    finish();
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(wait).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs out all the same in a browser without push', async () => {
+    fakeViewport(true);
+    fakeBrowser({ serviceWorker: false });
+    serveSettings();
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    renderApp('/settings');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+  });
+});
+```
+
+Create `apps/web/src/routes/Settings/Devices.test.tsx`:
+
+```tsx
+import type { DeviceView } from '@nitpilot/protocol';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from '../../test/push';
+import { fakeViewport, renderApp, type Answer } from '../../test/render';
+import { device, sent, serveSettings } from '../../test/settings';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const DAY = 86_400_000;
+const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
+
+async function open(devices: DeviceView[] | (() => Answer | Promise<Answer>), routes: Record<string, () => Answer | Promise<Answer>> = {}) {
+  fakeViewport(true);
+  fakeBrowser();
+  const fetch = serveSettings({ devices, routes });
+  const app = renderApp('/settings');
+  const section = within(await screen.findByRole('region', { name: 'Devices' }));
+  return { ...app, fetch, section };
+}
+
+describe('Devices (handoff §7)', () => {
+  it('lists your computers, online ones first, then the most recently seen', async () => {
+    const { section } = await open([
+      device({ id: 'old', name: 'old-mini', online: false, lastSeenAt: daysAgo(40) }),
+      device({ id: 'desk', name: 'maya-linux-desk', online: false, lastSeenAt: daysAgo(3) }),
+      device({ id: 'fresh', name: 'new-laptop', online: false, lastSeenAt: null }),
+      device({ id: 'mbp', name: "Maya's MacBook Pro", online: true }),
+    ]);
+    const rows = await section.findAllByRole('listitem');
+    expect(rows.map((row) => within(row).getByTestId('device-name').textContent)).toEqual(["Maya's MacBook Pro", 'maya-linux-desk', 'old-mini', 'new-laptop']);
+    expect(within(rows[0]!).getByText('Online')).toBeInTheDocument();
+    expect(within(rows[0]!).queryByText(/Last seen/)).not.toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Last seen 3 days ago')).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText('Online')).not.toBeInTheDocument();
+    expect(within(rows[3]!).getByText('Never connected')).toBeInTheDocument();
+    expect(section.getAllByRole('button', { name: /^Revoke/ })).toHaveLength(4);
+  });
+
+  it('revokes a device: it calls the route, says so, and the device is gone once the list is read again', async () => {
+    let devices = [device({ id: 'mbp' }), device({ id: 'desk', name: 'maya-linux-desk', online: false, lastSeenAt: daysAgo(3) })];
+    const { section, fetch } = await open(() => [200, { devices }], {
+      'DELETE /api/devices/desk': (): Answer => {
+        devices = devices.filter((d) => d.id !== 'desk');
+        return [204, null];
+      },
+    });
+    await userEvent.click(await section.findByRole('button', { name: 'Revoke maya-linux-desk' }));
+    expect(await screen.findByText('Revoked. That computer has to log in again.')).toBeInTheDocument();
+    await waitFor(() => expect(section.queryByText('maya-linux-desk')).not.toBeInTheDocument());
+    expect(sent(fetch, '/api/devices/desk')).toEqual(['DELETE ']);
+    expect(section.getByText("Maya's MacBook Pro")).toBeInTheDocument();
+  });
+
+  it('is busy while the revoke is on its way, and says why when it is refused', async () => {
+    let refuse: () => void = () => {};
+    const { section } = await open([device({ id: 'mbp' })], {
+      'DELETE /api/devices/mbp': () => new Promise<Answer>((resolve) => (refuse = () => resolve([404, { error: { code: 'not_found', message: 'No such device.' } }]))),
+    });
+    const revoke = await section.findByRole('button', { name: "Revoke Maya's MacBook Pro" });
+    await userEvent.click(revoke);
+    expect(revoke).toBeDisabled();
+    expect(revoke).toHaveAttribute('aria-busy', 'true');
+    refuse();
+    expect(await screen.findByText('No such device.')).toBeInTheDocument();
+    await waitFor(() => expect(revoke).toBeEnabled());
+  });
+
+  it('tells you how to connect one when there are none', async () => {
+    const { section } = await open([]);
+    expect(await section.findByText(/No computers yet\. Run/)).toHaveTextContent('No computers yet. Run npx nitpilot login on one to connect it.');
+  });
+});
+
+describe('Agent (handoff §7): worked out from your devices', () => {
+  async function agents(devices: DeviceView[]) {
+    await open(devices);
+    return within(await screen.findByRole('region', { name: 'Agent' }));
+  }
+
+  it('shows each agent once, with its version, the computers it is on, and whether one of them is online', async () => {
+    const section = await agents([
+      device({ id: 'a', name: "Maya's MacBook Pro", online: true, agent: { id: 'claude-code', version: '2.1.290' } }),
+      device({ id: 'b', name: 'maya-linux-desk', online: false, lastSeenAt: daysAgo(3), agent: { id: 'claude-code', version: '2.1.100' } }),
+      device({ id: 'c', name: 'old-mini', online: false, lastSeenAt: daysAgo(9), agent: { id: 'gemini-cli', version: null } }),
+      device({ id: 'd', name: 'new-laptop', online: false, lastSeenAt: null, agent: null }),
+    ]);
+    const rows = await section.findAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Claude Code');
+    expect(within(rows[0]!).getByText('v2.1.290')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("Used on Maya's MacBook Pro, maya-linux-desk")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Online')).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent('Gemini CLI');
+    expect(within(rows[1]!).getByText('Used on old-mini')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Not connected')).toBeInTheDocument();
+  });
+
+  it('takes the version from a computer that is offline when none with it is online', async () => {
+    const section = await agents([device({ online: false, lastSeenAt: daysAgo(1), agent: { id: 'claude-code', version: '2.1.100' } })]);
+    expect(await section.findByText('v2.1.100')).toBeInTheDocument();
+  });
+
+  it('says what to do when no computer reported an agent', async () => {
+    const section = await agents([device({ agent: null })]);
+    expect(await section.findByText(/Install Claude Code, then run/)).toHaveTextContent('Install Claude Code, then run nitpilot start.');
+  });
+});
+```
+
+Create `apps/web/src/routes/Settings/Notifications.test.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HOME_SCREEN_SHEET_SEEN_KEY } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
+import * as subscribe from '../../push/subscribe';
+import { ENDPOINT, fakeBrowser, SAFARI_IPHONE, VAPID_KEY } from '../../test/push';
+import { fakeViewport, renderApp, type Answer } from '../../test/render';
+import { sent, serveSettings, settingsMe } from '../../test/settings';
+
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+async function notifications() {
+  return within(await screen.findByRole('region', { name: 'Notifications' }));
+}
+
+const PUSH = { name: 'Push notifications' };
+
+describe('Notifications (handoff §7): the push switch for this browser', () => {
+  it('turns push on for this browser, and the page knows you are subscribed', async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser();
+    const fetch = serveSettings();
+    const { queryClient } = renderApp('/settings');
+    const section = await notifications();
+    expect(section.getByText("Only when you're needed: approvals, escalations, failures")).toBeInTheDocument();
+    const toggle = await section.findByRole('switch', PUSH);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(toggle);
+    await waitFor(() => expect(section.getByRole('switch', PUSH)).toHaveAttribute('aria-checked', 'true'));
+    expect(browser.pushManager.current).not.toBeNull();
+    expect(sent(fetch, '/api/push/subscriptions')).toHaveLength(1);
+    expect(queryClient.getQueryData<WebMe>(['me'])?.push.subscribed).toBe(true);
+  });
+
+  it('is busy while it works, and not after reading the push state fails', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    const toggle = await (await notifications()).findByRole('switch', PUSH);
+    // The first read (page load) worked; the one after the press fails.
+    vi.spyOn(subscribe, 'pushState').mockRejectedValueOnce(new Error('boom'));
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toHaveAttribute('aria-busy'));
+  });
+
+  it('turns it off again, and asks the server whether you still have a subscription elsewhere', async () => {
+    fakeViewport(true);
+    const browser = fakeBrowser({ permission: 'granted' });
+    await browser.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array([4]) });
+    const fetch = serveSettings({ me: { ...settingsMe, push: { vapidPublicKey: VAPID_KEY, subscribed: true } } });
+    renderApp('/settings');
+    const section = await notifications();
+    await waitFor(() => expect(section.getByRole('switch', PUSH)).toHaveAttribute('aria-checked', 'true'));
+    const reads = fetch.mock.calls.filter(([url]) => String(url) === '/api/me').length;
+    await userEvent.click(section.getByRole('switch', PUSH));
+    await waitFor(() => expect(section.getByRole('switch', PUSH)).toHaveAttribute('aria-checked', 'false'));
+    expect(sent(fetch, '/api/push/subscriptions')).toEqual([`DELETE ${JSON.stringify({ endpoint: ENDPOINT })}`]);
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url) === '/api/me').length).toBeGreaterThan(reads));
+  });
+
+  it("says what went wrong when the server doesn't take the subscription", async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings({ routes: { 'POST /api/push/subscriptions': (): Answer => [400, { error: { code: 'bad_request', message: 'endpoint: must be an https address of a push service' } }] } });
+    renderApp('/settings');
+    const section = await notifications();
+    await userEvent.click(await section.findByRole('switch', PUSH));
+    expect(await section.findByRole('alert')).toHaveTextContent('endpoint: must be an https address of a push service');
+    expect(section.getByRole('switch', PUSH)).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it.each([
+    ['denied', { permission: 'denied' } as const, "Blocked in your browser's settings. Allow notifications for this site there, then reload this page."],
+    ['unsupported', { serviceWorker: false } as const, "This browser can't show push notifications."],
+  ])('explains %s instead of offering the switch', async (_state, browser, text) => {
+    fakeViewport(true);
+    fakeBrowser(browser);
+    serveSettings();
+    renderApp('/settings');
+    const section = await notifications();
+    expect(await section.findByText(text)).toBeInTheDocument();
+    expect(section.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('says so when this server has no push keys', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings({ me: { ...settingsMe, push: { vapidPublicKey: null, subscribed: false } } });
+    renderApp('/settings');
+    const section = await notifications();
+    expect(await section.findByText("Push isn't set up on this server.")).toBeInTheDocument();
+    expect(section.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('shows the iPhone tip outside the Home Screen app, with a way to the steps', async () => {
+    fakeViewport(false);
+    fakeBrowser({ userAgent: SAFARI_IPHONE, maxTouchPoints: 5, pushManager: false });
+    localStorage.setItem(HOME_SCREEN_SHEET_SEEN_KEY, '1');
+    serveSettings();
+    renderApp('/settings');
+    const section = await notifications();
+    expect(await section.findByText(/Add Nitpilot to your Home Screen to get notifications\. In Safari, tap Share, then Add to Home Screen\./)).toBeInTheDocument();
+    expect(section.queryByRole('switch')).not.toBeInTheDocument();
+    await userEvent.click(section.getByRole('button', { name: 'Show me how' }));
+    expect(screen.getByRole('dialog', { name: 'Add Nitpilot to your Home Screen' })).toBeInTheDocument();
+  });
+});
+```
+
+Create `apps/web/src/routes/Settings/Defaults.test.tsx`:
+
+```tsx
+import type { Settings, WebMe } from '@nitpilot/protocol';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from '../../test/push';
+import { fakeViewport, renderApp, type Answer } from '../../test/render';
+import { sent, serveSettings, settingsMe } from '../../test/settings';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** The server answers a save with what it saved (the body it got), unless `answer` says otherwise. */
+function serve(opts: { me?: WebMe; answer?: (body: Settings) => Answer | Promise<Answer> } = {}) {
+  let current = opts.me ?? settingsMe;
+  return serveSettings({
+    me: (): Answer => [200, current],
+    routes: {
+      'PUT /api/me/settings': async (): Promise<Answer> => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)![1]!.body)) as Settings;
+        const answer = opts.answer ? await opts.answer(body) : ([200, body] as Answer);
+        if (answer[0] === 200) current = { ...current, settings: answer[1] as Settings };
+        return answer;
+      },
+    },
+  });
+}
+let fetchMock: ReturnType<typeof serveSettings>;
+
+async function openDefaults(opts: Parameters<typeof serve>[0] = {}) {
+  fakeViewport(true);
+  fakeBrowser();
+  fetchMock = serve(opts);
+  const app = renderApp('/settings');
+  const section = within(await screen.findByRole('region', { name: 'Defaults for new chats' }));
+  // The page asks for you again when it opens (usedToday may have moved): let that settle first.
+  await waitFor(() => expect(meReads()).toBeGreaterThanOrEqual(2));
+  return { ...app, section };
+}
+
+const meReads = () => fetchMock.mock.calls.filter(([url]) => String(url) === '/api/me').length;
+const saves = () => sent(fetchMock, '/api/me/settings').map((s) => JSON.parse(s.slice('PUT '.length)) as Settings);
+
+describe('Defaults (handoff §7 "Defaults for new chats")', () => {
+  it('shows your Auto defaults, the daily cap and what your CLIs used today', async () => {
+    const { section } = await openDefaults();
+    expect(section.getByRole('switch', { name: 'Auto-review' })).toHaveAttribute('aria-checked', 'true');
+    expect(section.getByRole('switch', { name: 'Auto-fix' })).toHaveAttribute('aria-checked', 'false');
+    expect(section.getByText('Your agent reviews as soon as you are requested')).toBeInTheDocument();
+    expect(section.getByText('Off: fixes wait as drafts for you to send')).toBeInTheDocument();
+    expect(section.getByText('Max 40 agent runs per day · 12 used today')).toBeInTheDocument();
+    expect(section.getByTestId('usage-bar')).toHaveStyle({ width: '30%' });
+    expect(section.getByTestId('usage-bar')).not.toHaveAttribute('data-full');
+  });
+
+  it('steps the cap by 5 and saves every press at once, with the whole of your settings', async () => {
+    const { section, queryClient } = await openDefaults();
+    await userEvent.click(section.getByRole('button', { name: 'Raise cap' }));
+    expect(await section.findByText('Max 45 agent runs per day · 12 used today')).toBeInTheDocument();
+    await waitFor(() => expect(queryClient.getQueryData<WebMe>(['me'])?.settings.dailyJobCap).toBe(45));
+    await userEvent.click(section.getByRole('button', { name: 'Lower cap' }));
+    await userEvent.click(section.getByRole('button', { name: 'Lower cap' }));
+    await waitFor(() => expect(queryClient.getQueryData<WebMe>(['me'])?.settings.dailyJobCap).toBe(35));
+    expect(saves()).toEqual([
+      { autoReview: true, autoAddress: false, dailyJobCap: 45 },
+      { autoReview: true, autoAddress: false, dailyJobCap: 40 },
+      { autoReview: true, autoAddress: false, dailyJobCap: 35 },
+    ]);
+  });
+
+  it('stops at 5 and at 200', async () => {
+    const low = await openDefaults({ me: { ...settingsMe, settings: { ...settingsMe.settings, dailyJobCap: 10 } } });
+    await userEvent.click(low.section.getByRole('button', { name: 'Lower cap' }));
+    expect(await low.section.findByText(/^Max 5 agent runs per day/)).toBeInTheDocument();
+    await waitFor(() => expect(low.section.getByRole('button', { name: 'Lower cap' })).toBeDisabled());
+    await userEvent.click(low.section.getByRole('button', { name: 'Lower cap' }));
+    expect(saves().map((s) => s.dailyJobCap)).toEqual([5]);
+    low.unmount();
+
+    const high = await openDefaults({ me: { ...settingsMe, usedToday: 0, settings: { ...settingsMe.settings, dailyJobCap: 200 } } });
+    expect(high.section.getByRole('button', { name: 'Raise cap' })).toBeDisabled();
+    expect(high.section.getByRole('button', { name: 'Lower cap' })).toBeEnabled();
+  });
+
+  it('saves a switch at once, and it shows the saved value', async () => {
+    const { section, queryClient } = await openDefaults();
+    const autoFix = section.getByRole('switch', { name: 'Auto-fix' });
+    await userEvent.click(autoFix);
+    await waitFor(() => expect(queryClient.getQueryData<WebMe>(['me'])?.settings.autoAddress).toBe(true));
+    expect(autoFix).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(section.getByRole('switch', { name: 'Auto-review' }));
+    await waitFor(() => expect(section.getByRole('switch', { name: 'Auto-review' })).toHaveAttribute('aria-checked', 'false'));
+    expect(saves()).toEqual([
+      { autoReview: true, autoAddress: true, dailyJobCap: 40 },
+      { autoReview: false, autoAddress: true, dailyJobCap: 40 },
+    ]);
+  });
+
+  it('keeps all three controls busy while a save is on its way, and ignores presses meanwhile', async () => {
+    let finish: () => void = () => {};
+    const { section } = await openDefaults({ answer: (body) => new Promise<Answer>((resolve) => (finish = () => resolve([200, body]))) });
+    await userEvent.click(section.getByRole('button', { name: 'Raise cap' }));
+    for (const control of [section.getByRole('switch', { name: 'Auto-review' }), section.getByRole('switch', { name: 'Auto-fix' }), section.getByRole('group', { name: 'Daily job cap' })]) {
+      expect(control).toHaveAttribute('aria-busy', 'true');
+    }
+    await userEvent.click(section.getByRole('button', { name: 'Raise cap' }));
+    await userEvent.click(section.getByRole('switch', { name: 'Auto-fix' }));
+    finish();
+    await waitFor(() => expect(section.getByRole('switch', { name: 'Auto-fix' })).not.toHaveAttribute('aria-busy'));
+    expect(saves()).toHaveLength(1);
+  });
+
+  it('says why a save was refused, goes back to what the server has, and asks for it again', async () => {
+    const { section } = await openDefaults({ answer: () => [400, { error: { code: 'bad_request', message: 'dailyJobCap: Too big' } }] });
+    const before = meReads();
+    await userEvent.click(section.getByRole('button', { name: 'Raise cap' }));
+    expect(await screen.findByText('dailyJobCap: Too big')).toBeInTheDocument();
+    expect(section.getByText('Max 40 agent runs per day · 12 used today')).toBeInTheDocument();
+    await waitFor(() => expect(meReads()).toBeGreaterThan(before));
+  });
+
+  it('turns the usage bar amber once today reaches the cap, and never past full', async () => {
+    const { section } = await openDefaults({ me: { ...settingsMe, usedToday: 52, settings: { ...settingsMe.settings, dailyJobCap: 50 } } });
+    expect(section.getByTestId('usage-bar')).toHaveStyle({ width: '100%' });
+    expect(section.getByTestId('usage-bar')).toHaveAttribute('data-full', 'true');
+  });
+});
+```
+
+Modify `apps/web/src/routes/Shell/Shell.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Shell.test.tsx b/apps/web/src/routes/Shell/Shell.test.tsx
+index ba6494e..56cb352 100644
+--- a/apps/web/src/routes/Shell/Shell.test.tsx
++++ b/apps/web/src/routes/Shell/Shell.test.tsx
+@@ -16,6 +16,7 @@ function serve() {
+   fakeApi({
+     'GET /api/me': (): Answer => [200, me],
+     'GET /api/inbox': (): Answer => [200, { rows: [] }],
++    'GET /api/devices': (): Answer => [200, { devices: [] }],
+     ...chatRoutes([{ repo: 'acme/shop-api', number: 139, title: 'Fix race in session refresh' }]),
+   });
+ }
+@@ -62,12 +63,13 @@ describe('Shell (handoff "App shell and layout")', () => {
+     expect(screen.queryByRole('heading', { name: 'Fix race in session refresh' })).not.toBeInTheDocument();
+   });
+ 
+-  it('keeps Sign out on the Settings page, reached from your avatar', async () => {
++  it('opens Settings from your avatar, as a page of its own (no inbox beside it), with Sign out', async () => {
+     fakeViewport(true);
+     serve();
+     renderApp('/');
+     await userEvent.click(await screen.findByRole('link', { name: 'Settings · maya' }));
+-    expect(await screen.findByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
++    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
++    expect(screen.queryByRole('region', { name: 'Inbox' })).not.toBeInTheDocument();
+     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+   });
+ });
+```
+
+Modify `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx b/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
+index eb9217b..eeebd55 100644
+--- a/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
++++ b/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
+@@ -9,7 +9,7 @@ import { HOME_SCREEN_SHEET_SEEN_KEY } from './IosHomeScreenSheet';
+ const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
+ 
+ function serve() {
+-  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }] });
++  fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }], 'GET /api/devices': (): Answer => [200, { devices: [] }] });
+ }
+ 
+ const NAME = 'Add Nitpilot to your Home Screen';
+@@ -61,7 +61,7 @@ describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
+     await userEvent.keyboard('{Escape}');
+     expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+     // On a phone Esc also means "back to the inbox"; the sheet keeps it.
+-    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
++    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+ 
+     await userEvent.click(screen.getByRole('button', { name: 'Show me how' }));
+     await userEvent.click(screen.getByTestId('sheet-backdrop'));
+@@ -78,7 +78,7 @@ describe('IosHomeScreenSheet (handoff §9 "iOS Home Screen hint")', () => {
+     act(() => sheet.focus());
+     await userEvent.keyboard('{Escape}');
+     expect(screen.queryByRole('dialog', { name: NAME })).not.toBeInTheDocument();
+-    expect(screen.getByRole('heading', { name: 'Signed in as @maya' })).toBeInTheDocument();
++    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+   });
+ 
+   it('opens again from Settings, and gives focus back to the button that opened it', async () => {
+```
+
+Run: `npm test -w apps/web`
+Expected: FAIL, 32 failed, 263 passed (295) in 6 of 39 files: `Defaults.test.tsx` 7, `Devices.test.tsx` 7, `Notifications.test.tsx` 8, `Settings.test.tsx` 7, `IosHomeScreenSheet.test.tsx` 2, `Shell.test.tsx` 1. Causes: no regions "Devices", "Defaults for new chats" or "Notifications", no "Settings" heading or "‹ Inbox", and the old placeholder still at `/settings` (inside the inbox layout). The three Account tests (sign out) pass already, since the placeholder has Sign out too.
+
+- [ ] **Step 17: Build the page**
+
+In this order, all in one step because the files lean on each other:
+
+1. `api/settings.ts`: `useDevices`, `useRevokeDevice`, `useSaveSettings`.
+2. Delete the placeholder: `git rm apps/web/src/routes/Settings/SettingsPlaceholder.tsx`. Its push switch, iPhone tip and sign-out move into `Notifications.tsx` and `Account.tsx`.
+3. `Shell.tsx` splits in two: `SignedIn` keeps every provider and the push re-send and renders `<Outlet context={me} />`; `InboxLayout` is the sidebar and pane (phone single pane, Esc back) and reads `me` from the outlet. `Home.tsx` renders `SignedIn`; `app.tsx` makes `InboxLayout` the layout route for `/`, `/c/…` and `*`, with `/settings` beside it. `Pane.module.css` loses the classes only the placeholder used.
+4. The page: `Settings.tsx` (top bar, nav, sections), `Section.tsx`, `Switch.tsx`, the five sections, and the two stylesheets.
+
+Create `apps/web/src/api/settings.ts`:
+
+```ts
+import { DevicesResponse, Settings, type DeviceView, type WebMe } from '@nitpilot/protocol';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../components/Toast/Toast';
+import { api } from './client';
+
+/** Your computers (`GET /api/devices`), as the Settings page lists them. A `me.update` reads them again (live/apply.ts). */
+export function useDevices() {
+  return useQuery({
+    queryKey: ['devices'],
+    queryFn: async (): Promise<DeviceView[]> => (await api.get('/api/devices', DevicesResponse)).devices,
+  });
+}
+
+/**
+ * Revoke one computer (`DELETE /api/devices/:id`): its CLI is signed out at once and has to log in again. No Undo: the
+ * token is gone. Either way the list is read again, so it shows what the server has.
+ */
+export function useRevokeDevice() {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.send('DELETE', `/api/devices/${encodeURIComponent(id)}`),
+    onSuccess: () => toast.show('Revoked. That computer has to log in again.'),
+    onError: (err) => toast.show(err.message, { error: true }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+}
+
+/**
+ * Save your settings (`PUT /api/me/settings`), the whole of them at once. The server's answer goes into `['me']`,
+ * which every page reads; a refusal is said in a toast and `['me']` is read again.
+ */
+export function useSaveSettings() {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: Settings) => api.send('PUT', '/api/me/settings', settings, Settings),
+    onSuccess: (saved) => queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, settings: saved } : old)),
+    onError: (err) => {
+      toast.show(err.message, { error: true });
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+```
+
+Delete `apps/web/src/routes/Settings/SettingsPlaceholder.tsx`.
+
+Modify `apps/web/src/routes/Shell/Shell.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Shell.tsx b/apps/web/src/routes/Shell/Shell.tsx
+index 946bca8..a545a6b 100644
+--- a/apps/web/src/routes/Shell/Shell.tsx
++++ b/apps/web/src/routes/Shell/Shell.tsx
+@@ -1,7 +1,7 @@
+ import type { WebMe } from '@nitpilot/protocol';
+ import { useQueryClient } from '@tanstack/react-query';
+ import { useEffect } from 'react';
+-import { Outlet, useMatch, useNavigate } from 'react-router';
++import { Outlet, useMatch, useNavigate, useOutletContext } from 'react-router';
+ import { InstallCard } from '../../components/InstallCard/InstallCard';
+ import { HomeScreenSheetProvider } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
+ import { ToastProvider } from '../../components/Toast/Toast';
+@@ -14,13 +14,13 @@ import styles from './Shell.module.css';
+ import { UiStateProvider } from './UiState';
+ 
+ /**
+- * The signed-in app (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside the page that's
+- * open. Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back. One
+- * `/ws/web` socket keeps it all live (live/LiveProvider.tsx); the pages read who you are from the outlet. What the
+- * inbox and the composer remember lives here, above both (UiState.tsx), and so do the toasts. So do the two ways to
+- * install the app (handoff §9): the install card where the browser offers it, and the iPhone's Home Screen sheet.
++ * The signed-in app, around every page: one `/ws/web` socket keeps it all live (live/LiveProvider.tsx), and the pages
++ * read who you are from the outlet (`useOutletContext<WebMe>()`). What the inbox and the composer remember lives here,
++ * above both (UiState.tsx), and so do the toasts. So do the two ways to install the app (handoff §9): the install
++ * card where the browser offers it, and the iPhone's Home Screen sheet. The pages are the inbox layout below and
++ * Settings, a page of its own (routes/Settings/Settings.tsx).
+  */
+-export function Shell({ me }: { me: WebMe }) {
++export function SignedIn({ me }: { me: WebMe }) {
+   const queryClient = useQueryClient();
+   const userId = me.id;
+   const vapidPublicKey = me.push.vapidPublicKey;
+@@ -43,7 +43,7 @@ export function Shell({ me }: { me: WebMe }) {
+       <UiStateProvider>
+         <ToastProvider>
+           <HomeScreenSheetProvider>
+-            <Layout me={me} />
++            <Outlet context={me} />
+             <InstallCard />
+           </HomeScreenSheetProvider>
+         </ToastProvider>
+@@ -52,7 +52,12 @@ export function Shell({ me }: { me: WebMe }) {
+   );
+ }
+ 
+-function Layout({ me }: { me: WebMe }) {
++/**
++ * The inbox and the page that's open (handoff "App shell and layout"). Desktop: the 360 px inbox sidebar beside it.
++ * Phone: one pane, the inbox at `/` and the open page anywhere else, with Esc (or ‹) going back.
++ */
++export function InboxLayout() {
++  const me = useOutletContext<WebMe>();
+   const desktop = useIsDesktop();
+   const atInbox = useMatch('/') !== null;
+   const navigate = useNavigate();
+```
+
+Modify `apps/web/src/routes/Home/Home.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Home/Home.tsx b/apps/web/src/routes/Home/Home.tsx
+index b9cbc9c..e43e4f5 100644
+--- a/apps/web/src/routes/Home/Home.tsx
++++ b/apps/web/src/routes/Home/Home.tsx
+@@ -2,10 +2,10 @@ import { ErrorState } from '../../components/ErrorState/ErrorState';
+ import { Wordmark } from '../../components/Wordmark/Wordmark';
+ import { useMe } from '../../api/me';
+ import { Landing } from '../Landing/Landing';
+-import { Shell } from '../Shell/Shell';
++import { SignedIn } from '../Shell/Shell';
+ import styles from './Home.module.css';
+ 
+-/** Every page starts here: the landing page when signed out, the app (inbox and pages) when signed in. */
++/** Every page starts here: the landing page when signed out, the app (the pages under routes/Shell/Shell.tsx `SignedIn`) when signed in. */
+ export function Home() {
+   const me = useMe();
+   if (me.isPending) {
+@@ -18,5 +18,5 @@ export function Home() {
+   }
+   if (me.isError) return <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+   if (me.data === null) return <Landing />;
+-  return <Shell me={me.data} />;
++  return <SignedIn me={me.data} />;
+ }
+```
+
+Modify `apps/web/src/app.tsx`:
+
+```diff
+diff --git a/apps/web/src/app.tsx b/apps/web/src/app.tsx
+index 0b060bc..134d4a1 100644
+--- a/apps/web/src/app.tsx
++++ b/apps/web/src/app.tsx
+@@ -4,8 +4,9 @@ import { BrowserRouter, Route, Routes } from 'react-router';
+ import { retryUnlessClientError } from './api/client';
+ import { Chat } from './routes/Chat/Chat';
+ import { Home } from './routes/Home/Home';
+-import { SettingsPlaceholder } from './routes/Settings/SettingsPlaceholder';
++import { Settings } from './routes/Settings/Settings';
+ import { EmptyPane } from './routes/Shell/Pane';
++import { InboxLayout } from './routes/Shell/Shell';
+ 
+ /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
+ export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
+@@ -26,17 +27,19 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
+ }
+ 
+ /**
+- * Every page. Home decides between the landing page (signed out) and the app; signed in, the pages below
+- * open beside the inbox (routes/Shell/Shell.tsx).
++ * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
++ * the inbox (routes/Shell/Shell.tsx `InboxLayout`), and Settings is a page of its own.
+  */
+ export function AppRoutes() {
+   return (
+     <Routes>
+       <Route element={<Home />}>
+-        <Route index element={<EmptyPane title="Pick a pull request" body="Its chat opens here." />} />
+-        <Route path="c/:owner/:repo/:number" element={<Chat />} />
+-        <Route path="settings" element={<SettingsPlaceholder />} />
+-        <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
++        <Route element={<InboxLayout />}>
++          <Route index element={<EmptyPane title="Pick a pull request" body="Its chat opens here." />} />
++          <Route path="c/:owner/:repo/:number" element={<Chat />} />
++          <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
++        </Route>
++        <Route path="settings" element={<Settings />} />
+       </Route>
+     </Routes>
+   );
+```
+
+Modify `apps/web/src/routes/Shell/Pane.module.css`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Pane.module.css b/apps/web/src/routes/Shell/Pane.module.css
+index dd723fa..ebe30ee 100644
+--- a/apps/web/src/routes/Shell/Pane.module.css
++++ b/apps/web/src/routes/Shell/Pane.module.css
+@@ -65,54 +65,3 @@
+   font-size: 13px;
+   color: var(--fg3);
+ }
+-
+-.ref {
+-  margin: 0;
+-  font-family: var(--font-mono);
+-  font-size: 12px;
+-  color: var(--fg2);
+-}
+-
+-.title {
+-  margin: 0;
+-  font-size: 20px;
+-  font-weight: 700;
+-  letter-spacing: -0.01em;
+-  line-height: 1.2;
+-}
+-
+-.actions {
+-  display: flex;
+-  flex-wrap: wrap;
+-  gap: 8px;
+-}
+-
+-.button {
+-  height: 32px;
+-  padding: 0 12px;
+-  border: 1px solid var(--b1);
+-  border-radius: var(--radius-control);
+-  background: var(--surface);
+-  color: var(--fg1);
+-  font-size: 12.5px;
+-  font-weight: 500;
+-  text-decoration: none;
+-  display: inline-flex;
+-  align-items: center;
+-  gap: 4px;
+-  cursor: pointer;
+-}
+-
+-/* A part of a page under its title (the Settings placeholder's push row). */
+-.section {
+-  display: flex;
+-  flex-direction: column;
+-  gap: 8px;
+-  padding: 12px 0;
+-}
+-
+-.heading {
+-  margin: 0;
+-  font-size: 16px;
+-  font-weight: 700;
+-}
+```
+
+Create `apps/web/src/routes/Settings/Section.tsx`:
+
+```tsx
+import type { ReactNode } from 'react';
+import styles from './Settings.module.css';
+
+/** One section of the Settings page: its 16 px heading over an 18 px-radius card. `id` is the nav's anchor. */
+export function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section id={id} className={styles.section} aria-labelledby={`${id}-heading`}>
+      <h2 id={`${id}-heading`} className={styles.heading}>
+        {title}
+      </h2>
+      <div className={styles.card}>{children}</div>
+    </section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Switch.tsx`:
+
+```tsx
+import styles from './Switch.module.css';
+
+/**
+ * The Settings page's switch (handoff §7): a 46×28 track with a 22 px thumb, `role=switch` with `aria-checked`. It
+ * shows `on` as the server last said, or the value on its way; pressing asks for the other value. While `busy`
+ * (a save on its way) presses are ignored and it says so (`aria-busy`).
+ */
+export function Switch({ label, on, busy = false, onToggle }: { label: string; on: boolean; busy?: boolean; onToggle: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      aria-busy={busy || undefined}
+      className={styles.switch}
+      onClick={() => {
+        if (!busy) onToggle(!on);
+      }}
+    >
+      <span className={styles.thumb} aria-hidden="true" />
+    </button>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Switch.module.css`:
+
+```css
+/* handoff §7: a 46×28 track (--b1 off, --acc on) and a white 22px thumb that slides 18px. */
+.switch {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--b1);
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--acc);
+}
+
+.switch[aria-busy='true'] {
+  cursor: progress;
+}
+
+.thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms;
+}
+
+.switch[aria-checked='true'] .thumb {
+  transform: translateX(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch,
+  .thumb {
+    transition: none;
+  }
+}
+```
+
+Create `apps/web/src/routes/Settings/Settings.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState, type MouseEvent } from 'react';
+import { Link, useNavigate, useOutletContext } from 'react-router';
+import { Toasts } from '../../components/Toast/Toast';
+import { useEscapeBack } from '../../lib/keys';
+import { useIsDesktop } from '../../lib/viewport';
+import { Account } from './Account';
+import { Agent } from './Agent';
+import { Defaults } from './Defaults';
+import { Devices } from './Devices';
+import { Notifications } from './Notifications';
+import styles from './Settings.module.css';
+
+/** The section nav (desktop): each label, and the section it jumps to. */
+const SECTIONS = [
+  { id: 'devices', label: 'Devices' },
+  { id: 'agent', label: 'Agent' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'defaults', label: 'Defaults' },
+  { id: 'account', label: 'Account' },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]['id'];
+
+/**
+ * `/settings` (handoff §7), a page of its own: the top bar ("‹ Inbox" and the title), then on a desktop a sticky 180 px
+ * section nav beside the cards, and on a phone the cards stacked, with Esc going back to the inbox. The sections:
+ * your computers and their agents, push for this browser, your defaults for new chats, and your account. You are read
+ * again when the page opens, so today's usage is fresh (the server sends no update when a CLI pings).
+ */
+export function Settings() {
+  const me = useOutletContext<WebMe>();
+  const desktop = useIsDesktop();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [current, setCurrent] = useState<SectionId>('devices');
+  useEscapeBack(!desktop, () => void navigate('/'));
+
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ['me'] });
+  }, [queryClient]);
+
+  // Scroll to the section without adding "#agent" to the address (Back still goes to the inbox).
+  function jump(e: MouseEvent<HTMLAnchorElement>, id: SectionId) {
+    e.preventDefault();
+    setCurrent(id);
+    document.getElementById(id)?.scrollIntoView?.({ block: 'start' });
+  }
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.topBar}>
+        <Link to="/" className={styles.back}>
+          ‹ Inbox
+        </Link>
+        <h1 className={styles.title}>Settings</h1>
+      </header>
+      <div className={styles.body}>
+        {desktop && (
+          <nav aria-label="Settings sections" className={styles.nav}>
+            {SECTIONS.map((s) => (
+              <a key={s.id} href={`#${s.id}`} className={styles.navLink} aria-current={current === s.id ? 'true' : undefined} onClick={(e) => jump(e, s.id)}>
+                {s.label}
+              </a>
+            ))}
+          </nav>
+        )}
+        <div className={styles.sections}>
+          <Devices />
+          <Agent />
+          <Notifications me={me} />
+          <Defaults me={me} />
+          <Account me={me} />
+        </div>
+      </div>
+      {/* The toasts' place: fixed near the bottom of the window (handoff "Toasts": 96 px up). */}
+      <div className={styles.toasts}>
+        <Toasts />
+      </div>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Devices.tsx`:
+
+```tsx
+import { BRAND, type DeviceView } from '@nitpilot/protocol';
+import { useDevices, useRevokeDevice } from '../../api/settings';
+import { lastSeen, useNow } from '../../lib/time';
+import { Section } from './Section';
+import styles from './Settings.module.css';
+
+/** Online first, then the most recently seen; a device that never connected last. */
+export function sortDevices(devices: DeviceView[]): DeviceView[] {
+  const seen = (d: DeviceView) => (d.lastSeenAt ? Date.parse(d.lastSeenAt) : -Infinity);
+  return [...devices].sort((a, b) => Number(b.online) - Number(a.online) || seen(b) - seen(a));
+}
+
+/**
+ * Your computers (handoff §7 "Devices"): each CLI that `nitpilot login` connected, online or when it was last seen,
+ * with Revoke. The handoff's "This device" chip is about the browser's own computer, which the server can't know
+ * (docs/why/revoking-devices.md), so an online device gets an "Online" chip instead.
+ */
+export function Devices() {
+  const devices = useDevices();
+  const now = useNow();
+  let body;
+  if (devices.isPending) {
+    body = <p className={styles.line}>Loading your computers…</p>;
+  } else if (devices.isError) {
+    body = (
+      <div className={styles.row}>
+        <p className={styles.rowText}>
+          <span className={styles.hint}>{devices.error.message}</span>
+        </p>
+        <button type="button" className={styles.button} onClick={() => void devices.refetch()}>
+          Try again
+        </button>
+      </div>
+    );
+  } else if (devices.data.length === 0) {
+    body = (
+      <p className={styles.line}>
+        No computers yet. Run <span className={styles.mono}>npx {BRAND.npmPackage} login</span> on one to connect it.
+      </p>
+    );
+  } else {
+    body = (
+      <ul className={styles.list}>
+        {sortDevices(devices.data).map((device) => (
+          <DeviceRow key={device.id} device={device} now={now} />
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <Section id="devices" title="Devices">
+      {body}
+    </Section>
+  );
+}
+
+function DeviceRow({ device, now }: { device: DeviceView; now: Date }) {
+  const revoke = useRevokeDevice();
+  const busy = revoke.isPending;
+  return (
+    <li className={styles.row}>
+      <span className={styles.laptop} data-online={device.online || undefined} aria-hidden="true" />
+      <div className={styles.rowText}>
+        <span className={styles.rowTitle}>
+          <span data-testid="device-name">{device.name}</span>
+          {device.online && (
+            <span className={`${styles.smallChip} ${styles.ok}`}>
+              <span className={styles.dot} aria-hidden="true" />
+              <span>Online</span>
+            </span>
+          )}
+        </span>
+        {!device.online && <span className={styles.hint}>{device.lastSeenAt ? `Last seen ${lastSeen(device.lastSeenAt, now)}` : 'Never connected'}</span>}
+      </div>
+      <button
+        type="button"
+        className={`${styles.button} ${styles.revoke}`}
+        aria-label={`Revoke ${device.name}`}
+        disabled={busy}
+        aria-busy={busy || undefined}
+        onClick={() => revoke.mutate(device.id)}
+      >
+        Revoke
+      </button>
+    </li>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Agent.tsx`:
+
+```tsx
+import { BRAND, type AgentId, type DeviceView } from '@nitpilot/protocol';
+import { useDevices } from '../../api/settings';
+import { AGENT_NAME } from '../../lib/names';
+import { sortDevices } from './Devices';
+import { Section } from './Section';
+import styles from './Settings.module.css';
+
+/** One coding agent across your computers. */
+export type AgentRow = { id: AgentId; version: string | null; online: boolean; usedOn: string[] };
+
+/**
+ * The agents your computers reported, one row each (online computers first): online when any computer with it is
+ * online, the version from an online one first, and the computers it's on.
+ */
+export function agentsFrom(devices: DeviceView[]): AgentRow[] {
+  const rows = new Map<AgentId, AgentRow>();
+  for (const device of sortDevices(devices)) {
+    if (!device.agent) continue;
+    const row = rows.get(device.agent.id) ?? { id: device.agent.id, version: null, online: false, usedOn: [] };
+    row.usedOn.push(device.name);
+    // Sorted online first, so the first version found comes from an online computer when there is one.
+    row.version ??= device.agent.version;
+    row.online ||= device.online;
+    rows.set(device.agent.id, row);
+  }
+  return [...rows.values()];
+}
+
+/** "v2.1.290", whether or not the agent wrote the v itself. */
+function versionLabel(version: string): string {
+  return version.startsWith('v') ? version : `v${version}`;
+}
+
+/** The coding agents on your computers (handoff §7 "Agent"), worked out from `GET /api/devices`. */
+export function Agent() {
+  const devices = useDevices();
+  let body;
+  if (devices.isPending) {
+    body = <p className={styles.line}>Loading…</p>;
+  } else if (devices.isError) {
+    body = <p className={styles.line}>Couldn't read your computers' agents.</p>;
+  } else {
+    const agents = agentsFrom(devices.data);
+    body =
+      agents.length === 0 ? (
+        <p className={styles.line}>
+          Install Claude Code, then run <span className={styles.mono}>{BRAND.cli} start</span>.
+        </p>
+      ) : (
+        <ul className={styles.list}>
+          {agents.map((agent) => (
+            <li key={agent.id} className={styles.row}>
+              <div className={styles.rowText}>
+                <span className={styles.rowTitle}>
+                  {AGENT_NAME[agent.id]}
+                  {agent.version && <span className={styles.version}>{versionLabel(agent.version)}</span>}
+                </span>
+                <span className={styles.hint}>Used on {agent.usedOn.join(', ')}</span>
+              </div>
+              {agent.online ? (
+                <span className={`${styles.chip} ${styles.ok}`}>
+                  <span aria-hidden="true">✓</span>
+                  <span>Online</span>
+                </span>
+              ) : (
+                <span className={`${styles.chip} ${styles.quiet}`}>
+                  <span aria-hidden="true">○</span>
+                  <span>Not connected</span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      );
+  }
+  return (
+    <Section id="agent" title="Agent">
+      {body}
+    </Section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Notifications.tsx`:
+
+```tsx
+import { BRAND, type WebMe } from '@nitpilot/protocol';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useHomeScreenSheet } from '../../components/IosHomeScreenSheet/IosHomeScreenSheet';
+import { pushState, turnPushOff, turnPushOn } from '../../push/subscribe';
+import { Section } from './Section';
+import styles from './Settings.module.css';
+import { Switch } from './Switch';
+
+const HINT = "Only when you're needed: approvals, escalations, failures";
+
+/**
+ * Push for this browser (handoff §7 "Notifications", docs/why/service-workers-and-pwa.md): the switch when this
+ * browser can subscribe, or why it can't. On an iPhone outside the Home Screen app, the tip and the way to the steps.
+ */
+export function Notifications({ me }: { me: WebMe }) {
+  const queryClient = useQueryClient();
+  const sheet = useHomeScreenSheet();
+  const state = useQuery({ queryKey: ['pushState'], queryFn: pushState, retry: false });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const vapidPublicKey = me.push.vapidPublicKey;
+
+  async function change(on: boolean) {
+    if (!vapidPublicKey) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (on) {
+        await turnPushOn(vapidPublicKey);
+      } else {
+        await turnPushOff();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      // The server's me.update reaches this tab too, but this browser knows its own state now.
+      try {
+        const now = await pushState();
+        queryClient.setQueryData(['pushState'], now);
+        if (now === 'on') queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, push: { ...old.push, subscribed: true } } : old));
+        // Off here; your other devices may still have one: ask the server.
+        else void queryClient.invalidateQueries({ queryKey: ['me'] });
+      } catch {
+        // Couldn't read the browser's state: leave the switch as it was. It must not stay busy.
+      }
+      setBusy(false);
+    }
+  }
+
+  // What the row says under its title, and whether the switch is offered.
+  let hint = HINT;
+  let control = null;
+  if (!vapidPublicKey) {
+    hint = "Push isn't set up on this server.";
+  } else if (state.data === 'unsupported') {
+    hint = "This browser can't show push notifications.";
+  } else if (state.data === 'denied') {
+    hint = "Blocked in your browser's settings. Allow notifications for this site there, then reload this page.";
+  } else if (state.data === 'on' || state.data === 'off') {
+    control = <Switch label="Push notifications" on={state.data === 'on'} busy={busy} onToggle={(on) => void change(on)} />;
+  }
+
+  return (
+    <Section id="notifications" title="Notifications">
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <span className={styles.rowTitle}>Push notifications</span>
+          <span className={styles.hint}>{hint}</span>
+        </div>
+        {control}
+      </div>
+      {vapidPublicKey && state.data === 'needs_home_screen' && (
+        <div className={styles.tip}>
+          <span className={styles.tipDiamond} aria-hidden="true" />
+          <div className={styles.tipBody}>
+            <span>
+              <b>On iPhone?</b> Add {BRAND.name} to your Home Screen to get notifications. In Safari, tap Share, then Add to Home Screen.
+            </span>
+            <button type="button" className={styles.button} onClick={sheet.open}>
+              Show me how
+            </button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
+    </Section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Defaults.tsx`:
+
+```tsx
+import type { Settings, WebMe } from '@nitpilot/protocol';
+import { useSaveSettings } from '../../api/settings';
+import { Section } from './Section';
+import styles from './Settings.module.css';
+import { Switch } from './Switch';
+
+/** The daily cap's range and step (the server checks the same range: protocol `Settings`). */
+const CAP_MIN = 5;
+const CAP_MAX = 200;
+const CAP_STEP = 5;
+
+/**
+ * Your defaults for new chats (handoff §7): Auto-review, Auto-fix, and the daily cap on agent runs with today's usage.
+ * Every press saves the whole of your settings at once. While that save is on its way the controls show the value
+ * it carries and are busy (presses are ignored); the server's answer then becomes `me.settings`, and a refusal puts
+ * back what the server has.
+ */
+export function Defaults({ me }: { me: WebMe }) {
+  const save = useSaveSettings();
+  const busy = save.isPending;
+  const settings: Settings = (busy ? save.variables : undefined) ?? me.settings;
+  const cap = settings.dailyJobCap;
+
+  function change(next: Partial<Settings>) {
+    if (!busy) save.mutate({ ...settings, ...next });
+  }
+
+  const used = me.usedToday;
+  const full = used >= cap;
+  const width = `${Math.min(100, (used / cap) * 100)}%`;
+
+  return (
+    <Section id="defaults" title="Defaults for new chats">
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <span className={styles.rowTitle}>Auto-review</span>
+          <span className={styles.hint}>Your agent reviews as soon as you are requested</span>
+        </div>
+        <Switch label="Auto-review" on={settings.autoReview} busy={busy} onToggle={(autoReview) => change({ autoReview })} />
+      </div>
+      <div className={styles.row}>
+        <div className={styles.rowText}>
+          <span className={styles.rowTitle}>Auto-fix</span>
+          <span className={styles.hint}>Off: fixes wait as drafts for you to send</span>
+        </div>
+        <Switch label="Auto-fix" on={settings.autoAddress} busy={busy} onToggle={(autoAddress) => change({ autoAddress })} />
+      </div>
+      <div className={`${styles.row} ${styles.capRow}`}>
+        <div className={styles.capText}>
+          <span className={styles.rowTitle}>Daily job cap</span>
+          <span className={styles.hint}>
+            Max {cap} agent runs per day · {used} used today
+          </span>
+          <div className={styles.track} aria-hidden="true">
+            <div className={styles.usage} data-testid="usage-bar" data-full={full || undefined} style={{ width }} />
+          </div>
+        </div>
+        <div className={styles.stepper} role="group" aria-label="Daily job cap" aria-busy={busy || undefined}>
+          <button type="button" className={styles.step} aria-label="Lower cap" disabled={cap <= CAP_MIN} onClick={() => change({ dailyJobCap: Math.max(CAP_MIN, cap - CAP_STEP) })}>
+            −
+          </button>
+          <span className={styles.capValue}>{cap}</span>
+          <button type="button" className={styles.step} aria-label="Raise cap" disabled={cap >= CAP_MAX} onClick={() => change({ dailyJobCap: Math.min(CAP_MAX, cap + CAP_STEP) })}>
+            +
+          </button>
+        </div>
+      </div>
+    </Section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Account.tsx`:
+
+```tsx
+import type { WebMe } from '@nitpilot/protocol';
+import { useState, type FormEvent } from 'react';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { turnPushOffBeforeSignOut } from '../../push/subscribe';
+import { Section } from './Section';
+import styles from './Settings.module.css';
+
+/**
+ * Who you are on GitHub, and Sign out (handoff §7 "Account"). The login is the name: Nitpilot stores no display name.
+ * Sign out removes this browser's push subscription first (never for longer than a moment), then sends the form.
+ */
+export function Account({ me }: { me: WebMe }) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  function signOut(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (signingOut) return;
+    setSigningOut(true);
+    const form = e.currentTarget;
+    // form.submit() doesn't fire this handler again.
+    void turnPushOffBeforeSignOut().then(() => form.submit());
+  }
+
+  return (
+    <Section id="account" title="Account">
+      <div className={`${styles.row} ${styles.account}`}>
+        <Avatar login={me.login} src={me.avatarUrl} size={40} />
+        <div className={styles.rowText}>
+          <span className={styles.rowTitle}>{me.login}</span>
+          <span className={`${styles.hint} ${styles.mono}`}>github.com/{me.login}</span>
+        </div>
+        {/* A plain form: the browser sends our Origin, which /auth/logout checks, then follows its redirect. */}
+        <form method="post" action="/auth/logout" onSubmit={signOut}>
+          <button type="submit" className={`${styles.button} ${styles.signOut}`} disabled={signingOut} aria-busy={signingOut}>
+            Sign out
+          </button>
+        </form>
+      </div>
+    </Section>
+  );
+}
+```
+
+Create `apps/web/src/routes/Settings/Settings.module.css`:
+
+```css
+/* handoff §7 "Settings" (NitpilotScreens screen=settings): a page of its own, the top bar, a 180px sticky section nav
+   on a desktop, and 18px-radius cards whose rows have 14px vertical padding and --b2 dividers. */
+.page {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--b1);
+  background: var(--side);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: var(--acc-text);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.back:hover {
+  background: var(--hover);
+}
+
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.body {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  gap: 40px;
+  padding: clamp(16px, 2.6vw, 32px) 20px 40px;
+}
+
+.nav {
+  flex: none;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 20px;
+  align-self: flex-start;
+}
+
+.navLink {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  color: var(--fg2);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.navLink:hover {
+  background: var(--hover);
+}
+
+.navLink[aria-current='true'] {
+  background: var(--muted);
+  color: var(--fg1);
+}
+
+.sections {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* The nav scrolls a section to the top of the page: leave a little room above its heading. */
+  scroll-margin-top: 20px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.card {
+  padding: 0 16px;
+  border: 1px solid var(--b1);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+
+.row + .row,
+.list > .row + .row {
+  border-top: 1px solid var(--b2);
+}
+
+/* A row with the laptop outline: a little more room before the text, as drawn. */
+.row:has(.laptop) {
+  gap: 14px;
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+/* One sentence alone in a card (loading, nothing yet, what to install). */
+.line {
+  margin: 0;
+  padding: 14px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.version {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--fg3);
+}
+
+/* The laptop outline beside a device: --fg2 online, --fg3 otherwise. */
+.laptop {
+  flex: none;
+  box-sizing: border-box;
+  width: 34px;
+  height: 26px;
+  border: 2px solid var(--fg3);
+  border-radius: 6px;
+}
+
+.laptop[data-online] {
+  border-color: var(--fg2);
+}
+
+/* Chips: 26px in the Agent rows, 20px beside a device's name. Always a glyph and a word. */
+.chip {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.smallChip {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.quiet {
+  background: var(--muted);
+  color: var(--fg2);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.revoke {
+  color: var(--red-fg);
+}
+
+/* The iPhone tip: an --acc-tint box with the accent diamond. */
+.tip {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--acc-tint);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.tipDiamond {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: var(--acc);
+  transform: rotate(45deg);
+}
+
+.tipBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg1);
+}
+
+.error {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--fg2);
+}
+
+/* The daily cap: its text and usage bar, and the −/+ stepper. */
+.capRow {
+  flex-wrap: wrap;
+}
+
+.capText {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.usage {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+}
+
+/* At or over the cap: amber (a limit reached is not an escalation, so never red). */
+.usage[data-full] {
+  background: var(--warn);
+}
+
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.stepper[aria-busy='true'] {
+  cursor: progress;
+}
+
+.step {
+  width: 44px;
+  height: 40px;
+  border: 0;
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.step:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.step:disabled {
+  color: var(--fg3);
+  cursor: not-allowed;
+}
+
+/* The focus ring sits inside the stepper's rounded box, which clips what's outside. */
+.step:focus-visible {
+  outline-offset: -2px;
+}
+
+.capValue {
+  width: 48px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+.account {
+  flex-wrap: wrap;
+}
+
+.signOut {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* Fixed near the bottom of the window: the toast sits 8px above this line, 96px up (handoff "Toasts"). */
+.toasts {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 88px;
+  height: 0;
+}
+
+@media (max-width: 759px) {
+  .topBar {
+    padding: 10px 16px;
+  }
+
+  .body {
+    padding: 16px 16px 40px;
+  }
+}
+```
+
+Run: `npm test -w apps/web && npm run typecheck`
+Expected: PASS, 295 tests in 39 files; typecheck clean in all four workspaces.
+
+- [ ] **Step 18: The Playwright spec**
+
+`settings.spec.ts` signs in as maya: the stepper's + saves and the value survives a reload; a seeded computer (`addDevice`, the control API's `/cli-token`) is revoked and is gone after a reload. `pwa.spec.ts`'s Settings check moves to the new "Blocked" sentence and asserts that no switch is drawn.
+
+Modify `apps/web/e2e/control.ts`:
+
+```diff
+diff --git a/apps/web/e2e/control.ts b/apps/web/e2e/control.ts
+index 991cda8..8135c72 100644
+--- a/apps/web/e2e/control.ts
++++ b/apps/web/e2e/control.ts
+@@ -60,3 +60,13 @@ export async function notify(login: 'maya' | 'leo'): Promise<{ reached: string[]
+   if (!res.ok) throw new Error(`notifying ${login} failed: ${res.status} ${await res.text()}`);
+   return (await res.json()) as { reached: string[]; recorded: { endpoint: string; payload: string }[] };
+ }
++
++/**
++ * Give someone a computer without running a CLI: a CLI token row named `name` (offline; `lastSeenAt` ISO makes it look
++ * used). Answers its id. Revoking it on the Settings page removes it.
++ */
++export async function addDevice(device: { login: 'maya' | 'leo'; name: string; lastSeenAt?: string; agent?: { id: string; version: string | null } }): Promise<string> {
++  const res = await fetch(`${CONTROL_URL}/cli-token`, { method: 'POST', body: JSON.stringify(device) });
++  if (!res.ok) throw new Error(`adding ${device.login}'s device failed: ${res.status} ${await res.text()}`);
++  return ((await res.json()) as { id: string }).id;
++}
+```
+
+Create `apps/web/e2e/settings.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { addDevice, resetChats, signIn } from './control';
+
+// The Settings page against the real server (spec §16, handoff §7). /reset puts the daily cap back to 40.
+test.beforeEach(async () => {
+  await resetChats();
+});
+test.afterAll(async () => {
+  await resetChats();
+});
+
+test('the daily cap stepper saves at once, and the new cap is still there after a reload', async ({ page, context }) => {
+  await signIn(context, 'maya');
+  await page.goto('/settings');
+  const defaults = page.getByRole('region', { name: 'Defaults for new chats' });
+  await expect(defaults.getByText(/^Max 40 agent runs per day · \d+ used today$/)).toBeVisible();
+  const saved = page.waitForResponse((res) => res.url().endsWith('/api/me/settings') && res.request().method() === 'PUT');
+  await defaults.getByRole('button', { name: 'Raise cap' }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(defaults.getByText(/^Max 45 agent runs per day/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Defaults for new chats' }).getByText(/^Max 45 agent runs per day/)).toBeVisible();
+});
+
+test('a computer is revoked from the Devices section, and is gone for good', async ({ page, context }) => {
+  await addDevice({ login: 'maya', name: 'maya-linux-desk', lastSeenAt: new Date(Date.now() - 3 * 86_400_000).toISOString(), agent: { id: 'claude-code', version: '2.1.290' } });
+  await signIn(context, 'maya');
+  await page.goto('/settings');
+  const devices = page.getByRole('region', { name: 'Devices' });
+  await expect(devices.getByText('maya-linux-desk')).toBeVisible();
+  await expect(devices.getByText('Last seen 3 days ago')).toBeVisible();
+  await devices.getByRole('button', { name: 'Revoke maya-linux-desk' }).click();
+  await expect(page.getByText('Revoked. That computer has to log in again.')).toBeVisible();
+  await expect(devices.getByText('maya-linux-desk')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Devices' })).toBeVisible();
+  await expect(page.getByText('maya-linux-desk')).toHaveCount(0);
+});
+```
+
+Modify `apps/web/e2e/pwa.spec.ts`:
+
+```diff
+diff --git a/apps/web/e2e/pwa.spec.ts b/apps/web/e2e/pwa.spec.ts
+index 76d6ef4..e2128a2 100644
+--- a/apps/web/e2e/pwa.spec.ts
++++ b/apps/web/e2e/pwa.spec.ts
+@@ -40,7 +40,8 @@ test("Settings reads push from the real browser, and the notifier pushes to a su
+   // Chromium's real APIs. Headless Chromium always blocks notifications, whatever the test allows, so this is the
+   // "denied" state; the switch itself is checked by hand (the live step). Never subscribe here: that reaches
+   // Google's push service.
+-  await expect(page.getByText("Notifications are blocked for this site. Allow them in your browser's site settings, then reload this page.")).toBeVisible();
++  await expect(page.getByText("Blocked in your browser's settings. Allow notifications for this site there, then reload this page.")).toBeVisible();
++  await expect(page.getByRole('switch', { name: 'Push notifications' })).toHaveCount(0);
+   // The server side of push, through the recording sender: with a subscription on file (seeded, since this browser
+   // can't subscribe), the notifier pushes to it and reaches maya. Never a real push service.
+   await resetChats();
+```
+
+Run, before the page exists (to see it fail): apply only this step's three files, the schema, the migration (Steps 3 and 4) and `test/e2e/web-server.ts` (Step 13), keep the old placeholder web code, then `npm run build && npm run test:e2e -w apps/web`
+Expected: FAIL, 3 failed, 9 passed (12): the two new tests (no "Defaults for new chats" or "Devices" region on `/settings`: element not found after 5 s) and the pwa Settings test (the new "Blocked in your browser's settings…" sentence isn't there).
+
+With the page from Step 17 in place:
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 12 tests (10 before this task, plus the 2 new ones).
+
+- [ ] **Step 19: The explainer and the spec**
+
+`docs/why/revoking-devices.md` is new. The spec gets the three `CliToken` fields (§8), `me.update` after personal writes and the Devices routes (§10), and the Settings page as its own page (§16).
+
+Create `docs/why/revoking-devices.md`:
+
+```markdown
+# Revoking a device (the Settings page's Devices section)
+
+**In one sentence:** each computer you ran `nitpilot login` on holds its own token; Revoke marks that token dead in the database and hangs up on that computer's open connection, so it stops at once and has to log in again.
+
+## What a "device" is
+
+`nitpilot login` (docs/why/cli-login.md) ends with the server making a **CLI token**: a random `nit_…` string the CLI keeps in its config file. The server stores only its hash, in a `CliToken` row with the computer's name. One row per computer: the Settings page calls that a device.
+
+Think of the token like the session cookie your browser has, but for a terminal. Revoking it is like signing that one computer out remotely.
+
+The row also remembers what the computer said the last time `nitpilot start` connected (its "hello"): which coding agent it found (Claude Code 2.1.290, say) and which repos are linked on it. That's how the page can still show "Claude Code" for a laptop that's closed right now (`ws/cli-hub.ts`, `rememberHello`). Those facts are saved **before** anyone is told the computer came online, so the update the page gets right after reads the fresh ones.
+
+## Why Revoke also closes the socket with 4401
+
+A connected `nitpilot start` keeps one WebSocket open to the server (docs/why/websockets.md). Setting `revokedAt` on the row is enough to refuse its *next* message: the hub checks the token on every message (`touchCliToken`). But a CLI only pings every 25 seconds, so for up to 25 seconds it could still be handed a job.
+
+So `DELETE /api/devices/:id` (`http/routes/devices.ts`) does both:
+
+1. `revokedAt = now` (only for your own token that isn't revoked yet; anything else is the same 404, so the route never tells you whose a device is);
+2. `CliHub.closeToken(tokenId, 4401, "This device was signed out. Run `nitpilot login`.")`: the hub forgets the connection on the spot and closes the socket.
+
+4401 is our "log in again" close code (`packages/protocol/src/close-codes.ts`, modelled on HTTP 401). The CLI knows it means "don't reconnect, your token is gone", prints the reason and stops, instead of retrying forever like it would after a server restart (1012).
+
+Then the route sends your open tabs a `me.update` (`ws/web-wire.ts`, `sendMeUpdate`), which also makes every Settings page you have open read the device list again. Like a `queryClient.invalidateQueries(['devices'])` that the *server* triggers, for every tab of yours.
+
+There is no Undo: the token itself is gone, and only a new `nitpilot login` makes another.
+
+## Why the page can't say "This device"
+
+The design drew a "This device" chip on the computer you're looking at the page from. The server can't know that: the browser and the CLI are separate programs that share nothing. The browser has a session cookie and the CLI has its token, and nothing links the two to one machine. So an online computer gets an "Online" chip instead.
+
+## The React analogy
+
+- `GET /api/devices` is a plain `useQuery(['devices'])` (`apps/web/src/api/settings.ts`).
+- Revoke is a `useMutation` that toasts and then invalidates `['devices']`. The row disappears because the list is fetched again, not because the page guessed.
+```
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index b6672d1..ca9268f 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -154,7 +154,7 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
+ | `User` | A person signed in with GitHub | githubId, login, avatarUrl, autoReview, autoAddress, dailyJobCap | `githubId` is unique (logins can change). The three settings (Plan 2) are edited on the Settings page and sent to the person's CLIs (§10); they default to on, on and 40 |
+ | `GithubAuth` | The user's GitHub user token | accessTokenEnc, accessExpiresAt, refreshTokenEnc, refreshExpiresAt, version, status `ok\|needs_reauth` | Encrypted with AES-256-GCM. Refreshes run one at a time, because refresh tokens are single-use |
+ | `WebSession` | A browser sign-in | tokenHash, expiresAt | |
+-| `CliToken` | One per CLI device | name, tokenHash, prefix, lastSeenAt, revokedAt | `nit_` prefix; only the hash is stored. `lastSeenAt` drives "offline since…" |
++| `CliToken` | One per CLI device | name, tokenHash, prefix, lastSeenAt, revokedAt, agentId, agentVersion, repos | `nit_` prefix; only the hash is stored. `lastSeenAt` drives "offline since…". `agentId`, `agentVersion` and `repos` (Plan 2) are what the device's last hello said, saved on every hello before its presence is announced, so the Settings page shows its agent while it's offline; the agent is null when the hello's agent has no modes |
+ | `CliLoginRequest` | The `nitpilot login` handshake | deviceCodeHash, userCode, deviceName, status `pending\|approved\|consumed\|denied\|expired`, expiresAt (10 min) | The token is created on the first poll after approval and never stored in plain form |
+ | `Installation` | A GitHub App installation | id, accountLogin, suspendedAt | |
+ | `Repo` | A repo the app can see | id, installationId, fullName, private, defaultBranch, rulesJson, rulesEtag, rulesError | Public-only mode ignores private repos |
+@@ -291,7 +291,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+   - `chat.items {chatId, items, lastSeq}` and `chat.state {chatId, …}` to subscribers after each dispatcher commit;
+   - `job.progress {chatId, who, action, stage, text}`, forwarded live from the CLI (`action` is `reviewing`, `fixing`, or `sending` for a publish job, so the line can say "leo's agent is reviewing…");
+   - `inbox.upsert {chatId, rows}` to every participant of a chat that changed: every row that person has for that chat (an author who also reviews has two), an empty list removing them. Only to people who can still read the repo (the inbox's own check);
+-  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding). The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone.
++  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding), and after each of the person's own writes (`PUT /api/me/settings`, `DELETE /api/devices/:id`, `POST`/`DELETE /api/push/subscriptions`), so every tab of theirs shows the change; the web app then reads `GET /api/devices` again. The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone.
+   - `chat.error {chatId, code}` when a subscribe is refused, or an open subscription's access check fails: `not_found` (no such chat, or you can't see its repo), `reauth` (your GitHub sign-in expired), `unavailable` (GitHub didn't answer; the client asks again a little later). The subscription is gone. A socket whose session ended is closed with 4401.
+ 
+   The client sends `chat.subscribe {chatId, afterSeq}` and `chat.unsubscribe {chatId}`. A subscribe needs read access to the chat (§16). All changes go through REST.
+@@ -302,6 +302,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ - Chat writes: `POST /api/chats/:id/notes`, `POST /api/chats/:id/points/:n/resolve`, `POST /api/chats/:id/points/:n/continue`, `POST /api/chats/:id/review` (Plan 1's stretch goal), `POST /api/chats/:id/retry` (now also with the session cookie), `PUT /api/chats/:id/auto`, `POST /api/chats/:id/drafts/:jobId/send`, `POST /api/chats/:id/drafts/:jobId/discard`, `POST /api/chats/:id/read`. Marking a chat read only moves the person's own cursor and changes nothing anyone else sees, so it needs the Origin check and the person being a participant, not a GitHub access check; for anyone else the chat is a 404.
+ - Answers of the chat writes: 200 (`{ok: true}`; Retry keeps `{status: queued|waiting}`) when the change became an engine event that changed the chat; 403 when the access rules say no (§16); 404 for a chat or a point you can't see; 409 with a plain sentence when the chat moved on first (the point was resolved or handed back meanwhile, the PR closed, your agent is already on it, the draft was already sent or discarded or is already being sent, the switch is already where you put it), so a double click, or two people pressing at once, has exactly one effect. A note is 1 to 4,000 characters. `nitpilot retry` (the CLI token) keeps Plan 1's rule: it isn't asked about read access, since it only runs your own failed job.
+ - Personal: `PUT /api/me/settings`, `POST /api/push/subscriptions`, `DELETE /api/push/subscriptions`, `DELETE /api/devices/:id`.
++- Devices: `GET /api/devices` answers `{devices: [{id, name, lastSeenAt, online, agent: {id, version} | null}]}`: your CLI tokens that aren't revoked, `agent` from the live connection when online and from the token's last hello otherwise. `DELETE /api/devices/:id` sets `revokedAt`, closes that CLI's socket with 4401 and answers 204; another person's device, an unknown one and one already revoked are the same 404. Both take the session cookie only (a CLI token is a 401).
+ - A chat read that isn't allowed answers like the inbox: the same 404 for a chat that doesn't exist and one you can't see, a 401 with code `reauth` when your GitHub sign-in expired, a 502 when GitHub doesn't answer. Every GitHub call gives up after 15 seconds.
+ - CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve`.
+ 
+@@ -644,7 +645,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
+   - **Header:** the Auto switch, round x/y, and whether each agent is online.
+   - **Composer** for notes to the agents.
+   - **"Approve on GitHub"** once the chat is ready.
+-- **Settings:** devices (CLI tokens, with Revoke), agent status, notification permission, defaults for new chats (Auto-review, Auto-fix) and the daily job cap with today's usage, account (sign out).
++- **Settings:** a page of its own (not beside the inbox): devices (CLI tokens, with Revoke; an online device shows "Online", since the server can't tell which computer the browser is on), agent status (worked out on the page from the devices), notification permission, defaults for new chats (Auto-review, Auto-fix) and the daily job cap with today's usage, account (sign out).
+ - **Onboarding:**
+   1. Sign in with GitHub.
+   2. Install the GitHub App.
+```
+
+- [ ] **Step 20: Look at it (controller, in the in-app browser)**
+
+Run `npm run build`, then the Playwright server (launch config `nitpilot-e2e-web`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server`). Seed it and sign maya in, as in Task 18's look:
+
+```bash
+C=http://127.0.0.1:4320
+curl -s -XPOST $C/reset
+# an offline computer that remembers Claude Code, seen 3 days ago
+curl -s -XPOST $C/cli-token -d "{\"login\":\"maya\",\"name\":\"maya-linux-desk\",\"lastSeenAt\":\"$(date -u -v-3d +%Y-%m-%dT%H:%M:%SZ)\",\"agent\":{\"id\":\"claude-code\",\"version\":\"2.1.290\"}}"
+# one that never connected
+curl -s -XPOST $C/cli-token -d '{"login":"maya","name":"old-desk"}'
+# an online computer (maya's fake-agent CLI): an "Online" device and a "✓ Online" Fake agent row
+curl -s -XPOST $C/cli -d '{"login":"maya","scenario":"happy.json"}'
+# the cookie to sign in as maya
+curl -s -XPOST $C/signin -d '{"login":"maya"}'
+# Auto-fix off, for the Defaults screenshot
+curl -s -XPOST $C/settings -d '{"login":"maya","autoAddress":false}'
+```
+
+`/signin` prints `{"name":"nitpilot_session","value":"…"}`. In the tab on `http://127.0.0.1:4319`, run `document.cookie = "nitpilot_session=<value>; path=/"` and open `/settings`. The in-app browser always reports notifications as blocked, so the push switch itself is not exercised here (the unit tests cover every `pushState`; the switch can be seen in desktop Chrome by hand).
+
+- **1280 px, light then dark.** A top bar with "‹ Inbox" and "Settings"; a sticky 180 px nav (Devices, Agent, Notifications, Defaults, Account) with the clicked item on a `--muted` background; five section cards (18 px radius, 16/700 headings, rows 14 px apart with `--b2` dividers). **Devices:** "test laptop" with the "● Online" chip and no "Last seen", then "maya-linux-desk / Last seen 3 days ago", then "old-desk / Never connected", each with an outlined red-text **Revoke**. **Agent:** "Fake agent v0.1.0 · Used on test laptop · ✓ Online" and "Claude Code v2.1.290 · Used on maya-linux-desk · ○ Not connected". **Notifications:** "Blocked in your browser's settings. Allow notifications for this site there, then reload this page." **Defaults:** both switches; press **+**: "Max 45 agent runs per day · 0 used today", the bar moves, and it is still 45 after a reload. **Account:** the avatar, "maya", mono "github.com/maya", **Sign out**. The nav keeps its highlight where you clicked it while you scroll (no scroll-spy, by design).
+- **Revoke.** Press **Revoke** on "maya-linux-desk": the row goes, the toast "Revoked. That computer has to log in again." shows centered, 96 px above the bottom edge, and the Agent section's Claude Code row goes with it. (The in-app browser lists the 204 as `ERR_ABORTED`; the page treats it as success.)
+- **375 px, light then dark.** The cards stack, there is no nav, the stepper wraps under its sentence, and there is no horizontal scroll (`document.documentElement.scrollWidth` is 375).
+- **iPhone tip.** As in Task 20's look, make the page see Safari on an iPhone from the console, move inside the app to `/settings`: the Notifications card shows the accent-tinted "On iPhone?" tip with **Show me how**, no switch. Press it: the sheet opens; Esc closes it, the page stays on `/settings`, and focus goes back to **Show me how**.
+- **Empty states.** `curl -s -XPOST $C/reset`, `curl -s -XDELETE $C/cli -d '{"login":"maya"}'`, and remove the seeded computers by revoking them: "No computers yet. Run `npx nitpilot login` on one to connect it." and "Install Claude Code, then run `nitpilot start`."
+- Not exercised in the look: turning push on (the permission is always denied there) and Sign out (it would end the session).
+
+- [ ] **Step 21: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 80, CLI 333 passed + 14 skipped, server 989, web 295; end to end 6; Playwright 12; typecheck, lint and build clean, with no new warnings.
+
+```bash
+git add apps/web apps/server packages/protocol docs
+git commit -m "feat(web): the Settings page with devices you can revoke, an agent list, push, defaults and sign out, and a me.update after your own writes
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 22: Onboarding that ticks itself off
 
 **Files:**
-- Create: `apps/server/src/http/routes/onboarding.ts` (or inside `me.ts`) and its db test, `apps/web/src/routes/Setup/{Setup.tsx,ChecklistRow.tsx,CommandBlock.tsx,*.module.css,*.test.tsx}`.
-- Modify: `apps/server/src/platform/github/reads.ts` and `platform/types.ts` (`userInstallations`), `apps/server/src/http/routes/setup.ts` (`/github/setup` redirects to `/setup`), `apps/server/src/http/routes/auth.ts` (a first sign-in with onboarding incomplete goes to `/setup` unless `next` says otherwise), `apps/server/src/ws/web-wire.ts` (`me.update` carries onboarding), `packages/protocol/src/web-api.ts` (`Onboarding`, `WebMe.onboarding`).
+
+- Create (server): `apps/server/src/auth/onboarding.ts` and `onboarding.db.test.ts` (the checklist's facts), `apps/server/src/http/routes/onboarding.ts` and `onboarding.db.test.ts` (`GET /api/onboarding`), `apps/server/prisma/migrations/<timestamp>_user_onboarded_at/migration.sql` (generated).
+- Create (web): `apps/web/src/api/onboarding.ts`, `apps/web/src/routes/Setup/{Setup.tsx,ChecklistRow.tsx,CommandBlock.tsx}`, `Setup.module.css`, `ChecklistRow.module.css`, `CommandBlock.module.css`, `Setup.test.tsx`, and `apps/web/e2e/setup.spec.ts`.
+- Create (docs): `docs/why/onboarding-facts.md`.
+- Modify (protocol): `packages/protocol/src/web-api.ts` and `web-api.test.ts` (`Onboarding`, `WebMe.onboarded`), `brand.ts` (`BRAND.hostedDomain`).
+- Modify (server): `apps/server/prisma/schema.prisma` (`User.onboardedAt`), `src/auth/users.ts` (`loadWebMe`), `src/auth/cli-login.ts` (`pollCliLogin`'s hook), `src/http/app.ts`, `src/http/routes/{auth.ts,setup.ts,cli.ts}`, `src/platform/types.ts`, `src/platform/github/reads.ts`, `src/platform/fake/fake-platform.ts`, `test/e2e/web-server.ts` (the Playwright server's control API).
+- Modify (server tests): `src/platform/github/reads.test.ts`, `src/http/routes/{auth,setup,cli,me}.db.test.ts`.
+- Modify (web): `apps/web/src/app.tsx`, `src/live/apply.ts`, `src/routes/Settings/{Settings.tsx,Settings.module.css}`, `apps/web/e2e/control.ts`.
+- Modify (web tests): `src/live/apply.test.ts`, `src/routes/Settings/Settings.test.tsx`, and eleven fixtures that build a `WebMe` and gain `onboarded: true`: `src/test/settings.ts`, `src/lib/banner.test.ts`, `src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx`, and the tests of `Home`, `Shell`, `Inbox`, `Chat`, `ChatBanner`, `Composer`, `DraftCard` and `AutoSwitch`.
+- Modify (docs): `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§8, §10, §16).
+- No new dependency, no deleted file.
 
 **Interfaces:**
-- Produces: `WebMe.appSlug: string` (for the install link) and `Onboarding = { signedIn: true; appInstalled: boolean; cliConnected: boolean; repoLinked: boolean; agentStarted: boolean; done: boolean }`. `appInstalled` = the user's own token sees at least one installation of this app (`GET /user/installations`, kept 5 minutes like `RepoAccess`); `cliConnected` = any unrevoked CLI token; `repoLinked` = a connected CLI reports at least one repo (or one did since the server started); `agentStarted` = a connected CLI reports an agent with at least one mode. `PlatformReads.userInstallations(userId): Promise<{ id: string; accountLogin: string }[]>`.
 
-**Behavior** (handoff §5):
-- Title, progress bar "N of 5", the five rows with done / waiting (spinner) / pending (number) icons and the command blocks with Copy: `npx nitpilot login` (from `BRAND`), `nitpilot repos add`, `nitpilot start` with the "detected automatically" agent chips (Claude Code; Gemini CLI shown as "coming later" while Task 20 is on hold). Install row links to the app's install page (`https://github.com/apps/<GITHUB_APP_SLUG>/installations/new`, slug from `WebMe`). The note "nitpilot.dev covers public repos only" only when the server runs with `PUBLIC_REPOS_ONLY`.
-- **Ticks itself off:** `me.update` on `/ws/web` refreshes `me` when a CLI connects or reports repos; the app-installed step re-checks when the window regains focus (GitHub's install page is another tab).
-- "Skip for now" goes to the inbox; the checklist stays reachable from Settings until `done`.
+- Consumes: Task 21's `CliToken.repos` and `CliToken.agentId` (written on every CLI hello), `MeUpdates.sendMeUpdate(userId)` and `AppDeps.meUpdates`, the Settings page and its `Section`, `useMe()` and `['me']`, `useCopy` (`lib/clipboard.ts`); `TtlCache` (`lib/ttl-cache.ts`); `requireUser`, `HttpError`, `getEnv().GITHUB_APP_SLUG` and `PUBLIC_REPOS_ONLY`; `GithubReads.userToken` (the person's own token, refreshed the way `findOpenPrsFor` refreshes it); `FakePlatform`; the Playwright control API (`signIn`, `startCli`, `resetChats`).
+- Produces (database): `User.onboardedAt DateTime?`.
+- Produces (protocol): `WebMe.onboarded: boolean`. `Onboarding = { steps: { appInstalled: boolean; cliConnected: boolean; repoLinked: boolean; agentStarted: boolean }; done: boolean; deviceName: string | null; appSlug: string; publicReposOnly: boolean }` (step 1, "signed in", is implied by being able to ask). `BRAND.hostedDomain = 'nitpilot.dev'`. There is no `WebMe.onboarding` and no `WebMe.appSlug`: "app installed" asks GitHub (up to 15 s) and `/api/me` is the app's first query, so the checklist is a read of its own.
+- Produces (platform): `type UserInstallation = { id: string; accountLogin: string }` and `PlatformReads.userInstallations(userId: string): Promise<UserInstallation[]>` (`platform/types.ts`; `GithubReads` asks `GET /user/installations?per_page=100` with the person's own token). `FakePlatform` gains `userInstalls: Map<string, UserInstallation[]>`, `installationLookups: string[]` (who was asked, in order) and `failUserInstallations: Error | null`.
+- Produces (server):
+  - `class OnboardingFacts { constructor(platform: Pick<PlatformReads, 'userInstallations'>, now?: () => number); read(userId: string): Promise<Onboarding> }` and `INSTALLED_TTL_MS = 5 * 60_000` (`auth/onboarding.ts`).
+  - `onboardingRoutes(deps: { platform: PlatformReads })`: `GET /api/onboarding`, session cookie only (a CLI token is a 401). It makes one `OnboardingFacts` per app, so GitHub's "yes" is kept as long as the server runs.
+  - `pollCliLogin(deviceCode, now = new Date(), onTokenCreated?: (userId: string) => Promise<void> | void)`: the hook runs once, after the token is saved. `cliRoutes(deps: { meUpdates?: MeUpdates } = {})` passes `(userId) => deps.meUpdates?.sendMeUpdate(userId)`. `auth/cli-login.ts` still imports no WebSocket code.
+  - `loadWebMe` adds `onboarded: user.onboardedAt !== null`.
+  - Playwright control API: `POST /installations { login }` (GitHub now lists one installation for that person), `POST /forget-devices { login }` (stop their CLI, revoke all their tokens); `/reset` also clears `onboardedAt` and the seeded installations. The fake GitHub answers `POST /login/oauth/access_token` and `GET /user` as a newcomer, `sam` (id 3003), so a real `/auth/github/login` then `/auth/github/callback` round trip makes a first-time user.
+- Produces (web): `useOnboarding()` (`api/onboarding.ts`, key `['onboarding']`); `<Setup />` (the `/setup` route); `<ChecklistRow n state title body>` with `StepState = 'done' | 'active' | 'pending'`; `<CommandBlock command active />`. `applyServerMessage` invalidates `['onboarding']` after a `me.update`. `e2e/control.ts` gains `installApp(login)` and `forgetDevices(login)`.
+
+**Behavior** (handoff §5; spec §10 "Reads", §16 "Onboarding"):
+
+- **The page.** `/setup` is a full page under the signed-in wrapper (like Settings), not a pane beside the inbox. Title "Set up Nitpilot", the line "This list ticks itself off as each step completes.", a 6 px accent progress bar with "N of 5", and a card of five rows. A done row has a green ✓ and its title in `--fg3`. The first row not done is **active**: a spinner (0.9 s, still under reduced motion) and its command with **Copy**, or, on step 2, an **Install on GitHub** button that opens `https://github.com/apps/<appSlug>/installations/new` in a new tab (`rel="noopener"`). Later rows show an outlined number and their command without Copy. A done row hides its command.
+- **The rows.** (1) "Sign in with GitHub", "Signed in as @maya." (2) "Install the GitHub App on your repos"; "nitpilot.dev covers public repos only." is added only when the server runs with `PUBLIC_REPOS_ONLY` (the domain comes from `BRAND.hostedDomain`). (3) "Connect your computer": `npx nitpilot login`, "Waiting for your terminal…" while active, "✓ Connected: <newest device name>" when done. (4) "Link a repo": `nitpilot repos add`, "Run it inside your clone. It's ticked off once `nitpilot start` connects." (5) "Start your agent": `nitpilot start` and two chips, "Claude Code · detected automatically" and "Gemini CLI · coming later" (Gemini is on hold). Commands come from `BRAND` (`npx ${BRAND.npmPackage} login`, `${BRAND.cli} repos add`, `${BRAND.cli} start`).
+- **Skip and finish.** "Skip for now" goes to the inbox. When all five are done it is replaced by **Open your inbox** (the primary button). Settings shows a "Finish setting up" card at the top, with a link to `/setup`, until `me.onboarded`.
+- **It ticks itself off.** Steps 4 and 5 can only tick together: the server hears about repos and the agent in a CLI's hello, and `nitpilot start` is what sends it. The page reads `GET /api/onboarding` again (a) after every `me.update` on `/ws/web`: a CLI connects or disconnects, or a `nitpilot login` finishes (the first poll after the person approved the device made the token, and the server tells their open tabs), and (b) when the window comes back into view, which is how step 2 ticks after GitHub's install page, another tab, is closed. TanStack Query already refetches on focus when nothing sets a `staleTime`; a test pins that.
+- **Where each fact comes from.** `cliConnected`: the person has a CLI token nobody revoked. `repoLinked`: one of those tokens remembers a non-empty `repos`. `agentStarted`: one remembers an `agentId`. `appInstalled`: GitHub's `GET /user/installations`, asked with the person's own token, lists at least one installation. A "yes" is kept 5 minutes per person; a "no" is never kept, so the focus re-check sees a fresh install at once. A GitHub error, timeout or expired sign-in counts as "no", is logged with `console.warn` and never fails the read. `deviceName` is the newest unrevoked token's name.
+- **Done is stored.** The first read where all four hold sets `User.onboardedAt` (`updateMany` where it is still null). From then on every read answers all steps true without asking GitHub, even if a computer is revoked later. Existing users get no backfill: their first visit to `/setup` sets it. When the page sees `done`, it writes `onboarded: true` into the `['me']` cache so Settings drops its card without a refetch.
+- **Landing.** After GitHub sends the browser back to `/auth/github/callback`, a person with `onboardedAt` still null whose saved `next` is the default `/` goes to `/setup`; any other `next` (a chat, an approval link) wins; a person who finished setup goes to `/`. `/github/setup`, after syncing the installation, redirects to `/setup` instead of `/`.
+- **States.** Loading: "Checking your setup…" (`role="status"`). A failed read: the error state "Couldn't check your setup." with **Try again**. Icons carry labels ("Done", "In progress", "Step 3, to do"); the active row has `aria-current="step"`; the progress bar is a `progressbar` with `aria-valuenow`. Later rows' commands are `--fg3`, not the prototype's 55 % opacity, which measures about 4.1:1 on `--code` (below AA).
+- Explainer `docs/why/onboarding-facts.md`: where each tick comes from, how the page hears about a change, why GitHub's yes is kept but its no isn't, why done is stored.
 
 **Tests this task must include:**
-- Onboarding facts: each flag from its source (a seeded installation answer from the fake GitHub fetch, a CLI token, a connected CLI with and without repos and modes); `/github/setup` redirects to `/setup`; a first sign-in lands on `/setup`.
-- `Setup.test.tsx`: the rows reflect the facts, and a `me.update` that sets `cliConnected` advances the list without a reload.
+- Protocol: `Onboarding` round trip and refusals, `WebMe` needs `onboarded`.
+- `reads.test.ts`: `userInstallations` lists with the person's token and `per_page=100`; an empty list.
+- `onboarding.db.test.ts` (facts): each fact from its source (a seeded installation, a CLI token, remembered repos and agent, a revoked token does not count); a yes cached for 5 minutes, then asked again; a no never cached; a GitHub failure counts as no, is logged, and still answers; done stored once and then GitHub is not asked; the public-only flag.
+- `onboarding.db.test.ts` (route): the signed-in answer; a CLI token and no sign-in are both 401.
+- `me.db.test.ts`, `auth.db.test.ts`, `setup.db.test.ts`, `cli.db.test.ts`: `onboarded`; a first sign-in lands on `/setup`, one with `next` keeps it, an onboarded person lands on `/`; `/github/setup` goes to `/setup`; the first poll after approval calls `sendMeUpdate` once.
+- `Setup.test.tsx`, `Settings.test.tsx`, `apply.test.ts`: as in the steps below.
+- Playwright `setup.spec.ts`: a first sign-in lands on `/setup`, with the install link; rows 3 to 5 tick live when a CLI is started through the control API.
+
+- [ ] **Step 1: Add `User.onboardedAt` and generate the migration**
+
+`onboardedAt` is the checklist's memory: null until the first time every step held. It sits with the other `User` settings, and the schema file gets re-aligned by `prisma format`, which is why the diff may show a few more lines than the change.
+
+Modify `apps/server/prisma/schema.prisma`:
+
+```diff
+diff --git a/apps/server/prisma/schema.prisma b/apps/server/prisma/schema.prisma
+index 55ff8b2..e770c18 100644
+--- a/apps/server/prisma/schema.prisma
++++ b/apps/server/prisma/schema.prisma
+@@ -20,6 +20,9 @@ model User {
+   autoReview  Boolean  @default(true)
+   autoAddress Boolean  @default(true)
+   dailyJobCap Int      @default(40)
++  /// When the setup checklist (`/setup`, spec §16 "Onboarding") first had every step done. From then on it reads done
++  /// without asking GitHub, and a sign-in goes straight to the inbox. Null: not yet.
++  onboardedAt DateTime?
+   createdAt   DateTime @default(now())
+   updatedAt   DateTime @updatedAt
+ 
+```
+
+Run: `npm run db:migrate -w apps/server -- --name user_onboarded_at`, then `npm run db:generate -w apps/server` (Prisma 7's `migrate dev` doesn't regenerate the client; without this step `onboardedAt` isn't a known field).
+Expected: a new folder `apps/server/prisma/migrations/<timestamp>_user_onboarded_at/` (the folder name carries your own timestamp) with this `migration.sql`, "Your database is now in sync with your schema." and "Generated Prisma Client".
+
+The generated `migration.sql` (the scratch commit's folder was `20261019152754_user_onboarded_at`; yours has a new timestamp):
+
+```sql
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "onboardedAt" TIMESTAMP(3);
+```
+
+- [ ] **Step 2: Write the failing test for `userInstallations`**
+
+GitHub answers `GET /user/installations` with the installations of this app that the token's owner can see. The test checks the mapping (ids become strings), that the call uses the person's own token (the test's token function answers `ghu_<userId>`, so `Bearer ghu_user-maya`), and the empty answer.
+
+Modify `apps/server/src/platform/github/reads.test.ts`:
+
+```diff
+diff --git a/apps/server/src/platform/github/reads.test.ts b/apps/server/src/platform/github/reads.test.ts
+index f95f65c..9a87832 100644
+--- a/apps/server/src/platform/github/reads.test.ts
++++ b/apps/server/src/platform/github/reads.test.ts
+@@ -117,6 +117,26 @@ describe('findOpenPrsFor (spec §15 "Catching up")', () => {
+   });
+ });
+ 
++describe('userInstallations (the setup checklist, spec §16 "Onboarding")', () => {
++  it("lists the app's installations the person can see, asked with their own token", async () => {
++    const { fetch, platform } = reads({
++      'GET /user/installations': () => ({ total_count: 2, installations: [{ id: 77, account: { login: 'octo' } }, { id: 78, account: { login: 'maya' } }] }),
++    });
++    expect(await platform.userInstallations('user-maya')).toEqual([
++      { id: '77', accountLogin: 'octo' },
++      { id: '78', accountLogin: 'maya' },
++    ]);
++    const call = fetch.calls.find((c) => c.url.pathname === '/user/installations')!;
++    expect(call.headers.get('authorization')).toBe('Bearer ghu_user-maya');
++    expect(call.url.searchParams.get('per_page')).toBe('100');
++  });
++
++  it('answers an empty list when the app is installed nowhere they can see', async () => {
++    const { platform } = reads({ 'GET /user/installations': () => ({ total_count: 0, installations: [] }) });
++    expect(await platform.userInstallations('user-maya')).toEqual([]);
++  });
++});
++
+ describe('listPrFiles', () => {
+   const file = (i: number) => ({ filename: `src/f${i}.ts`, status: 'modified', additions: 2, deletions: 1 });
+ 
+```
+
+- [ ] **Step 3: Run it to see it fail**
+
+Run: `npm run test:unit -w apps/server -- src/platform/github/reads.test.ts`
+Expected: FAIL, 2 failed, 15 passed (17) in 1 file: both new tests, `platform.userInstallations is not a function`.
+
+- [ ] **Step 4: Add `userInstallations` to the platform, the GitHub reads and `FakePlatform`**
+
+The type and the interface method first. `FakePlatform` (the pretend platform that tests and the Playwright server use) gets three things a test can set or read: the installations it lists per person, who was asked, and a switch that makes the call fail like a GitHub outage.
+
+Modify `apps/server/src/platform/types.ts`:
+
+```diff
+diff --git a/apps/server/src/platform/types.ts b/apps/server/src/platform/types.ts
+index 67b34ec..9f464f9 100644
+--- a/apps/server/src/platform/types.ts
++++ b/apps/server/src/platform/types.ts
+@@ -45,6 +45,9 @@ export type RepoInfo = { id: string; fullName: string; private: boolean; default
+ /** A PR a search found: enough to look it up. */
+ export type FoundPr = { repoFullName: string; number: number };
+ 
++/** One installation of this app that a person can see on the platform: on their account, or an org's they're in. */
++export type UserInstallation = { id: string; accountLogin: string };
++
+ export type PrNormalizedEvent = {
+   scope: 'pr';
+   pr: PrRef;
+@@ -74,6 +77,8 @@ export interface PlatformReads {
+   findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
+   /** The PR's changed files, at most `MAX_PR_FILES`; `truncated` when there may be more. */
+   listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>;
++  /** The installations of this app that the person can see, asked with their own token (the setup checklist, spec §16). */
++  userInstallations(userId: string): Promise<UserInstallation[]>;
+ }
+ 
+ /** How many changed files a PR's file list shows: three pages of 100. */
+```
+
+Modify `apps/server/src/platform/github/reads.ts`:
+
+```diff
+diff --git a/apps/server/src/platform/github/reads.ts b/apps/server/src/platform/github/reads.ts
+index 11cc7c6..e0ca69e 100644
+--- a/apps/server/src/platform/github/reads.ts
++++ b/apps/server/src/platform/github/reads.ts
+@@ -1,5 +1,5 @@
+ import type { PrFile } from '@nitpilot/protocol';
+-import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef } from '../types';
++import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef, type UserInstallation } from '../types';
+ import type { AppAuth } from './app-auth';
+ import { GithubError, type GithubClient } from './client';
+ import { gitSpecFor, snapshotFromPull } from './mapping';
+@@ -11,6 +11,9 @@ export { gitSpecFor, isTrustedAssociation, snapshotFromPull, toPerson } from './
+ /** What a search answers, as far as we read it. */
+ type GhSearch = { items: { number: number; repository_url: string }[] };
+ 
++/** What `GET /user/installations` answers, as far as we read it. */
++type GhUserInstallations = { installations: { id: number; account: { login: string } | null }[] };
++
+ /** The read side of the GitHub adapter. Task 26 adds the writes. */
+ export class GithubReads implements PlatformReads {
+   readonly id = 'github' as const;
+@@ -81,6 +84,16 @@ export class GithubReads implements PlatformReads {
+     return [...found.values()];
+   }
+ 
++  /**
++   * With a GitHub App's user token, `GET /user/installations` lists only this app's installations the person can
++   * reach: on their own account, or on an org where they can see it. The first 100 are plenty to say "installed".
++   */
++  async userInstallations(userId: string): Promise<UserInstallation[]> {
++    const token = await this.userToken(userId);
++    const { data } = await this.github.api<GhUserInstallations>('GET', '/user/installations?per_page=100', { token });
++    return data.installations.map((i) => ({ id: String(i.id), accountLogin: i.account?.login ?? '' }));
++  }
++
+   /** Page by page, 100 at a time, with the installation token, up to MAX_PR_FILES. */
+   async listPrFiles(ref: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
+     const token = await this.appAuth.installationToken(ref.installationId);
+```
+
+Modify `apps/server/src/platform/fake/fake-platform.ts`:
+
+```diff
+diff --git a/apps/server/src/platform/fake/fake-platform.ts b/apps/server/src/platform/fake/fake-platform.ts
+index 622d012..25de60d 100644
+--- a/apps/server/src/platform/fake/fake-platform.ts
++++ b/apps/server/src/platform/fake/fake-platform.ts
+@@ -3,7 +3,7 @@ import { GithubError } from '../github/client';
+ import { parseGithubWebhook } from '../github/normalize/index';
+ import type { GhReviewComment } from '../github/payloads';
+ import { gitSpecFor } from '../github/mapping';
+-import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
++import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, UserInstallation, WriteOptions } from '../types';
+ 
+ export type FakeWrite = {
+   kind: 'summary' | 'review' | 'reply';
+@@ -39,6 +39,12 @@ export class FakePlatform implements PlatformAdapter {
+   readonly prFiles = new Map<string, PrFile[]>();
+   /** Which PRs' files were listed, in order. */
+   readonly fileLists: string[] = [];
++  /** userId → the app's installations GitHub lists for them (the setup checklist's "installed" step) */
++  readonly userInstalls = new Map<string, UserInstallation[]>();
++  /** Whose installations were asked for, in order. */
++  readonly installationLookups: string[] = [];
++  /** Set to make every userInstallations call fail with this error, as a GitHub outage would. */
++  failUserInstallations: Error | null = null;
+   /** Make the next postReview with inline comments fail like GitHub does for lines outside the diff. */
+   rejectNextInlineReview = false;
+   private nextId = Date.now() * 1000;
+@@ -82,6 +88,12 @@ export class FakePlatform implements PlatformAdapter {
+     return { files: this.prFiles.get(prKey(pr)) ?? [], truncated: false };
+   }
+ 
++  async userInstallations(userId: string): Promise<UserInstallation[]> {
++    this.installationLookups.push(userId);
++    if (this.failUserInstallations) throw this.failUserInstallations;
++    return this.userInstalls.get(userId) ?? [];
++  }
++
+   async upsertSummary(pr: PrRef, body: string, existingId?: string, opts?: WriteOptions): Promise<{ id: string }> {
+     const existing =
+       this.writes.find((w) => w.kind === 'summary' && w.id === existingId) ??
+```
+
+- [ ] **Step 5: Run the reads test to see it pass**
+
+Run: `npm run test:unit -w apps/server -- src/platform/github/reads.test.ts`
+Expected: PASS, 17 tests in 1 file.
+
+- [ ] **Step 6: Write the failing Playwright spec, and the control API it needs**
+
+The end-to-end test goes in now, before the page exists, so the finished feature is checked from the outside. It needs four things from the test server, shown first.
+
+- **Fake GitHub sign-in.** The Playwright server's fake GitHub now answers the two calls of a sign-in (`POST /login/oauth/access_token` and `GET /user`) as a newcomer, `sam`. A real `/auth/github/login` then `/auth/github/callback` round trip, with any code, makes a first-time user who has never finished setup.
+- **`POST /installations { login }`** makes `FakePlatform` list one installation for that person (the install step's "yes").
+- **`POST /forget-devices { login }`** stops that person's CLI and revokes all their tokens (so they are back before `nitpilot login`).
+- **`/reset`** also sets everyone's `onboardedAt` back to null and clears the seeded installations.
+
+Modify `apps/server/test/e2e/web-server.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/web-server.ts b/apps/server/test/e2e/web-server.ts
+index 7bee73c..6f393d8 100644
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -56,10 +56,23 @@ const recordPush: PushSend = async (target, payload) => {
+ };
+ const realPush = env.E2E_REAL_PUSH === '1';
+ 
++/**
++ * Someone GitHub signs in who isn't one of the harness's people: a real sign-in (`/auth/github/login`, then the
++ * callback) with any code makes them, as a first sign-in would. setup.spec.ts uses it.
++ */
++const NEWCOMER = { id: 3003, login: 'sam' };
++
+ const e2e = await startE2e({
+   port: webPort,
+   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
+-  github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
++  github: new GithubClient(
++    fakeFetch({
++      'GET /repos/octo/sandbox': () => ({ id: 1 }),
++      // GitHub's half of a sign-in: any code buys a token, and the token belongs to the newcomer.
++      'POST /login/oauth/access_token': () => ({ access_token: 'ghu_newcomer', expires_in: 28_800, refresh_token: 'ghr_newcomer', refresh_token_expires_in: 15_811_200 }),
++      'GET /user': () => ({ ...NEWCOMER, avatar_url: null }),
++    }),
++  ),
+   push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
+ });
+ // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
+@@ -100,11 +113,24 @@ control.post('/pr', async (c) => {
+ });
+ /**
+  * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
+- * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults.
++ * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults, their
++ * setup checklist is unfinished again, and GitHub lists no installation for anyone until /installations says so.
+  */
+ control.post('/reset', async (c) => {
+   await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
+-  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40 } });
++  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40, onboardedAt: null } });
++  e2e.platform.userInstalls.clear();
++  return c.body(null, 204);
++});
++/**
++ * What GitHub's `GET /user/installations` lists for someone (the setup checklist's "Install the GitHub App" step):
++ * the app installed on their account. /reset lists none again.
++ */
++control.post('/installations', async (c) => {
++  const { login } = (await c.req.json()) as { login: string };
++  const user = await prisma.user.findFirst({ where: { login } });
++  if (!user) return c.json({ error: `no user "${login}"` }, 400);
++  e2e.platform.userInstalls.set(user.id, [{ id: '1', accountLogin: login }]);
+   return c.body(null, 204);
+ });
+ /**
+@@ -170,6 +196,19 @@ control.post('/cli', async (c) => {
+   if (!clis.has(login)) clis.set(login, await e2e.startCli(login, scenario));
+   return c.body(null, 204);
+ });
++/**
++ * Stop someone's CLI and revoke every token they have, as if they had never run `nitpilot login`: the setup
++ * checklist's computer, repo and agent steps are open again.
++ */
++control.post('/forget-devices', async (c) => {
++  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
++  const user = e2e.users[login];
++  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
++  await clis.get(login)?.stop();
++  clis.delete(login);
++  await prisma.cliToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
++  return c.body(null, 204);
++});
+ /** Stop it again, so the next test finds that person's agent offline. */
+ control.delete('/cli', async (c) => {
+   const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+```
+
+Modify `apps/web/e2e/control.ts`:
+
+```diff
+diff --git a/apps/web/e2e/control.ts b/apps/web/e2e/control.ts
+index 8135c72..c7e7d36 100644
+--- a/apps/web/e2e/control.ts
++++ b/apps/web/e2e/control.ts
+@@ -70,3 +70,15 @@ export async function addDevice(device: { login: 'maya' | 'leo'; name: string; l
+   if (!res.ok) throw new Error(`adding ${device.login}'s device failed: ${res.status} ${await res.text()}`);
+   return ((await res.json()) as { id: string }).id;
+ }
++
++/** Have GitHub list an installation of the app for someone (the setup checklist's install step). `resetChats` clears it. */
++export async function installApp(login: string): Promise<void> {
++  const res = await fetch(`${CONTROL_URL}/installations`, { method: 'POST', body: JSON.stringify({ login }) });
++  if (!res.ok) throw new Error(`installing the app for ${login} failed: ${res.status} ${await res.text()}`);
++}
++
++/** Stop someone's CLI and revoke all their tokens, so their setup checklist starts again from "Connect your computer". */
++export async function forgetDevices(login: 'maya' | 'leo'): Promise<void> {
++  const res = await fetch(`${CONTROL_URL}/forget-devices`, { method: 'POST', body: JSON.stringify({ login }) });
++  if (!res.ok) throw new Error(`forgetting ${login}'s devices failed: ${res.status} ${await res.text()}`);
++}
+```
+
+The spec has two tests. The first signs `sam` in with the real round trip and expects `/setup` with the install link. The second signs `maya` in, installs the app through the control API, fakes the window coming back into view (`visibilitychange` is what TanStack Query's focus manager listens to), then starts her CLI with a scenario that links a repo and an agent, and watches rows 3 to 5 tick with no reload.
+
+Create `apps/web/e2e/setup.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { forgetDevices, installApp, resetChats, signIn, startCli } from './control';
+
+// The setup checklist against the real server (spec §16 "Onboarding", handoff §5). /reset makes everyone's checklist
+// unfinished again and lists no installation; forgetDevices takes maya back to before `nitpilot login`.
+test.beforeEach(async () => {
+  await forgetDevices('maya');
+  await resetChats();
+});
+test.afterAll(async () => {
+  await forgetDevices('maya');
+  await resetChats();
+});
+
+test("a first sign-in lands on the checklist, with GitHub's install page next", async ({ page }) => {
+  // A real sign-in: the server sends the browser to GitHub, and GitHub (the pretend one) sends it back with a code.
+  const login = await page.request.get('/auth/github/login', { maxRedirects: 0 });
+  const state = new URL(login.headers()['location']!).searchParams.get('state');
+  await page.goto(`/auth/github/callback?code=any&state=${state}`);
+  await expect(page).toHaveURL(/\/setup$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeVisible();
+  await expect(page.getByText('1 of 5')).toBeVisible();
+  await expect(page.getByText('Signed in as @sam.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Install on GitHub' })).toHaveAttribute('href', 'https://github.com/apps/nitpilot-dev/installations/new');
+});
+
+test('the checklist ticks itself off: the install when the window comes back, the rest when the CLI connects', async ({ page, context }) => {
+  await signIn(context, 'maya');
+  await page.goto('/setup');
+  await expect(page.getByText('1 of 5')).toBeVisible();
+
+  // GitHub's install page was another tab: coming back to this one asks again.
+  await installApp('maya');
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+  await expect(page.getByText('2 of 5')).toBeVisible();
+  const steps = page.getByRole('list', { name: 'Setup steps' }).getByRole('listitem');
+  await expect(steps.nth(2)).toHaveAttribute('aria-current', 'step');
+  await expect(steps.nth(2)).toContainText('Waiting for your terminal…');
+
+  // `nitpilot start` connects with a linked repo and the fake agent: rows 3 to 5 tick, with no reload.
+  await startCli('maya', 'happy.json');
+  await expect(page.getByText('5 of 5')).toBeVisible();
+  await expect(steps.nth(2)).toContainText('✓ Connected: test laptop');
+  await expect(page.getByRole('link', { name: 'Open your inbox' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Skip for now' })).toHaveCount(0);
+});
+```
+
+- [ ] **Step 7: Run Playwright to see it fail**
+
+Ports 4319 and 4320 must be free (`lsof -iTCP:4319 -sTCP:LISTEN` prints nothing).
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: FAIL, 2 failed and 12 passed (14). The two `setup.spec.ts` tests fail: the first signs in fine, but the browser lands on `/` instead of `/setup` (`toHaveURL(/\/setup$/)` times out); the second finds no "1 of 5" on `/setup`, because the web app has no such page yet. The 12 older tests still pass, so the new control API didn't disturb them.
+
+- [ ] **Step 8: Write the failing protocol test**
+
+`WebMe` gains `onboarded`; `Onboarding` is the new body of `GET /api/onboarding`. The test checks the round trip, that a checklist without its four steps is refused, and that a `WebMe` without `onboarded` is refused.
+
+Modify `packages/protocol/src/web-api.test.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.test.ts b/packages/protocol/src/web-api.test.ts
+index b1f398b..644cdc6 100644
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -3,11 +3,11 @@ import { MeResponse } from './api';
+ import { jobResult, settings } from './test-samples';
+ import {
+   ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+-  PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
++  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+ } from './web-api';
+ 
+ describe('web API bodies', () => {
+-  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true } };
++  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true }, onboarded: false };
+ 
+   it('round-trips WebMe', () => {
+     expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
+@@ -135,4 +135,17 @@ describe('web API bodies', () => {
+     expect(DevicesResponse.parse(JSON.parse(JSON.stringify({ devices })))).toEqual({ devices });
+     expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'copilot', version: null } }] }).success).toBe(false);
+   });
++
++  it('round-trips the setup checklist: four steps from the server, done, the newest device, the app to install', () => {
++    const onboarding: Onboarding = {
++      steps: { appInstalled: true, cliConnected: true, repoLinked: false, agentStarted: false },
++      done: false,
++      deviceName: "Maya's MacBook Pro",
++      appSlug: 'nitpilot-dev',
++      publicReposOnly: true,
++    };
++    expect(Onboarding.parse(JSON.parse(JSON.stringify(onboarding)))).toEqual(onboarding);
++    expect(Onboarding.safeParse({ ...onboarding, steps: { appInstalled: true } }).success).toBe(false);
++    expect(WebMe.safeParse({ ...me, onboarded: undefined }).success).toBe(false);
++  });
+ });
+```
+
+- [ ] **Step 9: Run it to see it fail**
+
+Run: `npm test -w packages/protocol`
+Expected: FAIL, 2 failed, 79 passed (81) in 1 of 8 files: the `WebMe` round trip (`onboarded` is stripped, since the schema doesn't know it) and the new checklist test (`Onboarding` is undefined).
+
+- [ ] **Step 10: Add `Onboarding`, `WebMe.onboarded` and `BRAND.hostedDomain`**
+
+`BRAND.hostedDomain` is the hosted instance's name, used for the "covers public repos only" note, so the page doesn't hard-code "nitpilot.dev" (CLAUDE.md).
+
+Modify `packages/protocol/src/web-api.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.ts b/packages/protocol/src/web-api.ts
+index 38a6116..ca466ef 100644
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -35,6 +35,11 @@ export const WebMe = MeResponse.extend({
+    * no keys, so push is off and the CLI notifies as in Plan 1), and whether you have any subscription.
+    */
+   push: z.object({ vapidPublicKey: z.string().nullable(), subscribed: z.boolean() }),
++  /**
++   * You finished the setup checklist once (`User.onboardedAt`): Settings stops offering "Finish setting up". The
++   * checklist's own facts are a read of their own (`GET /api/onboarding`), since one of them asks GitHub.
++   */
++  onboarded: z.boolean(),
+ });
+ export type WebMe = z.infer<typeof WebMe>;
+ 
+@@ -57,6 +62,23 @@ export type DeviceView = z.infer<typeof DeviceView>;
+ export const DevicesResponse = z.object({ devices: z.array(DeviceView) });
+ export type DevicesResponse = z.infer<typeof DevicesResponse>;
+ 
++/**
++ * The setup checklist (`GET /api/onboarding`, the `/setup` page, handoff §5). Step 1, signing in, is a given: only a
++ * signed-in person can ask. `appInstalled`: GitHub lists an installation of this app that you can see.
++ * `cliConnected`: you have a CLI token nobody revoked (`npx nitpilot login` worked). `repoLinked`: one of those CLIs
++ * reported a linked repo when `nitpilot start` connected. `agentStarted`: one reported an agent it can run. `done`
++ * once all four held at the same time; from then on every step reads true. `deviceName` is your newest computer's name
++ * ("Connected: …"); `appSlug` makes the install link; `publicReposOnly` says this server reviews public repos only.
++ */
++export const Onboarding = z.object({
++  steps: z.object({ appInstalled: z.boolean(), cliConnected: z.boolean(), repoLinked: z.boolean(), agentStarted: z.boolean() }),
++  done: z.boolean(),
++  deviceName: z.string().nullable(),
++  appSlug: z.string(),
++  publicReposOnly: z.boolean(),
++});
++export type Onboarding = z.infer<typeof Onboarding>;
++
+ /**
+  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
+  * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
+```
+
+Modify `packages/protocol/src/brand.ts`:
+
+```diff
+diff --git a/packages/protocol/src/brand.ts b/packages/protocol/src/brand.ts
+index 4cba407..0b6056d 100644
+--- a/packages/protocol/src/brand.ts
++++ b/packages/protocol/src/brand.ts
+@@ -17,6 +17,8 @@ export const BRAND = {
+   sessionCookie: 'nitpilot_session',
+   oauthCookie: 'nitpilot_oauth',
+   userAgent: 'nitpilot',
++  /** The hosted instance (Plan 3), which reviews public repos only; the setup checklist names it. */
++  hostedDomain: 'nitpilot.dev',
+   /** Where the code and docs live; the web app's landing page links here. */
+   repoUrl: 'https://github.com/NikosGkikas13/nitpilot',
+ } as const;
+```
+
+- [ ] **Step 11: Run the protocol tests to see them pass**
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 81 tests in 8 files.
+
+- [ ] **Step 12: Write the failing `/api/me` tests**
+
+A new person reads `onboarded: false`; once `onboardedAt` is set, `true`. Only the first test's expected object changes, and one test is added.
+
+Modify `apps/server/src/http/routes/me.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/me.db.test.ts b/apps/server/src/http/routes/me.db.test.ts
+index d432095..5923cfc 100644
+--- a/apps/server/src/http/routes/me.db.test.ts
++++ b/apps/server/src/http/routes/me.db.test.ts
+@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
+ import { testApp } from '../../../test/app';
+ import { makeCliToken, makeUser } from '../../../test/db';
+ import { sessionCookieFor } from '../../../test/http';
++import { prisma } from '../../lib/prisma';
+ 
+ describe('GET /api/me', () => {
+   it('tells a signed-in browser who it is', async () => {
+@@ -11,10 +12,17 @@ describe('GET /api/me', () => {
+     expect(res.status).toBe(200);
+     expect(WebMe.parse(await res.json())).toEqual({
+       id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth', agentOnline: false,
+-      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false },
++      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: false,
+     });
+   });
+ 
++  it('says you finished the setup checklist once it was done', async () => {
++    const user = await makeUser();
++    await prisma.user.update({ where: { id: user.id }, data: { onboardedAt: new Date() } });
++    const res = await testApp().request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
++    expect(await res.json()).toMatchObject({ onboarded: true });
++  });
++
+   it('says whether any of your CLIs is connected', async () => {
+     const user = await makeUser({ login: 'maya-online' });
+     const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2, agent: { id: 'fake' as const, version: null, modes: [] } }] : []), sendSettings: () => 0, closeToken: () => false };
+```
+
+- [ ] **Step 13: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/me.db.test.ts`
+Expected: FAIL, 2 failed, 3 passed (5) in 1 file: the answer has no `onboarded`, so the first test's `toEqual` differs and the new test reads `undefined`.
+
+- [ ] **Step 14: Send `onboarded` from `loadWebMe`**
+
+Modify `apps/server/src/auth/users.ts`:
+
+```diff
+diff --git a/apps/server/src/auth/users.ts b/apps/server/src/auth/users.ts
+index 4eae786..6c1dd2b 100644
+--- a/apps/server/src/auth/users.ts
++++ b/apps/server/src/auth/users.ts
+@@ -38,7 +38,7 @@ export function settingsOf(user: Settings): Settings {
+  * Who you are, as the web app reads it (`GET /api/me`, and `me.update` on `/ws/web`): your GitHub account, whether
+  * your GitHub sign-in still works, whether one of your CLIs is connected right now, your settings, how many
+  * agent runs your connected CLIs started today, and Web Push: the server's public key (null when push is off)
+- * and whether you have a subscription.
++ * and whether you have a subscription. Last, whether you finished the setup checklist once (`User.onboardedAt`).
+  */
+ export async function loadWebMe(userId: string, clis: LiveClis, vapidPublicKey: string | null): Promise<WebMe> {
+   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true, _count: { select: { pushSubs: true } } } });
+@@ -54,5 +54,6 @@ export async function loadWebMe(userId: string, clis: LiveClis, vapidPublicKey:
+     // Each CLI counts from its own midnight; a device that's offline isn't counted.
+     usedToday: connected.reduce((sum, cli) => sum + cli.usedToday, 0),
+     push: { vapidPublicKey, subscribed: user._count.pushSubs > 0 },
++    onboarded: user.onboardedAt !== null,
+   };
+ }
+```
+
+- [ ] **Step 15: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/me.db.test.ts`
+Expected: PASS, 5 tests in 1 file. (`me.update` carries the same `WebMe`, so it carries `onboarded` too.)
+
+- [ ] **Step 16: Write the failing tests for the checklist's facts**
+
+`OnboardingFacts.read(userId)` is a class (not a function) so that GitHub's "yes" lives as long as the server does. The tests build one with `FakePlatform` as GitHub and a clock they move by hand. `computer()` makes a CLI token as its last hello left it (name, remembered repos, remembered agent).
+
+Create `apps/server/src/auth/onboarding.db.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makeCliToken, makeUser } from '../../test/db';
+import { prisma } from '../lib/prisma';
+import { FakePlatform } from '../platform/fake/fake-platform';
+import { INSTALLED_TTL_MS, OnboardingFacts } from './onboarding';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+/** The checklist's facts for a new person, with GitHub played by FakePlatform and a clock the test moves. */
+async function scene() {
+  const user = await makeUser({ login: 'maya' });
+  const platform = new FakePlatform();
+  let now = Date.now();
+  const facts = new OnboardingFacts(platform, () => now);
+  return {
+    user,
+    platform,
+    read: () => facts.read(user.id),
+    later: (ms: number) => void (now += ms),
+    installed: () => platform.userInstalls.set(user.id, [{ id: '77', accountLogin: 'maya' }]),
+  };
+}
+
+/** One of her CLI tokens, as its last hello left it. */
+async function computer(userId: string, over: { name?: string; repos?: string[]; agentId?: string; revoked?: boolean } = {}) {
+  const token = await makeCliToken(userId, { revoked: over.revoked ?? false });
+  await prisma.cliToken.update({ where: { id: token.id }, data: { name: over.name ?? 'test laptop', repos: over.repos ?? [], agentId: over.agentId ?? null } });
+  return token;
+}
+
+const NONE = { appInstalled: false, cliConnected: false, repoLinked: false, agentStarted: false };
+
+describe('OnboardingFacts (spec §16 "Onboarding")', () => {
+  it('has only the sign-in done for someone new, and names the app to install', async () => {
+    const { read } = await scene();
+    expect(await read()).toEqual({ steps: NONE, done: false, deviceName: null, appSlug: 'nitpilot-dev', publicReposOnly: false });
+  });
+
+  it("ticks the app off once GitHub lists an installation the person's own token can see", async () => {
+    const { user, platform, read, installed } = await scene();
+    installed();
+    expect((await read()).steps).toEqual({ ...NONE, appInstalled: true });
+    expect(platform.installationLookups).toEqual([user.id]);
+  });
+
+  it('ticks the computer off with a CLI token, named after the newest one; a revoked token does not count', async () => {
+    const { user, read } = await scene();
+    await computer(user.id, { name: 'old-desk', revoked: true, repos: ['octo/sandbox'], agentId: 'claude-code' });
+    expect(await read()).toMatchObject({ steps: NONE, deviceName: null });
+    await computer(user.id, { name: 'maya-linux-desk' });
+    await computer(user.id, { name: "Maya's MacBook Pro" });
+    expect(await read()).toMatchObject({ steps: { ...NONE, cliConnected: true }, deviceName: "Maya's MacBook Pro" });
+  });
+
+  it('ticks the repo off when a CLI reported a linked repo, and the agent when one reported an agent it can run', async () => {
+    const { user, read } = await scene();
+    await computer(user.id, { repos: ['octo/sandbox'] });
+    expect((await read()).steps).toEqual({ ...NONE, cliConnected: true, repoLinked: true });
+    await computer(user.id, { agentId: 'claude-code' });
+    expect((await read()).steps).toEqual({ ...NONE, cliConnected: true, repoLinked: true, agentStarted: true });
+  });
+
+  it("keeps GitHub's yes for 5 minutes, then asks again", async () => {
+    const { platform, read, later, installed } = await scene();
+    installed();
+    expect((await read()).steps.appInstalled).toBe(true);
+    platform.userInstalls.clear();
+    later(INSTALLED_TTL_MS - 1);
+    expect((await read()).steps.appInstalled).toBe(true);
+    expect(platform.installationLookups).toHaveLength(1);
+    later(1);
+    expect((await read()).steps.appInstalled).toBe(false);
+    expect(platform.installationLookups).toHaveLength(2);
+  });
+
+  it("never keeps a no: the next read (the window's focus after GitHub's install tab) asks again", async () => {
+    const { platform, read, installed } = await scene();
+    expect((await read()).steps.appInstalled).toBe(false);
+    installed();
+    expect((await read()).steps.appInstalled).toBe(true);
+    expect(platform.installationLookups).toHaveLength(2);
+  });
+
+  it('counts a GitHub failure as not installed, says so in the log, and still answers', async () => {
+    const { user, platform, read } = await scene();
+    platform.failUserInstallations = new Error('GitHub GET /user/installations failed with 502');
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await computer(user.id);
+    expect((await read()).steps).toEqual({ ...NONE, cliConnected: true });
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(user.id), expect.any(Error));
+  });
+
+  it('remembers done the first time every step holds, and from then on answers done without asking GitHub', async () => {
+    const { user, platform, read, installed } = await scene();
+    installed();
+    const token = await computer(user.id, { name: "Maya's MacBook Pro", repos: ['octo/sandbox'], agentId: 'claude-code' });
+    expect(await read()).toMatchObject({ steps: { appInstalled: true, cliConnected: true, repoLinked: true, agentStarted: true }, done: true });
+    const { onboardedAt } = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(onboardedAt).toBeInstanceOf(Date);
+
+    // The computer is revoked and GitHub would say no now: setup stays done.
+    await prisma.cliToken.update({ where: { id: token.id }, data: { revokedAt: new Date() } });
+    platform.userInstalls.clear();
+    expect(await read()).toMatchObject({ steps: { appInstalled: true, cliConnected: true, repoLinked: true, agentStarted: true }, done: true, deviceName: null });
+    expect(platform.installationLookups).toHaveLength(1);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).onboardedAt).toEqual(onboardedAt);
+  });
+
+  it('says when this server reviews public repos only', async () => {
+    vi.stubEnv('PUBLIC_REPOS_ONLY', 'true');
+    const { read } = await scene();
+    expect((await read()).publicReposOnly).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 17: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/auth/onboarding.db.test.ts`
+Expected: FAIL, 1 file failed to load and no tests ran: `Cannot find module './onboarding'`.
+
+- [ ] **Step 18: Add the facts**
+
+`read` looks at the database first (the person, then their unrevoked tokens, newest first), answers "all done" straight away if `onboardedAt` is set, and otherwise asks GitHub through `appInstalled`. Only a "yes" goes into the cache, so a person who just installed the app sees it on the next read. If all four hold, `updateMany ... where onboardedAt is null` stores the time; two reads at once both answer done and one of them writes it.
+
+Create `apps/server/src/auth/onboarding.ts`:
+
+```ts
+import type { Onboarding } from '@nitpilot/protocol';
+import { getEnv } from '../lib/env';
+import { prisma } from '../lib/prisma';
+import { TtlCache } from '../lib/ttl-cache';
+import type { PlatformReads } from '../platform/types';
+
+/** How long GitHub's "yes, the app is installed" is kept per person. A "no" is never kept. */
+export const INSTALLED_TTL_MS = 5 * 60_000;
+
+/** The most people whose "yes" is kept at once (the oldest goes first). */
+const MAX_PEOPLE = 10_000;
+
+/** Every step done: what a person who finished setup once always reads. */
+const ALL_DONE: Onboarding['steps'] = { appInstalled: true, cliConnected: true, repoLinked: true, agentStarted: true };
+
+/**
+ * The setup checklist's facts (spec §16 "Onboarding", docs/why/onboarding-facts.md): where each tick comes from.
+ * - The app is installed when GitHub lists an installation of it that the person can see (`GET /user/installations`,
+ *   with their own token). A yes is kept for 5 minutes, like RepoAccess's answers. A no isn't kept, so the next read
+ *   (the page asks again when its window gets focus back from GitHub's install tab) sees a fresh install at once.
+ *   GitHub failing, timing out or needing a new sign-in counts as no: it is logged and never fails the read.
+ * - The computer is connected when the person has a CLI token nobody revoked (`npx nitpilot login` made one).
+ * - A repo is linked, and the agent started, when one of those tokens remembers it from its last hello
+ *   (`nitpilot start` reports its linked repos and its agent; ws/cli-hub.ts saves both on the token).
+ * The first time all four hold, `User.onboardedAt` is set; from then on every step reads done without asking GitHub.
+ */
+export class OnboardingFacts {
+  private readonly installed: TtlCache<true>;
+
+  constructor(
+    private readonly platform: Pick<PlatformReads, 'userInstallations'>,
+    now: () => number = () => Date.now(),
+  ) {
+    this.installed = new TtlCache(INSTALLED_TTL_MS, MAX_PEOPLE, now);
+  }
+
+  async read(userId: string): Promise<Onboarding> {
+    const env = getEnv();
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { onboardedAt: true } });
+    const tokens = await prisma.cliToken.findMany({
+      where: { userId, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { name: true, repos: true, agentId: true },
+    });
+    const about = { deviceName: tokens[0]?.name ?? null, appSlug: env.GITHUB_APP_SLUG, publicReposOnly: env.PUBLIC_REPOS_ONLY };
+    if (user.onboardedAt) return { steps: ALL_DONE, done: true, ...about };
+
+    const steps: Onboarding['steps'] = {
+      appInstalled: await this.appInstalled(userId),
+      cliConnected: tokens.length > 0,
+      repoLinked: tokens.some((t) => t.repos.length > 0),
+      agentStarted: tokens.some((t) => t.agentId !== null),
+    };
+    const done = Object.values(steps).every(Boolean);
+    // Only the first read that sees it done writes the time; two at once both answer done, and one of them saves it.
+    if (done) await prisma.user.updateMany({ where: { id: userId, onboardedAt: null }, data: { onboardedAt: new Date() } });
+    return { steps, done, ...about };
+  }
+
+  private async appInstalled(userId: string): Promise<boolean> {
+    if (this.installed.get(userId)) return true;
+    try {
+      const installations = await this.platform.userInstallations(userId);
+      if (installations.length === 0) return false;
+      this.installed.set(userId, true);
+      return true;
+    } catch (err) {
+      // The checklist is a hint, not a gate: a GitHub hiccup (or an expired sign-in) shows the step as not done yet.
+      console.warn(`[onboarding] couldn't ask GitHub for the installations of user ${userId}:`, err);
+      return false;
+    }
+  }
+}
+```
+
+- [ ] **Step 19: Run them to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/auth/onboarding.db.test.ts`
+Expected: PASS, 9 tests in 1 file.
+
+- [ ] **Step 20: Write the failing route tests**
+
+The route answers the signed-in person's checklist. A CLI's `Bearer` token and no sign-in at all are both a 401: the checklist is for the web app's session only.
+
+Create `apps/server/src/http/routes/onboarding.db.test.ts`:
+
+```ts
+import { Onboarding } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeCliToken, makeUser } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+import { FakePlatform } from '../../platform/fake/fake-platform';
+
+describe('GET /api/onboarding', () => {
+  it("answers the signed-in person's setup checklist", async () => {
+    const user = await makeUser();
+    const platform = new FakePlatform();
+    platform.userInstalls.set(user.id, [{ id: '77', accountLogin: 'octo' }]);
+    await makeCliToken(user.id);
+    const res = await testApp({ platform }).request('/api/onboarding', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(res.status).toBe(200);
+    expect(Onboarding.parse(await res.json())).toEqual({
+      steps: { appInstalled: true, cliConnected: true, repoLinked: false, agentStarted: false },
+      done: false,
+      deviceName: 'test laptop',
+      appSlug: 'nitpilot-dev',
+      publicReposOnly: false,
+    });
+  });
+
+  it("refuses a CLI's token like no sign-in at all, and no sign-in with a 401", async () => {
+    const user = await makeUser();
+    const token = await makeCliToken(user.id);
+    const app = testApp();
+    expect((await app.request('/api/onboarding', { headers: { authorization: `Bearer ${token.raw}` } })).status).toBe(401);
+    expect((await app.request('/api/onboarding')).status).toBe(401);
+  });
+});
+```
+
+- [ ] **Step 21: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/onboarding.db.test.ts`
+Expected: FAIL, 2 failed in 1 file: both get a 404, since no route exists.
+
+- [ ] **Step 22: Add the route and mount it**
+
+`app.ts` changes in two separate ways in this task. This step takes the first: the import, the doc comment on `platform` (it is now also used with a person's own token), and the mounted route. Step 27 takes the second.
+
+Create `apps/server/src/http/routes/onboarding.ts`:
+
+```ts
+import { Hono } from 'hono';
+import { OnboardingFacts } from '../../auth/onboarding';
+import { requireUser, type UserVariables } from '../../auth/request-user';
+import type { PlatformReads } from '../../platform/types';
+import { HttpError } from '../errors';
+
+/**
+ * `GET /api/onboarding` (spec §10 "Reads"): the setup checklist's facts (auth/onboarding.ts), for the web app's `/setup`
+ * page. A read of its own, not part of `/api/me`, because one fact asks GitHub and `/api/me` is the app's first
+ * request. Only the web app's session cookie may ask (a CLI token is answered as if no one were signed in).
+ */
+export function onboardingRoutes(deps: { platform: PlatformReads }): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+  // One per server, so GitHub's "yes" is kept between reads.
+  const facts = new OnboardingFacts(deps.platform);
+
+  app.get('/api/onboarding', requireUser, async (c) => {
+    if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+    return c.json(await facts.read(c.get('user').id));
+  });
+
+  return app;
+}
+```
+
+Modify `apps/server/src/http/app.ts`:
+
+```diff
+diff --git a/apps/server/src/http/app.ts b/apps/server/src/http/app.ts
+index 24c9363..46ca4fe 100644
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -20,6 +20,7 @@ import { cliApproveRoutes } from './routes/cli-approve';
+ import { deviceRoutes, type DeviceClis } from './routes/devices';
+ import { inboxRoutes } from './routes/inbox';
+ import { meRoutes } from './routes/me';
++import { onboardingRoutes } from './routes/onboarding';
+ import { pushRoutes } from './routes/push';
+ import { settingsRoutes, type SettingsSender } from './routes/settings';
+ import { setupRoutes } from './routes/setup';
+@@ -36,7 +37,7 @@ export type AppDeps = {
+   clis: LiveClis & SettingsSender & DeviceClis;
+   /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
+   access: RepoAccess;
+-  /** GitHub reads with the app's installation token (the chat screen's file list). */
++  /** GitHub reads: with the app's installation token (the chat screen's file list), and with a person's own (the setup checklist). */
+   platform: PlatformReads;
+   /** The server's public Web Push key (VAPID), which browsers subscribe with; null when push is off (lib/env.ts). */
+   vapidPublicKey: string | null;
+@@ -60,6 +61,7 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', settingsRoutes(deps));
+   app.route('/', pushRoutes(deps));
+   app.route('/', deviceRoutes(deps));
++  app.route('/', onboardingRoutes(deps));
+   app.route('/', inboxRoutes(deps));
+   app.route('/', chatRoutes(deps));
+   app.route('/', chatActionRoutes(deps));
+```
+
+- [ ] **Step 23: Run the route tests to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/onboarding.db.test.ts`
+Expected: PASS, 2 tests in 1 file.
+
+- [ ] **Step 24: Write the failing test for the CLI login's poll**
+
+When `nitpilot login` finishes, the first poll after the person approved the device creates the token. That is the moment "Connect your computer" can tick, even before the CLI connects, so the server must tell the person's open tabs. The test approves a login, polls twice, and expects `sendMeUpdate` to have been called once, with that person.
+
+Modify `apps/server/src/http/routes/cli.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/cli.db.test.ts b/apps/server/src/http/routes/cli.db.test.ts
+index 6742486..f080a75 100644
+--- a/apps/server/src/http/routes/cli.db.test.ts
++++ b/apps/server/src/http/routes/cli.db.test.ts
+@@ -1,10 +1,10 @@
+ import type { MyChatsResponse } from '@nitpilot/protocol';
+-import { describe, expect, it } from 'vitest';
++import { describe, expect, it, vi } from 'vitest';
+ import { makeChat, makeCliToken, makeRepo, makeUser, personOf } from '../../../test/db';
+ import { fakeFetch } from '../../../test/fake-fetch';
+ import { testApp } from '../../../test/app';
+ import { sessionCookieFor } from '../../../test/http';
+-import { startCliLogin } from '../../auth/cli-login';
++import { decideCliLogin, startCliLogin } from '../../auth/cli-login';
+ import { Dispatcher } from '../../chats/dispatch';
+ import { prisma } from '../../lib/prisma';
+ import { generateToken } from '../../lib/tokens';
+@@ -57,6 +57,22 @@ describe('nitpilot login', () => {
+     expect((await app().request('/api/me', { headers: auth })).status).toBe(401);
+   });
+ 
++  it("tells the person's open tabs once the first poll after approval made the token, so the setup checklist ticks", async () => {
++    const user = await makeUser();
++    const sendMeUpdate = vi.fn(async () => {});
++    const server = testApp({ github: new GithubClient(fakeFetch({})), meUpdates: { sendMeUpdate } });
++    const poll = async (deviceCode: string) => server.request('/api/cli/login/poll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceCode }) });
++    const login = await startCliLogin('laptop');
++    await poll(login.deviceCode);
++    expect(sendMeUpdate).not.toHaveBeenCalled();
++    await decideCliLogin(login.userCode, user.id, 'approve');
++    expect(await (await poll(login.deviceCode)).json()).toMatchObject({ status: 'approved' });
++    expect(sendMeUpdate).toHaveBeenCalledExactlyOnceWith(user.id);
++    // Later polls make no token, so they tell nobody.
++    await poll(login.deviceCode);
++    expect(sendMeUpdate).toHaveBeenCalledOnce();
++  });
++
+   it('reports a denied login', async () => {
+     const user = await makeUser();
+     const start = (await (await post('/api/cli/login', { deviceName: 'laptop' })).json()) as LoginStart;
+```
+
+- [ ] **Step 25: Run it to see it fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/cli.db.test.ts`
+Expected: FAIL, 1 failed, 12 passed (13) in 1 file: `sendMeUpdate` was never called.
+
+- [ ] **Step 26: Give `pollCliLogin` a hook, and pass it from the route**
+
+`pollCliLogin` stays free of WebSocket code: it takes an optional function, `onTokenCreated`, and calls it after the database transaction has committed and only when it made a token (`approved`). The route supplies the function; `app.ts` hands the route the app's `meUpdates`.
+
+Modify `apps/server/src/auth/cli-login.ts`:
+
+```diff
+diff --git a/apps/server/src/auth/cli-login.ts b/apps/server/src/auth/cli-login.ts
+index 099ba81..18ba9a6 100644
+--- a/apps/server/src/auth/cli-login.ts
++++ b/apps/server/src/auth/cli-login.ts
+@@ -21,8 +21,11 @@ export async function startCliLogin(deviceName: string, now = new Date()) {
+   }
+ }
+ 
+-/** The CLI polls this. The token is created on the first poll after approval and never stored in plain form. */
+-export async function pollCliLogin(deviceCode: string, now = new Date()): Promise<CliLoginPollResponse> {
++/**
++ * The CLI polls this. The token is created on the first poll after approval and never stored in plain form.
++ * `onTokenCreated` runs once that token is saved, with whose it is (the route tells their open tabs).
++ */
++export async function pollCliLogin(deviceCode: string, now = new Date(), onTokenCreated?: (userId: string) => Promise<void> | void): Promise<CliLoginPollResponse> {
+   const req = await prisma.cliLoginRequest.findUnique({ where: { deviceCodeHash: hashToken(deviceCode) } });
+   if (!req) return { status: 'expired' };
+   if (req.status === 'pending' && req.expiresAt <= now) {
+@@ -34,7 +37,7 @@ export async function pollCliLogin(deviceCode: string, now = new Date()): Promis
+   if (req.status !== 'approved' || !req.userId) return { status: 'expired' };
+ 
+   const userId = req.userId;
+-  return prisma.$transaction(async (tx) => {
++  const answer = await prisma.$transaction(async (tx) => {
+     // Compare-and-swap: only the first poll after approval wins a token.
+     const { count } = await tx.cliLoginRequest.updateMany({ where: { id: req.id, status: 'approved' }, data: { status: 'consumed' } });
+     if (count === 0) return { status: 'expired' } as const;
+@@ -42,6 +45,8 @@ export async function pollCliLogin(deviceCode: string, now = new Date()): Promis
+     await tx.cliToken.create({ data: { userId, name: req.deviceName, tokenHash: token.hash, prefix: token.prefix } });
+     return { status: 'approved', token: token.raw } as const;
+   });
++  if (answer.status === 'approved') await onTokenCreated?.(userId);
++  return answer;
+ }
+ 
+ export async function findCliLogin(userCode: string) {
+```
+
+Modify `apps/server/src/http/routes/cli.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/cli.ts b/apps/server/src/http/routes/cli.ts
+index 0e467bf..3e31b84 100644
+--- a/apps/server/src/http/routes/cli.ts
++++ b/apps/server/src/http/routes/cli.ts
+@@ -10,12 +10,17 @@ import { getEnv } from '../../lib/env';
+ import { prisma } from '../../lib/prisma';
+ import { RateLimiter } from '../../lib/rate-limit';
+ import { transcriptUrl } from '../../lib/urls';
++import type { MeUpdates } from '../../ws/web-wire';
+ import { HttpError } from '../errors';
+ 
+ /** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
+ export const LOGIN_STARTS_PER_MINUTE = 10;
+ 
+-export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
++/**
++ * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats, retry and logging out. `meUpdates` tells the
++ * person's open tabs when a login made a new token, so the setup checklist's "Connect your computer" ticks at once.
++ */
++export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: { cli: CliAuth } }> {
+   const app = new Hono<{ Variables: { cli: CliAuth } }>();
+   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
+ 
+@@ -34,7 +39,7 @@ export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
+ 
+   app.post('/api/cli/login/poll', async (c) => {
+     const { deviceCode } = CliLoginPollRequest.parse(await c.req.json());
+-    return c.json(await pollCliLogin(deviceCode));
++    return c.json(await pollCliLogin(deviceCode, new Date(), (userId) => deps.meUpdates?.sendMeUpdate(userId)));
+   });
+ 
+   app.get('/api/me/chats', requireCliToken, async (c) => {
+```
+
+Modify `apps/server/src/http/app.ts`:
+
+```diff
+diff --git a/apps/server/src/http/app.ts b/apps/server/src/http/app.ts
+index 46ca4fe..1acac9a 100644
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -43,7 +43,7 @@ export type AppDeps = {
+   vapidPublicKey: string | null;
+   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
+   webSockets?: { closeSession(tokenHash: string): void };
+-  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes. */
++  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes, and a CLI login. */
+   meUpdates?: MeUpdates;
+   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
+   webDistDir?: string;
+@@ -66,7 +66,7 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', chatRoutes(deps));
+   app.route('/', chatActionRoutes(deps));
+   app.route('/', chatDraftRoutes(deps));
+-  app.route('/', cliRoutes());
++  app.route('/', cliRoutes(deps));
+   app.route('/', cliApproveRoutes());
+   app.route('/', setupRoutes(deps));
+   app.route('/', webhookRoutes(deps));
+```
+
+- [ ] **Step 27: Run the CLI route tests to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/cli.db.test.ts`
+Expected: PASS, 13 tests in 1 file.
+
+- [ ] **Step 28: Write the failing sign-in landing tests**
+
+Three new sign-in tests (a first sign-in goes to `/setup`; one for a chat keeps its page; an onboarded person goes to `/`) and the `/github/setup` test, which now expects `/setup`.
+
+Modify `apps/server/src/http/routes/auth.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/auth.db.test.ts b/apps/server/src/http/routes/auth.db.test.ts
+index 66ceed4..413a90c 100644
+--- a/apps/server/src/http/routes/auth.db.test.ts
++++ b/apps/server/src/http/routes/auth.db.test.ts
+@@ -58,6 +58,31 @@ describe('GitHub sign-in', () => {
+     expect(cookieHeader(res)).toContain(`${BRAND.sessionCookie}=`);
+   });
+ 
++  it('takes a first sign-in to the setup checklist when nothing else was asked for', async () => {
++    const githubId = ghId();
++    const app = testApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
++    const { cookie, saved } = await startLogin(app, '/');
++    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
++    expect(res.status).toBe(302);
++    expect(res.headers.get('location')).toBe('/setup');
++  });
++
++  it('keeps the page a sign-in was asked for, even before setup is done', async () => {
++    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
++    const { cookie, saved } = await startLogin(app, '/c/octo/sandbox/42');
++    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
++    expect(res.headers.get('location')).toBe('/c/octo/sandbox/42');
++  });
++
++  it('takes someone who finished setup straight to the inbox', async () => {
++    const githubId = ghId();
++    await prisma.user.create({ data: { githubId, login: 'maya', onboardedAt: new Date() } });
++    const app = testApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
++    const { cookie, saved } = await startLogin(app, '/');
++    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
++    expect(res.headers.get('location')).toBe('/');
++  });
++
+   it('rejects a callback whose state does not match', async () => {
+     const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+     const { cookie } = await startLogin(app);
+```
+
+Modify `apps/server/src/http/routes/setup.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/setup.db.test.ts b/apps/server/src/http/routes/setup.db.test.ts
+index 64a1dcf..19ba87f 100644
+--- a/apps/server/src/http/routes/setup.db.test.ts
++++ b/apps/server/src/http/routes/setup.db.test.ts
+@@ -13,7 +13,7 @@ beforeEach(resetDb);
+ const pem = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+ 
+ describe('GET /github/setup', () => {
+-  it('syncs the new installation from the API, then goes home', async () => {
++  it('syncs the new installation from the API, then goes back to the setup checklist', async () => {
+     const github = new GithubClient(
+       fakeFetch({
+         'GET /app/installations/77': () => ({ id: 77, account: { login: 'octo' } }),
+@@ -26,7 +26,7 @@ describe('GET /github/setup', () => {
+       headers: { cookie: await sessionCookieFor(user.id) },
+     });
+     expect(res.status).toBe(302);
+-    expect(res.headers.get('location')).toBe('/');
++    expect(res.headers.get('location')).toBe('/setup');
+     expect((await prisma.repo.findUniqueOrThrow({ where: { id: '501' } })).fullName).toBe('octo/sandbox');
+   });
+ 
+```
+
+- [ ] **Step 29: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/auth.db.test.ts src/http/routes/setup.db.test.ts`
+Expected: FAIL, 2 failed, 22 passed (24) in 2 files: the first sign-in lands on `/` instead of `/setup`, and `/github/setup` redirects to `/` instead of `/setup`. The other two new sign-in tests already pass (the default is `next` and an onboarded person goes to `/`): they pin behavior the change must keep.
+
+- [ ] **Step 30: Redirect to `/setup`**
+
+In the callback, `saveGithubUser` already returns the user row with `onboardedAt`, so no extra database read is needed. Only the default `next` of `/` is replaced; a saved `next` of a chat or an approval link wins. `GET /github/setup` goes back to the checklist once it has synced the installation.
+
+Modify `apps/server/src/http/routes/auth.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/auth.ts b/apps/server/src/http/routes/auth.ts
+index 8c0399a..65ac591 100644
+--- a/apps/server/src/http/routes/auth.ts
++++ b/apps/server/src/http/routes/auth.ts
+@@ -85,7 +85,9 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
+       console.error(`[sign-in] couldn't look for chats to resume for ${user.login}:`, err);
+     }
+     await startSession(c, user.id);
+-    return c.redirect(saved.next);
++    // Someone who hasn't finished setting up starts at the checklist, unless the sign-in was for a page of its own
++    // (an approval link, a chat).
++    return c.redirect(saved.next === '/' && user.onboardedAt === null ? '/setup' : saved.next);
+   });
+ 
+   app.post('/auth/logout', async (c) => {
+```
+
+Modify `apps/server/src/http/routes/setup.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/setup.ts b/apps/server/src/http/routes/setup.ts
+index 7ee060b..d6cf62c 100644
+--- a/apps/server/src/http/routes/setup.ts
++++ b/apps/server/src/http/routes/setup.ts
+@@ -5,7 +5,10 @@ import type { AppAuth } from '../../platform/github/app-auth';
+ import type { GithubClient } from '../../platform/github/client';
+ import { HttpError } from '../errors';
+ 
+-/** GitHub sends people here after they install or reconfigure the app (spec §10). */
++/**
++ * GitHub sends people here after they install or reconfigure the app (spec §10). Once the installation is synced, they
++ * go back to the setup checklist (`/setup`), whose "Install the GitHub App" step is now ticked.
++ */
+ export function setupRoutes(deps: { github: GithubClient; appAuth: AppAuth }): Hono {
+   const app = new Hono();
+   app.get('/github/setup', async (c) => {
+@@ -16,7 +19,7 @@ export function setupRoutes(deps: { github: GithubClient; appAuth: AppAuth }): H
+     const installationId = c.req.query('installation_id');
+     if (!installationId || !/^\d+$/.test(installationId)) throw new HttpError('validation_error', 'missing installation_id');
+     await syncInstallationFromApi(installationId, deps.github, deps.appAuth);
+-    return c.redirect('/');
++    return c.redirect('/setup');
+   });
+   return app;
+ }
+```
+
+- [ ] **Step 31: Run the server's tests and typecheck**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/auth.db.test.ts src/http/routes/setup.db.test.ts && npm test -w apps/server && npm run typecheck -w apps/server`
+Expected: PASS, 24 tests in the first two files; the server's whole suite 1007 tests in 85 files; typecheck clean.
+
+- [ ] **Step 32: See the web tests break on the new `WebMe` field**
+
+Every web test that builds a `WebMe` now lacks `onboarded`, and the web app parses `/api/me` with the protocol's schema.
+
+Run: `npm test -w apps/web && npm run typecheck -w apps/web`
+Expected: FAIL, 115 failed, 180 passed (295) in 13 of 39 files; typecheck reports 10 errors (`Property 'onboarded' is missing`). The `Home` fixture is untyped, so only the test run shows it.
+
+- [ ] **Step 33: Give the eleven fixtures `onboarded: true`**
+
+One property on each `WebMe` the tests build. `true`, so none of them shows the Settings "Finish setting up" card; the Settings test for the card sets `false` itself.
+
+Modify `apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx b/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
+index eeebd55..2d25d4e 100644
+--- a/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
++++ b/apps/web/src/components/IosHomeScreenSheet/IosHomeScreenSheet.test.tsx
+@@ -6,7 +6,7 @@ import { pretendIphone, VAPID_KEY } from '../../test/push';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ import { HOME_SCREEN_SHEET_SEEN_KEY } from './IosHomeScreenSheet';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false }, onboarded: true };
+ 
+ function serve() {
+   fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }], 'GET /api/devices': (): Answer => [200, { devices: [] }] });
+```
+
+Modify `apps/web/src/lib/banner.test.ts`:
+
+```diff
+diff --git a/apps/web/src/lib/banner.test.ts b/apps/web/src/lib/banner.test.ts
+index 9806ac2..07a8d0a 100644
+--- a/apps/web/src/lib/banner.test.ts
++++ b/apps/web/src/lib/banner.test.ts
+@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
+ import { chatView, point } from '../test/chat';
+ import { chatBanner, escalationNote } from './banner';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ const view = (over: Partial<ChatView> = {}) => chatView(over);
+ const escalated = (over: Partial<PointView> = {}) => point({ status: 'escalated', escalationReason: 'category', category: 'security', ...over });
+ 
+```
+
+Modify `apps/web/src/routes/Chat/AutoSwitch.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/AutoSwitch.test.tsx b/apps/web/src/routes/Chat/AutoSwitch.test.tsx
+index 2c62acc..bb9eb06 100644
+--- a/apps/web/src/routes/Chat/AutoSwitch.test.tsx
++++ b/apps/web/src/routes/Chat/AutoSwitch.test.tsx
+@@ -61,7 +61,7 @@ describe('AutoSwitch (handoff §2 "Header")', () => {
+ });
+ 
+ describe('the Auto switch in the chat header', () => {
+-  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++  const mayaMe: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ 
+   function serve(view: Partial<ChatView>, routes: Record<string, () => Answer | Promise<Answer>> = {}) {
+     return fakeApi({
+```
+
+Modify `apps/web/src/routes/Chat/Chat.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/Chat.test.tsx b/apps/web/src/routes/Chat/Chat.test.tsx
+index 79c4915..16a0d0c 100644
+--- a/apps/web/src/routes/Chat/Chat.test.tsx
++++ b/apps/web/src/routes/Chat/Chat.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, chatView, item, point } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ const maya = { githubId: '1001', login: 'maya' };
+ const leo = { githubId: '1002', login: 'leo' };
+ const PATH = '/c/acme/shop-api/142';
+```
+
+Modify `apps/web/src/routes/Chat/ChatBanner.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/ChatBanner.test.tsx b/apps/web/src/routes/Chat/ChatBanner.test.tsx
+index 581a42a..474efa3 100644
+--- a/apps/web/src/routes/Chat/ChatBanner.test.tsx
++++ b/apps/web/src/routes/Chat/ChatBanner.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, point } from '../../test/chat';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ const PATH = '/c/acme/shop-api/142';
+ const none: Permissions = { note: true, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] };
+ 
+```
+
+Modify `apps/web/src/routes/Chat/Composer.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/Composer.test.tsx b/apps/web/src/routes/Chat/Composer.test.tsx
+index c2bd874..3824944 100644
+--- a/apps/web/src/routes/Chat/Composer.test.tsx
++++ b/apps/web/src/routes/Chat/Composer.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatResponse, chatView } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ const PATH = '/c/acme/shop-api/142';
+ const SENT = "Sent. Included in the agents' next round.";
+ 
+```
+
+Modify `apps/web/src/routes/Chat/DraftCard.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Chat/DraftCard.test.tsx b/apps/web/src/routes/Chat/DraftCard.test.tsx
+index dd6e6f7..ddf5b1b 100644
+--- a/apps/web/src/routes/Chat/DraftCard.test.tsx
++++ b/apps/web/src/routes/Chat/DraftCard.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { authorDraft, chatResponse, chatView, item, point, reviewerDraft } from '../../test/chat';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const me = (githubId: string, login: string): WebMe => ({ id: `u_${login}`, githubId, login, avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } });
++const me = (githubId: string, login: string): WebMe => ({ id: `u_${login}`, githubId, login, avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true });
+ const maya = me('1001', 'maya');
+ const leo = me('1002', 'leo');
+ const PATH = '/c/acme/shop-api/142';
+```
+
+Modify `apps/web/src/routes/Home/Home.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Home/Home.test.tsx b/apps/web/src/routes/Home/Home.test.tsx
+index 7e5ce0a..7d92eab 100644
+--- a/apps/web/src/routes/Home/Home.test.tsx
++++ b/apps/web/src/routes/Home/Home.test.tsx
+@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { fakeApi, renderApp, type Answer } from '../../test/render';
+ 
+-const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ const noRows = (): Answer => [200, { rows: [] }];
+ 
+ afterEach(() => vi.unstubAllGlobals());
+```
+
+Modify `apps/web/src/routes/Inbox/Inbox.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Inbox/Inbox.test.tsx b/apps/web/src/routes/Inbox/Inbox.test.tsx
+index a0a9151..6e5e850 100644
+--- a/apps/web/src/routes/Inbox/Inbox.test.tsx
++++ b/apps/web/src/routes/Inbox/Inbox.test.tsx
+@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { chatRoutes } from '../../test/chat';
+ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ 
+ function row(over: Partial<InboxRow>): InboxRow {
+   return {
+```
+
+Modify `apps/web/src/routes/Shell/Shell.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Shell/Shell.test.tsx b/apps/web/src/routes/Shell/Shell.test.tsx
+index 56cb352..07d03f6 100644
+--- a/apps/web/src/routes/Shell/Shell.test.tsx
++++ b/apps/web/src/routes/Shell/Shell.test.tsx
+@@ -10,7 +10,7 @@ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render
+ const resyncPush = vi.hoisted(() => vi.fn(async () => {}));
+ vi.mock('../../push/subscribe', async (original) => ({ ...(await original<typeof import('../../push/subscribe')>()), resyncPush }));
+ 
+-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
++const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
+ 
+ function serve() {
+   fakeApi({
+```
+
+Modify `apps/web/src/test/settings.ts`:
+
+```diff
+diff --git a/apps/web/src/test/settings.ts b/apps/web/src/test/settings.ts
+index 7f25db7..42e477e 100644
+--- a/apps/web/src/test/settings.ts
++++ b/apps/web/src/test/settings.ts
+@@ -5,7 +5,7 @@ import { fakeApi, type Answer } from './render';
+ /** maya, as the Settings page reads her: the default settings, 12 agent runs today, and a server with push keys. */
+ export const settingsMe: WebMe = {
+   id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true,
+-  settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 12, push: { vapidPublicKey: VAPID_KEY, subscribed: false },
++  settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 12, push: { vapidPublicKey: VAPID_KEY, subscribed: false }, onboarded: true,
+ };
+ 
+ /** One of maya's computers; pass only what a test cares about. */
+```
+
+- [ ] **Step 34: Run the web tests to see them pass**
+
+Run: `npm test -w apps/web && npm run typecheck -w apps/web`
+Expected: PASS, 295 tests in 39 files; typecheck clean.
+
+- [ ] **Step 35: Write the failing web tests**
+
+Three test files. `Setup.test.tsx` is the page: it serves `/api/onboarding` from a function the test can change, so a test can move the facts and then fire a `me.update`, or a visibility change, and watch the list react. `Settings.test.tsx` gains the "Finish setting up" card and its absence once `onboarded`. `apply.test.ts` pins the `['onboarding']` invalidation.
+
+Create `apps/web/src/routes/Setup/Setup.test.tsx`:
+
+```tsx
+import type { Onboarding } from '@nitpilot/protocol';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakeBrowser } from '../../test/push';
+import { fakeViewport, renderApp, type Answer } from '../../test/render';
+import { sent, serveSettings, settingsMe } from '../../test/settings';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const NOTHING_YET: Onboarding = {
+  steps: { appInstalled: false, cliConnected: false, repoLinked: false, agentStarted: false },
+  done: false,
+  deviceName: null,
+  appSlug: 'nitpilot-dev',
+  publicReposOnly: false,
+};
+
+/** maya, not set up yet, on a server whose `/api/onboarding` answers `facts()` each time it's asked. */
+function serveSetup(facts: () => Onboarding) {
+  fakeViewport(true);
+  fakeBrowser();
+  return serveSettings({ me: { ...settingsMe, onboarded: false }, routes: { 'GET /api/onboarding': (): Answer => [200, facts()] } });
+}
+
+/** The checklist's five rows, top to bottom. */
+async function rows() {
+  const list = await screen.findByRole('list', { name: 'Setup steps' });
+  return within(list).getAllByRole('listitem');
+}
+
+describe('Setup (handoff §5): the checklist', () => {
+  it('starts with only the sign-in done: the install step is next, the commands wait their turn', async () => {
+    serveSetup(() => NOTHING_YET);
+    renderApp('/setup');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeInTheDocument();
+    expect(screen.getByText('This list ticks itself off as each step completes.')).toBeInTheDocument();
+    expect(await screen.findByText('1 of 5')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Setup progress' })).toHaveAttribute('aria-valuenow', '1');
+
+    const [signIn, install, connect, link, start] = await rows();
+    expect(within(signIn!).getByRole('img', { name: 'Done' })).toBeInTheDocument();
+    expect(signIn).toHaveTextContent('Sign in with GitHub');
+    expect(signIn).toHaveTextContent('Signed in as @maya.');
+
+    expect(install).toHaveAttribute('aria-current', 'step');
+    expect(within(install!).getByRole('img', { name: 'In progress' })).toBeInTheDocument();
+    const button = within(install!).getByRole('link', { name: 'Install on GitHub' });
+    expect(button).toHaveAttribute('href', 'https://github.com/apps/nitpilot-dev/installations/new');
+    expect(button).toHaveAttribute('target', '_blank');
+    expect(button).toHaveAttribute('rel', 'noopener');
+    expect(install).not.toHaveTextContent('public repos only');
+
+    // Later rows show their command, but no Copy until it's their turn.
+    for (const [row, n, command] of [[connect, 3, 'npx nitpilot login'], [link, 4, 'nitpilot repos add'], [start, 5, 'nitpilot start']] as const) {
+      expect(within(row!).getByRole('img', { name: `Step ${n}, to do` })).toHaveTextContent(String(n));
+      expect(row).toHaveTextContent(command);
+      expect(within(row!).queryByRole('button')).not.toBeInTheDocument();
+    }
+    expect(start).toHaveTextContent('Claude Code · detected automatically');
+    expect(start).toHaveTextContent('Gemini CLI · coming later');
+
+    expect(screen.getByRole('link', { name: 'Skip for now' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Open your inbox' })).not.toBeInTheDocument();
+  });
+
+  it('says a public-only server covers public repos only', async () => {
+    serveSetup(() => ({ ...NOTHING_YET, publicReposOnly: true }));
+    renderApp('/setup');
+    const [, install] = await rows();
+    await waitFor(() => expect(install).toHaveTextContent('nitpilot.dev covers public repos only.'));
+  });
+
+  it('names the connected computer, and gives the next command a Copy button', async () => {
+    serveSetup(() => ({ ...NOTHING_YET, steps: { ...NOTHING_YET.steps, appInstalled: true, cliConnected: true }, deviceName: "Maya's MacBook Pro" }));
+    // After serveSetup: its pretend browser replaces `navigator` too.
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn(async () => {}) } });
+    renderApp('/setup');
+    expect(await screen.findByText('3 of 5')).toBeInTheDocument();
+    const [, install, connect, link] = await rows();
+    expect(within(install!).getByRole('img', { name: 'Done' })).toBeInTheDocument();
+    expect(within(install!).queryByRole('link', { name: 'Install on GitHub' })).not.toBeInTheDocument();
+    expect(connect).toHaveTextContent("✓ Connected: Maya's MacBook Pro");
+    expect(connect).not.toHaveTextContent('npx nitpilot login');
+    expect(link).toHaveAttribute('aria-current', 'step');
+    expect(link).toHaveTextContent("Run it inside your clone. It's ticked off once nitpilot start connects.");
+    const copy = within(link!).getByRole('button', { name: 'Copy nitpilot repos add' });
+    await userEvent.click(copy);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('nitpilot repos add');
+    expect(copy).toHaveTextContent('Copied');
+  });
+
+  it('waits for the terminal on the connect step', async () => {
+    serveSetup(() => ({ ...NOTHING_YET, steps: { ...NOTHING_YET.steps, appInstalled: true } }));
+    renderApp('/setup');
+    const [, , connect] = await rows();
+    await waitFor(() => expect(connect).toHaveAttribute('aria-current', 'step'));
+    expect(connect).toHaveTextContent('Waiting for your terminal…');
+    expect(within(connect!).getByRole('button', { name: 'Copy npx nitpilot login' })).toBeInTheDocument();
+  });
+
+  it('ticks itself off: a me.update reads the facts again, and the next step is up, without a reload', async () => {
+    let facts: Onboarding = { ...NOTHING_YET, steps: { ...NOTHING_YET.steps, appInstalled: true } };
+    const fetch = serveSetup(() => facts);
+    const { sockets } = renderApp('/setup');
+    expect(await screen.findByText('2 of 5')).toBeInTheDocument();
+    facts = { ...facts, steps: { ...facts.steps, cliConnected: true }, deviceName: "Maya's MacBook Pro" };
+    act(() => sockets.last().receive({ v: 1, t: 'me.update', d: { me: { ...settingsMe, onboarded: false } } }));
+    expect(await screen.findByText('3 of 5')).toBeInTheDocument();
+    const [, , connect, link] = await rows();
+    expect(connect).toHaveTextContent("✓ Connected: Maya's MacBook Pro");
+    expect(link).toHaveAttribute('aria-current', 'step');
+    expect(sent(fetch, '/api/onboarding')).toHaveLength(2);
+  });
+
+  it("asks again when the window comes back into view (GitHub's install page is another tab)", async () => {
+    let facts = NOTHING_YET;
+    const fetch = serveSetup(() => facts);
+    renderApp('/setup');
+    expect(await screen.findByText('1 of 5')).toBeInTheDocument();
+    facts = { ...NOTHING_YET, steps: { ...NOTHING_YET.steps, appInstalled: true } };
+    act(() => void window.dispatchEvent(new Event('visibilitychange')));
+    expect(await screen.findByText('2 of 5')).toBeInTheDocument();
+    expect(sent(fetch, '/api/onboarding')).toHaveLength(2);
+  });
+
+  it('offers the inbox once every step is done', async () => {
+    serveSetup(() => ({ ...NOTHING_YET, steps: { appInstalled: true, cliConnected: true, repoLinked: true, agentStarted: true }, done: true, deviceName: "Maya's MacBook Pro" }));
+    renderApp('/setup');
+    expect(await screen.findByText('5 of 5')).toBeInTheDocument();
+    for (const row of await rows()) expect(within(row).getByRole('img', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open your inbox' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Skip for now' })).not.toBeInTheDocument();
+  });
+
+  it('goes to the inbox with "Skip for now"', async () => {
+    serveSetup(() => NOTHING_YET);
+    renderApp('/setup');
+    await userEvent.click(await screen.findByRole('link', { name: 'Skip for now' }));
+    expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+  });
+
+  it("says so when the checklist can't be read, and tries again", async () => {
+    let fail = true;
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings({
+      me: { ...settingsMe, onboarded: false },
+      routes: { 'GET /api/onboarding': (): Answer => (fail ? [500, { error: { code: 'internal', message: 'boom' } }] : [200, NOTHING_YET]) },
+    });
+    renderApp('/setup');
+    expect(await screen.findByRole('alert', {}, { timeout: 3000 })).toHaveTextContent("Couldn't check your setup.");
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('1 of 5')).toBeInTheDocument();
+  });
+});
+```
+
+Modify `apps/web/src/routes/Settings/Settings.test.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Settings/Settings.test.tsx b/apps/web/src/routes/Settings/Settings.test.tsx
+index ab534b7..68960e8 100644
+--- a/apps/web/src/routes/Settings/Settings.test.tsx
++++ b/apps/web/src/routes/Settings/Settings.test.tsx
+@@ -82,6 +82,26 @@ describe('Settings (handoff §7): the page', () => {
+   });
+ });
+ 
++describe('Settings: finishing setup', () => {
++  it('offers the setup checklist at the top until you have finished it', async () => {
++    fakeViewport(true);
++    fakeBrowser();
++    serveSettings({ me: { ...settingsMe, onboarded: false } });
++    renderApp('/settings');
++    const card = within(await screen.findByRole('region', { name: 'Finish setting up' }));
++    expect(card.getByRole('link', { name: 'Open the checklist' })).toHaveAttribute('href', '/setup');
++  });
++
++  it('is gone once you have', async () => {
++    fakeViewport(true);
++    fakeBrowser();
++    serveSettings();
++    renderApp('/settings');
++    await screen.findByRole('region', { name: 'Devices' });
++    expect(screen.queryByRole('region', { name: 'Finish setting up' })).not.toBeInTheDocument();
++  });
++});
++
+ describe('Account (handoff §7)', () => {
+   it('shows who you are on GitHub', async () => {
+     fakeViewport(true);
+```
+
+Modify `apps/web/src/live/apply.test.ts`:
+
+```diff
+diff --git a/apps/web/src/live/apply.test.ts b/apps/web/src/live/apply.test.ts
+index 32e3800..f51028c 100644
+--- a/apps/web/src/live/apply.test.ts
++++ b/apps/web/src/live/apply.test.ts
+@@ -65,4 +65,11 @@ describe('applyServerMessage', () => {
+     applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
+     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['devices'] });
+   });
++
++  it('reads the setup checklist again after a me.update (a CLI logged in or connected)', () => {
++    const queryClient = new QueryClient();
++    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
++    applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
++    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['onboarding'] });
++  });
+ });
+```
+
+- [ ] **Step 36: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/routes/Setup src/routes/Settings src/live`
+Expected: FAIL, 11 failed, 49 passed (60) in 3 files: the 9 `Setup` tests (there is no `/setup` route, so no heading or list is found), 1 `Settings` test (no "Finish setting up" region; the "card is gone once finished" test passes already), and the `apply` test (no `['onboarding']` invalidation).
+
+- [ ] **Step 37: The read and the live refetch**
+
+`useOnboarding()` is one query with no `staleTime`, which is what makes TanStack Query read it again whenever the window regains focus (the install step relies on that). `applyServerMessage` invalidates it after every `me.update`.
+
+Create `apps/web/src/api/onboarding.ts`:
+
+```ts
+import { Onboarding } from '@nitpilot/protocol';
+import { useQuery } from '@tanstack/react-query';
+import { api } from './client';
+
+/**
+ * The setup checklist's facts (`GET /api/onboarding`). Read again after every `me.update` (a CLI logged in or
+ * connected: live/apply.ts) and whenever the window comes back into view (TanStack's default, since nothing here
+ * sets a staleTime), which is how the install step ticks after GitHub's install page, in another tab.
+ */
+export function useOnboarding() {
+  return useQuery({
+    queryKey: ['onboarding'],
+    queryFn: () => api.get('/api/onboarding', Onboarding),
+  });
+}
+```
+
+Modify `apps/web/src/live/apply.ts`:
+
+```diff
+diff --git a/apps/web/src/live/apply.ts b/apps/web/src/live/apply.ts
+index e4bb3d0..ef9ca2d 100644
+--- a/apps/web/src/live/apply.ts
++++ b/apps/web/src/live/apply.ts
+@@ -40,8 +40,10 @@ export function applyServerMessage(queryClient: QueryClient, msg: ServerToWeb):
+       return;
+     case 'me.update':
+       queryClient.setQueryData(['me'], msg.d.me);
+-      // Something about you changed (a device came or went, or was revoked): the Settings page's devices may have too.
++      // Something about you changed (a device came or went, logged in, or was revoked): the Settings page's devices
++      // may have too, and so may the setup checklist.
+       void queryClient.invalidateQueries({ queryKey: ['devices'] });
++      void queryClient.invalidateQueries({ queryKey: ['onboarding'] });
+       return;
+   }
+ }
+```
+
+- [ ] **Step 38: The command block and the row**
+
+`CommandBlock` is the mono box on `--code` with an optional Copy button (it reuses `useCopy`). `ChecklistRow` draws one row: the icon (✓, spinner or number), the title, the body line, and whatever the page puts under it. Both CSS files use tokens only.
+
+Create `apps/web/src/routes/Setup/CommandBlock.tsx`:
+
+```tsx
+import { useCopy } from '../../lib/clipboard';
+import styles from './CommandBlock.module.css';
+
+/**
+ * A command to run in a terminal (handoff §5): a 44 px `--code` block with a `$` prefix. `active` (the step whose turn
+ * it is) adds Copy; a later step's command shows in `--fg3`, without Copy, so you can read ahead.
+ */
+export function CommandBlock({ command, active }: { command: string; active: boolean }) {
+  const { copied, copy } = useCopy(command);
+  return (
+    <div className={styles.block} data-active={active}>
+      <span className={styles.prompt} aria-hidden="true">
+        $
+      </span>
+      <code className={styles.command}>{command}</code>
+      {active && (
+        <button type="button" className={styles.copy} onClick={copy} aria-label={`Copy ${command}`}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/routes/Setup/CommandBlock.module.css`:
+
+```css
+/* handoff §5 (NitpilotScreens screen=onboarding): the command block, 44px tall, --code, mono 13.5px, a 32px Copy button. */
+.block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--code);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+
+.prompt {
+  color: var(--fg3);
+}
+
+.command {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  color: var(--fg1);
+}
+
+/* A later step's command: readable ahead of time, but quieter (--fg3 stays AA, where the prototype's 55% opacity didn't). */
+.block[data-active='false'] .command {
+  color: var(--fg3);
+}
+
+.copy {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copy:hover {
+  background: var(--hover);
+}
+```
+
+Create `apps/web/src/routes/Setup/ChecklistRow.tsx`:
+
+```tsx
+import type { ReactNode } from 'react';
+import styles from './ChecklistRow.module.css';
+
+/** Where a step stands: done, the one whose turn it is (the first one not done), or one still to come. */
+export type StepState = 'done' | 'active' | 'pending';
+
+/**
+ * One step of the setup checklist (handoff §5): a 26 px icon (a green ✓ when done, a spinner while it's this step's
+ * turn, its number in an outlined circle when still to come), the title (in `--fg3` once done), a line about it, and
+ * whatever the step adds below (`children`: its command, a button, a status line, the agent chips).
+ */
+export function ChecklistRow({ n, state, title, body, children }: { n: number; state: StepState; title: string; body: ReactNode; children?: ReactNode }) {
+  return (
+    <li className={styles.row} data-state={state} aria-current={state === 'active' ? 'step' : undefined}>
+      <span className={styles.iconBox}>
+        {state === 'done' && (
+          <span className={styles.done} role="img" aria-label="Done">
+            ✓
+          </span>
+        )}
+        {state === 'active' && <span className={styles.spinner} role="img" aria-label="In progress" />}
+        {state === 'pending' && (
+          <span className={styles.number} role="img" aria-label={`Step ${n}, to do`}>
+            {n}
+          </span>
+        )}
+      </span>
+      <div className={styles.text}>
+        <span className={styles.title}>{title}</span>
+        <span className={styles.body}>{body}</span>
+        {children}
+      </div>
+    </li>
+  );
+}
+```
+
+Create `apps/web/src/routes/Setup/ChecklistRow.module.css`:
+
+```css
+/* handoff §5 (NitpilotScreens screen=onboarding): a checklist row, 16px vertical padding, --b2 dividers between rows. */
+.row {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--b2);
+}
+
+.iconBox {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+
+.done,
+.number,
+.spinner {
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The ✓ is drawn in --surface: white on the light theme's green, dark on the dark theme's brighter green. */
+.done {
+  background: var(--ok);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.number {
+  border: 1.5px solid var(--b1);
+  color: var(--fg3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The waiting spinner: 0.9s a turn. Reduced motion stops it (styles/global.css), leaving a still ring. */
+.spinner {
+  border: 2.5px solid var(--b1);
+  border-top-color: var(--acc);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--fg1);
+}
+
+.row[data-state='done'] .title {
+  color: var(--fg3);
+}
+
+.row[data-state='pending'] .title {
+  font-weight: 500;
+}
+
+.body {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.body code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+```
+
+- [ ] **Step 39: The Setup page**
+
+`Checklist` works out each row's state from the five facts: done rows are done, the first open row is active, the rest are pending. The outer `Setup` shows the loading line, the error state or the checklist, and the Skip or Open-your-inbox link. When the read says `done`, an effect writes `onboarded: true` into the `['me']` cache.
+
+Create `apps/web/src/routes/Setup/Setup.tsx`:
+
+```tsx
+import { BRAND, type Onboarding, type WebMe } from '@nitpilot/protocol';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { Link, useOutletContext } from 'react-router';
+import { useOnboarding } from '../../api/onboarding';
+import { Avatar } from '../../components/Avatar/Avatar';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { ChecklistRow, type StepState } from './ChecklistRow';
+import { CommandBlock } from './CommandBlock';
+import styles from './Setup.module.css';
+
+const LOGIN = `npx ${BRAND.npmPackage} login`;
+const REPOS_ADD = `${BRAND.cli} repos add`;
+const START = `${BRAND.cli} start`;
+
+/**
+ * `/setup` (handoff §5, spec §16 "Onboarding"): the five steps from signing in to a running agent, a page of its own.
+ * It ticks itself off: the facts (`GET /api/onboarding`) are read again after every `me.update` (a CLI logged in or
+ * connected) and when the window comes back into view (after GitHub's install page, in another tab). A first sign-in
+ * lands here; "Skip for now" goes to the inbox, and Settings links back here until setup is done.
+ */
+export function Setup() {
+  const me = useOutletContext<WebMe>();
+  const onboarding = useOnboarding();
+  const queryClient = useQueryClient();
+  const done = onboarding.data?.done ?? false;
+
+  // The server remembers done on this read; `me` says so too from now on, so Settings stops offering the checklist.
+  useEffect(() => {
+    if (done && !me.onboarded) queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, onboarded: true } : old));
+  }, [done, me.onboarded, queryClient]);
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.topBar}>
+        <Wordmark />
+        <span className={styles.spacer} />
+        <Avatar login={me.login} src={me.avatarUrl} size={32} />
+      </header>
+      <main className={styles.main}>
+        <div className={styles.intro}>
+          <h1 className={styles.title}>Set up {BRAND.name}</h1>
+          <p className={styles.sub}>This list ticks itself off as each step completes.</p>
+        </div>
+        {onboarding.isPending ? (
+          <p className={styles.loading} role="status">
+            Checking your setup…
+          </p>
+        ) : onboarding.isError ? (
+          <ErrorState message="Couldn't check your setup." onRetry={() => void onboarding.refetch()} />
+        ) : (
+          <Checklist me={me} facts={onboarding.data} />
+        )}
+        {done ? (
+          <Link to="/" className={styles.primary}>
+            Open your inbox
+          </Link>
+        ) : (
+          <Link to="/" className={styles.skip}>
+            Skip for now
+          </Link>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/** The progress bar and the five rows. The first step not done is the active one, even if a later one is done. */
+function Checklist({ me, facts }: { me: WebMe; facts: Onboarding }) {
+  const { appInstalled, cliConnected, repoLinked, agentStarted } = facts.steps;
+  // Step 1, signing in, is done: only a signed-in person sees this page.
+  const finished = [true, appInstalled, cliConnected, repoLinked, agentStarted];
+  const firstOpen = finished.indexOf(false);
+  const state = (i: number): StepState => (finished[i] ? 'done' : i === firstOpen ? 'active' : 'pending');
+  const count = finished.filter(Boolean).length;
+
+  return (
+    <>
+      <div className={styles.progress}>
+        <div className={styles.track} role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={5} aria-valuenow={count}>
+          <div className={styles.fill} style={{ width: `${(count / 5) * 100}%` }} />
+        </div>
+        <span className={styles.count}>{count} of 5</span>
+      </div>
+      <ol className={styles.card} aria-label="Setup steps">
+        <ChecklistRow n={1} state="done" title="Sign in with GitHub" body={`Signed in as @${me.login}.`} />
+
+        <ChecklistRow
+          n={2}
+          state={state(1)}
+          title="Install the GitHub App on your repos"
+          body={
+            <>
+              {state(1) === 'done' ? 'Installed on GitHub.' : 'Pick the repos your agents may work on. GitHub opens in a new tab.'}
+              {facts.publicReposOnly && ` ${BRAND.hostedDomain} covers public repos only.`}
+            </>
+          }
+        >
+          {state(1) === 'active' && (
+            <a className={styles.install} href={`https://github.com/apps/${facts.appSlug}/installations/new`} target="_blank" rel="noopener">
+              Install on GitHub
+            </a>
+          )}
+        </ChecklistRow>
+
+        <ChecklistRow
+          n={3}
+          state={state(2)}
+          title="Connect your computer"
+          body={state(2) === 'done' ? 'Your terminal is linked to this account.' : 'Run this in a terminal, then approve the device in the tab that opens.'}
+        >
+          {state(2) !== 'done' && <CommandBlock command={LOGIN} active={state(2) === 'active'} />}
+          {state(2) === 'active' && <span className={styles.status}>Waiting for your terminal…</span>}
+          {state(2) === 'done' && <span className={styles.connected}>✓ Connected{facts.deviceName ? `: ${facts.deviceName}` : ''}</span>}
+        </ChecklistRow>
+
+        <ChecklistRow
+          n={4}
+          state={state(3)}
+          title="Link a repo"
+          body={
+            state(3) === 'done' ? (
+              'Your computer reported a linked repo.'
+            ) : (
+              <>
+                Run it inside your clone. It's ticked off once <code>{START}</code> connects.
+              </>
+            )
+          }
+        >
+          {state(3) !== 'done' && <CommandBlock command={REPOS_ADD} active={state(3) === 'active'} />}
+        </ChecklistRow>
+
+        <ChecklistRow
+          n={5}
+          state={state(4)}
+          title="Start your agent"
+          body={state(4) === 'done' ? 'Your agent is connected.' : `${BRAND.name} picks up your coding agent on its own.`}
+        >
+          {state(4) !== 'done' && (
+            <>
+              <CommandBlock command={START} active={state(4) === 'active'} />
+              <div className={styles.chips}>
+                <span className={styles.chip}>Claude Code · detected automatically</span>
+                <span className={styles.chip}>Gemini CLI · coming later</span>
+              </div>
+            </>
+          )}
+        </ChecklistRow>
+      </ol>
+    </>
+  );
+}
+```
+
+Create `apps/web/src/routes/Setup/Setup.module.css`:
+
+```css
+/* handoff §5 "Onboarding checklist" (NitpilotScreens screen=onboarding): the wordmark bar, then a 620px column with the
+   title, the 6px progress bar, the checklist card and "Skip for now". */
+.page {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: clamp(8px, 3vw, 36px) 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.sub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--fg2);
+}
+
+.loading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.track {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--acc);
+  transition: width 400ms;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--fg3);
+}
+
+.card {
+  margin: 0;
+  padding: 6px 18px;
+  list-style: none;
+  border: 1px solid var(--b1);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.install {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.status,
+.connected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+.connected {
+  color: var(--ok-fg);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+.skip {
+  align-self: center;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.primary {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-control);
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* Phone: the 16px side gutters every screen keeps. */
+@media (max-width: 759px) {
+  .topBar {
+    padding: 14px 16px;
+  }
+
+  .main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .card {
+    padding: 4px 14px;
+  }
+}
+```
+
+- [ ] **Step 40: The route, and the card in Settings**
+
+`/setup` is a sibling of `/settings` under the signed-in wrapper. Settings shows `FinishSetup` (a `Section` with one line and a link) above Devices while `!me.onboarded`. It is not in the section nav; the handoff draws no such card.
+
+Modify `apps/web/src/app.tsx`:
+
+```diff
+diff --git a/apps/web/src/app.tsx b/apps/web/src/app.tsx
+index 134d4a1..08653db 100644
+--- a/apps/web/src/app.tsx
++++ b/apps/web/src/app.tsx
+@@ -5,6 +5,7 @@ import { retryUnlessClientError } from './api/client';
+ import { Chat } from './routes/Chat/Chat';
+ import { Home } from './routes/Home/Home';
+ import { Settings } from './routes/Settings/Settings';
++import { Setup } from './routes/Setup/Setup';
+ import { EmptyPane } from './routes/Shell/Pane';
+ import { InboxLayout } from './routes/Shell/Shell';
+ 
+@@ -28,7 +29,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
+ 
+ /**
+  * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
+- * the inbox (routes/Shell/Shell.tsx `InboxLayout`), and Settings is a page of its own.
++ * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own.
+  */
+ export function AppRoutes() {
+   return (
+@@ -40,6 +41,7 @@ export function AppRoutes() {
+           <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
+         </Route>
+         <Route path="settings" element={<Settings />} />
++        <Route path="setup" element={<Setup />} />
+       </Route>
+     </Routes>
+   );
+```
+
+Modify `apps/web/src/routes/Settings/Settings.tsx`:
+
+```diff
+diff --git a/apps/web/src/routes/Settings/Settings.tsx b/apps/web/src/routes/Settings/Settings.tsx
+index 26fde59..e0a314b 100644
+--- a/apps/web/src/routes/Settings/Settings.tsx
++++ b/apps/web/src/routes/Settings/Settings.tsx
+@@ -10,6 +10,7 @@ import { Agent } from './Agent';
+ import { Defaults } from './Defaults';
+ import { Devices } from './Devices';
+ import { Notifications } from './Notifications';
++import { Section } from './Section';
+ import styles from './Settings.module.css';
+ 
+ /** The section nav (desktop): each label, and the section it jumps to. */
+@@ -27,7 +28,8 @@ type SectionId = (typeof SECTIONS)[number]['id'];
+  * `/settings` (handoff §7), a page of its own: the top bar ("‹ Inbox" and the title), then on a desktop a sticky 180 px
+  * section nav beside the cards, and on a phone the cards stacked, with Esc going back to the inbox. The sections:
+  * your computers and their agents, push for this browser, your defaults for new chats, and your account. You are read
+- * again when the page opens, so today's usage is fresh (the server sends no update when a CLI pings).
++ * again when the page opens, so today's usage is fresh (the server sends no update when a CLI pings). Until you finish
++ * the setup checklist once, a card at the top links back to it.
+  */
+ export function Settings() {
+   const me = useOutletContext<WebMe>();
+@@ -67,6 +69,7 @@ export function Settings() {
+           </nav>
+         )}
+         <div className={styles.sections}>
++          {!me.onboarded && <FinishSetup />}
+           <Devices />
+           <Agent />
+           <Notifications me={me} />
+@@ -81,3 +84,17 @@ export function Settings() {
+     </div>
+   );
+ }
++
++/** Until the setup checklist was done once (`me.onboarded`): a way back to it (routes/Setup/Setup.tsx). */
++function FinishSetup() {
++  return (
++    <Section id="setup" title="Finish setting up">
++      <div className={styles.finish}>
++        <p className={styles.finishText}>A few steps are left before your agent can review and fix pull requests.</p>
++        <Link to="/setup" className={styles.button}>
++          Open the checklist
++        </Link>
++      </div>
++    </Section>
++  );
++}
+```
+
+Modify `apps/web/src/routes/Settings/Settings.module.css`:
+
+```diff
+diff --git a/apps/web/src/routes/Settings/Settings.module.css b/apps/web/src/routes/Settings/Settings.module.css
+index 6b81666..78dca55 100644
+--- a/apps/web/src/routes/Settings/Settings.module.css
++++ b/apps/web/src/routes/Settings/Settings.module.css
+@@ -399,3 +399,26 @@
+     padding: 16px 16px 40px;
+   }
+ }
++
++/* "Finish setting up": one line and the link to /setup, shown until the checklist was done once. */
++.finish {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 14px;
++  padding: 14px 0;
++}
++
++.finishText {
++  flex: 1;
++  margin: 0;
++  font-size: 14px;
++  line-height: 1.45;
++  color: var(--fg2);
++}
++
++.finish .button {
++  display: inline-flex;
++  align-items: center;
++  text-decoration: none;
++}
+```
+
+- [ ] **Step 41: Run the web tests, typecheck and lint**
+
+Run: `npm test -w apps/web && npm run typecheck && npm run lint`
+Expected: PASS, 307 tests in 40 files; typecheck and lint clean, and nothing printed to stderr by the new tests.
+
+- [ ] **Step 42: Run Playwright to see it pass**
+
+Ports 4319 and 4320 must be free.
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 14 tests (the two new ones take well under a second each). Run it twice more: it must pass every time.
+
+- [ ] **Step 43: The explainer and the spec**
+
+The explainer is for a React developer: the page asks the server what is true instead of keeping its own ticks, two things make it ask again, and the cache and the stored "done" are explained. The spec changes in three places: §8 (`User.onboardedAt`), §10 (`me.update` also fires after a CLI login's first poll; `/api/me` gains `onboarded`, not "onboarding facts"; `GET /api/onboarding`; `/github/setup` goes to `/setup`), and §16 (the checklist, the landing, Skip and the Settings card).
+
+Create `docs/why/onboarding-facts.md`:
+
+```markdown
+# Onboarding facts (the setup checklist that ticks itself off)
+
+**In one sentence:** the `/setup` page never asks you to tick anything; it asks the server what is already true (is the app installed, has a computer logged in, has it linked a repo, has it found an agent), and asks again whenever something about you may have changed.
+
+## Where each tick comes from
+
+`GET /api/onboarding` (`http/routes/onboarding.ts`) answers four facts, worked out in `auth/onboarding.ts`:
+
+| Step | True when | Where that's stored |
+|---|---|---|
+| 1. Sign in with GitHub | always: only a signed-in person can ask | (nothing) |
+| 2. Install the GitHub App | GitHub lists an installation of this app you can see | GitHub, `GET /user/installations` with your own token |
+| 3. Connect your computer | you have a CLI token nobody revoked | `CliToken` rows (`npx nitpilot login` makes one) |
+| 4. Link a repo | one of those tokens' last hello reported a linked repo | `CliToken.repos` |
+| 5. Start your agent | one of them reported an agent that can run | `CliToken.agentId` |
+
+Steps 4 and 5 come from the "hello" `nitpilot start` sends when it connects: the hub saves the repos and the agent on the token (`ws/cli-hub.ts`, `rememberHello`, docs/why/revoking-devices.md).
+
+## How the page hears about a change
+
+Think of `['onboarding']` as an ordinary TanStack Query. Two things make it fetch again:
+
+- **The server says "something about you changed".** On `/ws/web` it sends `me.update` when one of your CLIs connects or disconnects, and when `nitpilot login`'s first poll after you approved it makes the token (`http/routes/cli.ts` passes a hook to `pollCliLogin`). The web app's handler (`live/apply.ts`) calls `invalidateQueries(['onboarding'])`, so the list moves without a reload. It's like a server-triggered refetch.
+- **The window comes back into view.** Installing the app happens on GitHub, in another tab, and GitHub doesn't tell our browser tab anything. TanStack already refetches a query when the window regains focus (its `refetchOnWindowFocus` default, with no `staleTime`), so coming back from GitHub's tab is enough. GitHub also sends you to `/github/setup` after an install, which now redirects to `/setup`.
+
+## Why GitHub's "yes" is kept but its "no" isn't
+
+Asking GitHub can take a while (up to 15 seconds before we give up), and the page asks on every focus. So a **yes** is kept for 5 minutes per person, in a small in-memory cache like the one for repo access (`lib/ttl-cache.ts`). An app rarely gets uninstalled in the middle of setting up.
+
+A **no** is never kept: the moment you come back from installing, the next read must ask GitHub again and see the fresh install. Caching "no" would leave the step unticked for 5 minutes right when you're watching it.
+
+If GitHub fails, times out, or your GitHub sign-in needs renewing, the step just reads "not yet" (and the server logs why). The checklist is a guide, not a gate, so it never shows an error for that.
+
+## Why "done" is stored
+
+Once all four facts hold at the same time, the server writes `User.onboardedAt` (only if it's still empty, so two reads at once write it once). From then on:
+
+- the checklist reads every step as done without asking GitHub at all;
+- revoking a computer later doesn't "un-finish" your setup;
+- a sign-in goes straight to the inbox instead of `/setup` (`http/routes/auth.ts`), and Settings stops showing its "Finish setting up" card (`WebMe.onboarded`).
+
+Without storing it, someone who swapped laptops would be sent back through onboarding, and every read would cost a GitHub call forever.
+```
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index ca9268f..acaa306 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -151,7 +151,7 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
+ 
+ | Model | What it's for | Key fields | Notes |
+ |---|---|---|---|
+-| `User` | A person signed in with GitHub | githubId, login, avatarUrl, autoReview, autoAddress, dailyJobCap | `githubId` is unique (logins can change). The three settings (Plan 2) are edited on the Settings page and sent to the person's CLIs (§10); they default to on, on and 40 |
++| `User` | A person signed in with GitHub | githubId, login, avatarUrl, autoReview, autoAddress, dailyJobCap, onboardedAt | `githubId` is unique (logins can change). The three settings (Plan 2) are edited on the Settings page and sent to the person's CLIs (§10); they default to on, on and 40. `onboardedAt` is set the first time every step of the setup checklist holds (§16) |
+ | `GithubAuth` | The user's GitHub user token | accessTokenEnc, accessExpiresAt, refreshTokenEnc, refreshExpiresAt, version, status `ok\|needs_reauth` | Encrypted with AES-256-GCM. Refreshes run one at a time, because refresh tokens are single-use |
+ | `WebSession` | A browser sign-in | tokenHash, expiresAt | |
+ | `CliToken` | One per CLI device | name, tokenHash, prefix, lastSeenAt, revokedAt, agentId, agentVersion, repos | `nit_` prefix; only the hash is stored. `lastSeenAt` drives "offline since…". `agentId`, `agentVersion` and `repos` (Plan 2) are what the device's last hello said, saved on every hello before its presence is announced, so the Settings page shows its agent while it's offline; the agent is null when the hello's agent has no modes |
+@@ -291,25 +291,26 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+   - `chat.items {chatId, items, lastSeq}` and `chat.state {chatId, …}` to subscribers after each dispatcher commit;
+   - `job.progress {chatId, who, action, stage, text}`, forwarded live from the CLI (`action` is `reviewing`, `fixing`, or `sending` for a publish job, so the line can say "leo's agent is reviewing…");
+   - `inbox.upsert {chatId, rows}` to every participant of a chat that changed: every row that person has for that chat (an author who also reviews has two), an empty list removing them. Only to people who can still read the repo (the inbox's own check);
+-  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding), and after each of the person's own writes (`PUT /api/me/settings`, `DELETE /api/devices/:id`, `POST`/`DELETE /api/push/subscriptions`), so every tab of theirs shows the change; the web app then reads `GET /api/devices` again. The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone.
++  - `me.update` when one of the person's CLIs connects or disconnects (presence, onboarding), when a CLI login's first poll after approval creates their token, and after each of the person's own writes (`PUT /api/me/settings`, `DELETE /api/devices/:id`, `POST`/`DELETE /api/push/subscriptions`), so every tab of theirs shows the change; the web app then reads `GET /api/devices` and `GET /api/onboarding` again. The chats where that person's agent has active jobs, and every chat someone has open in which that person takes part, are sent again too, so "working", "waiting" and the presence dot stay true for everyone.
+   - `chat.error {chatId, code}` when a subscribe is refused, or an open subscription's access check fails: `not_found` (no such chat, or you can't see its repo), `reauth` (your GitHub sign-in expired), `unavailable` (GitHub didn't answer; the client asks again a little later). The subscription is gone. A socket whose session ended is closed with 4401.
+ 
+   The client sends `chat.subscribe {chatId, afterSeq}` and `chat.unsubscribe {chatId}`. A subscribe needs read access to the chat (§16). All changes go through REST.
+ - **Resuming without gaps:** subscribe first (live items are buffered), then catch up from `afterSeq` out of the database, every missed item, in `chat.items` messages of at most 200, then flush the buffer while skipping duplicates (Odyhook's `listen/route.ts` pattern). The client also drops any `seq` it already has, and re-subscribes with each open chat's `lastSeq` after a reconnect.
+ 
+ **REST endpoints in Plan 2** (JSON, signed in by the session cookie; every write gets an Origin check, needs read access to the chat's repo, and is checked against the access rules in §16 before it becomes an engine event under the chat's lock):
+-- Reads: `GET /api/me` (adds settings, onboarding facts and the Web Push public key to Plan 1's answer), `GET /api/inbox`, `GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`, and the newest 200 timeline items), `GET /api/chats/:id/messages?before=` (older items; newer ones arrive on `/ws/web`), `GET /api/chats/:id/files` (changed files from the platform, at most 300, kept in memory per head commit for 10 minutes), `GET /api/devices`.
++- Reads: `GET /api/me` (adds settings, the Web Push public key and `onboarded` to Plan 1's answer), `GET /api/onboarding` (the setup checklist, below), `GET /api/inbox`, `GET /api/chats/:owner/:repo/:number` (header, participants and presence, points, waiting drafts, team rules, what the viewer may do, `lastSeq`, and the newest 200 timeline items), `GET /api/chats/:id/messages?before=` (older items; newer ones arrive on `/ws/web`), `GET /api/chats/:id/files` (changed files from the platform, at most 300, kept in memory per head commit for 10 minutes), `GET /api/devices`.
+ - Chat writes: `POST /api/chats/:id/notes`, `POST /api/chats/:id/points/:n/resolve`, `POST /api/chats/:id/points/:n/continue`, `POST /api/chats/:id/review` (Plan 1's stretch goal), `POST /api/chats/:id/retry` (now also with the session cookie), `PUT /api/chats/:id/auto`, `POST /api/chats/:id/drafts/:jobId/send`, `POST /api/chats/:id/drafts/:jobId/discard`, `POST /api/chats/:id/read`. Marking a chat read only moves the person's own cursor and changes nothing anyone else sees, so it needs the Origin check and the person being a participant, not a GitHub access check; for anyone else the chat is a 404.
+ - Answers of the chat writes: 200 (`{ok: true}`; Retry keeps `{status: queued|waiting}`) when the change became an engine event that changed the chat; 403 when the access rules say no (§16); 404 for a chat or a point you can't see; 409 with a plain sentence when the chat moved on first (the point was resolved or handed back meanwhile, the PR closed, your agent is already on it, the draft was already sent or discarded or is already being sent, the switch is already where you put it), so a double click, or two people pressing at once, has exactly one effect. A note is 1 to 4,000 characters. `nitpilot retry` (the CLI token) keeps Plan 1's rule: it isn't asked about read access, since it only runs your own failed job.
+ - Personal: `PUT /api/me/settings`, `POST /api/push/subscriptions`, `DELETE /api/push/subscriptions`, `DELETE /api/devices/:id`.
+ - Devices: `GET /api/devices` answers `{devices: [{id, name, lastSeenAt, online, agent: {id, version} | null}]}`: your CLI tokens that aren't revoked, `agent` from the live connection when online and from the token's last hello otherwise. `DELETE /api/devices/:id` sets `revokedAt`, closes that CLI's socket with 4401 and answers 204; another person's device, an unknown one and one already revoked are the same 404. Both take the session cookie only (a CLI token is a 401).
+ - A chat read that isn't allowed answers like the inbox: the same 404 for a chat that doesn't exist and one you can't see, a 401 with code `reauth` when your GitHub sign-in expired, a 502 when GitHub doesn't answer. Every GitHub call gives up after 15 seconds.
++- Onboarding: `GET /api/onboarding` answers `{steps: {appInstalled, cliConnected, repoLinked, agentStarted}, done, deviceName, appSlug, publicReposOnly}`, session cookie only (a CLI token is a 401). It's a read of its own, not part of `/api/me`, because "app installed" asks GitHub (`GET /user/installations` with the person's own token) and `/api/me` is the app's first request. `cliConnected`: an unrevoked CLI token; `repoLinked` / `agentStarted`: an unrevoked token whose last hello reported a linked repo / an agent with a mode; `deviceName`: the newest unrevoked token's name. GitHub's yes is kept 5 minutes per person, a no isn't kept, and a GitHub failure counts as no (logged, never failing the read). The first read where all four hold sets `User.onboardedAt`; from then on every step reads true without asking GitHub.
+ - CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve`.
+ 
+ **REST endpoints in Plan 1**
+ - Webhooks: `POST /webhooks/github`
+ - GitHub sign-in: `GET /auth/github/login`, `GET /auth/github/callback` (PKCE S256), `POST /auth/logout`
+-- After installing the app: `GET /github/setup`
++- After installing the app: `GET /github/setup` (syncs the installation, then goes to `/setup` in Plan 2)
+ - CLI login:
+   - `POST /api/cli/login` returns `{deviceCode, userCode, verifyUrl, interval, expiresIn}`.
+   - `POST /api/cli/login/poll` returns `pending | approved{token} | denied | expired`.
+@@ -652,7 +653,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
+   3. `npx nitpilot login`.
+   4. `nitpilot repos add`.
+   5. `nitpilot start`.
+-  The checklist ticks itself off as each step completes (`me.update` on `/ws/web`, §10).
++  The checklist (`/setup`, its facts from `GET /api/onboarding`, §10) ticks itself off as each step completes: it is read again on every `me.update` (a CLI logged in, connected or disconnected) and when the window comes back into view (GitHub's install page is another tab). A first sign-in with no page of its own to go back to lands on `/setup` until setup is done once; "Skip for now" goes to the inbox, and Settings links back to the checklist until then.
+ - **Platform:** works well on phones as well as desktop, has light and dark themes, and can be installed as a PWA (the browser's install offer becomes the handoff's install card; on iOS, where only the Home Screen app gets push, a sheet explains how to add it). A small hand-written service worker handles only `push` and `notificationclick`; there is no offline cache, since the app needs the server anyway. Signing out first removes that browser's push subscription (best effort, it never holds up signing out), so a shared browser stops getting the last person's notifications. When the app starts it also re-sends that browser's existing subscription, so one the server dropped, or one left by the last person on a shared browser, is taken over by whoever is signed in.
+ - **Who can see a chat:** anyone who can read the repo on GitHub, checked with their own token and cached for 5 minutes. A chat open on `/ws/web` is checked again once that answer is 5 minutes old, the next time something is sent for it; losing access ends the subscription with `chat.error`. Someone who isn't a participant sees it read-only. The inbox lists only the chats a person is part of, and only those in repos they can still read: the same check, made once per repo and kept for 5 minutes. An expired GitHub sign-in makes the inbox a 401 that says so, and GitHub not answering makes it a 502.
+ - **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
+```
+
+- [ ] **Step 44: Look at it (controller, in the in-app browser)**
+
+Build, then start the Playwright server (launch config `nitpilot-e2e-web-w7`, or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build`). Take the lock first if other work is using the ports. Seed maya before her first `nitpilot login`, then set her cookie in the tab on `http://127.0.0.1:4319`:
+
+```bash
+C=http://127.0.0.1:4320
+curl -s -XPOST $C/forget-devices -d '{"login":"maya"}'   # maya before `nitpilot login`
+curl -s -XPOST $C/reset                                  # checklist unfinished, no installation
+curl -s -XPOST $C/signin -d '{"login":"maya"}'           # prints {"name":"nitpilot_session","value":"…"}
+```
+
+In the tab, run `document.cookie = "nitpilot_session=<value>; path=/"`, then open `/setup`. A real first sign-in can't be clicked through by hand (`/auth/github/login` sends the browser to the real github.com), and the public-only note can't be seen on this server (`web-server.ts` forces `PUBLIC_REPOS_ONLY` off); `setup.spec.ts` and the unit tests cover those two.
+
+- **Start, 1280 px, light.** A 620 px centered column under a top bar with the wordmark and maya's avatar. "Set up Nitpilot" as the title, the line "This list ticks itself off as each step completes.", a progress bar with "1 of 5", then the card. Row 1: green ✓, "Sign in with GitHub" in the lighter text color, "Signed in as @maya." Row 2 is active: a spinner, "Install the GitHub App on your repos", "Pick the repos your agents may work on. GitHub opens in a new tab." and the **Install on GitHub** button. Rows 3 to 5 show outlined numbers and their commands (`npx nitpilot login`, `nitpilot repos add`, `nitpilot start`) with **no** Copy button; row 5 shows the chips "Claude Code · detected automatically" and "Gemini CLI · coming later". "Skip for now" sits below the card.
+- **Install ticks on focus.** `curl -s -XPOST $C/installations -d '{"login":"maya"}'`, then make the tab come back into view: in the console, `document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))` (the in-app browser has no second tab; the event must bubble to reach TanStack Query's listener). One `GET /api/onboarding` goes out and the page reads "2 of 5": row 2 is done, row 3 is active with **Copy** and "Waiting for your terminal…".
+- **The CLI ticks the rest.** `curl -s -XPOST $C/cli -d '{"login":"maya","scenario":"happy.json"}'` starts maya's fake-agent CLI. With no reload, one refetch follows the `me.update` and the page reads "5 of 5": all rows ✓, row 3 says "✓ Connected: test laptop", and **Open your inbox** (accent) replaces "Skip for now".
+- **Dark and phone.** At 1280 px dark, and at 375 px light and dark (reload after `forget-devices`, `reset` and `installations` to be at "2 of 5"): the column has 16 px gutters, the commands stay inside their boxes, the chips wrap, and `document.documentElement.scrollWidth` is 375. The ✓ is drawn in the surface color, white in light and dark on the brighter dark-mode green.
+- **Settings.** After `reset` again (so `onboarded` is false), `/settings` at 1280 px dark, with no devices: the first card is "Finish setting up" with the line "A few steps are left before your agent can review and fix pull requests." and **Open the checklist** (it goes to `/setup`); then Devices says "No computers yet. Run npx nitpilot login on one to connect it." and Agent says "Install Claude Code, then run nitpilot start." After the page above reached "5 of 5", the card is gone.
+- Known minors: no live tick for a token made by the control API's `POST /cli-token` (that route sends no `me.update`); no list of the installed repos ("Installed on acme/shop-api…" in the prototype); no "Waiting for a linked repo…" line (the spinner already says waiting).
+
+- [ ] **Step 45: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 81, CLI 333 passed + 14 skipped, server 1007, web 307; end to end 6; Playwright 14; typecheck, lint and build clean.
+
+```bash
+git add packages/protocol/src apps/server/src apps/server/test apps/server/prisma apps/web docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): onboarding that ticks itself off: GET /api/onboarding, the setup checklist, and a first sign-in that lands on it
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 23: Device approval in the web app; the server pages go
 
 **Files:**
-- Create: `apps/server/src/http/routes/cli-requests.ts` and `cli-requests.db.test.ts`, `apps/web/src/routes/Approve/{Approve.tsx,*.module.css,Approve.test.tsx}`.
-- Modify: `packages/protocol/src/web-api.ts` (`CliRequestView`, `CliRequestDecision`), `apps/server/src/http/app.ts`, `apps/server/src/http/errors.ts` (no HTML), `apps/server/tsconfig.json` (no JSX left), `apps/cli` texts only if they name the page differently (they shouldn't: the URL stays `/cli/approve?code=`).
-- Delete: `apps/server/src/http/routes/cli-approve.tsx`, `apps/server/src/http/pages/{approve,layout}.tsx` and their tests (the transcript and home pages went in Tasks 2 and 10).
+- Create (server): `apps/server/src/http/routes/cli-requests.ts` and `cli-requests.db.test.ts`.
+- Create (web): `apps/web/src/api/cli-requests.ts`, `apps/web/src/lib/browser.ts`, `apps/web/src/routes/Approve/{Approve.tsx,Approve.module.css,Approve.test.tsx}`, `apps/web/e2e/approve.spec.ts`.
+- Modify: `packages/protocol/src/web-api.ts` and `web-api.test.ts` (`CliRequestView`, `CliRequestDecision`); `apps/server/src/http/app.ts`; `apps/server/src/auth/cli-login.ts` (`createdAt: now`, a comment); `apps/server/src/http/routes/cli.db.test.ts` and `apps/server/src/http/spa.test.ts`; `apps/server/tsconfig.json` (no JSX left); `apps/web/src/app.tsx` (the lazy route); `apps/web/vite.config.ts` (the `/cli/` proxy entry goes); `docs/superpowers/specs/2026-10-07-nitpilot-design.md`; `docs/why/cli-login.md`.
+- Delete: `apps/server/src/http/routes/cli-approve.tsx`, `apps/server/src/http/pages/approve.tsx`, `apps/server/src/http/pages/layout.tsx` (they had no test files of their own; their tests lived in `cli.db.test.ts` and move to the new API there). Nothing is left under `apps/server/src/http/pages/`.
+- No migration, no new dependency. `apps/server/src/http/errors.ts` was already JSON-only and `apps/cli` already says `/cli/approve?code=` (the server builds the URL), so neither changes.
 
 **Interfaces:**
-- Consumes: `findCliLogin`, `decideCliLogin` (`auth/cli-login.ts`).
-- Produces: `GET /api/cli/requests/:userCode` → `CliRequestView = { userCode; deviceName; requestedAt: string; expiresAt: string; status: 'pending' | 'approved' | 'denied' | 'expired' }` (an unknown code → 404); `POST /api/cli/requests/:userCode { decision: 'approve' | 'deny' }` → the new `CliRequestView` (requireUser + requireSameOrigin). The SPA route `/cli/approve?code=` signs you in first (`/auth/github/login?next=…`) when `useMe()` is null.
+- Consumes: `findCliLogin(userCode)`, `decideCliLogin(userCode, userId, decision, now?)` and `startCliLogin(deviceName, now?)` (`auth/cli-login.ts`); `requireUser`, `requireSameOrigin`, `UserVariables` (`auth/request-user.ts`); `HttpError` (`http/errors.ts`); web: `useMe()` (`api/me.ts`), `api.get` / `api.send` (`api/client.ts`), `ErrorState`, `Wordmark`, `useNow` and `itemTime` (`lib/time.ts`), `CommandBlock` (`routes/Setup/CommandBlock.tsx`, Task 22), `BRAND.npmPackage`; Playwright: `signIn`, `forgetDevices`, `pageProblems` (`e2e/control.ts`).
+- Produces (protocol): `CliRequestView = { userCode: string; deviceName: string; requestedAt: string; expiresAt: string; status: 'pending' | 'approved' | 'denied' | 'expired' }` and `CliRequestDecision = { decision: 'approve' | 'deny' }`.
+- Produces (server): `cliRequestRoutes(): Hono<{ Variables: UserVariables }>` (takes no deps):
+  - `GET /api/cli/requests/:userCode` → `CliRequestView`. Session cookie only: a CLI token is a 401. An unknown code is a 404 ("No such code.").
+  - `POST /api/cli/requests/:userCode { decision }` → the request's new `CliRequestView`. Session cookie only, plus the Origin check (403 before the body is read). A bad `decision` is a 400. A code that is no longer pending (decided, collected, expired) answers 200 with how it stands now.
+  - `startCliLogin` now stores `createdAt: now`, so `requestedAt` and `expiresAt` come from one clock.
+- Produces (web): `useCliRequest(userCode: string, enabled: boolean)` and `useDecideCliRequest(userCode: string)` (`api/cli-requests.ts`, query key `['cli-request', userCode]`); `browser.goTo(url: string): void` (`lib/browser.ts`, the one place the app leaves for another address, so a test can spy on it); `Approve` (`routes/Approve/Approve.tsx`), routed at `cli/approve` outside Home and loaded lazily.
 
-**Behavior** (handoff §6): the centered 440 px card in four states: Pending (the code large in mono, device row, Approve / Deny, "The code expires in 9:41." counting down from `expiresAt`), Approved, Denied, Expired (with the `npx nitpilot login` command block). A countdown that reaches zero switches to Expired without a request.
+**Behavior** (handoff §6; spec §10 CLI approval):
+- **What the server answers.** The page reads one login and decides it. `requestedAt` is when the CLI asked and `expiresAt` is 10 minutes later. Status: `pending` until someone decides; `approved` once approved, and still `approved` after the CLI has collected its token; `denied`; `expired` when a pending login passed its 10 minutes (nothing is written when it is read, the CLI's next poll does that, as before). The code is looked up however it was typed (lower case, spaces around it).
+- **Only a person can decide.** A CLI token can't approve a login (a CLI approving logins would defeat the point of asking a person), so it is answered like no sign-in at all. Another site can't press Approve for you: the POST needs the Origin check.
+- **A second click is harmless.** Approving or denying a code that is already decided, collected or expired changes nothing and answers 200 with what happened, so a double click or an old tab just shows the result.
+- **The page** (`/cli/approve?code=…`, the link `nitpilot login` opens) stands outside Home: no landing page, no inbox, no socket. Signed out, it sends the browser to `/auth/github/login?next=…` with the same path and code, and GitHub sign-in brings you back. It is a centered 440 px card (24 px radius) in four states, with the handoff's copy:
+  - **Pending:** eyebrow "Device login", "Approve this device?", the code in mono in a box with "Check that this code matches the one in your terminal.", a device row with the device name and "requested HH:MM" (the login request carries no OS or CLI version), **Approve** (48 px, accent) and **Deny** (outlined), and the fine print "Only approve if you just ran npx nitpilot login. The code expires in 9:41." counting down each second from `expiresAt`. While a decision is on its way both buttons are disabled and busy.
+  - **Approved:** "Device approved", "<device name> can now run your agent. You can close this tab."
+  - **Denied:** "Login denied", "Nothing was connected. If you didn't start this login, you're all set."
+  - **Expired:** "This code expired", "Codes last 10 minutes. Run the login again in your terminal:" and the `npx nitpilot login` command block (with Copy). A countdown that reaches zero switches to Expired by itself, without a request.
+  - **Code not found** (an unknown code, or no `code` at all): "Code not found", "Check the code in your terminal, or start again:" and the same command block.
+  - A read or a decision that fails (network, 5xx) shows the error state with **Try again**, which reads the login again instead of sending the decision twice. Focus moves to the outcome's heading after a decision. The code box is spelled out letter by letter to a screen reader.
+- **The countdown uses the browser's clock.** A computer whose clock is minutes off shows a wrong count; the server still decides (a late Approve answers `expired`).
+- **The server renders no page any more.** `/cli/approve` is answered by the web app's fallback (`http/spa.ts`) with the `frame-ancestors 'none'` header. `grep -rn renderPage apps/server/src` is empty and `apps/server/src/http/pages/` is gone. The server's `tsconfig.json` loses `jsx` and `jsxImportSource`, and Vite's dev proxy loses its `/cli/` entry.
+- **The page is its own file** (`React.lazy`): with it in the main chunk, the build crossed Vite's 500 kB warning (504 kB). Now the main chunk is 499.8 kB and the page is a 5 kB chunk the browser fetches only when this page opens. The main chunk is 0.2 kB under the limit, so the next code that lands in it needs the same treatment (see the notes).
+- **Spec and explainer.** Spec §7 and §10 describe the web page and the two routes; the Plan 1 lines for `GET|POST /cli/approve` and "Every server-rendered page sends…" become history notes. `docs/why/cli-login.md` (it already covers the device flow) gains the web page and a "Why the page is careful" section: the two codes, the stored hash, the Origin check, the harmless second click, and `frame-ancestors`.
 
 **Tests this task must include:**
-- `cli-requests.db.test.ts`: view a pending code; approve → the CLI's next poll gets a token (existing `pollCliLogin`); deny; an expired code can't be approved; another Origin → 403; not signed in → 401.
-- `Approve.test.tsx`: the four states, the countdown flipping to Expired (fake timers).
-- Nothing under `apps/server/src/http/pages/` remains, and `grep -r renderPage apps/server/src` is empty; every server answer that is HTML now comes from `spa.ts` with the CSP header.
+- `cli-requests.db.test.ts`: view a pending login (code, device, times); the code however it's typed; a pending login past 10 minutes reads `expired`; a CLI token and no sign-in are both 401; approve answers `approved` and the CLI's next poll gets its token; it still reads `approved` once the CLI collected the token; deny, and the CLI hears `denied` with no token made; an expired code can't be approved (answers `expired`, the CLI never gets a token); an already decided code answers what happened and changes nothing; an unknown code is 404 and a bad decision 400; another Origin is 403 and leaves the login waiting.
+- `cli.db.test.ts`: the handshake and the denied and expired cases go through the new API; the signed-out redirect test is removed (it moves to the web app).
+- `spa.test.ts`: `/cli/approve` is answered with the app and the CSP header.
+- `web-api.test.ts`: `CliRequestView` round-trips and refuses `consumed`; `CliRequestDecision` takes only approve or deny.
+- `Approve.test.tsx`: the four states, not found (unknown code, no code), the countdown flipping to Expired (fake timers), the signed-out redirect, busy buttons, a failed request.
+- Playwright `approve.spec.ts`: a real `POST /api/cli/login`, open `/cli/approve?code=…` signed in as maya, Approve, and the poll returns a token; signed out, the page asks for `/auth/github/login?next=…` with the same code.
+
+- [ ] **Step 1: Write the failing protocol test**
+
+The two shapes, in the protocol's web API test. `consumed` is the server's word for approved and collected; the page must never see it:
+
+Modify `packages/protocol/src/web-api.test.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.test.ts b/packages/protocol/src/web-api.test.ts
+index 644cdc6..dcc138b 100644
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
+ import { MeResponse } from './api';
+ import { jobResult, settings } from './test-samples';
+ import {
+-  ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
++  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+   Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+ } from './web-api';
+ 
+@@ -148,4 +148,13 @@ describe('web API bodies', () => {
+     expect(Onboarding.safeParse({ ...onboarding, steps: { appInstalled: true } }).success).toBe(false);
+     expect(WebMe.safeParse({ ...me, onboarded: undefined }).success).toBe(false);
+   });
++
++  it('round-trips a device login waiting on /cli/approve, and takes only approve or deny', () => {
++    const request: CliRequestView = { userCode: 'WDJB-MJHT', deviceName: "Maya's MacBook Pro", requestedAt: '2026-10-19T18:02:00.000Z', expiresAt: '2026-10-19T18:12:00.000Z', status: 'pending' };
++    expect(CliRequestView.parse(JSON.parse(JSON.stringify(request)))).toEqual(request);
++    // `consumed` is the server's word for approved and collected; the page never sees it.
++    expect(CliRequestView.safeParse({ ...request, status: 'consumed' }).success).toBe(false);
++    expect(CliRequestDecision.parse({ decision: 'deny' })).toEqual({ decision: 'deny' });
++    expect(CliRequestDecision.safeParse({ decision: 'maybe' }).success).toBe(false);
++  });
+ });
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm test -w packages/protocol`
+Expected: FAIL, 1 failed and 81 passed (82). `web-api.test.ts` has 1 failed and 25 passed: `CliRequestView` is not exported yet (`CliRequestView.parse` is not a function or undefined).
+
+- [ ] **Step 3: The two schemas**
+
+Modify `packages/protocol/src/web-api.ts`:
+
+```diff
+diff --git a/packages/protocol/src/web-api.ts b/packages/protocol/src/web-api.ts
+index ca466ef..2dc67ce 100644
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -79,6 +79,25 @@ export const Onboarding = z.object({
+ });
+ export type Onboarding = z.infer<typeof Onboarding>;
+ 
++/**
++ * A `nitpilot login` waiting on the approve page (`GET /api/cli/requests/:userCode`, `/cli/approve?code=…`, handoff
++ * §6). `userCode` is the short code the terminal printed, for the person to compare. `requestedAt` is when the CLI
++ * asked; `expiresAt` is 10 minutes later, and the page counts down to it. `status`: `pending` until someone decides,
++ * then `approved` (also once the CLI has collected its token) or `denied`; `expired` once the 10 minutes ran out first.
++ */
++export const CliRequestView = z.object({
++  userCode: z.string(),
++  deviceName: z.string(),
++  requestedAt: z.string(),
++  expiresAt: z.string(),
++  status: z.enum(['pending', 'approved', 'denied', 'expired']),
++});
++export type CliRequestView = z.infer<typeof CliRequestView>;
++
++/** `POST /api/cli/requests/:userCode`: the person pressed Approve or Deny. It answers the request's new `CliRequestView`. */
++export const CliRequestDecision = z.object({ decision: z.enum(['approve', 'deny']) });
++export type CliRequestDecision = z.infer<typeof CliRequestDecision>;
++
+ /**
+  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
+  * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
+```
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm test -w packages/protocol`
+Expected: PASS, 82 tests (`web-api.test.ts` 26).
+
+- [ ] **Step 5: Write the failing server tests**
+
+Three server test files. The new route's tests go in `cli-requests.db.test.ts`; `cli.db.test.ts` stops using the old page (its `approveForm` helper becomes `decide`, which presses the new API's button, and the signed-out redirect test goes); `spa.test.ts` gains the check that `/cli/approve` is the app's now.
+
+Create `apps/server/src/http/routes/cli-requests.db.test.ts`:
+
+```ts
+import { CliRequestView } from '@nitpilot/protocol';
+import { describe, expect, it } from 'vitest';
+import { testApp } from '../../../test/app';
+import { makeCliToken, makeUser } from '../../../test/db';
+import { sessionCookieFor } from '../../../test/http';
+import { decideCliLogin, startCliLogin } from '../../auth/cli-login';
+import { prisma } from '../../lib/prisma';
+
+const ORIGIN = 'http://localhost:8787';
+
+/**
+ * maya, signed in to the web app, and a `nitpilot login` waiting for her: `login` is what the CLI got back
+ * (the secret device code and the short user code). `view`, `decide` and `poll` are the page's and the CLI's requests.
+ */
+async function scene(startedAt = new Date()) {
+  const maya = await makeUser({ login: 'maya' });
+  const cookie = await sessionCookieFor(maya.id);
+  const login = await startCliLogin("Maya's MacBook Pro", startedAt);
+  const app = testApp();
+  const view = (code: string, headers: Record<string, string> = { cookie }) => app.request(`/api/cli/requests/${code}`, { headers });
+  const decide = (code: string, decision: string, headers: Record<string, string> = { cookie, origin: ORIGIN }) =>
+    app.request(`/api/cli/requests/${code}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ decision }) });
+  const poll = async () =>
+    (await app.request('/api/cli/login/poll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceCode: login.deviceCode }) })).json();
+  return { maya, cookie, login, view, decide, poll };
+}
+
+const statusOf = async (res: Response) => CliRequestView.parse(await res.json()).status;
+
+describe('GET /api/cli/requests/:userCode', () => {
+  it('shows a waiting login: its code, the device, when it was asked and when it runs out', async () => {
+    const startedAt = new Date();
+    const { login, view } = await scene(startedAt);
+    const res = await view(login.userCode);
+    expect(res.status).toBe(200);
+    expect(CliRequestView.parse(await res.json())).toEqual({
+      userCode: login.userCode,
+      deviceName: "Maya's MacBook Pro",
+      requestedAt: startedAt.toISOString(),
+      expiresAt: login.expiresAt.toISOString(),
+      status: 'pending',
+    });
+  });
+
+  it('finds the code however it was typed: lower case, with spaces around it', async () => {
+    const { login, view } = await scene();
+    const res = await view(encodeURIComponent(` ${login.userCode.toLowerCase()} `));
+    expect(res.status).toBe(200);
+    expect(CliRequestView.parse(await res.json()).userCode).toBe(login.userCode);
+  });
+
+  it('reads a pending code past its 10 minutes as expired', async () => {
+    const { login, view } = await scene(new Date(Date.now() - 11 * 60_000));
+    expect(await statusOf(await view(login.userCode))).toBe('expired');
+  });
+
+  it("answers 404 for a code that doesn't exist", async () => {
+    const { view } = await scene();
+    const res = await view('ZZZZ-ZZZZ');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: 'not_found' } });
+  });
+
+  it("refuses a CLI's token like no sign-in at all, and no sign-in with a 401", async () => {
+    const { maya, login, view } = await scene();
+    const token = await makeCliToken(maya.id);
+    expect((await view(login.userCode, { authorization: `Bearer ${token.raw}` })).status).toBe(401);
+    expect((await view(login.userCode, {})).status).toBe(401);
+  });
+});
+
+describe('POST /api/cli/requests/:userCode', () => {
+  it("approves: the answer says so, and the CLI's next poll gets its token", async () => {
+    const { maya, login, decide, poll } = await scene();
+    expect(await poll()).toEqual({ status: 'pending' });
+    const res = await decide(login.userCode, 'approve');
+    expect(res.status).toBe(200);
+    expect(CliRequestView.parse(await res.json())).toMatchObject({ userCode: login.userCode, status: 'approved' });
+    expect(await poll()).toMatchObject({ status: 'approved', token: expect.stringMatching(/^nit_/) });
+    expect(await prisma.cliToken.count({ where: { userId: maya.id, name: "Maya's MacBook Pro" } })).toBe(1);
+  });
+
+  it('still reads approved once the CLI has collected its token', async () => {
+    const { login, decide, poll, view } = await scene();
+    await decide(login.userCode, 'approve');
+    await poll(); // the row is now `consumed`
+    expect(await statusOf(await view(login.userCode))).toBe('approved');
+  });
+
+  it('denies: the CLI hears denied, and no token is made', async () => {
+    const { maya, login, decide, poll } = await scene();
+    expect(await statusOf(await decide(login.userCode, 'deny'))).toBe('denied');
+    expect(await poll()).toEqual({ status: 'denied' });
+    expect(await prisma.cliToken.count({ where: { userId: maya.id } })).toBe(0);
+  });
+
+  it("can't approve an expired code: it answers expired and the CLI never gets a token", async () => {
+    const { login, decide, poll } = await scene(new Date(Date.now() - 11 * 60_000));
+    const res = await decide(login.userCode, 'approve');
+    expect(res.status).toBe(200);
+    expect(await statusOf(res)).toBe('expired');
+    expect(await poll()).toEqual({ status: 'expired' });
+  });
+
+  it('answers a code that was already decided with what happened, and changes nothing (a double click, a stale tab)', async () => {
+    const { maya, login, decide } = await scene();
+    await decideCliLogin(login.userCode, maya.id, 'deny');
+    const res = await decide(login.userCode, 'approve');
+    expect(res.status).toBe(200);
+    expect(await statusOf(res)).toBe('denied');
+    expect((await prisma.cliLoginRequest.findUniqueOrThrow({ where: { userCode: login.userCode } })).status).toBe('denied');
+  });
+
+  it('decides the code however it was typed', async () => {
+    const { login, decide } = await scene();
+    expect(await statusOf(await decide(login.userCode.toLowerCase(), 'approve'))).toBe('approved');
+  });
+
+  it("answers 404 for a code that doesn't exist, and 400 for a decision that isn't approve or deny", async () => {
+    const { login, decide } = await scene();
+    expect((await decide('ZZZZ-ZZZZ', 'approve')).status).toBe(404);
+    expect((await decide(login.userCode, 'maybe')).status).toBe(400);
+  });
+
+  it('refuses a request from another site with 403, and leaves the login waiting', async () => {
+    const { cookie, login, decide, view } = await scene();
+    const res = await decide(login.userCode, 'approve', { cookie, origin: 'https://evil.example' });
+    expect(res.status).toBe(403);
+    expect(await statusOf(await view(login.userCode))).toBe('pending');
+    expect((await decide(login.userCode, 'approve', { cookie })).status).toBe(403); // no Origin at all
+  });
+
+  it("refuses a CLI's token like no sign-in at all, and no sign-in with a 401", async () => {
+    const { maya, login, decide } = await scene();
+    const token = await makeCliToken(maya.id);
+    expect((await decide(login.userCode, 'approve', { authorization: `Bearer ${token.raw}` })).status).toBe(401);
+    expect((await decide(login.userCode, 'approve', { origin: ORIGIN })).status).toBe(401);
+  });
+});
+```
+
+Modify `apps/server/src/http/routes/cli.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/routes/cli.db.test.ts b/apps/server/src/http/routes/cli.db.test.ts
+index f080a75..c00e76d 100644
+--- a/apps/server/src/http/routes/cli.db.test.ts
++++ b/apps/server/src/http/routes/cli.db.test.ts
+@@ -19,12 +19,9 @@ async function post(path: string, body: unknown, headers: Record<string, string>
+   return app().request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+ }
+ 
+-async function approveForm(code: string, decision: 'approve' | 'deny', cookie: string, headers: Record<string, string> = ORIGIN) {
+-  return app().request('/cli/approve', {
+-    method: 'POST',
+-    headers: { cookie, 'content-type': 'application/x-www-form-urlencoded', ...headers },
+-    body: new URLSearchParams({ code, decision }).toString(),
+-  });
++/** The approve page's button (`POST /api/cli/requests/:userCode`), pressed by someone signed in with `cookie`. */
++async function decide(code: string, decision: 'approve' | 'deny', cookie: string, headers: Record<string, string> = ORIGIN) {
++  return post(`/api/cli/requests/${code}`, { decision }, { cookie, ...headers });
+ }
+ 
+ describe('nitpilot login', () => {
+@@ -37,13 +34,11 @@ describe('nitpilot login', () => {
+     expect(start.verifyUrl).toBe(`http://localhost:8787/cli/approve?code=${start.userCode}`);
+     expect(await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()).toEqual({ status: 'pending' });
+ 
+-    const page = await app().request(`/cli/approve?code=${start.userCode}`, { headers: { cookie } });
+-    const html = await page.text();
+-    expect(html).toContain(start.userCode);
+-    expect(html).toContain('Maya&#39;s MacBook Pro');
++    const request = await app().request(`/api/cli/requests/${start.userCode}`, { headers: { cookie } });
++    expect(await request.json()).toMatchObject({ userCode: start.userCode, deviceName: "Maya's MacBook Pro", status: 'pending' });
+ 
+-    expect((await approveForm(start.userCode, 'approve', cookie, {})).status).toBe(403);
+-    expect(await (await approveForm(start.userCode, 'approve', cookie)).text()).toContain('Device approved');
++    expect((await decide(start.userCode, 'approve', cookie, {})).status).toBe(403);
++    expect(await (await decide(start.userCode, 'approve', cookie)).json()).toMatchObject({ status: 'approved' });
+ 
+     const approved = (await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()) as { status: string; token: string };
+     expect(approved.status).toBe('approved');
+@@ -76,7 +71,7 @@ describe('nitpilot login', () => {
+   it('reports a denied login', async () => {
+     const user = await makeUser();
+     const start = (await (await post('/api/cli/login', { deviceName: 'laptop' })).json()) as LoginStart;
+-    await approveForm(start.userCode, 'deny', await sessionCookieFor(user.id));
++    await decide(start.userCode, 'deny', await sessionCookieFor(user.id));
+     expect(await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()).toEqual({ status: 'denied' });
+   });
+ 
+@@ -84,14 +79,8 @@ describe('nitpilot login', () => {
+     const user = await makeUser();
+     const old = await startCliLogin('laptop', new Date(Date.now() - 11 * 60_000));
+     expect(await (await post('/api/cli/login/poll', { deviceCode: old.deviceCode })).json()).toEqual({ status: 'expired' });
+-    const page = await app().request(`/cli/approve?code=${old.userCode}`, { headers: { cookie: await sessionCookieFor(user.id) } });
+-    expect(await page.text()).toContain('This code expired');
+-  });
+-
+-  it('sends people who are not signed in to GitHub first, then back', async () => {
+-    const res = await app().request('/cli/approve?code=WDJB-MJHT');
+-    expect(res.status).toBe(302);
+-    expect(res.headers.get('location')).toBe(`/auth/github/login?next=${encodeURIComponent('/cli/approve?code=WDJB-MJHT')}`);
++    const request = await app().request(`/api/cli/requests/${old.userCode}`, { headers: { cookie: await sessionCookieFor(user.id) } });
++    expect(await request.json()).toMatchObject({ status: 'expired' });
+   });
+ 
+   it('rejects a bad request body', async () => {
+```
+
+Modify `apps/server/src/http/spa.test.ts`:
+
+```diff
+diff --git a/apps/server/src/http/spa.test.ts b/apps/server/src/http/spa.test.ts
+index 35df785..7d6f9f2 100644
+--- a/apps/server/src/http/spa.test.ts
++++ b/apps/server/src/http/spa.test.ts
+@@ -31,6 +31,13 @@ describe('serving the web app', () => {
+     expect(res.headers.get('cache-control')).toBe('no-cache');
+   });
+ 
++  it("answers the device approval page with the app too: the server no longer renders a page of its own", async () => {
++    const res = await testApp({ webDistDir: dist }).request('/cli/approve?code=WDJB-MJHT');
++    expect(res.status).toBe(200);
++    expect(await res.text()).toContain('<title>app</title>');
++    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
++  });
++
+   it('answers / with the app', async () => {
+     const res = await testApp({ webDistDir: dist }).request('/');
+     expect(await res.text()).toContain('<title>app</title>');
+```
+
+- [ ] **Step 6: Run them to see them fail**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/cli-requests.db.test.ts src/http/routes/cli.db.test.ts && npm run test:unit -w apps/server -- src/http/spa.test.ts`
+Expected: FAIL, 17 failed and 21 passed (38) in all: 13 of the 14 `cli-requests` tests (the route doesn't exist, so the answers are 404 where 200, 401, 403 or 400 are expected; "answers 404 for a code that doesn't exist" already passes, since an unknown route is also a JSON 404), 3 in `cli.db.test.ts` (the handshake, denied and expired tests, which now use the new API) and the `spa.test.ts` one (the old server page still answers `/cli/approve`). (If `-- <files>` isn't passed through by your npm, run `cd apps/server && npx vitest run --project db --project unit <files>`.)
+
+- [ ] **Step 7: The route, and the server pages go**
+
+The route file, whole. It maps the stored row to the page's view (`pending` past its time reads `expired`; `consumed`, the row's word for approved and collected, reads `approved`), takes the session cookie only, and re-reads the row after a decision so a late or repeated click answers how things stand:
+
+Create `apps/server/src/http/routes/cli-requests.ts`:
+
+```ts
+import { CliRequestDecision, type CliRequestView } from '@nitpilot/protocol';
+import { Hono, type Context } from 'hono';
+import { decideCliLogin, findCliLogin } from '../../auth/cli-login';
+import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import type { CliLoginRequest } from '../../generated/prisma/client';
+import { HttpError } from '../errors';
+
+/**
+ * The web app's approve page (`/cli/approve?code=…`, handoff §6, docs/why/cli-login.md). `nitpilot login` printed a
+ * short code and opened that page; it reads the login with `GET /api/cli/requests/:userCode` and sends Approve or Deny
+ * with `POST`. Only the web app's session cookie may do either: a CLI token is answered as if no one were signed in
+ * (a CLI approving logins would defeat the point of asking a person). The POST also checks the Origin, so another site
+ * can't press Approve for you. A code that was already decided answers what happened instead of an error, so a double
+ * click or a tab left open just shows the result.
+ */
+export function cliRequestRoutes(): Hono<{ Variables: UserVariables }> {
+  const app = new Hono<{ Variables: UserVariables }>();
+
+  app.get('/api/cli/requests/:userCode', requireUser, async (c) => {
+    sessionOnly(c);
+    const request = await findCliLogin(c.req.param('userCode'));
+    if (!request) throw new HttpError('not_found', 'No such code.');
+    return c.json(viewOf(request, new Date()));
+  });
+
+  app.post('/api/cli/requests/:userCode', requireUser, requireSameOrigin, async (c) => {
+    sessionOnly(c);
+    const { decision } = CliRequestDecision.parse(await c.req.json());
+    const userCode = c.req.param('userCode');
+    // decideCliLogin changes only a pending, unexpired login; anything else stays as it was.
+    const outcome = await decideCliLogin(userCode, c.get('user').id, decision);
+    if (outcome === 'not_found') throw new HttpError('not_found', 'No such code.');
+    // Read it again: whatever happened (this decision, an earlier one, the clock), the page shows the row as it is now.
+    const request = await findCliLogin(userCode);
+    if (!request) throw new HttpError('not_found', 'No such code.');
+    return c.json(viewOf(request, new Date()));
+  });
+
+  return app;
+}
+
+function sessionOnly(c: Context<{ Variables: UserVariables }>): void {
+  if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+}
+
+/**
+ * A login row as the page sees it. The page has no word for `consumed` (approved, and the CLI has collected its
+ * token): that's still approved. A pending row whose 10 minutes ran out is expired, even before a poll marks it so.
+ */
+function viewOf(request: CliLoginRequest, now: Date): CliRequestView {
+  return {
+    userCode: request.userCode,
+    deviceName: request.deviceName,
+    requestedAt: request.createdAt.toISOString(),
+    expiresAt: request.expiresAt.toISOString(),
+    status: statusOf(request, now),
+  };
+}
+
+function statusOf(request: CliLoginRequest, now: Date): CliRequestView['status'] {
+  switch (request.status) {
+    case 'pending':
+      return request.expiresAt <= now ? 'expired' : 'pending';
+    case 'approved':
+    case 'consumed':
+      return 'approved';
+    case 'denied':
+      return 'denied';
+    default:
+      return 'expired';
+  }
+}
+```
+
+`startCliLogin` now stores `createdAt: now` (the page's `requestedAt` is that column, and a login started "11 minutes ago" in a test must say so), and `decideCliLogin`'s comment names the new page. Then `app.ts` registers the new routes in place of the old ones, and the server's `tsconfig.json` drops its JSX options:
+
+Modify `apps/server/src/auth/cli-login.ts`:
+
+```diff
+diff --git a/apps/server/src/auth/cli-login.ts b/apps/server/src/auth/cli-login.ts
+index 18ba9a6..1ac3cfd 100644
+--- a/apps/server/src/auth/cli-login.ts
++++ b/apps/server/src/auth/cli-login.ts
+@@ -12,7 +12,7 @@ export async function startCliLogin(deviceName: string, now = new Date()) {
+   for (let attempt = 0; ; attempt++) {
+     const userCode = generateUserCode();
+     try {
+-      await prisma.cliLoginRequest.create({ data: { deviceCodeHash: hashToken(deviceCode), userCode, deviceName, expiresAt } });
++      await prisma.cliLoginRequest.create({ data: { deviceCodeHash: hashToken(deviceCode), userCode, deviceName, expiresAt, createdAt: now } });
+       return { deviceCode, userCode, expiresAt };
+     } catch (err) {
+       if (isUniqueViolation(err) && attempt < 5) continue; // two identical user codes: pick another
+@@ -53,7 +53,7 @@ export async function findCliLogin(userCode: string) {
+   return prisma.cliLoginRequest.findUnique({ where: { userCode: userCode.trim().toUpperCase() } });
+ }
+ 
+-/** The person pressed Approve or Deny on /cli/approve. */
++/** The person pressed Approve or Deny on the web app's /cli/approve page (http/routes/cli-requests.ts). */
+ export async function decideCliLogin(userCode: string, userId: string, decision: 'approve' | 'deny', now = new Date()) {
+   const req = await findCliLogin(userCode);
+   if (!req) return 'not_found' as const;
+```
+
+Modify `apps/server/src/http/app.ts`:
+
+```diff
+diff --git a/apps/server/src/http/app.ts b/apps/server/src/http/app.ts
+index 1acac9a..5062421 100644
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -16,7 +16,7 @@ import { chatActionRoutes } from './routes/chat-actions';
+ import { chatDraftRoutes } from './routes/chat-drafts';
+ import { chatRoutes } from './routes/chats';
+ import { cliRoutes } from './routes/cli';
+-import { cliApproveRoutes } from './routes/cli-approve';
++import { cliRequestRoutes } from './routes/cli-requests';
+ import { deviceRoutes, type DeviceClis } from './routes/devices';
+ import { inboxRoutes } from './routes/inbox';
+ import { meRoutes } from './routes/me';
+@@ -67,7 +67,7 @@ export function createApp(deps: AppDeps): Hono {
+   app.route('/', chatActionRoutes(deps));
+   app.route('/', chatDraftRoutes(deps));
+   app.route('/', cliRoutes(deps));
+-  app.route('/', cliApproveRoutes());
++  app.route('/', cliRequestRoutes());
+   app.route('/', setupRoutes(deps));
+   app.route('/', webhookRoutes(deps));
+   // Last: everything else is the web app's (spec §7).
+```
+
+Modify `apps/server/tsconfig.json`:
+
+```diff
+diff --git a/apps/server/tsconfig.json b/apps/server/tsconfig.json
+index 7cb6372..21e39c5 100644
+--- a/apps/server/tsconfig.json
++++ b/apps/server/tsconfig.json
+@@ -1,5 +1,5 @@
+ {
+   "extends": "../../tsconfig.base.json",
+-  "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "hono/jsx", "allowImportingTsExtensions": true },
++  "compilerOptions": { "allowImportingTsExtensions": true },
+   "include": ["src", "test", "scripts", "prisma.config.ts", "vitest.config.ts"]
+ }
+```
+
+Now delete the server-rendered page, its layout and its route:
+
+Delete `apps/server/src/http/routes/cli-approve.tsx`, `apps/server/src/http/pages/approve.tsx` and `apps/server/src/http/pages/layout.tsx`:
+
+```bash
+git rm apps/server/src/http/routes/cli-approve.tsx apps/server/src/http/pages/approve.tsx apps/server/src/http/pages/layout.tsx
+```
+
+Check that nothing is left:
+
+Run: `ls apps/server/src/http/pages; grep -rn renderPage apps/server/src`
+Expected: `ls` says there is no such directory, and `grep` prints nothing.
+
+- [ ] **Step 8: Run the server tests to see them pass**
+
+Run: `npm run test:db -w apps/server -- src/http/routes/cli-requests.db.test.ts src/http/routes/cli.db.test.ts && npm run test:unit -w apps/server -- src/http/spa.test.ts && npm run typecheck -w apps/server`
+Expected: PASS, 38 tests (14 + the `cli.db.test.ts` ones + the `spa.test.ts` ones); typecheck clean.
+
+- [ ] **Step 9: Write the failing Playwright spec**
+
+It starts a login with the same request `nitpilot login` makes, signs maya in, and uses the real page. The second test answers GitHub itself, so nothing leaves the machine:
+
+Create `apps/web/e2e/approve.spec.ts`:
+
+```ts
+import { expect, test, type APIRequestContext } from '@playwright/test';
+import { forgetDevices, pageProblems, signIn } from './control';
+
+// Device approval against the real server (handoff §6, docs/why/cli-login.md): the same two requests `nitpilot login`
+// makes (start, then poll), with the web app's page in between. forgetDevices revokes the token the test makes.
+test.afterAll(async () => {
+  await forgetDevices('maya');
+});
+
+/** Start a login the way the CLI does. Answers the secret device code and the short code the terminal would print. */
+async function startLogin(request: APIRequestContext) {
+  const res = await request.post('/api/cli/login', { data: { deviceName: 'playwright-laptop' } });
+  expect(res.ok()).toBe(true);
+  return (await res.json()) as { deviceCode: string; userCode: string; verifyUrl: string };
+}
+
+test("approving on the page gives the CLI's next poll its token", async ({ page, context }) => {
+  const problems = pageProblems(page);
+  const login = await startLogin(page.request);
+  expect(new URL(login.verifyUrl).pathname).toBe('/cli/approve');
+
+  await signIn(context, 'maya');
+  await page.goto(`/cli/approve?code=${login.userCode}`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Approve this device?' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^Code / })).toHaveText(login.userCode);
+  await expect(page.getByText('playwright-laptop')).toBeVisible();
+  await expect(page.getByText(/The code expires in (10:00|9:\d\d)\./)).toBeVisible();
+
+  const poll = async () => (await page.request.post('/api/cli/login/poll', { data: { deviceCode: login.deviceCode } })).json();
+  expect(await poll()).toEqual({ status: 'pending' });
+
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Device approved' })).toBeVisible();
+  await expect(page.getByText('playwright-laptop can now run your agent. You can close this tab.')).toBeVisible();
+  expect(await poll()).toMatchObject({ status: 'approved', token: expect.stringMatching(/^nit_/) });
+  expect(problems).toEqual([]);
+});
+
+test('signed out, the page sends you through GitHub sign-in and asks to come back to the same code', async ({ page }) => {
+  // The server would send the browser on to github.com: answer that here, so nothing leaves the machine.
+  await page.route('https://github.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>GitHub</title>' }));
+  const signInRequest = page.waitForRequest((req) => new URL(req.url()).pathname === '/auth/github/login');
+  await page.goto('/cli/approve?code=WDJB-MJHT');
+  const url = new URL((await signInRequest).url());
+  expect(url.searchParams.get('next')).toBe('/cli/approve?code=WDJB-MJHT');
+});
+```
+
+- [ ] **Step 10: Run it to see it fail**
+
+The web app has no `/cli/approve` route yet, and the server no longer renders one, so the address shows the app's own front page.
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: FAIL, 2 failed and 14 passed (16): both `approve.spec.ts` tests (no "Approve this device?" heading; no request to `/auth/github/login`). Ports 4319 and 4320 must be free (`lsof -i :4319`).
+
+- [ ] **Step 11: Write the failing Approve tests**
+
+A small seam first: `browser.goTo` is the one way the app leaves for another address, because jsdom won't let a test replace `window.location.assign`, and a test can spy on this. Then the page's tests, which use the real app (`renderApp`) at `/cli/approve?code=WDJB-MJHT` with a fake server and fake timers for the countdown:
+
+Create `apps/web/src/lib/browser.ts`:
+
+```ts
+/**
+ * Leaving the web app for a page the server answers (GitHub sign-in). One object, so a test can replace `goTo` with
+ * `vi.spyOn(browser, 'goTo')`: jsdom won't let a test replace `window.location.assign` itself.
+ */
+export const browser = {
+  goTo(url: string): void {
+    window.location.assign(url);
+  },
+};
+```
+
+Create `apps/web/src/routes/Approve/Approve.test.tsx`:
+
+```tsx
+import type { CliRequestView } from '@nitpilot/protocol';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { browser } from '../../lib/browser';
+import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
+import { sent, settingsMe } from '../../test/settings';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const CODE = 'WDJB-MJHT';
+const PATH = `/cli/approve?code=${CODE}`;
+const API = `/api/cli/requests/${CODE}`;
+
+/** maya's laptop asked to log in at 18:02 (local time), with 9 minutes 41 seconds left. */
+function pending(over: Partial<CliRequestView> = {}): CliRequestView {
+  const requestedAt = new Date();
+  requestedAt.setHours(18, 2, 0, 0);
+  return {
+    userCode: CODE,
+    deviceName: "Maya's MacBook Pro",
+    requestedAt: requestedAt.toISOString(),
+    expiresAt: new Date(Date.now() + (9 * 60 + 41) * 1000).toISOString(),
+    status: 'pending',
+    ...over,
+  };
+}
+
+type Route = () => Answer | Promise<Answer>;
+
+/** maya, signed in, and the server's answers about the login: `view` for the read, `decide` for Approve or Deny. */
+function serveApprove(opts: { view?: Route; decide?: Route; me?: Route } = {}) {
+  fakeViewport(true);
+  return fakeApi({
+    'GET /api/me': opts.me ?? ((): Answer => [200, settingsMe]),
+    [`GET ${API}`]: opts.view ?? ((): Answer => [200, pending()]),
+    [`POST ${API}`]: opts.decide ?? ((): Answer => [200, pending({ status: 'approved' })]),
+  });
+}
+
+const card = () => screen.findByRole('main');
+
+describe('Approve (handoff §6): pending', () => {
+  it('shows the code to compare, the device, Approve and Deny, and the time left', async () => {
+    const fetch = serveApprove();
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Approve this device?' })).toBeInTheDocument();
+    expect(screen.getByText('Device login')).toBeInTheDocument();
+    expect(screen.getByText('Check that this code matches the one in your terminal.')).toBeInTheDocument();
+    // The code is read out letter by letter, so a screen reader can compare it too.
+    expect(screen.getByRole('img', { name: 'Code W D J B M J H T' })).toHaveTextContent(CODE);
+    expect(screen.getByText("Maya's MacBook Pro")).toBeInTheDocument();
+    expect(screen.getByText('requested 18:02')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeEnabled();
+    expect(screen.getByText(/Only approve if you just ran npx nitpilot login\. The code expires in 9:4\d\./)).toBeInTheDocument();
+    // A page of its own: no inbox, no socket.
+    expect(sent(fetch, '/api/inbox')).toEqual([]);
+  });
+
+  it('counts down every second, and turns to expired at zero without asking the server', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetch = serveApprove({ view: (): Answer => [200, pending({ expiresAt: new Date(Date.now() + 3_000).toISOString() })] });
+    renderApp(PATH);
+    expect(await screen.findByText(/The code expires in 0:0[23]\./)).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText(/The code expires in 0:0[12]\./)).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(await screen.findByRole('heading', { level: 1, name: 'This code expired' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(sent(fetch, API)).toEqual(['GET ']);
+  });
+});
+
+describe('Approve (handoff §6): deciding', () => {
+  it('Approve sends the decision, keeps both buttons busy meanwhile, then shows Device approved', async () => {
+    let answer!: (a: Answer) => void;
+    const fetch = serveApprove({ decide: () => new Promise<Answer>((resolve) => (answer = resolve)) });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    for (const name of ['Approve', 'Deny']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'true');
+    }
+    expect(sent(fetch, API)).toEqual(['GET ', 'POST {"decision":"approve"}']);
+    answer([200, pending({ status: 'approved' })]);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Device approved' })).toBeInTheDocument();
+    expect(screen.getByText("Maya's MacBook Pro can now run your agent. You can close this tab.")).toBeInTheDocument();
+  });
+
+  it('Deny shows Login denied', async () => {
+    const fetch = serveApprove({ decide: (): Answer => [200, pending({ status: 'denied' })] });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deny' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Login denied' })).toBeInTheDocument();
+    expect(screen.getByText("Nothing was connected. If you didn't start this login, you're all set.")).toBeInTheDocument();
+    expect(sent(fetch, API)).toEqual(['GET ', 'POST {"decision":"deny"}']);
+  });
+
+  it("shows what the server says happened, even if it isn't what was pressed (decided in another tab)", async () => {
+    serveApprove({ decide: (): Answer => [200, pending({ status: 'denied' })] });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Login denied' })).toBeInTheDocument();
+  });
+
+  it('a decision that fails offers Try again, which reads the login again', async () => {
+    let views = 0;
+    serveApprove({
+      view: (): Answer => [200, pending(views++ === 0 ? {} : { status: 'approved' })],
+      decide: (): Answer => [500, { error: { code: 'server_error', message: 'internal server error' } }],
+    });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('internal server error');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Device approved' })).toBeInTheDocument();
+  });
+});
+
+describe('Approve (handoff §6): the other states', () => {
+  it('a login already approved reads Device approved, with no buttons', async () => {
+    serveApprove({ view: (): Answer => [200, pending({ status: 'approved' })] });
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Device approved' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
+  it('an expired login says so, with the login command to run again', async () => {
+    serveApprove({ view: (): Answer => [200, pending({ status: 'expired' })] });
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: 'This code expired' })).toBeInTheDocument();
+    expect(screen.getByText('Codes last 10 minutes. Run the login again in your terminal:')).toBeInTheDocument();
+    expect(within(await card()).getByText('npx nitpilot login')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy npx nitpilot login' })).toBeInTheDocument();
+  });
+
+  it('an unknown code says Code not found, with the command to start again', async () => {
+    serveApprove({ view: (): Answer => [404, { error: { code: 'not_found', message: 'No such code.' } }] });
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Code not found' })).toBeInTheDocument();
+    expect(screen.getByText('Check the code in your terminal, or start again:')).toBeInTheDocument();
+    expect(within(await card()).getByText('npx nitpilot login')).toBeInTheDocument();
+  });
+
+  it('no code at all says Code not found without asking the server', async () => {
+    const fetch = serveApprove();
+    renderApp('/cli/approve');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Code not found' })).toBeInTheDocument();
+    expect(fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/cli/requests'))).toEqual([]);
+  });
+
+  it("a read that fails (the server's down) offers Try again", async () => {
+    let views = 0;
+    serveApprove({ view: (): Answer => (views++ < 3 ? [503, {}] : [200, pending()]) });
+    renderApp(PATH);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nitpilot answered 503. Try again in a moment.');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Approve this device?' })).toBeInTheDocument();
+  });
+});
+
+describe('Approve: signed out', () => {
+  it('goes to GitHub sign-in first, coming back to this page with its code', async () => {
+    const leave = vi.spyOn(browser, 'goTo').mockImplementation(() => {});
+    const fetch = serveApprove({ me: (): Answer => [401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }] });
+    renderApp(PATH);
+    await waitFor(() => expect(leave).toHaveBeenCalledWith(`/auth/github/login?next=${encodeURIComponent(PATH)}`));
+    expect(sent(fetch, API)).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 12: Run them to see them fail**
+
+Run: `npm test -w apps/web -- src/routes/Approve`
+Expected: FAIL, 12 failed and 0 passed (the file loads; the app has no `/cli/approve` route, so the page shows the inbox's "Nothing here" pane and each test's `findByRole`/`findByText` for "Approve this device?", "Device approved", "This code expired" or "Code not found" times out).
+
+- [ ] **Step 13: The data hooks, the page, its styles, the route**
+
+The two hooks. Coming back to the tab reads the login again (TanStack's default), so a login decided in another tab shows when you return; the mutation writes the server's answer into the same key:
+
+Create `apps/web/src/api/cli-requests.ts`:
+
+```ts
+import { CliRequestView, type CliRequestDecision } from '@nitpilot/protocol';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from './client';
+
+const path = (userCode: string) => `/api/cli/requests/${encodeURIComponent(userCode)}`;
+
+/**
+ * The `nitpilot login` waiting on the approve page (`GET /api/cli/requests/:userCode`). The page counts down to
+ * `expiresAt` on its own. Coming back to the tab reads it again (TanStack's default), so a login decided in another
+ * tab shows here too. `enabled` waits until we know someone is signed in.
+ */
+export function useCliRequest(userCode: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['cli-request', userCode],
+    queryFn: () => api.get(path(userCode), CliRequestView),
+    enabled,
+  });
+}
+
+/** Approve or Deny. The server answers the login as it is now, which replaces what the page shows. */
+export function useDecideCliRequest(userCode: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (decision: CliRequestDecision['decision']) => api.send('POST', path(userCode), { decision } satisfies CliRequestDecision, CliRequestView),
+    onSuccess: (view) => queryClient.setQueryData(['cli-request', userCode], view),
+  });
+}
+```
+
+The page. It reads `useMe()` itself (there is no Home around it), sends a signed-out visitor to GitHub, shows the card for each status, counts down in the pending card, and uses Task 22's `CommandBlock` for the terminal command:
+
+Create `apps/web/src/routes/Approve/Approve.tsx`:
+
+```tsx
+import { BRAND, type CliRequestView } from '@nitpilot/protocol';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { useLocation, useSearchParams } from 'react-router';
+import { useCliRequest, useDecideCliRequest } from '../../api/cli-requests';
+import { ApiError } from '../../api/client';
+import { useMe } from '../../api/me';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { browser } from '../../lib/browser';
+import { itemTime, useNow } from '../../lib/time';
+import { CommandBlock } from '../Setup/CommandBlock';
+import styles from './Approve.module.css';
+
+const LOGIN = `npx ${BRAND.npmPackage} login`;
+
+/**
+ * `/cli/approve?code=…` (handoff §6, docs/why/cli-login.md): `nitpilot login` opened this page with the short code it
+ * printed. You check the code matches your terminal, then Approve or Deny. A page of its own: no inbox and no socket.
+ * Signed out, it sends you through GitHub sign-in first, which brings you back here with the same code.
+ */
+export function Approve() {
+  const me = useMe();
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const code = (params.get('code') ?? '').trim();
+  const signedOut = me.data === null;
+
+  useEffect(() => {
+    if (signedOut) browser.goTo(`/auth/github/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+  }, [signedOut, location.pathname, location.search]);
+
+  let content: ReactNode;
+  if (me.isError) content = <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+  else if (me.isPending || signedOut) content = <Loading />;
+  else if (code === '') content = <Outcome kind="not_found" />;
+  else content = <LoginRequest code={code} />;
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.topBar}>
+        <Wordmark />
+      </header>
+      <main className={styles.main}>{content}</main>
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <p className={styles.loading} role="status" aria-busy="true">
+      Loading…
+    </p>
+  );
+}
+
+/** The login behind `code`: read it, show it, send Approve or Deny. */
+function LoginRequest({ code }: { code: string }) {
+  const request = useCliRequest(code, true);
+  const decide = useDecideCliRequest(code);
+
+  if (request.isPending) return <Loading />;
+  // A decision that never got an answer: read the login again, which shows whether it went through.
+  if (decide.isError) {
+    return (
+      <ErrorState
+        message={decide.error.message}
+        onRetry={() => {
+          decide.reset();
+          void request.refetch();
+        }}
+      />
+    );
+  }
+  if (request.isError) {
+    if (request.error instanceof ApiError && request.error.status === 404) return <Outcome kind="not_found" />;
+    return <ErrorState message={request.error.message} onRetry={() => void request.refetch()} />;
+  }
+  return <LoginCard view={request.data} busy={decide.isPending} decided={decide.isSuccess} onDecide={(decision) => decide.mutate(decision)} />;
+}
+
+/** The card for one login. It counts down each second, and turns to Expired at zero on its own, without a request. */
+function LoginCard(props: { view: CliRequestView; busy: boolean; decided: boolean; onDecide: (decision: 'approve' | 'deny') => void }) {
+  const { view } = props;
+  const now = useNow(1000);
+  const secondsLeft = Math.ceil((Date.parse(view.expiresAt) - now.getTime()) / 1000);
+  const status = view.status === 'pending' && secondsLeft <= 0 ? 'expired' : view.status;
+  if (status !== 'pending') return <Outcome kind={status} deviceName={view.deviceName} focus={props.decided} />;
+
+  return (
+    <section className={styles.card} aria-labelledby="approve-title">
+      <span className={styles.eyebrow}>Device login</span>
+      <div className={styles.intro}>
+        <h1 id="approve-title" className={styles.title}>
+          Approve this device?
+        </h1>
+        <p className={styles.body}>Check that this code matches the one in your terminal.</p>
+      </div>
+      {/* Read out letter by letter, so a screen reader can compare it with the terminal's too. */}
+      <div className={styles.code} role="img" aria-label={`Code ${spelled(view.userCode)}`}>
+        {view.userCode}
+      </div>
+      <div className={styles.device}>
+        <span className={styles.laptop} aria-hidden="true" />
+        <div className={styles.deviceText}>
+          <span className={styles.deviceName}>{view.deviceName}</span>
+          <span className={styles.meta}>requested {itemTime(view.requestedAt, now)}</span>
+        </div>
+      </div>
+      <div className={styles.buttons}>
+        <button type="button" className={styles.approve} disabled={props.busy} aria-busy={props.busy} onClick={() => props.onDecide('approve')}>
+          Approve
+        </button>
+        <button type="button" className={styles.deny} disabled={props.busy} aria-busy={props.busy} onClick={() => props.onDecide('deny')}>
+          Deny
+        </button>
+      </div>
+      <p className={styles.fine}>
+        Only approve if you just ran {LOGIN}. The code expires in {countdown(secondsLeft)}.
+      </p>
+    </section>
+  );
+}
+
+const OUTCOMES = {
+  approved: { title: 'Device approved', body: (device: string) => `${device} can now run your agent. You can close this tab.` },
+  denied: { title: 'Login denied', body: () => "Nothing was connected. If you didn't start this login, you're all set." },
+  expired: { title: 'This code expired', body: () => 'Codes last 10 minutes. Run the login again in your terminal:' },
+  not_found: { title: 'Code not found', body: () => 'Check the code in your terminal, or start again:' },
+} as const;
+
+/**
+ * Approved, Denied, Expired, or a code we don't know. Each has its glyph and its title, so the state never rests on
+ * colour alone. `focus` moves focus to the title when it replaces the buttons you just pressed, so a screen reader says it.
+ */
+function Outcome({ kind, deviceName = '', focus = false }: { kind: keyof typeof OUTCOMES; deviceName?: string; focus?: boolean }) {
+  const title = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (focus) title.current?.focus();
+  }, [focus]);
+  const { title: text, body } = OUTCOMES[kind];
+
+  return (
+    <section className={`${styles.card} ${styles.outcome}`} aria-labelledby="approve-title">
+      <span className={styles.icon} data-kind={kind} aria-hidden="true">
+        {kind === 'approved' ? '✓' : kind === 'denied' ? '×' : <span className={styles.ring} />}
+      </span>
+      <h1 id="approve-title" ref={title} tabIndex={-1} className={styles.outcomeTitle}>
+        {text}
+      </h1>
+      <p className={styles.outcomeBody}>{body(deviceName)}</p>
+      {(kind === 'expired' || kind === 'not_found') && (
+        <div className={styles.command}>
+          <CommandBlock command={LOGIN} active />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** "9:41": minutes and seconds left. */
+function countdown(seconds: number): string {
+  const s = Math.max(0, seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** "WDJB-MJHT" → "W D J B M J H T". */
+function spelled(code: string): string {
+  return code.replace(/[^A-Za-z0-9]/g, '').split('').join(' ');
+}
+```
+
+Create `apps/web/src/routes/Approve/Approve.module.css`:
+
+```css
+/* handoff §6 "CLI approval" (NitpilotScreens screen=approve): the wordmark top left, then a centered 440px card with
+   a 24px radius in one of four states, plus "Code not found". */
+.page {
+  box-sizing: border-box;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  padding: 0 4px 8px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.loading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+  border: 1px solid var(--b1);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* The code's size follows the card's width (cqw), as in the prototype. */
+  container-type: inline-size;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.code {
+  padding: 20px 12px;
+  border: 1px solid var(--b1);
+  border-radius: 16px;
+  background: var(--code);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: clamp(30px, 9cqw, 38px);
+  letter-spacing: 0.14em;
+  color: var(--fg1);
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A laptop outline, as on the Settings page's devices. */
+.laptop {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  height: 30px;
+  border: 2px solid var(--fg2);
+  border-radius: 7px;
+}
+
+.deviceText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deviceName {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.approve,
+.deny {
+  flex: 1;
+  height: 48px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.approve {
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.deny {
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+.deny:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.approve:disabled,
+.deny:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.fine {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg3);
+  text-align: center;
+}
+
+/* Approved, Denied, Expired and Code not found: a 56px glyph, the title, one line, sometimes the login command. */
+.outcome {
+  align-items: center;
+  gap: 14px;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  text-align: center;
+}
+
+.icon {
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon[data-kind='approved'] {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.icon[data-kind='denied'] {
+  background: var(--muted);
+  color: var(--fg2);
+  font-size: 24px;
+}
+
+.icon[data-kind='expired'],
+.icon[data-kind='not_found'] {
+  border: 2px solid var(--b1);
+}
+
+.ring {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg3);
+  border-radius: var(--radius-pill);
+}
+
+.outcomeTitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Focus lands here after a decision so a screen reader says the result; it isn't something to click. */
+.outcomeTitle:focus {
+  outline: none;
+}
+
+.outcomeBody {
+  margin: 0;
+  max-width: 22em;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.command {
+  align-self: stretch;
+  text-align: left;
+}
+
+/* Phone: the 16px side gutters every screen keeps, and a little less padding inside the card. */
+@media (max-width: 759px) {
+  .page {
+    padding: 14px 16px 16px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .outcome {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+}
+```
+
+The route, loaded lazily, and Vite's dev proxy loses the `/cli/` entry (the app answers that address now):
+
+Modify `apps/web/src/app.tsx`:
+
+```diff
+diff --git a/apps/web/src/app.tsx b/apps/web/src/app.tsx
+index 08653db..b8a88bf 100644
+--- a/apps/web/src/app.tsx
++++ b/apps/web/src/app.tsx
+@@ -1,5 +1,5 @@
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+-import { useState } from 'react';
++import { lazy, Suspense, useState } from 'react';
+ import { BrowserRouter, Route, Routes } from 'react-router';
+ import { retryUnlessClientError } from './api/client';
+ import { Chat } from './routes/Chat/Chat';
+@@ -9,6 +9,12 @@ import { Setup } from './routes/Setup/Setup';
+ import { EmptyPane } from './routes/Shell/Pane';
+ import { InboxLayout } from './routes/Shell/Shell';
+ 
++/**
++ * Device approval is the one page most people open once, from `nitpilot login`, so it's a file of its own that the
++ * browser fetches only when that page opens (and the rest of the app stays under Vite's 500 kB chunk warning).
++ */
++const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
++
+ /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
+ export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
+   return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError, ...queries } } });
+@@ -29,7 +35,8 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
+ 
+ /**
+  * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
+- * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own.
++ * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own. Device
++ * approval (`/cli/approve`, the link `nitpilot login` opens) stands outside Home: no landing page, no inbox, no socket.
+  */
+ export function AppRoutes() {
+   return (
+@@ -43,6 +50,14 @@ export function AppRoutes() {
+         <Route path="settings" element={<Settings />} />
+         <Route path="setup" element={<Setup />} />
+       </Route>
++      <Route
++        path="cli/approve"
++        element={
++          <Suspense fallback={null}>
++            <Approve />
++          </Suspense>
++        }
++      />
+     </Routes>
+   );
+ }
+```
+
+Modify `apps/web/vite.config.ts`:
+
+```diff
+diff --git a/apps/web/vite.config.ts b/apps/web/vite.config.ts
+index eef811f..37bd8e6 100644
+--- a/apps/web/vite.config.ts
++++ b/apps/web/vite.config.ts
+@@ -19,8 +19,6 @@ export default defineConfig({
+       '/auth': SERVER,
+       '/github': SERVER,
+       '/ws': { target: SERVER, ws: true },
+-      // Still rendered by the server: device approval, until Task 23.
+-      '/cli/': SERVER,
+     },
+   },
+   test: {
+```
+
+- [ ] **Step 14: Run the web tests**
+
+Run: `npm test -w apps/web && npm run typecheck -w apps/web && npm run lint`
+Expected: PASS, 319 web tests (307 + 12 in `Approve.test.tsx`); typecheck and lint clean.
+
+- [ ] **Step 15: Run Playwright**
+
+Run: `npm run build && npm run test:e2e -w apps/web`
+Expected: PASS, 16 tests. The build prints no chunk-size warning: `index-*.js` is about 499.8 kB and `Approve-*.js` about 5 kB. Run `npm run test:e2e -w apps/web` twice more: it must pass every time.
+
+- [ ] **Step 16: The spec and the explainer**
+
+Spec §7 says the server renders no page since W7, §10's CLI approval bullet gets the shape, the status mapping, the 401/403/404 rules, the 200-on-decided rule, the countdown and the signed-out redirect, and the two Plan 1 lines become history notes pointing at `http/spa.ts`:
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index acaa306..97651a4 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -124,7 +124,7 @@ GitHub ──────────────────▶ ┌────
+   - stores everything in Postgres and hands jobs to connected CLIs;
+   - writes to GitHub: the summary comment as the app bot, reviews and replies as the user;
+   - serves the web app's API and WebSockets, and the built web app itself, from the same origin (Plan 2): any GET that isn't an API route gets the app's `index.html`;
+-  - in Plan 1, served a few pages rendered on the server: sign-in, CLI approval, and a read-only chat transcript. Plan 2's web app takes over all three, at the same URLs.
++  - in Plan 1, served a few pages rendered on the server: sign-in, CLI approval, and a read-only chat transcript. Plan 2's web app takes over all three, at the same URLs; since W7 the server renders no page of its own, and every HTML answer is the web app's `index.html` with its Content-Security-Policy.
+ - **CLI** (`apps/cli`, run with `npx`): the only component that touches code. It logs in and keeps one WebSocket open. For each job it creates an isolated git worktree, starts a local MCP server, runs the user's agent CLI and sends the results back. For address jobs it also commits and pushes.
+ - **Web app** (`apps/web`, Plan 2): a React + Vite PWA built from the Claude Design output. In development Vite runs on port 5173 and proxies `/api`, `/auth`, `/github` and `/ws` to the server, so the browser sees one origin there too.
+ - **Protocol** (`packages/protocol`): zod schemas and TypeScript types for every message, job bundle and result, plus the `BRAND` constant. All three apps use it.
+@@ -305,7 +305,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ - Devices: `GET /api/devices` answers `{devices: [{id, name, lastSeenAt, online, agent: {id, version} | null}]}`: your CLI tokens that aren't revoked, `agent` from the live connection when online and from the token's last hello otherwise. `DELETE /api/devices/:id` sets `revokedAt`, closes that CLI's socket with 4401 and answers 204; another person's device, an unknown one and one already revoked are the same 404. Both take the session cookie only (a CLI token is a 401).
+ - A chat read that isn't allowed answers like the inbox: the same 404 for a chat that doesn't exist and one you can't see, a 401 with code `reauth` when your GitHub sign-in expired, a 502 when GitHub doesn't answer. Every GitHub call gives up after 15 seconds.
+ - Onboarding: `GET /api/onboarding` answers `{steps: {appInstalled, cliConnected, repoLinked, agentStarted}, done, deviceName, appSlug, publicReposOnly}`, session cookie only (a CLI token is a 401). It's a read of its own, not part of `/api/me`, because "app installed" asks GitHub (`GET /user/installations` with the person's own token) and `/api/me` is the app's first request. `cliConnected`: an unrevoked CLI token; `repoLinked` / `agentStarted`: an unrevoked token whose last hello reported a linked repo / an agent with a mode; `deviceName`: the newest unrevoked token's name. GitHub's yes is kept 5 minutes per person, a no isn't kept, and a GitHub failure counts as no (logged, never failing the read). The first read where all four hold sets `User.onboardedAt`; from then on every step reads true without asking GitHub.
+-- CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve`.
++- CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve?code=`, so the CLI's link is unchanged. Both answer `{userCode, deviceName, requestedAt, expiresAt, status: pending|approved|denied|expired}`: a pending login past `expiresAt` reads `expired`, one the CLI already collected (`consumed`) reads `approved`. The code is matched trimmed and upper-cased; an unknown code is a 404. Both take the session cookie only (a CLI token is a 401), and the POST has the Origin check. A POST on a login that is no longer pending (decided already, or expired) changes nothing and answers 200 with how it stands, so a double click or a stale tab just shows the result. The page counts down to `expiresAt` and shows Expired at zero without asking the server; signed out, it sends you through `/auth/github/login?next=` first.
+ 
+ **REST endpoints in Plan 1**
+ - Webhooks: `POST /webhooks/github`
+@@ -314,11 +314,11 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ - CLI login:
+   - `POST /api/cli/login` returns `{deviceCode, userCode, verifyUrl, interval, expiresIn}`.
+   - `POST /api/cli/login/poll` returns `pending | approved{token} | denied | expired`.
+-  - `GET|POST /cli/approve` is a page rendered on the server, protected by the session and an Origin check.
++  - `GET|POST /cli/approve` was a page rendered on the server, protected by the session and an Origin check. W7 replaced it with the web app's page at the same URL and the two `/api/cli/requests/:userCode` routes above.
+ - Status: `GET /api/me`, `GET /api/me/chats` (behind `nitpilot status`)
+ - Retry a failed job: `POST /api/chats/:id/retry` (behind `nitpilot retry`)
+ - Revoke a CLI: `DELETE /api/cli/token`
+-- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes). In Plan 2 the web app's chat screen takes over the same URL, with the same access rule and the same 404s. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sends `Content-Security-Policy: frame-ancestors 'none'`.
++- Transcript: `GET /c/:owner/:repo/:number` is a read-only chat transcript rendered on the server. It requires sign-in and read access to the repo on GitHub (checked with the viewer's own token, kept for 5 minutes). In Plan 2 the web app's chat screen takes over the same URL, with the same access rule and the same 404s. A chat that doesn't exist and one the viewer can't see get the same 404; a viewer whose GitHub sign-in expired is asked to sign in again. Every server-rendered page sent `Content-Security-Policy: frame-ancestors 'none'`; since W7 there are none, and the web app's pages carry the same rule in their Content-Security-Policy (`http/spa.ts`).
+ - Health check: `GET /healthz`
+ - Stretch goals: `POST /api/chats/:id/review` (manual review of an untrusted PR) and `POST /api/chats/:id/messages` (a human note)
+ 
+```
+
+`docs/why/cli-login.md` already explained the device flow; it now names the web page and the two routes, and says why the page is careful (two codes, the stored hash, the Origin check, the second click, `frame-ancestors`):
+
+Modify `docs/why/cli-login.md`:
+
+```diff
+diff --git a/docs/why/cli-login.md b/docs/why/cli-login.md
+index f31a098..807a4f8 100644
+--- a/docs/why/cli-login.md
++++ b/docs/why/cli-login.md
+@@ -9,10 +9,18 @@ This is the same "device flow" you've seen on a TV app that says "go to example.
+ 1. **The CLI asks to log in.** `POST /api/cli/login` with the device name. The server makes two codes (`auth/cli-login.ts`):
+    - a long secret **device code**, which only the CLI knows. We store only its hash;
+    - a short **user code** like `WDJB-MJHT`, which you read and compare.
+-2. **You approve in the browser.** The CLI opens `/cli/approve?code=WDJB-MJHT` (with `nitpilot login --no-open` it only prints it, so you can paste it into the browser signed in as the right account). If you're not signed in, you go through GitHub sign-in first and come back (`docs/why/oauth-pkce.md`). You check that the code matches your terminal and press Approve. That POST is accepted only from our own pages (`lib/csrf.ts`).
++2. **You approve in the browser.** The CLI opens `/cli/approve?code=WDJB-MJHT` (with `nitpilot login --no-open` it only prints it, so you can paste it into the browser signed in as the right account). That's a page of the web app (`apps/web/src/routes/Approve/Approve.tsx`). If you're not signed in, it sends you through GitHub sign-in first and you come back to the same address (`docs/why/oauth-pkce.md`). The page reads the login with `GET /api/cli/requests/WDJB-MJHT`, shows the code and the device's name, and counts down the 10 minutes. You check that the code matches your terminal and press Approve, which sends `POST /api/cli/requests/WDJB-MJHT {decision: 'approve'}` (`apps/server/src/http/routes/cli-requests.ts`).
+ 3. **The CLI polls.** Every 2 seconds it sends its device code to `POST /api/cli/login/poll` and gets `pending`, `denied`, `expired`, or `approved` plus a `nit_…` token. Codes expire after 10 minutes.
+ 4. **From then on** the CLI sends `Authorization: Bearer nit_…` on every request. `requireCliToken` (`auth/cli-token.ts`) hashes it, looks it up, and rejects revoked tokens. `DELETE /api/cli/token` revokes the token that sent it.
+ 
++## Why the page is careful
++
++- **Two codes, and you compare them.** Anyone can start a login and send you its link ("click here to log in!"). If you approved without looking, their terminal would get a token for *your* account. The short code is the check: it's printed in *your* terminal, so if the page shows a code your terminal didn't print, it isn't your login. Press Deny. That's also why the page says "Only approve if you just ran npx nitpilot login".
++- **Only the device code's hash is stored.** The long device code is the thing that collects the token. We keep only its hash (like a password), so someone who reads the database can't use a waiting login. The short code isn't secret (it's on screen), so it's stored as is.
++- **Approving needs the session cookie and our Origin.** Approving is a change made with your cookie, and a browser sends that cookie with any request to us, even one another site's page starts. So the POST checks the `Origin` header (`requireSameOrigin`, `lib/csrf.ts`): only our own page may press Approve. A CLI token can't approve at all (it gets 401): the whole point is that a *person* says yes.
++- **A second click is harmless.** Approve and Deny change only a login that is still pending (`updateMany` with `status: 'pending'`, the compare-and-swap below). If it was already decided, or the 10 minutes ran out, the answer is just how the login stands now, so a double click or an old tab shows the result instead of an error.
++- **No frames.** Every page of the web app is sent with `Content-Security-Policy: frame-ancestors 'none'` (`http/spa.ts`), so another site can't show the approve page invisibly inside its own and trick you into clicking Approve (clickjacking).
++
+ ## The token is handed out exactly once
+ 
+ The first poll after approval gets the token; every later poll gets `expired`. Two things make that hold even if two polls arrive at the same moment:
+@@ -28,5 +36,6 @@ The first poll after approval gets the token; every later poll gets `expired`. T
+ ## The React analogy
+ 
+ - Polling is a `useEffect` with `setInterval(fetchStatus, 2000)` that stops once the status isn't `pending`.
++- The page's countdown is the same idea the other way round: a one-second `setInterval` re-renders the card, and when the time left reaches zero the card shows Expired by itself, without asking the server (the server would say expired too).
+ - A transaction is like a reducer that returns either the whole new state or the old one, never something in between.
+ - `requireCliToken` is middleware, like a route guard (`<RequireAuth>`) that runs before the page and redirects if you're not allowed in.
+```
+
+- [ ] **Step 17: Look at it (controller, in the in-app browser)**
+
+Build, then start the Playwright server (launch config `nitpilot-e2e-web-w7`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build`). Sign maya in and set her cookie in the tab, as in Task 18's look. Start the logins the way the CLI does (the web app only shows what the CLI asked for):
+
+```bash
+W=http://127.0.0.1:4319
+C=http://127.0.0.1:4320
+curl -s -X POST $C/signin -d '{"login":"maya"}'          # the cookie for http://127.0.0.1:4319
+curl -s -X POST $W/api/cli/login -H 'content-type: application/json' -d '{"deviceName":"Maya'"'"'s MacBook Pro"}'
+```
+
+The second line prints `deviceCode`, `userCode` and `verifyUrl` (`/cli/approve?code=XXXX-XXXX`); start three of them (Approve, Deny and a spare; the endpoint allows 10 starts a minute). In the tab on `http://127.0.0.1:4319`, run `document.cookie = "nitpilot_session=<value>; path=/"` and open a `verifyUrl`.
+
+- **The page.** `GET /cli/approve?code=…` is the app's `index.html` with `Content-Security-Policy: frame-ancestors 'none'`. The main chunk is about 499.8 kB and the Approve chunk about 5 kB.
+- **Pending, 1280 px, light then dark.** A 440 px card centered on the page: the eyebrow "Device login", "Approve this device?", the code spaced out in mono in the code box, "Maya's MacBook Pro / requested HH:MM", **Approve** (accent) and **Deny** (outlined), and the fine print counting down ("…expires in 9:51.").
+- **Approve.** "Device approved / Maya's MacBook Pro can now run your agent. You can close this tab." Then poll as the CLI would: `curl -s -X POST $W/api/cli/login/poll -H 'content-type: application/json' -d '{"deviceCode":"<deviceCode>"}'` answers `{"status":"approved","token":"nit_…"}` once, and `expired` on the next poll.
+- **Deny.** Open another code typed in lower case (it is found): "Login denied / Nothing was connected…".
+- **375 px, light then dark.** Code not found (`/cli/approve?code=NOPE-NOPE`): the ring, "Code not found", the command block with Copy. The pending card at 375 px, with 16 px gutters and no horizontal scroll (`document.documentElement.scrollWidth` is 375). Expired in dark: leave a pending page open and move the page's clock 11 minutes ahead; the card flips to "This code expired" by itself, with no request.
+- **Console.** Only the 404 for `NOPE-NOPE` and 401s before the cookie was set. (A `/ws/web` reconnect error after the server was stopped is the old W4 note, not this task.)
+- Clean up: the tokens an approval made show as devices; `curl -s -X POST $C/forget-devices -d '{"login":"maya"}'` revokes them.
+- Not exercised here: the signed-out redirect (it leaves for the real github.com); `Approve.test.tsx` and `approve.spec.ts` cover it.
+
+- [ ] **Step 18: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 82, CLI 333 passed + 14 skipped, server 1021, web 319; end to end 6; Playwright 16; typecheck and lint clean; the build prints no warning.
+
+```bash
+git add apps/server apps/web packages/protocol docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/why docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "feat(web): device approval is a page of the web app, and the server renders no pages any more
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+(`git add apps/server` also stages the three deletions made with `git rm`.)
 
 ---
 
