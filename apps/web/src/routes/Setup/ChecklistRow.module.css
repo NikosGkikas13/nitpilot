@@ -1,0 +1,90 @@
+/* handoff §5 (NitpilotScreens screen=onboarding): a checklist row, 16px vertical padding, --b2 dividers between rows. */
+.row {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--b2);
+}
+
+.iconBox {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+
+.done,
+.number,
+.spinner {
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The ✓ is drawn in --surface: white on the light theme's green, dark on the dark theme's brighter green. */
+.done {
+  background: var(--ok);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.number {
+  border: 1.5px solid var(--b1);
+  color: var(--fg3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The waiting spinner: 0.9s a turn. Reduced motion stops it (styles/global.css), leaving a still ring. */
+.spinner {
+  border: 2.5px solid var(--b1);
+  border-top-color: var(--acc);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--fg1);
+}
+
+.row[data-state='done'] .title {
+  color: var(--fg3);
+}
+
+.row[data-state='pending'] .title {
+  font-weight: 500;
+}
+
+.body {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.body code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}

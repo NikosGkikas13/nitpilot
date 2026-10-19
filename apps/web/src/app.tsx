@@ -5,6 +5,7 @@ import { retryUnlessClientError } from './api/client';
 import { Chat } from './routes/Chat/Chat';
 import { Home } from './routes/Home/Home';
 import { Settings } from './routes/Settings/Settings';
+import { Setup } from './routes/Setup/Setup';
 import { EmptyPane } from './routes/Shell/Pane';
 import { InboxLayout } from './routes/Shell/Shell';
 
@@ -28,7 +29,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
 
 /**
  * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
- * the inbox (routes/Shell/Shell.tsx `InboxLayout`), and Settings is a page of its own.
+ * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own.
  */
 export function AppRoutes() {
   return (
@@ -40,6 +41,7 @@ export function AppRoutes() {
           <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
         </Route>
         <Route path="settings" element={<Settings />} />
+        <Route path="setup" element={<Setup />} />
       </Route>
     </Routes>
   );

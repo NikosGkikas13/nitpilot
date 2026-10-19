@@ -1,10 +1,10 @@
 import type { MyChatsResponse } from '@nitpilot/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { makeChat, makeCliToken, makeRepo, makeUser, personOf } from '../../../test/db';
 import { fakeFetch } from '../../../test/fake-fetch';
 import { testApp } from '../../../test/app';
 import { sessionCookieFor } from '../../../test/http';
-import { startCliLogin } from '../../auth/cli-login';
+import { decideCliLogin, startCliLogin } from '../../auth/cli-login';
 import { Dispatcher } from '../../chats/dispatch';
 import { prisma } from '../../lib/prisma';
 import { generateToken } from '../../lib/tokens';
@@ -55,6 +55,22 @@ describe('nitpilot login', () => {
     expect(await (await app().request('/api/me', { headers: auth })).json()).toMatchObject({ login: 'maya', avatarUrl: null, githubAuth: 'needs_reauth' });
     expect((await app().request('/api/cli/token', { method: 'DELETE', headers: auth })).status).toBe(204);
     expect((await app().request('/api/me', { headers: auth })).status).toBe(401);
+  });
+
+  it("tells the person's open tabs once the first poll after approval made the token, so the setup checklist ticks", async () => {
+    const user = await makeUser();
+    const sendMeUpdate = vi.fn(async () => {});
+    const server = testApp({ github: new GithubClient(fakeFetch({})), meUpdates: { sendMeUpdate } });
+    const poll = async (deviceCode: string) => server.request('/api/cli/login/poll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceCode }) });
+    const login = await startCliLogin('laptop');
+    await poll(login.deviceCode);
+    expect(sendMeUpdate).not.toHaveBeenCalled();
+    await decideCliLogin(login.userCode, user.id, 'approve');
+    expect(await (await poll(login.deviceCode)).json()).toMatchObject({ status: 'approved' });
+    expect(sendMeUpdate).toHaveBeenCalledExactlyOnceWith(user.id);
+    // Later polls make no token, so they tell nobody.
+    await poll(login.deviceCode);
+    expect(sendMeUpdate).toHaveBeenCalledOnce();
   });
 
   it('reports a denied login', async () => {

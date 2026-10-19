@@ -3,7 +3,7 @@ import { GithubError } from '../github/client';
 import { parseGithubWebhook } from '../github/normalize/index';
 import type { GhReviewComment } from '../github/payloads';
 import { gitSpecFor } from '../github/mapping';
-import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, WriteOptions } from '../types';
+import type { AnchoredComment, FoundPr, GitSpec, GitSpecInput, NormalizedEvent, PlatformAdapter, PrRef, PrSnapshot, RepoRef, UserInstallation, WriteOptions } from '../types';
 
 export type FakeWrite = {
   kind: 'summary' | 'review' | 'reply';
@@ -39,6 +39,12 @@ export class FakePlatform implements PlatformAdapter {
   readonly prFiles = new Map<string, PrFile[]>();
   /** Which PRs' files were listed, in order. */
   readonly fileLists: string[] = [];
+  /** userId → the app's installations GitHub lists for them (the setup checklist's "installed" step) */
+  readonly userInstalls = new Map<string, UserInstallation[]>();
+  /** Whose installations were asked for, in order. */
+  readonly installationLookups: string[] = [];
+  /** Set to make every userInstallations call fail with this error, as a GitHub outage would. */
+  failUserInstallations: Error | null = null;
   /** Make the next postReview with inline comments fail like GitHub does for lines outside the diff. */
   rejectNextInlineReview = false;
   private nextId = Date.now() * 1000;
@@ -80,6 +86,12 @@ export class FakePlatform implements PlatformAdapter {
   async listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
     this.fileLists.push(prKey(pr));
     return { files: this.prFiles.get(prKey(pr)) ?? [], truncated: false };
+  }
+
+  async userInstallations(userId: string): Promise<UserInstallation[]> {
+    this.installationLookups.push(userId);
+    if (this.failUserInstallations) throw this.failUserInstallations;
+    return this.userInstalls.get(userId) ?? [];
   }
 
   async upsertSummary(pr: PrRef, body: string, existingId?: string, opts?: WriteOptions): Promise<{ id: string }> {

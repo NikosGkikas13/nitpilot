@@ -36352,7 +36352,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `Setup.test.tsx`, `Settings.test.tsx`, `apply.test.ts`: as in the steps below.
 - Playwright `setup.spec.ts`: a first sign-in lands on `/setup`, with the install link; rows 3 to 5 tick live when a CLI is started through the control API.
 
-- [ ] **Step 1: Add `User.onboardedAt` and generate the migration**
+- [x] **Step 1: Add `User.onboardedAt` and generate the migration**
 
 `onboardedAt` is the checklist's memory: null until the first time every step held. It sits with the other `User` settings, and the schema file gets re-aligned by `prisma format`, which is why the diff may show a few more lines than the change.
 
@@ -36385,7 +36385,7 @@ The generated `migration.sql` (the scratch commit's folder was `20261019152754_u
 ALTER TABLE "User" ADD COLUMN     "onboardedAt" TIMESTAMP(3);
 ```
 
-- [ ] **Step 2: Write the failing test for `userInstallations`**
+- [x] **Step 2: Write the failing test for `userInstallations`**
 
 GitHub answers `GET /user/installations` with the installations of this app that the token's owner can see. The test checks the mapping (ids become strings), that the call uses the person's own token (the test's token function answers `ghu_<userId>`, so `Bearer ghu_user-maya`), and the empty answer.
 
@@ -36425,12 +36425,12 @@ index f95f65c..9a87832 100644
  
 ```
 
-- [ ] **Step 3: Run it to see it fail**
+- [x] **Step 3: Run it to see it fail**
 
 Run: `npm run test:unit -w apps/server -- src/platform/github/reads.test.ts`
 Expected: FAIL, 2 failed, 15 passed (17) in 1 file: both new tests, `platform.userInstallations is not a function`.
 
-- [ ] **Step 4: Add `userInstallations` to the platform, the GitHub reads and `FakePlatform`**
+- [x] **Step 4: Add `userInstallations` to the platform, the GitHub reads and `FakePlatform`**
 
 The type and the interface method first. `FakePlatform` (the pretend platform that tests and the Playwright server use) gets three things a test can set or read: the installations it lists per person, who was asked, and a switch that makes the call fail like a GitHub outage.
 
@@ -36549,12 +36549,12 @@ index 622d012..25de60d 100644
        this.writes.find((w) => w.kind === 'summary' && w.id === existingId) ??
 ```
 
-- [ ] **Step 5: Run the reads test to see it pass**
+- [x] **Step 5: Run the reads test to see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/platform/github/reads.test.ts`
 Expected: PASS, 17 tests in 1 file.
 
-- [ ] **Step 6: Write the failing Playwright spec, and the control API it needs**
+- [x] **Step 6: Write the failing Playwright spec, and the control API it needs**
 
 The end-to-end test goes in now, before the page exists, so the finished feature is checked from the outside. It needs four things from the test server, shown first.
 
@@ -36722,14 +36722,14 @@ test('the checklist ticks itself off: the install when the window comes back, th
 });
 ```
 
-- [ ] **Step 7: Run Playwright to see it fail**
+- [x] **Step 7: Run Playwright to see it fail**
 
 Ports 4319 and 4320 must be free (`lsof -iTCP:4319 -sTCP:LISTEN` prints nothing).
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: FAIL, 2 failed and 12 passed (14). The two `setup.spec.ts` tests fail: the first signs in fine, but the browser lands on `/` instead of `/setup` (`toHaveURL(/\/setup$/)` times out); the second finds no "1 of 5" on `/setup`, because the web app has no such page yet. The 12 older tests still pass, so the new control API didn't disturb them.
 
-- [ ] **Step 8: Write the failing protocol test**
+- [x] **Step 8: Write the failing protocol test**
 
 `WebMe` gains `onboarded`; `Onboarding` is the new body of `GET /api/onboarding`. The test checks the round trip, that a checklist without its four steps is refused, and that a `WebMe` without `onboarded` is refused.
 
@@ -36774,12 +36774,12 @@ index b1f398b..644cdc6 100644
  });
 ```
 
-- [ ] **Step 9: Run it to see it fail**
+- [x] **Step 9: Run it to see it fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 2 failed, 79 passed (81) in 1 of 8 files: the `WebMe` round trip (`onboarded` is stripped, since the schema doesn't know it) and the new checklist test (`Onboarding` is undefined).
 
-- [ ] **Step 10: Add `Onboarding`, `WebMe.onboarded` and `BRAND.hostedDomain`**
+- [x] **Step 10: Add `Onboarding`, `WebMe.onboarded` and `BRAND.hostedDomain`**
 
 `BRAND.hostedDomain` is the hosted instance's name, used for the "covers public repos only" note, so the page doesn't hard-code "nitpilot.dev" (CLAUDE.md).
 
@@ -36846,12 +36846,12 @@ index 4cba407..0b6056d 100644
  } as const;
 ```
 
-- [ ] **Step 11: Run the protocol tests to see them pass**
+- [x] **Step 11: Run the protocol tests to see them pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 81 tests in 8 files.
 
-- [ ] **Step 12: Write the failing `/api/me` tests**
+- [x] **Step 12: Write the failing `/api/me` tests**
 
 A new person reads `onboarded: false`; once `onboardedAt` is set, `true`. Only the first test's expected object changes, and one test is added.
 
@@ -36891,12 +36891,12 @@ index d432095..5923cfc 100644
      const clis = { connectionsFor: (userId: string) => (userId === user.id ? [{ tokenId: 'token-1', repos: new Set<string>(), usedToday: 2, agent: { id: 'fake' as const, version: null, modes: [] } }] : []), sendSettings: () => 0, closeToken: () => false };
 ```
 
-- [ ] **Step 13: Run them to see them fail**
+- [x] **Step 13: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/me.db.test.ts`
 Expected: FAIL, 2 failed, 3 passed (5) in 1 file: the answer has no `onboarded`, so the first test's `toEqual` differs and the new test reads `undefined`.
 
-- [ ] **Step 14: Send `onboarded` from `loadWebMe`**
+- [x] **Step 14: Send `onboarded` from `loadWebMe`**
 
 Modify `apps/server/src/auth/users.ts`:
 
@@ -36923,12 +36923,12 @@ index 4eae786..6c1dd2b 100644
  }
 ```
 
-- [ ] **Step 15: Run them to see them pass**
+- [x] **Step 15: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/me.db.test.ts`
 Expected: PASS, 5 tests in 1 file. (`me.update` carries the same `WebMe`, so it carries `onboarded` too.)
 
-- [ ] **Step 16: Write the failing tests for the checklist's facts**
+- [x] **Step 16: Write the failing tests for the checklist's facts**
 
 `OnboardingFacts.read(userId)` is a class (not a function) so that GitHub's "yes" lives as long as the server does. The tests build one with `FakePlatform` as GitHub and a clock they move by hand. `computer()` makes a CLI token as its last hello left it (name, remembered repos, remembered agent).
 
@@ -37054,12 +37054,12 @@ describe('OnboardingFacts (spec §16 "Onboarding")', () => {
 });
 ```
 
-- [ ] **Step 17: Run them to see them fail**
+- [x] **Step 17: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/auth/onboarding.db.test.ts`
 Expected: FAIL, 1 file failed to load and no tests ran: `Cannot find module './onboarding'`.
 
-- [ ] **Step 18: Add the facts**
+- [x] **Step 18: Add the facts**
 
 `read` looks at the database first (the person, then their unrevoked tokens, newest first), answers "all done" straight away if `onboardedAt` is set, and otherwise asks GitHub through `appInstalled`. Only a "yes" goes into the cache, so a person who just installed the app sees it on the next read. If all four hold, `updateMany ... where onboardedAt is null` stores the time; two reads at once both answer done and one of them writes it.
 
@@ -37141,12 +37141,12 @@ export class OnboardingFacts {
 }
 ```
 
-- [ ] **Step 19: Run them to see them pass**
+- [x] **Step 19: Run them to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/auth/onboarding.db.test.ts`
 Expected: PASS, 9 tests in 1 file.
 
-- [ ] **Step 20: Write the failing route tests**
+- [x] **Step 20: Write the failing route tests**
 
 The route answers the signed-in person's checklist. A CLI's `Bearer` token and no sign-in at all are both a 401: the checklist is for the web app's session only.
 
@@ -37187,12 +37187,12 @@ describe('GET /api/onboarding', () => {
 });
 ```
 
-- [ ] **Step 21: Run them to see them fail**
+- [x] **Step 21: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/onboarding.db.test.ts`
 Expected: FAIL, 2 failed in 1 file: both get a 404, since no route exists.
 
-- [ ] **Step 22: Add the route and mount it**
+- [x] **Step 22: Add the route and mount it**
 
 `app.ts` changes in two separate ways in this task. This step takes the first: the import, the doc comment on `platform` (it is now also used with a person's own token), and the mounted route. Step 27 takes the second.
 
@@ -37258,12 +37258,12 @@ index 24c9363..46ca4fe 100644
    app.route('/', chatActionRoutes(deps));
 ```
 
-- [ ] **Step 23: Run the route tests to see them pass**
+- [x] **Step 23: Run the route tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/onboarding.db.test.ts`
 Expected: PASS, 2 tests in 1 file.
 
-- [ ] **Step 24: Write the failing test for the CLI login's poll**
+- [x] **Step 24: Write the failing test for the CLI login's poll**
 
 When `nitpilot login` finishes, the first poll after the person approved the device creates the token. That is the moment "Connect your computer" can tick, even before the CLI connects, so the server must tell the person's open tabs. The test approves a login, polls twice, and expects `sendMeUpdate` to have been called once, with that person.
 
@@ -37312,12 +37312,12 @@ index 6742486..f080a75 100644
      const start = (await (await post('/api/cli/login', { deviceName: 'laptop' })).json()) as LoginStart;
 ```
 
-- [ ] **Step 25: Run it to see it fail**
+- [x] **Step 25: Run it to see it fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/cli.db.test.ts`
 Expected: FAIL, 1 failed, 12 passed (13) in 1 file: `sendMeUpdate` was never called.
 
-- [ ] **Step 26: Give `pollCliLogin` a hook, and pass it from the route**
+- [x] **Step 26: Give `pollCliLogin` a hook, and pass it from the route**
 
 `pollCliLogin` stays free of WebSocket code: it takes an optional function, `onTokenCreated`, and calls it after the database transaction has committed and only when it made a token (`approved`). The route supplies the function; `app.ts` hands the route the app's `meUpdates`.
 
@@ -37426,12 +37426,12 @@ index 46ca4fe..1acac9a 100644
    app.route('/', webhookRoutes(deps));
 ```
 
-- [ ] **Step 27: Run the CLI route tests to see them pass**
+- [x] **Step 27: Run the CLI route tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/cli.db.test.ts`
 Expected: PASS, 13 tests in 1 file.
 
-- [ ] **Step 28: Write the failing sign-in landing tests**
+- [x] **Step 28: Write the failing sign-in landing tests**
 
 Three new sign-in tests (a first sign-in goes to `/setup`; one for a chat keeps its page; an onboarded person goes to `/`) and the `/github/setup` test, which now expects `/setup`.
 
@@ -37503,12 +37503,12 @@ index 64a1dcf..19ba87f 100644
  
 ```
 
-- [ ] **Step 29: Run them to see them fail**
+- [x] **Step 29: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/auth.db.test.ts src/http/routes/setup.db.test.ts`
 Expected: FAIL, 2 failed, 22 passed (24) in 2 files: the first sign-in lands on `/` instead of `/setup`, and `/github/setup` redirects to `/` instead of `/setup`. The other two new sign-in tests already pass (the default is `next` and an onboarded person goes to `/`): they pin behavior the change must keep.
 
-- [ ] **Step 30: Redirect to `/setup`**
+- [x] **Step 30: Redirect to `/setup`**
 
 In the callback, `saveGithubUser` already returns the user row with `onboardedAt`, so no extra database read is needed. Only the default `next` of `/` is replaced; a saved `next` of a chat or an approval link wins. `GET /github/setup` goes back to the checklist once it has synced the installation.
 
@@ -37562,19 +37562,19 @@ index 7ee060b..d6cf62c 100644
  }
 ```
 
-- [ ] **Step 31: Run the server's tests and typecheck**
+- [x] **Step 31: Run the server's tests and typecheck**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/auth.db.test.ts src/http/routes/setup.db.test.ts && npm test -w apps/server && npm run typecheck -w apps/server`
 Expected: PASS, 24 tests in the first two files; the server's whole suite 1007 tests in 85 files; typecheck clean.
 
-- [ ] **Step 32: See the web tests break on the new `WebMe` field**
+- [x] **Step 32: See the web tests break on the new `WebMe` field**
 
 Every web test that builds a `WebMe` now lacks `onboarded`, and the web app parses `/api/me` with the protocol's schema.
 
 Run: `npm test -w apps/web && npm run typecheck -w apps/web`
 Expected: FAIL, 115 failed, 180 passed (295) in 13 of 39 files; typecheck reports 10 errors (`Property 'onboarded' is missing`). The `Home` fixture is untyped, so only the test run shows it.
 
-- [ ] **Step 33: Give the eleven fixtures `onboarded: true`**
+- [x] **Step 33: Give the eleven fixtures `onboarded: true`**
 
 One property on each `WebMe` the tests build. `true`, so none of them shows the Settings "Finish setting up" card; the Settings test for the card sets `false` itself.
 
@@ -37776,12 +37776,12 @@ index 7f25db7..42e477e 100644
  /** One of maya's computers; pass only what a test cares about. */
 ```
 
-- [ ] **Step 34: Run the web tests to see them pass**
+- [x] **Step 34: Run the web tests to see them pass**
 
 Run: `npm test -w apps/web && npm run typecheck -w apps/web`
 Expected: PASS, 295 tests in 39 files; typecheck clean.
 
-- [ ] **Step 35: Write the failing web tests**
+- [x] **Step 35: Write the failing web tests**
 
 Three test files. `Setup.test.tsx` is the page: it serves `/api/onboarding` from a function the test can change, so a test can move the facts and then fire a `me.update`, or a visibility change, and watch the list react. `Settings.test.tsx` gains the "Finish setting up" card and its absence once `onboarded`. `apply.test.ts` pins the `['onboarding']` invalidation.
 
@@ -38007,12 +38007,12 @@ index 32e3800..f51028c 100644
  });
 ```
 
-- [ ] **Step 36: Run them to see them fail**
+- [x] **Step 36: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/routes/Setup src/routes/Settings src/live`
 Expected: FAIL, 11 failed, 49 passed (60) in 3 files: the 9 `Setup` tests (there is no `/setup` route, so no heading or list is found), 1 `Settings` test (no "Finish setting up" region; the "card is gone once finished" test passes already), and the `apply` test (no `['onboarding']` invalidation).
 
-- [ ] **Step 37: The read and the live refetch**
+- [x] **Step 37: The read and the live refetch**
 
 `useOnboarding()` is one query with no `staleTime`, which is what makes TanStack Query read it again whenever the window regains focus (the install step relies on that). `applyServerMessage` invalidates it after every `me.update`.
 
@@ -38057,7 +38057,7 @@ index e4bb3d0..ef9ca2d 100644
  }
 ```
 
-- [ ] **Step 38: The command block and the row**
+- [x] **Step 38: The command block and the row**
 
 `CommandBlock` is the mono box on `--code` with an optional Copy button (it reuses `useCopy`). `ChecklistRow` draws one row: the icon (✓, spinner or number), the title, the body line, and whatever the page puts under it. Both CSS files use tokens only.
 
@@ -38279,7 +38279,7 @@ Create `apps/web/src/routes/Setup/ChecklistRow.module.css`:
 }
 ```
 
-- [ ] **Step 39: The Setup page**
+- [x] **Step 39: The Setup page**
 
 `Checklist` works out each row's state from the five facts: done rows are done, the first open row is active, the rest are pending. The outer `Setup` shows the loading line, the error state or the checklist, and the Skip or Open-your-inbox link. When the read says `done`, an effect writes `onboarded: true` into the `['me']` cache.
 
@@ -38619,7 +38619,7 @@ Create `apps/web/src/routes/Setup/Setup.module.css`:
 }
 ```
 
-- [ ] **Step 40: The route, and the card in Settings**
+- [x] **Step 40: The route, and the card in Settings**
 
 `/setup` is a sibling of `/settings` under the signed-in wrapper. Settings shows `FinishSetup` (a `Section` with one line and a link) above Devices while `!me.onboarded`. It is not in the section nav; the handoff draws no such card.
 
@@ -38746,19 +38746,19 @@ index 6b81666..78dca55 100644
 +}
 ```
 
-- [ ] **Step 41: Run the web tests, typecheck and lint**
+- [x] **Step 41: Run the web tests, typecheck and lint**
 
 Run: `npm test -w apps/web && npm run typecheck && npm run lint`
 Expected: PASS, 307 tests in 40 files; typecheck and lint clean, and nothing printed to stderr by the new tests.
 
-- [ ] **Step 42: Run Playwright to see it pass**
+- [x] **Step 42: Run Playwright to see it pass**
 
 Ports 4319 and 4320 must be free.
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: PASS, 14 tests (the two new ones take well under a second each). Run it twice more: it must pass every time.
 
-- [ ] **Step 43: The explainer and the spec**
+- [x] **Step 43: The explainer and the spec**
 
 The explainer is for a React developer: the page asks the server what is true instead of keeping its own ticks, two things make it ask again, and the cache and the stored "done" are explained. The spec changes in three places: §8 (`User.onboardedAt`), §10 (`me.update` also fires after a CLI login's first poll; `/api/me` gains `onboarded`, not "onboarding facts"; `GET /api/onboarding`; `/github/setup` goes to `/setup`), and §16 (the checklist, the landing, Skip and the Settings card).
 
@@ -38866,7 +38866,7 @@ index ca9268f..acaa306 100644
  - **Who can act in a chat** (checked by one pure, table-tested function on every write, on top of read access):
 ```
 
-- [ ] **Step 44: Look at it (controller, in the in-app browser)**
+- [x] **Step 44: Look at it (controller, in the in-app browser)**
 
 Build, then start the Playwright server (launch config `nitpilot-e2e-web-w7`, or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build`). Take the lock first if other work is using the ports. Seed maya before her first `nitpilot login`, then set her cookie in the tab on `http://127.0.0.1:4319`:
 
@@ -38886,10 +38886,10 @@ In the tab, run `document.cookie = "nitpilot_session=<value>; path=/"`, then ope
 - **Settings.** After `reset` again (so `onboarded` is false), `/settings` at 1280 px dark, with no devices: the first card is "Finish setting up" with the line "A few steps are left before your agent can review and fix pull requests." and **Open the checklist** (it goes to `/setup`); then Devices says "No computers yet. Run npx nitpilot login on one to connect it." and Agent says "Install Claude Code, then run nitpilot start." After the page above reached "5 of 5", the card is gone.
 - Known minors: no live tick for a token made by the control API's `POST /cli-token` (that route sends no `me.update`); no list of the installed repos ("Installed on acme/shop-api…" in the prototype); no "Waiting for a linked repo…" line (the spinner already says waiting).
 
-- [ ] **Step 45: Run everything, then commit**
+- [x] **Step 45: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
-Expected: protocol 81, CLI 333 passed + 14 skipped, server 1007, web 307; end to end 6; Playwright 14; typecheck, lint and build clean.
+Expected: protocol 81, CLI 333 passed + 14 skipped, server 1007, web 307 (1008 and 312 on top of Task 21's fix round 1, which added one server and five web tests); end to end 6; Playwright 14; typecheck, lint and build clean.
 
 ```bash
 git add packages/protocol/src apps/server/src apps/server/test apps/server/prisma apps/web docs/why docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md

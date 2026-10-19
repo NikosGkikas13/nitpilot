@@ -40,8 +40,10 @@ export function applyServerMessage(queryClient: QueryClient, msg: ServerToWeb): 
       return;
     case 'me.update':
       queryClient.setQueryData(['me'], msg.d.me);
-      // Something about you changed (a device came or went, or was revoked): the Settings page's devices may have too.
+      // Something about you changed (a device came or went, logged in, or was revoked): the Settings page's devices
+      // may have too, and so may the setup checklist.
       void queryClient.invalidateQueries({ queryKey: ['devices'] });
+      void queryClient.invalidateQueries({ queryKey: ['onboarding'] });
       return;
   }
 }

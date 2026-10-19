@@ -10,7 +10,7 @@ import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render
 const resyncPush = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../../push/subscribe', async (original) => ({ ...(await original<typeof import('../../push/subscribe')>()), resyncPush }));
 
-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false } };
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
 
 function serve() {
   fakeApi({

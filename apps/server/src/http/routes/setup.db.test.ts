@@ -13,7 +13,7 @@ beforeEach(resetDb);
 const pem = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
 
 describe('GET /github/setup', () => {
-  it('syncs the new installation from the API, then goes home', async () => {
+  it('syncs the new installation from the API, then goes back to the setup checklist', async () => {
     const github = new GithubClient(
       fakeFetch({
         'GET /app/installations/77': () => ({ id: 77, account: { login: 'octo' } }),
@@ -26,7 +26,7 @@ describe('GET /github/setup', () => {
       headers: { cookie: await sessionCookieFor(user.id) },
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe('/');
+    expect(res.headers.get('location')).toBe('/setup');
     expect((await prisma.repo.findUniqueOrThrow({ where: { id: '501' } })).fullName).toBe('octo/sandbox');
   });
 

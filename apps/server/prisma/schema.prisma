@@ -20,6 +20,9 @@ model User {
   autoReview  Boolean  @default(true)
   autoAddress Boolean  @default(true)
   dailyJobCap Int      @default(40)
+  /// When the setup checklist (`/setup`, spec §16 "Onboarding") first had every step done. From then on it reads done
+  /// without asking GitHub, and a sign-in goes straight to the inbox. Null: not yet.
+  onboardedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

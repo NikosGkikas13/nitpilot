@@ -21,8 +21,11 @@ export async function startCliLogin(deviceName: string, now = new Date()) {
   }
 }
 
-/** The CLI polls this. The token is created on the first poll after approval and never stored in plain form. */
-export async function pollCliLogin(deviceCode: string, now = new Date()): Promise<CliLoginPollResponse> {
+/**
+ * The CLI polls this. The token is created on the first poll after approval and never stored in plain form.
+ * `onTokenCreated` runs once that token is saved, with whose it is (the route tells their open tabs).
+ */
+export async function pollCliLogin(deviceCode: string, now = new Date(), onTokenCreated?: (userId: string) => Promise<void> | void): Promise<CliLoginPollResponse> {
   const req = await prisma.cliLoginRequest.findUnique({ where: { deviceCodeHash: hashToken(deviceCode) } });
   if (!req) return { status: 'expired' };
   if (req.status === 'pending' && req.expiresAt <= now) {
@@ -34,7 +37,7 @@ export async function pollCliLogin(deviceCode: string, now = new Date()): Promis
   if (req.status !== 'approved' || !req.userId) return { status: 'expired' };
 
   const userId = req.userId;
-  return prisma.$transaction(async (tx) => {
+  const answer = await prisma.$transaction(async (tx) => {
     // Compare-and-swap: only the first poll after approval wins a token.
     const { count } = await tx.cliLoginRequest.updateMany({ where: { id: req.id, status: 'approved' }, data: { status: 'consumed' } });
     if (count === 0) return { status: 'expired' } as const;
@@ -42,6 +45,8 @@ export async function pollCliLogin(deviceCode: string, now = new Date()): Promis
     await tx.cliToken.create({ data: { userId, name: req.deviceName, tokenHash: token.hash, prefix: token.prefix } });
     return { status: 'approved', token: token.raw } as const;
   });
+  if (answer.status === 'approved') await onTokenCreated?.(userId);
+  return answer;
 }
 
 export async function findCliLogin(userCode: string) {

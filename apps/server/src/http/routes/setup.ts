@@ -5,7 +5,10 @@ import type { AppAuth } from '../../platform/github/app-auth';
 import type { GithubClient } from '../../platform/github/client';
 import { HttpError } from '../errors';
 
-/** GitHub sends people here after they install or reconfigure the app (spec §10). */
+/**
+ * GitHub sends people here after they install or reconfigure the app (spec §10). Once the installation is synced, they
+ * go back to the setup checklist (`/setup`), whose "Install the GitHub App" step is now ticked.
+ */
 export function setupRoutes(deps: { github: GithubClient; appAuth: AppAuth }): Hono {
   const app = new Hono();
   app.get('/github/setup', async (c) => {
@@ -16,7 +19,7 @@ export function setupRoutes(deps: { github: GithubClient; appAuth: AppAuth }): H
     const installationId = c.req.query('installation_id');
     if (!installationId || !/^\d+$/.test(installationId)) throw new HttpError('validation_error', 'missing installation_id');
     await syncInstallationFromApi(installationId, deps.github, deps.appAuth);
-    return c.redirect('/');
+    return c.redirect('/setup');
   });
   return app;
 }

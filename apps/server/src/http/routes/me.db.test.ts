@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeCliToken, makeUser } from '../../../test/db';
 import { sessionCookieFor } from '../../../test/http';
+import { prisma } from '../../lib/prisma';
 
 describe('GET /api/me', () => {
   it('tells a signed-in browser who it is', async () => {
@@ -11,8 +12,15 @@ describe('GET /api/me', () => {
     expect(res.status).toBe(200);
     expect(WebMe.parse(await res.json())).toEqual({
       id: user.id, githubId: user.githubId, login: 'maya-me', avatarUrl: null, githubAuth: 'needs_reauth', agentOnline: false,
-      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false },
+      settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: false,
     });
+  });
+
+  it('says you finished the setup checklist once it was done', async () => {
+    const user = await makeUser();
+    await prisma.user.update({ where: { id: user.id }, data: { onboardedAt: new Date() } });
+    const res = await testApp().request('/api/me', { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(await res.json()).toMatchObject({ onboarded: true });
   });
 
   it('says whether any of your CLIs is connected', async () => {

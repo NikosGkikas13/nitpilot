@@ -56,10 +56,23 @@ const recordPush: PushSend = async (target, payload) => {
 };
 const realPush = env.E2E_REAL_PUSH === '1';
 
+/**
+ * Someone GitHub signs in who isn't one of the harness's people: a real sign-in (`/auth/github/login`, then the
+ * callback) with any code makes them, as a first sign-in would. setup.spec.ts uses it.
+ */
+const NEWCOMER = { id: 3003, login: 'sam' };
+
 const e2e = await startE2e({
   port: webPort,
   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
-  github: new GithubClient(fakeFetch({ 'GET /repos/octo/sandbox': () => ({ id: 1 }) })),
+  github: new GithubClient(
+    fakeFetch({
+      'GET /repos/octo/sandbox': () => ({ id: 1 }),
+      // GitHub's half of a sign-in: any code buys a token, and the token belongs to the newcomer.
+      'POST /login/oauth/access_token': () => ({ access_token: 'ghu_newcomer', expires_in: 28_800, refresh_token: 'ghr_newcomer', refresh_token_expires_in: 15_811_200 }),
+      'GET /user': () => ({ ...NEWCOMER, avatar_url: null }),
+    }),
+  ),
   push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
 });
 // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
@@ -100,11 +113,24 @@ control.post('/pr', async (c) => {
 });
 /**
  * Forget every PR: the tests share this server and its database, so each test that opens PRs starts here.
- * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults.
+ * People, their sign-ins, their devices and the installation stay; their Settings go back to the defaults, their
+ * setup checklist is unfinished again, and GitHub lists no installation for anyone until /installations says so.
  */
 control.post('/reset', async (c) => {
   await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
-  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40 } });
+  await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40, onboardedAt: null } });
+  e2e.platform.userInstalls.clear();
+  return c.body(null, 204);
+});
+/**
+ * What GitHub's `GET /user/installations` lists for someone (the setup checklist's "Install the GitHub App" step):
+ * the app installed on their account. /reset lists none again.
+ */
+control.post('/installations', async (c) => {
+  const { login } = (await c.req.json()) as { login: string };
+  const user = await prisma.user.findFirst({ where: { login } });
+  if (!user) return c.json({ error: `no user "${login}"` }, 400);
+  e2e.platform.userInstalls.set(user.id, [{ id: '1', accountLogin: login }]);
   return c.body(null, 204);
 });
 /**
@@ -168,6 +194,19 @@ const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
 control.post('/cli', async (c) => {
   const { login, scenario } = (await c.req.json()) as { login: 'maya' | 'leo'; scenario?: string };
   if (!clis.has(login)) clis.set(login, await e2e.startCli(login, scenario));
+  return c.body(null, 204);
+});
+/**
+ * Stop someone's CLI and revoke every token they have, as if they had never run `nitpilot login`: the setup
+ * checklist's computer, repo and agent steps are open again.
+ */
+control.post('/forget-devices', async (c) => {
+  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  await clis.get(login)?.stop();
+  clis.delete(login);
+  await prisma.cliToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
   return c.body(null, 204);
 });
 /** Stop it again, so the next test finds that person's agent offline. */

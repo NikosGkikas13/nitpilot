@@ -1,0 +1,50 @@
+/* handoff §5 (NitpilotScreens screen=onboarding): the command block, 44px tall, --code, mono 13.5px, a 32px Copy button. */
+.block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--code);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+
+.prompt {
+  color: var(--fg3);
+}
+
+.command {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  color: var(--fg1);
+}
+
+/* A later step's command: readable ahead of time, but quieter (--fg3 stays AA, where the prototype's 55% opacity didn't). */
+.block[data-active='false'] .command {
+  color: var(--fg3);
+}
+
+.copy {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--b1);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copy:hover {
+  background: var(--hover);
+}

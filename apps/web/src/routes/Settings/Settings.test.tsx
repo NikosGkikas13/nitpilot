@@ -92,6 +92,26 @@ describe('Settings (handoff §7): the page', () => {
   });
 });
 
+describe('Settings: finishing setup', () => {
+  it('offers the setup checklist at the top until you have finished it', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings({ me: { ...settingsMe, onboarded: false } });
+    renderApp('/settings');
+    const card = within(await screen.findByRole('region', { name: 'Finish setting up' }));
+    expect(card.getByRole('link', { name: 'Open the checklist' })).toHaveAttribute('href', '/setup');
+  });
+
+  it('is gone once you have', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    await screen.findByRole('region', { name: 'Devices' });
+    expect(screen.queryByRole('region', { name: 'Finish setting up' })).not.toBeInTheDocument();
+  });
+});
+
 describe('Account (handoff §7)', () => {
   it('shows who you are on GitHub', async () => {
     fakeViewport(true);

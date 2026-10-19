@@ -10,12 +10,17 @@ import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
 import { RateLimiter } from '../../lib/rate-limit';
 import { transcriptUrl } from '../../lib/urls';
+import type { MeUpdates } from '../../ws/web-wire';
 import { HttpError } from '../errors';
 
 /** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
 export const LOGIN_STARTS_PER_MINUTE = 10;
 
-export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
+/**
+ * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats, retry and logging out. `meUpdates` tells the
+ * person's open tabs when a login made a new token, so the setup checklist's "Connect your computer" ticks at once.
+ */
+export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: { cli: CliAuth } }> {
   const app = new Hono<{ Variables: { cli: CliAuth } }>();
   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
 
@@ -34,7 +39,7 @@ export function cliRoutes(): Hono<{ Variables: { cli: CliAuth } }> {
 
   app.post('/api/cli/login/poll', async (c) => {
     const { deviceCode } = CliLoginPollRequest.parse(await c.req.json());
-    return c.json(await pollCliLogin(deviceCode));
+    return c.json(await pollCliLogin(deviceCode, new Date(), (userId) => deps.meUpdates?.sendMeUpdate(userId)));
   });
 
   app.get('/api/me/chats', requireCliToken, async (c) => {

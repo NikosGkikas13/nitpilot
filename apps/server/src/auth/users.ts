@@ -38,7 +38,7 @@ export function settingsOf(user: Settings): Settings {
  * Who you are, as the web app reads it (`GET /api/me`, and `me.update` on `/ws/web`): your GitHub account, whether
  * your GitHub sign-in still works, whether one of your CLIs is connected right now, your settings, how many
  * agent runs your connected CLIs started today, and Web Push: the server's public key (null when push is off)
- * and whether you have a subscription.
+ * and whether you have a subscription. Last, whether you finished the setup checklist once (`User.onboardedAt`).
  */
 export async function loadWebMe(userId: string, clis: LiveClis, vapidPublicKey: string | null): Promise<WebMe> {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { githubAuth: true, _count: { select: { pushSubs: true } } } });
@@ -54,5 +54,6 @@ export async function loadWebMe(userId: string, clis: LiveClis, vapidPublicKey: 
     // Each CLI counts from its own midnight; a device that's offline isn't counted.
     usedToday: connected.reduce((sum, cli) => sum + cli.usedToday, 0),
     push: { vapidPublicKey, subscribed: user._count.pushSubs > 0 },
+    onboarded: user.onboardedAt !== null,
   };
 }

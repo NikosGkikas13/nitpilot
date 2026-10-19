@@ -45,6 +45,9 @@ export type RepoInfo = { id: string; fullName: string; private: boolean; default
 /** A PR a search found: enough to look it up. */
 export type FoundPr = { repoFullName: string; number: number };
 
+/** One installation of this app that a person can see on the platform: on their account, or an org's they're in. */
+export type UserInstallation = { id: string; accountLogin: string };
+
 export type PrNormalizedEvent = {
   scope: 'pr';
   pr: PrRef;
@@ -74,6 +77,8 @@ export interface PlatformReads {
   findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
   /** The PR's changed files, at most `MAX_PR_FILES`; `truncated` when there may be more. */
   listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>;
+  /** The installations of this app that the person can see, asked with their own token (the setup checklist, spec §16). */
+  userInstallations(userId: string): Promise<UserInstallation[]>;
 }
 
 /** How many changed files a PR's file list shows: three pages of 100. */

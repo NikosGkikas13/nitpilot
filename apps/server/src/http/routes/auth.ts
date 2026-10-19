@@ -85,7 +85,9 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
       console.error(`[sign-in] couldn't look for chats to resume for ${user.login}:`, err);
     }
     await startSession(c, user.id);
-    return c.redirect(saved.next);
+    // Someone who hasn't finished setting up starts at the checklist, unless the sign-in was for a page of its own
+    // (an approval link, a chat).
+    return c.redirect(saved.next === '/' && user.onboardedAt === null ? '/setup' : saved.next);
   });
 
   app.post('/auth/logout', async (c) => {

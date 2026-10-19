@@ -6,7 +6,7 @@ import { pretendIphone, VAPID_KEY } from '../../test/push';
 import { fakeApi, fakeViewport, renderApp, type Answer } from '../../test/render';
 import { HOME_SCREEN_SHEET_SEEN_KEY } from './IosHomeScreenSheet';
 
-const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false } };
+const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: VAPID_KEY, subscribed: false }, onboarded: true };
 
 function serve() {
   fakeApi({ 'GET /api/me': (): Answer => [200, me], 'GET /api/inbox': (): Answer => [200, { rows: [] }], 'GET /api/devices': (): Answer => [200, { devices: [] }] });

@@ -58,6 +58,31 @@ describe('GitHub sign-in', () => {
     expect(cookieHeader(res)).toContain(`${BRAND.sessionCookie}=`);
   });
 
+  it('takes a first sign-in to the setup checklist when nothing else was asked for', async () => {
+    const githubId = ghId();
+    const app = testApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
+    const { cookie, saved } = await startLogin(app, '/');
+    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/setup');
+  });
+
+  it('keeps the page a sign-in was asked for, even before setup is done', async () => {
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    const { cookie, saved } = await startLogin(app, '/c/octo/sandbox/42');
+    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
+    expect(res.headers.get('location')).toBe('/c/octo/sandbox/42');
+  });
+
+  it('takes someone who finished setup straight to the inbox', async () => {
+    const githubId = ghId();
+    await prisma.user.create({ data: { githubId, login: 'maya', onboardedAt: new Date() } });
+    const app = testApp({ github: new GithubClient(githubFake({ id: githubId, login: 'maya' })) });
+    const { cookie, saved } = await startLogin(app, '/');
+    const res = await app.request(`/auth/github/callback?code=abc&state=${saved.state}`, { headers: { cookie } });
+    expect(res.headers.get('location')).toBe('/');
+  });
+
   it('rejects a callback whose state does not match', async () => {
     const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
     const { cookie } = await startLogin(app);

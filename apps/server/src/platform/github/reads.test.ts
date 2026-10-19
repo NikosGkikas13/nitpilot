@@ -117,6 +117,26 @@ describe('findOpenPrsFor (spec §15 "Catching up")', () => {
   });
 });
 
+describe('userInstallations (the setup checklist, spec §16 "Onboarding")', () => {
+  it("lists the app's installations the person can see, asked with their own token", async () => {
+    const { fetch, platform } = reads({
+      'GET /user/installations': () => ({ total_count: 2, installations: [{ id: 77, account: { login: 'octo' } }, { id: 78, account: { login: 'maya' } }] }),
+    });
+    expect(await platform.userInstallations('user-maya')).toEqual([
+      { id: '77', accountLogin: 'octo' },
+      { id: '78', accountLogin: 'maya' },
+    ]);
+    const call = fetch.calls.find((c) => c.url.pathname === '/user/installations')!;
+    expect(call.headers.get('authorization')).toBe('Bearer ghu_user-maya');
+    expect(call.url.searchParams.get('per_page')).toBe('100');
+  });
+
+  it('answers an empty list when the app is installed nowhere they can see', async () => {
+    const { platform } = reads({ 'GET /user/installations': () => ({ total_count: 0, installations: [] }) });
+    expect(await platform.userInstallations('user-maya')).toEqual([]);
+  });
+});
+
 describe('listPrFiles', () => {
   const file = (i: number) => ({ filename: `src/f${i}.ts`, status: 'modified', additions: 2, deletions: 1 });
 

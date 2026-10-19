@@ -17,6 +17,8 @@ export const BRAND = {
   sessionCookie: 'nitpilot_session',
   oauthCookie: 'nitpilot_oauth',
   userAgent: 'nitpilot',
+  /** The hosted instance (Plan 3), which reviews public repos only; the setup checklist names it. */
+  hostedDomain: 'nitpilot.dev',
   /** Where the code and docs live; the web app's landing page links here. */
   repoUrl: 'https://github.com/NikosGkikas13/nitpilot',
 } as const;

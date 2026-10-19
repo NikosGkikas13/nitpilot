@@ -65,4 +65,11 @@ describe('applyServerMessage', () => {
     applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['devices'] });
   });
+
+  it('reads the setup checklist again after a me.update (a CLI logged in or connected)', () => {
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    applyServerMessage(queryClient, { v: 1, t: 'me.update', d: { me: { login: 'maya' } as WebMe } });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['onboarding'] });
+  });
 });

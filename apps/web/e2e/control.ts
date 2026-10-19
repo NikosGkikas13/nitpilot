@@ -70,3 +70,15 @@ export async function addDevice(device: { login: 'maya' | 'leo'; name: string; l
   if (!res.ok) throw new Error(`adding ${device.login}'s device failed: ${res.status} ${await res.text()}`);
   return ((await res.json()) as { id: string }).id;
 }
+
+/** Have GitHub list an installation of the app for someone (the setup checklist's install step). `resetChats` clears it. */
+export async function installApp(login: string): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/installations`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`installing the app for ${login} failed: ${res.status} ${await res.text()}`);
+}
+
+/** Stop someone's CLI and revoke all their tokens, so their setup checklist starts again from "Connect your computer". */
+export async function forgetDevices(login: 'maya' | 'leo'): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/forget-devices`, { method: 'POST', body: JSON.stringify({ login }) });
+  if (!res.ok) throw new Error(`forgetting ${login}'s devices failed: ${res.status} ${await res.text()}`);
+}

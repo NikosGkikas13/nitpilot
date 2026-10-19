@@ -10,6 +10,7 @@ import { Agent } from './Agent';
 import { Defaults } from './Defaults';
 import { Devices } from './Devices';
 import { Notifications } from './Notifications';
+import { Section } from './Section';
 import styles from './Settings.module.css';
 
 /** The section nav (desktop): each label, and the section it jumps to. */
@@ -27,7 +28,8 @@ type SectionId = (typeof SECTIONS)[number]['id'];
  * `/settings` (handoff §7), a page of its own: the top bar ("‹ Inbox" and the title), then on a desktop a sticky 180 px
  * section nav beside the cards, and on a phone the cards stacked, with Esc going back to the inbox. The sections:
  * your computers and their agents, push for this browser, your defaults for new chats, and your account. You are read
- * again when the page opens, so today's usage is fresh (the server sends no update when a CLI pings).
+ * again when the page opens, so today's usage is fresh (the server sends no update when a CLI pings). Until you finish
+ * the setup checklist once, a card at the top links back to it.
  */
 export function Settings() {
   const me = useOutletContext<WebMe>();
@@ -69,6 +71,7 @@ export function Settings() {
           </nav>
         )}
         <div className={styles.sections}>
+          {!me.onboarded && <FinishSetup />}
           <Devices />
           <Agent />
           <Notifications me={me} />
@@ -81,5 +84,19 @@ export function Settings() {
         <Toasts />
       </div>
     </div>
+  );
+}
+
+/** Until the setup checklist was done once (`me.onboarded`): a way back to it (routes/Setup/Setup.tsx). */
+function FinishSetup() {
+  return (
+    <Section id="setup" title="Finish setting up">
+      <div className={styles.finish}>
+        <p className={styles.finishText}>A few steps are left before your agent can review and fix pull requests.</p>
+        <Link to="/setup" className={styles.button}>
+          Open the checklist
+        </Link>
+      </div>
+    </Section>
   );
 }

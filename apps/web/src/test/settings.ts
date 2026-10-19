@@ -5,7 +5,7 @@ import { fakeApi, type Answer } from './render';
 /** maya, as the Settings page reads her: the default settings, 12 agent runs today, and a server with push keys. */
 export const settingsMe: WebMe = {
   id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true,
-  settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 12, push: { vapidPublicKey: VAPID_KEY, subscribed: false },
+  settings: { autoReview: true, autoAddress: false, dailyJobCap: 40 }, usedToday: 12, push: { vapidPublicKey: VAPID_KEY, subscribed: false }, onboarded: true,
 };
 
 /** One of maya's computers; pass only what a test cares about. */

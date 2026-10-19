@@ -1,5 +1,5 @@
 import type { PrFile } from '@nitpilot/protocol';
-import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef } from '../types';
+import { MAX_PR_FILES, type FoundPr, type GitSpec, type GitSpecInput, type NormalizedEvent, type PlatformReads, type PrRef, type PrSnapshot, type RepoRef, type UserInstallation } from '../types';
 import type { AppAuth } from './app-auth';
 import { GithubError, type GithubClient } from './client';
 import { gitSpecFor, snapshotFromPull } from './mapping';
@@ -10,6 +10,9 @@ export { gitSpecFor, isTrustedAssociation, snapshotFromPull, toPerson } from './
 
 /** What a search answers, as far as we read it. */
 type GhSearch = { items: { number: number; repository_url: string }[] };
+
+/** What `GET /user/installations` answers, as far as we read it. */
+type GhUserInstallations = { installations: { id: number; account: { login: string } | null }[] };
 
 /** The read side of the GitHub adapter. Task 26 adds the writes. */
 export class GithubReads implements PlatformReads {
@@ -79,6 +82,16 @@ export class GithubReads implements PlatformReads {
       }
     }
     return [...found.values()];
+  }
+
+  /**
+   * With a GitHub App's user token, `GET /user/installations` lists only this app's installations the person can
+   * reach: on their own account, or on an org where they can see it. The first 100 are plenty to say "installed".
+   */
+  async userInstallations(userId: string): Promise<UserInstallation[]> {
+    const token = await this.userToken(userId);
+    const { data } = await this.github.api<GhUserInstallations>('GET', '/user/installations?per_page=100', { token });
+    return data.installations.map((i) => ({ id: String(i.id), accountLogin: i.account?.login ?? '' }));
   }
 
   /** Page by page, 100 at a time, with the installation token, up to MAX_PR_FILES. */

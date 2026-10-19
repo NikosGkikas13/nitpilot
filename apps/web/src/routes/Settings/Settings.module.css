@@ -405,3 +405,26 @@
     padding: 16px 16px 40px;
   }
 }
+
+/* "Finish setting up": one line and the link to /setup, shown until the checklist was done once. */
+.finish {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+}
+
+.finishText {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--fg2);
+}
+
+.finish .button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}

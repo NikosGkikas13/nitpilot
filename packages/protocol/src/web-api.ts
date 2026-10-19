@@ -35,6 +35,11 @@ export const WebMe = MeResponse.extend({
    * no keys, so push is off and the CLI notifies as in Plan 1), and whether you have any subscription.
    */
   push: z.object({ vapidPublicKey: z.string().nullable(), subscribed: z.boolean() }),
+  /**
+   * You finished the setup checklist once (`User.onboardedAt`): Settings stops offering "Finish setting up". The
+   * checklist's own facts are a read of their own (`GET /api/onboarding`), since one of them asks GitHub.
+   */
+  onboarded: z.boolean(),
 });
 export type WebMe = z.infer<typeof WebMe>;
 
@@ -56,6 +61,23 @@ export type DeviceView = z.infer<typeof DeviceView>;
 
 export const DevicesResponse = z.object({ devices: z.array(DeviceView) });
 export type DevicesResponse = z.infer<typeof DevicesResponse>;
+
+/**
+ * The setup checklist (`GET /api/onboarding`, the `/setup` page, handoff §5). Step 1, signing in, is a given: only a
+ * signed-in person can ask. `appInstalled`: GitHub lists an installation of this app that you can see.
+ * `cliConnected`: you have a CLI token nobody revoked (`npx nitpilot login` worked). `repoLinked`: one of those CLIs
+ * reported a linked repo when `nitpilot start` connected. `agentStarted`: one reported an agent it can run. `done`
+ * once all four held at the same time; from then on every step reads true. `deviceName` is your newest computer's name
+ * ("Connected: …"); `appSlug` makes the install link; `publicReposOnly` says this server reviews public repos only.
+ */
+export const Onboarding = z.object({
+  steps: z.object({ appInstalled: z.boolean(), cliConnected: z.boolean(), repoLinked: z.boolean(), agentStarted: z.boolean() }),
+  done: z.boolean(),
+  deviceName: z.string().nullable(),
+  appSlug: z.string(),
+  publicReposOnly: z.boolean(),
+});
+export type Onboarding = z.infer<typeof Onboarding>;
 
 /**
  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor

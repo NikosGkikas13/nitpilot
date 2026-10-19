@@ -20,6 +20,7 @@ import { cliApproveRoutes } from './routes/cli-approve';
 import { deviceRoutes, type DeviceClis } from './routes/devices';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
+import { onboardingRoutes } from './routes/onboarding';
 import { pushRoutes } from './routes/push';
 import { settingsRoutes, type SettingsSender } from './routes/settings';
 import { setupRoutes } from './routes/setup';
@@ -36,13 +37,13 @@ export type AppDeps = {
   clis: LiveClis & SettingsSender & DeviceClis;
   /** Who can read which repo on GitHub: one 5-minute answer per person and repo, shared by every chat read and the browser's socket. */
   access: RepoAccess;
-  /** GitHub reads with the app's installation token (the chat screen's file list). */
+  /** GitHub reads: with the app's installation token (the chat screen's file list), and with a person's own (the setup checklist). */
   platform: PlatformReads;
   /** The server's public Web Push key (VAPID), which browsers subscribe with; null when push is off (lib/env.ts). */
   vapidPublicKey: string | null;
   /** The browsers' sockets (ws/web-hub.ts): signing out closes the ones on that session. */
   webSockets?: { closeSession(tokenHash: string): void };
-  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes. */
+  /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes, and a CLI login. */
   meUpdates?: MeUpdates;
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
   webDistDir?: string;
@@ -60,11 +61,12 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', settingsRoutes(deps));
   app.route('/', pushRoutes(deps));
   app.route('/', deviceRoutes(deps));
+  app.route('/', onboardingRoutes(deps));
   app.route('/', inboxRoutes(deps));
   app.route('/', chatRoutes(deps));
   app.route('/', chatActionRoutes(deps));
   app.route('/', chatDraftRoutes(deps));
-  app.route('/', cliRoutes());
+  app.route('/', cliRoutes(deps));
   app.route('/', cliApproveRoutes());
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));

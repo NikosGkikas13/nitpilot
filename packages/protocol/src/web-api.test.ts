@@ -3,11 +3,11 @@ import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
   ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
-  PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
-  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true } };
+  const me: WebMe = { id: 'user_1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: settings(), usedToday: 12, push: { vapidPublicKey: 'BPublicKey', subscribed: true }, onboarded: false };
 
   it('round-trips WebMe', () => {
     expect(WebMe.parse(JSON.parse(JSON.stringify(me)))).toEqual(me);
@@ -134,5 +134,18 @@ describe('web API bodies', () => {
     ];
     expect(DevicesResponse.parse(JSON.parse(JSON.stringify({ devices })))).toEqual({ devices });
     expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'copilot', version: null } }] }).success).toBe(false);
+  });
+
+  it('round-trips the setup checklist: four steps from the server, done, the newest device, the app to install', () => {
+    const onboarding: Onboarding = {
+      steps: { appInstalled: true, cliConnected: true, repoLinked: false, agentStarted: false },
+      done: false,
+      deviceName: "Maya's MacBook Pro",
+      appSlug: 'nitpilot-dev',
+      publicReposOnly: true,
+    };
+    expect(Onboarding.parse(JSON.parse(JSON.stringify(onboarding)))).toEqual(onboarding);
+    expect(Onboarding.safeParse({ ...onboarding, steps: { appInstalled: true } }).success).toBe(false);
+    expect(WebMe.safeParse({ ...me, onboarded: undefined }).success).toBe(false);
   });
 });
