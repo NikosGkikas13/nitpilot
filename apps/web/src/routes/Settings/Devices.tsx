@@ -1,4 +1,5 @@
 import { BRAND, type DeviceView } from '@nitpilot/protocol';
+import { useEffect, useRef } from 'react';
 import { useDevices, useRevokeDevice } from '../../api/settings';
 import { lastSeen, useNow } from '../../lib/time';
 import { Section } from './Section';
@@ -18,6 +19,24 @@ export function sortDevices(devices: DeviceView[]): DeviceView[] {
 export function Devices() {
   const devices = useDevices();
   const now = useNow();
+  // After a revoke, once the row is gone, focus goes to the next row's Revoke, else the previous one's, else the heading.
+  const revokes = useRef(new Map<string, HTMLButtonElement>());
+  const after = useRef<{ gone: string; next: string | null; previous: string | null } | null>(null);
+
+  function revoked(id: string) {
+    const ids = sortDevices(devices.data ?? []).map((d) => d.id);
+    const at = ids.indexOf(id);
+    after.current = { gone: id, next: ids[at + 1] ?? null, previous: ids[at - 1] ?? null };
+  }
+
+  useEffect(() => {
+    const pending = after.current;
+    if (!pending || !devices.data || devices.data.some((d) => d.id === pending.gone)) return;
+    after.current = null;
+    const target = [pending.next, pending.previous].map((id) => (id ? revokes.current.get(id) : undefined)).find(Boolean);
+    (target ?? document.getElementById('devices-heading'))?.focus();
+  }, [devices.data]);
+
   let body;
   if (devices.isPending) {
     body = <p className={styles.line}>Loading your computers…</p>;
@@ -42,7 +61,16 @@ export function Devices() {
     body = (
       <ul className={styles.list}>
         {sortDevices(devices.data).map((device) => (
-          <DeviceRow key={device.id} device={device} now={now} />
+          <DeviceRow
+            key={device.id}
+            device={device}
+            now={now}
+            onRevoked={() => revoked(device.id)}
+            buttonRef={(button) => {
+              if (button) revokes.current.set(device.id, button);
+              else revokes.current.delete(device.id);
+            }}
+          />
         ))}
       </ul>
     );
@@ -54,7 +82,7 @@ export function Devices() {
   );
 }
 
-function DeviceRow({ device, now }: { device: DeviceView; now: Date }) {
+function DeviceRow({ device, now, onRevoked, buttonRef }: { device: DeviceView; now: Date; onRevoked: () => void; buttonRef: (button: HTMLButtonElement | null) => void }) {
   const revoke = useRevokeDevice();
   const busy = revoke.isPending;
   return (
@@ -76,9 +104,13 @@ function DeviceRow({ device, now }: { device: DeviceView; now: Date }) {
         type="button"
         className={`${styles.button} ${styles.revoke}`}
         aria-label={`Revoke ${device.name}`}
-        disabled={busy}
+        ref={buttonRef}
+        aria-disabled={busy || undefined}
         aria-busy={busy || undefined}
-        onClick={() => revoke.mutate(device.id)}
+        onClick={() => {
+          // aria-disabled keeps the focus on the button while it works, so a press has to be ignored here.
+          if (!busy) revoke.mutate(device.id, { onSuccess: onRevoked });
+        }}
       >
         Revoke
       </button>

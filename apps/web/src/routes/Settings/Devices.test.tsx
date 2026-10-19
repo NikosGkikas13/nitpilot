@@ -57,16 +57,46 @@ describe('Devices (handoff §7)', () => {
 
   it('is busy while the revoke is on its way, and says why when it is refused', async () => {
     let refuse: () => void = () => {};
-    const { section } = await open([device({ id: 'mbp' })], {
+    const { section, fetch } = await open([device({ id: 'mbp' })], {
       'DELETE /api/devices/mbp': () => new Promise<Answer>((resolve) => (refuse = () => resolve([404, { error: { code: 'not_found', message: 'No such device.' } }]))),
     });
     const revoke = await section.findByRole('button', { name: "Revoke Maya's MacBook Pro" });
     await userEvent.click(revoke);
-    expect(revoke).toBeDisabled();
+    // aria-disabled, not disabled: a disabled button would drop keyboard focus.
+    expect(revoke).toHaveAttribute('aria-disabled', 'true');
     expect(revoke).toHaveAttribute('aria-busy', 'true');
+    expect(revoke).toHaveFocus();
+    await userEvent.click(revoke);
     refuse();
     expect(await screen.findByText('No such device.')).toBeInTheDocument();
-    await waitFor(() => expect(revoke).toBeEnabled());
+    await waitFor(() => expect(revoke).not.toHaveAttribute('aria-disabled'));
+    expect(sent(fetch, '/api/devices/mbp')).toEqual(['DELETE ']);
+  });
+
+  it('moves focus to the next computer\'s Revoke after a revoke, else the previous one, else the section heading', async () => {
+    let devices = [
+      device({ id: 'a', name: 'alpha', online: true }),
+      device({ id: 'b', name: 'bravo', online: false, lastSeenAt: daysAgo(1) }),
+      device({ id: 'c', name: 'charlie', online: false, lastSeenAt: daysAgo(2) }),
+    ];
+    const remove = (id: string) => (): Answer => {
+      devices = devices.filter((d) => d.id !== id);
+      return [204, null];
+    };
+    const { section } = await open(() => [200, { devices }], {
+      'DELETE /api/devices/b': remove('b'),
+      'DELETE /api/devices/c': remove('c'),
+      'DELETE /api/devices/a': remove('a'),
+    });
+    await userEvent.click(await section.findByRole('button', { name: 'Revoke bravo' }));
+    await waitFor(() => expect(section.queryByText('bravo')).not.toBeInTheDocument());
+    await waitFor(() => expect(section.getByRole('button', { name: 'Revoke charlie' })).toHaveFocus());
+    await userEvent.click(section.getByRole('button', { name: 'Revoke charlie' }));
+    await waitFor(() => expect(section.queryByText('charlie')).not.toBeInTheDocument());
+    await waitFor(() => expect(section.getByRole('button', { name: 'Revoke alpha' })).toHaveFocus());
+    await userEvent.click(section.getByRole('button', { name: 'Revoke alpha' }));
+    await waitFor(() => expect(section.queryByText('alpha')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Devices' })).toHaveFocus());
   });
 
   it('tells you how to connect one when there are none', async () => {

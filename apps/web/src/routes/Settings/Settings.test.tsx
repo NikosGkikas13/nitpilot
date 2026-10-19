@@ -40,6 +40,16 @@ describe('Settings (handoff §7): the page', () => {
     expect(nav.getByRole('link', { name: 'Defaults' })).toHaveAttribute('href', '#defaults');
   });
 
+  it('moves focus to the heading of the section you pick in the nav, so a keyboard or screen reader user lands there', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    const nav = within(await screen.findByRole('navigation', { name: 'Settings sections' }));
+    await userEvent.click(nav.getByRole('link', { name: 'Defaults' }));
+    expect(screen.getByRole('heading', { name: 'Defaults for new chats' })).toHaveFocus();
+  });
+
   it('goes back to the inbox with "‹ Inbox"', async () => {
     fakeViewport(true);
     fakeBrowser();

@@ -36,15 +36,6 @@ export type WebWiring = {
 };
 
 /**
- * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
- * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
- * gets `me.update` (so do the person's tabs after the routes' personal writes, `sendMeUpdate`), and the chats where their agent has work or shows its presence are sent again. A CLI's progress
- * lines go to the chat's followers. A chat's items and views go out in order; its inbox rows go out in order among
- * themselves, but apart, so a slow GitHub check for a row never holds back an item. A failure is logged and never
- * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
- * tests call this, so the tests run what production runs.
- */
-/**
  * Send someone's open tabs a fresh `me.update` (who they are, their settings, push, their agent's presence). The
  * routes that change those call it after saving (settings, devices, push subscriptions), so every tab of theirs
  * shows the change, not only the one that made it. Resolves once sent; never throws: a failure is logged.
@@ -54,6 +45,15 @@ export type MeUpdates = { sendMeUpdate(userId: string): Promise<void> };
 /** What the wiring hands back: `sendMeUpdate` for the HTTP routes (http/app.ts `AppDeps.meUpdates`), `stop` for shutdown. */
 export type WebWired = MeUpdates & { stop(): void };
 
+/**
+ * Connect `/ws/web` to the rest of the server (spec §10 "Web ↔ server"). After each commit, the chat's followers get
+ * its new items and their own view of it, and its participants their inbox rows. When a CLI comes or goes, its owner
+ * gets `me.update` (so do the person's tabs after the routes' personal writes, `sendMeUpdate`), and the chats where their agent has work or shows its presence are sent again. A CLI's progress
+ * lines go to the chat's followers. A chat's items and views go out in order; its inbox rows go out in order among
+ * themselves, but apart, so a slow GitHub check for a row never holds back an item. A failure is logged and never
+ * reaches the dispatcher; if a chat's new items can't be read, its open tabs are told to resume. main.ts and the
+ * tests call this, so the tests run what production runs.
+ */
 export function wireWebHub({ webHub, dispatcher, cliHub, access, vapidPublicKey, debounceMs = STATE_DEBOUNCE_MS, loadItems = loadItemsAfter }: WebWiring): WebWired {
   // Work under one key goes out in order: a chat's items before the state that follows them (and its inbox rows apart, under `inbox:<chatId>`).
   const perChat = new KeyedLock();

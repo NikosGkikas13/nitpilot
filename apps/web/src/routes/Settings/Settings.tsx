@@ -46,6 +46,8 @@ export function Settings() {
     e.preventDefault();
     setCurrent(id);
     document.getElementById(id)?.scrollIntoView?.({ block: 'start' });
+    // And focus its heading, so the keyboard and a screen reader are in the section too (the scroll is already done).
+    document.getElementById(`${id}-heading`)?.focus({ preventScroll: true });
   }
 
   return (

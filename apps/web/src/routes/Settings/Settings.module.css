@@ -103,6 +103,11 @@
   font-weight: 700;
 }
 
+/* Moved to by code (the nav, Revoke), not a control: no ring unless the keyboard put it there. */
+.heading:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .card {
   padding: 0 16px;
   border: 1px solid var(--b1);
@@ -247,11 +252,12 @@
   cursor: pointer;
 }
 
-.button:hover:not(:disabled) {
+.button:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--hover);
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
   cursor: progress;
   opacity: 0.6;
 }
@@ -350,11 +356,11 @@
   cursor: pointer;
 }
 
-.step:hover:not(:disabled) {
+.step:hover:not([aria-disabled='true']) {
   background: var(--hover);
 }
 
-.step:disabled {
+.step[aria-disabled='true'] {
   color: var(--fg3);
   cursor: not-allowed;
 }

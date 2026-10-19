@@ -227,8 +227,13 @@ export class CliHub {
     }
     const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { login: true, ...SETTINGS_COLUMNS } });
     // Remember what the device said (spec §8 `CliToken`), so the Settings page can show its agent while it's offline.
-    // Before it's registered below: a me.update that follows its coming online reads these fresh.
-    await rememberHello(auth.tokenId, hello);
+    // Before it's registered below: a me.update that follows its coming online reads these fresh. Saved only on a token
+    // that still isn't revoked: a revoke that committed since the check above is caught here and the device turned away.
+    if (!(await rememberHello(auth.tokenId, hello))) {
+      ws.close(CLOSE_CODES.reauth, SIGNED_OUT_REASON);
+      return null;
+    }
+    // Nothing is awaited from here to `byToken.set`, so a revoke that commits after the save above finds the connection.
     const conn: CliConnection = {
       tokenId: auth.tokenId,
       userId: auth.userId,
@@ -323,11 +328,13 @@ export function usableAgent(agent: { id: AgentId; version: string | null; modes:
   return agent.modes.length > 0 ? { id: agent.id, version: agent.version } : null;
 }
 
-/** Save the parts of a hello the Settings page shows for a device that's offline: its agent and its linked repos. */
-async function rememberHello(tokenId: string, hello: Hello): Promise<void> {
+/** Save the parts of a hello the Settings page shows for a device that's offline: its agent and its linked repos. False when the token has been revoked. */
+async function rememberHello(tokenId: string, hello: Hello): Promise<boolean> {
   const agent = usableAgent(hello.d.agent);
-  await prisma.cliToken.update({
-    where: { id: tokenId },
+  // Compare-and-set: matches only a token that isn't revoked, so false means "revoked while this hello was in flight".
+  const { count } = await prisma.cliToken.updateMany({
+    where: { id: tokenId, revokedAt: null },
     data: { agentId: agent?.id ?? null, agentVersion: agent?.version ?? null, repos: hello.d.repos },
   });
+  return count === 1;
 }

@@ -17,13 +17,15 @@ A connected `nitpilot start` keeps one WebSocket open to the server (docs/why/we
 So `DELETE /api/devices/:id` (`http/routes/devices.ts`) does both:
 
 1. `revokedAt = now` (only for your own token that isn't revoked yet; anything else is the same 404, so the route never tells you whose a device is);
-2. `CliHub.closeToken(tokenId, 4401, "This device was signed out. Run `nitpilot login`.")`: the hub forgets the connection on the spot and closes the socket.
+2. ``CliHub.closeToken(tokenId, 4401, "This device was signed out. Run `nitpilot login`.")``: the hub forgets the connection on the spot and closes the socket.
 
-4401 is our "log in again" close code (`packages/protocol/src/close-codes.ts`, modelled on HTTP 401). The CLI knows it means "don't reconnect, your token is gone", prints the reason and stops, instead of retrying forever like it would after a server restart (1012).
+4401 is our "log in again" close code (`packages/protocol/src/close-codes.ts`, modelled on HTTP 401). The CLI knows it means "don't reconnect, your token is gone", prints its own "This device was signed out. Run `nitpilot login`." message (`apps/cli/src/daemon.ts`, `STOP_MESSAGES.reauth`) and stops, instead of retrying forever like it would after a server restart (1012).
 
 Then the route sends your open tabs a `me.update` (`ws/web-wire.ts`, `sendMeUpdate`), which also makes every Settings page you have open read the device list again. Like a `queryClient.invalidateQueries(['devices'])` that the *server* triggers, for every tab of yours.
 
-There is no Undo: the token itself is gone, and only a new `nitpilot login` makes another.
+A computer can also be revoked in the middle of saying hello. The hello is saved with a check built in: `rememberHello` only updates a token that isn't revoked yet (`updateMany` with `revokedAt: null`), and the hub turns the computer away with the same 4401 if nothing was updated. Think of an optimistic update that gets rolled back: the check and the save are one database step, so there is no gap in which a revoked computer gets welcomed.
+
+There is no Undo: the token is dead for good (its row stays with `revokedAt` set; the list just stops showing it), and only a new `nitpilot login` makes another.
 
 ## Why the page can't say "This device"
 

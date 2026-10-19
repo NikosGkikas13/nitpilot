@@ -341,6 +341,31 @@ describe('closeToken (a device revoked on the Settings page)', () => {
     desktop.close();
   });
 
+  it('turns away a device that was revoked while its hello was being processed: no welcome, not online, nothing registered', async () => {
+    const hub = new CliHub();
+    const { user, token } = await device();
+    const changes: PresenceChange[] = [];
+    hub.onPresence((e) => changes.push(e));
+    const { url } = await hubOnPort(hub);
+    // The hub is reading the user for the welcome when DELETE /api/devices/:id commits: it finds no connection to close.
+    const realRead = prisma.user.findUniqueOrThrow.bind(prisma.user);
+    const spy = vi.spyOn(prisma.user, 'findUniqueOrThrow') as unknown as { mockImplementationOnce(fn: (args: unknown) => Promise<unknown>): void };
+    spy.mockImplementationOnce(async (args) => {
+      await prisma.cliToken.update({ where: { id: token.id }, data: { revokedAt: new Date() } });
+      return realRead(args as never);
+    });
+    try {
+      const cli = await TestCli.connect(url, token.raw);
+      cli.send(hello());
+      expect(await cli.closed).toEqual({ code: CLOSE_CODES.reauth, reason: SIGNED_OUT_REASON });
+      await cli.nothing('welcome', 100);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(hub.connectionsFor(user.id)).toEqual([]);
+    expect(changes).toEqual([]);
+  });
+
   it('returns false for a device that is not connected', async () => {
     const { hub } = await hubOnPort();
     const { token } = await device();

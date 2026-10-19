@@ -34,6 +34,9 @@ export function useSaveSettings() {
   const toast = useToast();
   const queryClient = useQueryClient();
   return useMutation({
+    // A read of you that is already on its way would answer with the settings from before this save and, landing
+    // after it, put them back: cancel it first (the page asks for `['me']` when it opens, and a me.update can too).
+    onMutate: () => queryClient.cancelQueries({ queryKey: ['me'] }),
     mutationFn: (settings: Settings) => api.send('PUT', '/api/me/settings', settings, Settings),
     onSuccess: (saved) => queryClient.setQueryData<WebMe | null>(['me'], (old) => (old ? { ...old, settings: saved } : old)),
     onError: (err) => {

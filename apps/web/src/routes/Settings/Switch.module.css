@@ -1,4 +1,8 @@
-/* handoff §7: a 46×28 track (--b1 off, --acc on) and a white 22px thumb that slides 18px. */
+/*
+ * handoff §7: a 46×28 track (--b1 off, --acc on) and a white 22px thumb that slides 18px. The off track also gets a
+ * 1px --fg3 ring: --b1 alone is about 1.3:1 against the card, and WCAG 1.4.11 asks 3:1 of a control's boundary. The
+ * ring is inside the box (inset), so the size stays 46×28; the on state has none.
+ */
 .switch {
   flex: none;
   position: relative;
@@ -8,12 +12,14 @@
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--b1);
+  box-shadow: inset 0 0 0 1px var(--fg3);
   cursor: pointer;
   transition: background-color 150ms;
 }
 
 .switch[aria-checked='true'] {
   background: var(--acc);
+  box-shadow: none;
 }
 
 .switch[aria-busy='true'] {

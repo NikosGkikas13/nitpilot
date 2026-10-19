@@ -37,7 +37,21 @@ describe('Notifications (handoff §7): the push switch for this browser', () => 
     expect(queryClient.getQueryData<WebMe>(['me'])?.push.subscribed).toBe(true);
   });
 
-  it('is busy while it works, and not after reading the push state fails', async () => {
+  it('is busy while turning push on, and not busy once it is done', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings();
+    renderApp('/settings');
+    const toggle = await (await notifications()).findByRole('switch', PUSH);
+    let finish: () => void = () => {};
+    vi.spyOn(subscribe, 'turnPushOn').mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-busy', 'true'));
+    finish();
+    await waitFor(() => expect(toggle).not.toHaveAttribute('aria-busy'));
+  });
+
+  it('is not left busy when reading the push state fails', async () => {
     fakeViewport(true);
     fakeBrowser();
     serveSettings();

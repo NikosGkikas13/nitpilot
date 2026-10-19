@@ -13,7 +13,8 @@ const CAP_STEP = 5;
  * Your defaults for new chats (handoff §7): Auto-review, Auto-fix, and the daily cap on agent runs with today's usage.
  * Every press saves the whole of your settings at once. While that save is on its way the controls show the value
  * it carries and are busy (presses are ignored); the server's answer then becomes `me.settings`, and a refusal puts
- * back what the server has.
+ * back what the server has. The stepper's ends use `aria-disabled`, not `disabled`, so the button that was just
+ * pressed keeps keyboard focus; the number is a polite live region, so the new cap is announced.
  */
 export function Defaults({ me }: { me: WebMe }) {
   const save = useSaveSettings();
@@ -56,11 +57,25 @@ export function Defaults({ me }: { me: WebMe }) {
           </div>
         </div>
         <div className={styles.stepper} role="group" aria-label="Daily job cap" aria-busy={busy || undefined}>
-          <button type="button" className={styles.step} aria-label="Lower cap" disabled={cap <= CAP_MIN} onClick={() => change({ dailyJobCap: Math.max(CAP_MIN, cap - CAP_STEP) })}>
+          <button
+            type="button"
+            className={styles.step}
+            aria-label="Lower cap"
+            aria-disabled={cap <= CAP_MIN || undefined}
+            onClick={() => cap > CAP_MIN && change({ dailyJobCap: Math.max(CAP_MIN, cap - CAP_STEP) })}
+          >
             −
           </button>
-          <span className={styles.capValue}>{cap}</span>
-          <button type="button" className={styles.step} aria-label="Raise cap" disabled={cap >= CAP_MAX} onClick={() => change({ dailyJobCap: Math.min(CAP_MAX, cap + CAP_STEP) })}>
+          <span className={styles.capValue} aria-live="polite">
+            {cap}
+          </span>
+          <button
+            type="button"
+            className={styles.step}
+            aria-label="Raise cap"
+            aria-disabled={cap >= CAP_MAX || undefined}
+            onClick={() => cap < CAP_MAX && change({ dailyJobCap: Math.min(CAP_MAX, cap + CAP_STEP) })}
+          >
             +
           </button>
         </div>

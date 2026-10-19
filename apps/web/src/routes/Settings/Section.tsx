@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import styles from './Settings.module.css';
 
-/** One section of the Settings page: its 16 px heading over an 18 px-radius card. `id` is the nav's anchor. */
+/** One section of the Settings page: its 16 px heading over an 18 px-radius card. `id` is the nav's anchor. The heading can take focus from code (`tabIndex=-1`): the nav and Revoke move it there. */
 export function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={id} className={styles.section} aria-labelledby={`${id}-heading`}>
-      <h2 id={`${id}-heading`} className={styles.heading}>
+      <h2 id={`${id}-heading`} className={styles.heading} tabIndex={-1}>
         {title}
       </h2>
       <div className={styles.card}>{children}</div>

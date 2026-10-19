@@ -72,14 +72,26 @@ describe('Defaults (handoff §7 "Defaults for new chats")', () => {
     const low = await openDefaults({ me: { ...settingsMe, settings: { ...settingsMe.settings, dailyJobCap: 10 } } });
     await userEvent.click(low.section.getByRole('button', { name: 'Lower cap' }));
     expect(await low.section.findByText(/^Max 5 agent runs per day/)).toBeInTheDocument();
-    await waitFor(() => expect(low.section.getByRole('button', { name: 'Lower cap' })).toBeDisabled());
-    await userEvent.click(low.section.getByRole('button', { name: 'Lower cap' }));
+    const lower = low.section.getByRole('button', { name: 'Lower cap' });
+    await waitFor(() => expect(lower).toHaveAttribute('aria-disabled', 'true'));
+    // aria-disabled, not disabled: the button keeps focus at the end of its range, and a press sends nothing.
+    lower.focus();
+    await userEvent.click(lower);
+    expect(lower).toHaveFocus();
     expect(saves().map((s) => s.dailyJobCap)).toEqual([5]);
     low.unmount();
 
     const high = await openDefaults({ me: { ...settingsMe, usedToday: 0, settings: { ...settingsMe.settings, dailyJobCap: 200 } } });
-    expect(high.section.getByRole('button', { name: 'Raise cap' })).toBeDisabled();
-    expect(high.section.getByRole('button', { name: 'Lower cap' })).toBeEnabled();
+    expect(high.section.getByRole('button', { name: 'Raise cap' })).toHaveAttribute('aria-disabled', 'true');
+    expect(high.section.getByRole('button', { name: 'Lower cap' })).not.toHaveAttribute('aria-disabled');
+    await userEvent.click(high.section.getByRole('button', { name: 'Raise cap' }));
+    expect(saves()).toEqual([]);
+  });
+
+  it('announces the new cap to a screen reader (a polite live region)', async () => {
+    const { section } = await openDefaults();
+    const value = section.getByText('40', { selector: 'output, span' });
+    expect(value).toHaveAttribute('aria-live', 'polite');
   });
 
   it('saves a switch at once, and it shows the saved value', async () => {
@@ -108,6 +120,45 @@ describe('Defaults (handoff §7 "Defaults for new chats")', () => {
     finish();
     await waitFor(() => expect(section.getByRole('switch', { name: 'Auto-fix' })).not.toHaveAttribute('aria-busy'));
     expect(saves()).toHaveLength(1);
+  });
+
+  it('does not let a read of you that was already on its way overwrite the cap you just saved', async () => {
+    let release: () => void = () => {};
+    let held = false;
+    let current = settingsMe;
+    fetchMock = serveSettings({
+      me: async (): Promise<Answer> => {
+        const stale = current;
+        // The third read (after the page's own two) is the slow one: it carries what the server had before the save.
+        if (meReads() === 3 && !held) {
+          held = true;
+          await new Promise<void>((resolve) => (release = resolve));
+        }
+        return [200, stale];
+      },
+      routes: {
+        'PUT /api/me/settings': async (): Promise<Answer> => {
+          const body = JSON.parse(String(fetchMock.mock.calls.at(-1)![1]!.body)) as Settings;
+          current = { ...current, settings: body };
+          return [200, body];
+        },
+      },
+    });
+    fakeViewport(true);
+    fakeBrowser();
+    const app = renderApp('/settings');
+    const section = within(await screen.findByRole('region', { name: 'Defaults for new chats' }));
+    await waitFor(() => expect(meReads()).toBeGreaterThanOrEqual(2));
+    // A read starts (a me.update or focus refetch would do this) ...
+    void app.queryClient.invalidateQueries({ queryKey: ['me'] });
+    await waitFor(() => expect(held).toBe(true));
+    // ... and the save lands while it is still on its way.
+    await userEvent.click(section.getByRole('button', { name: 'Raise cap' }));
+    await waitFor(() => expect(app.queryClient.getQueryData<WebMe>(['me'])?.settings.dailyJobCap).toBe(45));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(app.queryClient.getQueryData<WebMe>(['me'])?.settings.dailyJobCap).toBe(45);
+    expect(section.getByText(/^Max 45 agent runs per day/)).toBeInTheDocument();
   });
 
   it('says why a save was refused, goes back to what the server has, and asks for it again', async () => {

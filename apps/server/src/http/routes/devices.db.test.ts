@@ -77,15 +77,19 @@ describe('DELETE /api/devices/:id', () => {
     expect(await laptopCli.closed).toEqual({ code: CLOSE_CODES.reauth, reason: SIGNED_OUT_REASON });
     // The hub forgets it at once: nothing more goes to that socket, and /api/me says the agent is offline.
     expect(hub.connectionsFor(maya.id)).toEqual([]);
-    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
+    // The hub announced the socket going away (presence), which already sends your tabs a me.update: not a second one.
+    expect(sendMeUpdate).not.toHaveBeenCalled();
     const { devices } = DevicesResponse.parse(await (await list()).json());
     expect(devices.map((d) => d.id)).not.toContain(laptop.id);
   });
 
   it('revokes an offline device too: its token stops working', async () => {
-    const { desk, revoke } = await scene();
+    const { maya, desk, revoke, sendMeUpdate } = await scene();
     expect((await revoke(desk.id)).status).toBe(204);
     expect(await revokedAt(desk.id)).not.toBeNull();
+    // Nothing was connected, so no presence change: the route tells your tabs itself, once.
+    expect(sendMeUpdate).toHaveBeenCalledTimes(1);
+    expect(sendMeUpdate).toHaveBeenCalledWith(maya.id);
   });
 
   it("answers 404 for another person's device, an unknown one and one already revoked, and changes nothing", async () => {

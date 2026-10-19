@@ -51,8 +51,10 @@ export function deviceRoutes(deps: { clis: DeviceClis; meUpdates?: MeUpdates }):
     const { count } = await prisma.cliToken.updateMany({ where: { id: tokenId, userId, revokedAt: null }, data: { revokedAt: new Date() } });
     if (count === 0) throw new HttpError('not_found', 'No such device.');
     // A connected CLI would notice on its next message anyway (it pings every 25 s); this tells it now.
-    deps.clis.closeToken(tokenId, CLOSE_CODES.reauth, SIGNED_OUT_REASON);
-    await deps.meUpdates?.sendMeUpdate(userId);
+    const wasOnline = deps.clis.closeToken(tokenId, CLOSE_CODES.reauth, SIGNED_OUT_REASON);
+    // Closing a connected device announces it went away, and that already sends your tabs a me.update (web-wire's
+    // presence listener). Only an offline device needs this one, so your tabs get exactly one.
+    if (!wasOnline) await deps.meUpdates?.sendMeUpdate(userId);
     return c.body(null, 204);
   });
 
