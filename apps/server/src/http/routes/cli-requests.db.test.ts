@@ -54,6 +54,12 @@ describe('GET /api/cli/requests/:userCode', () => {
     expect(await statusOf(await view(login.userCode))).toBe('expired');
   });
 
+  it('writes nothing when it reads an expired login: the row stays pending until the CLI polls', async () => {
+    const { login, view } = await scene(new Date(Date.now() - 11 * 60_000));
+    expect(await statusOf(await view(login.userCode))).toBe('expired');
+    expect((await prisma.cliLoginRequest.findUniqueOrThrow({ where: { userCode: login.userCode } })).status).toBe('pending');
+  });
+
   it("answers 404 for a code that doesn't exist", async () => {
     const { view } = await scene();
     const res = await view('ZZZZ-ZZZZ');
@@ -135,5 +141,23 @@ describe('POST /api/cli/requests/:userCode', () => {
     const token = await makeCliToken(maya.id);
     expect((await decide(login.userCode, 'approve', { authorization: `Bearer ${token.raw}` })).status).toBe(401);
     expect((await decide(login.userCode, 'approve', { origin: ORIGIN })).status).toBe(401);
+  });
+
+  it("leaves the login waiting when a CLI's token tries to approve it", async () => {
+    const { maya, login, decide, poll } = await scene();
+    const token = await makeCliToken(maya.id);
+    expect((await decide(login.userCode, 'approve', { authorization: `Bearer ${token.raw}`, origin: ORIGIN })).status).toBe(401);
+    expect((await prisma.cliLoginRequest.findUniqueOrThrow({ where: { userCode: login.userCode } })).status).toBe('pending');
+    expect(await poll()).toEqual({ status: 'pending' });
+  });
+
+  it('checks the Origin before it reads the body: another site with junk is 403, not 400', async () => {
+    const { cookie, login } = await scene();
+    const res = await testApp().request(`/api/cli/requests/${login.userCode}`, {
+      method: 'POST',
+      headers: { cookie, origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: 'not json {',
+    });
+    expect(res.status).toBe(403);
   });
 });

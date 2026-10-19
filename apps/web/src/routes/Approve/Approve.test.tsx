@@ -123,6 +123,31 @@ describe('Approve (handoff §6): deciding', () => {
   });
 });
 
+describe('Approve: focus', () => {
+  it('moves to the heading once Approve is answered', async () => {
+    serveApprove();
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Device approved' })).toHaveFocus();
+  });
+
+  it('moves to the heading when the countdown reaches zero while you were looking at the card', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serveApprove({ view: (): Answer => [200, pending({ expiresAt: new Date(Date.now() + 3_000).toISOString() })] });
+    renderApp(PATH);
+    expect(await screen.findByText(/The code expires in 0:0[23]\./)).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(await screen.findByRole('heading', { level: 1, name: 'This code expired' })).toHaveFocus();
+  });
+
+  it("leaves focus alone when the page opens on a login that's already over", async () => {
+    serveApprove({ view: (): Answer => [200, pending({ status: 'expired' })] });
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: 'This code expired' })).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+});
+
 describe('Approve (handoff §6): the other states', () => {
   it('a login already approved reads Device approved, with no buttons', async () => {
     serveApprove({ view: (): Answer => [200, pending({ status: 'approved' })] });
@@ -162,6 +187,28 @@ describe('Approve (handoff §6): the other states', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Nitpilot answered 503. Try again in a moment.');
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Approve this device?' })).toBeInTheDocument();
+  });
+});
+
+describe('Approve: the session ends while the page is open', () => {
+  const unauthorized = (): Answer => [401, { error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } }];
+  const signInAgain = `/auth/github/login?next=${encodeURIComponent(PATH)}`;
+
+  it('a read that answers 401 sends you to GitHub sign-in instead of offering Try again', async () => {
+    const leave = vi.spyOn(browser, 'goTo').mockImplementation(() => {});
+    let meReads = 0;
+    serveApprove({ me: (): Answer => (meReads++ === 0 ? [200, settingsMe] : unauthorized()), view: unauthorized });
+    renderApp(PATH);
+    await waitFor(() => expect(leave).toHaveBeenCalledWith(signInAgain));
+  });
+
+  it('a decision that answers 401 does the same', async () => {
+    const leave = vi.spyOn(browser, 'goTo').mockImplementation(() => {});
+    let meReads = 0;
+    serveApprove({ me: (): Answer => (meReads++ === 0 ? [200, settingsMe] : unauthorized()), decide: unauthorized });
+    renderApp(PATH);
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(leave).toHaveBeenCalledWith(signInAgain));
   });
 });
 

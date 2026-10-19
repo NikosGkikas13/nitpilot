@@ -1,5 +1,5 @@
 import { BRAND, type CliRequestView } from '@nitpilot/protocol';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { useCliRequest, useDecideCliRequest } from '../../api/cli-requests';
 import { ApiError } from '../../api/client';
@@ -84,7 +84,11 @@ function LoginCard(props: { view: CliRequestView; busy: boolean; decided: boolea
   const now = useNow(1000);
   const secondsLeft = Math.ceil((Date.parse(view.expiresAt) - now.getTime()) / 1000);
   const status = view.status === 'pending' && secondsLeft <= 0 ? 'expired' : view.status;
-  if (status !== 'pending') return <Outcome kind={status} deviceName={view.deviceName} focus={props.decided} />;
+  // Once this page has shown the pending card, whatever replaces it (a decision, the countdown, a re-read) takes focus:
+  // the button you may have been on is gone. An outcome shown straight away on load doesn't steal it.
+  const [showedPending, setShowedPending] = useState(false);
+  if (status === 'pending' && !showedPending) setShowedPending(true);
+  if (status !== 'pending') return <Outcome kind={status} deviceName={view.deviceName} focus={props.decided || showedPending} />;
 
   return (
     <section className={styles.card} aria-labelledby="approve-title">
