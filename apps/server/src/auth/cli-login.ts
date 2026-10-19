@@ -45,7 +45,14 @@ export async function pollCliLogin(deviceCode: string, now = new Date(), onToken
     await tx.cliToken.create({ data: { userId, name: req.deviceName, tokenHash: token.hash, prefix: token.prefix } });
     return { status: 'approved', token: token.raw } as const;
   });
-  if (answer.status === 'approved') await onTokenCreated?.(userId);
+  if (answer.status === 'approved') {
+    // The token already exists and the request is consumed: if this hook threw, the CLI would lose its login (the next poll reads expired).
+    try {
+      await onTokenCreated?.(userId);
+    } catch (err) {
+      console.error(`[cli-login] couldn't tell user ${userId}'s open tabs about their new token:`, err);
+    }
+  }
   return answer;
 }
 

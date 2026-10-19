@@ -73,6 +73,23 @@ describe('nitpilot login', () => {
     expect(sendMeUpdate).toHaveBeenCalledOnce();
   });
 
+  it('still hands over the token when telling the open tabs fails (the token is already saved)', async () => {
+    const user = await makeUser();
+    const sendMeUpdate = vi.fn(async () => {
+      throw new Error('socket gone');
+    });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const server = testApp({ github: new GithubClient(fakeFetch({})), meUpdates: { sendMeUpdate } });
+    const login = await startCliLogin('laptop');
+    await decideCliLogin(login.userCode, user.id, 'approve');
+    const res = await server.request('/api/cli/login/poll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceCode: login.deviceCode }) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'approved', token: expect.stringMatching(/^nit_/) });
+    expect(sendMeUpdate).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it('reports a denied login', async () => {
     const user = await makeUser();
     const start = (await (await post('/api/cli/login', { deviceName: 'laptop' })).json()) as LoginStart;

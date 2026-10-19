@@ -143,6 +143,23 @@ describe('Setup (handoff §5): the checklist', () => {
     expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
   });
 
+  it('shows "Checking your setup…" while the facts are on their way', async () => {
+    fakeViewport(true);
+    fakeBrowser();
+    serveSettings({ me: { ...settingsMe, onboarded: false }, routes: { 'GET /api/onboarding': () => new Promise<Answer>(() => {}) } });
+    renderApp('/setup');
+    expect(await screen.findByText('Checking your setup…')).toHaveAttribute('role', 'status');
+    expect(screen.queryByRole('list', { name: 'Setup steps' })).not.toBeInTheDocument();
+  });
+
+  it('writes onboarded: true into the cached me once the facts say done, without reading me again', async () => {
+    const fetch = serveSetup(() => ({ ...NOTHING_YET, steps: { appInstalled: true, cliConnected: true, repoLinked: true, agentStarted: true }, done: true, deviceName: "Maya's MacBook Pro" }));
+    const { queryClient } = renderApp('/setup');
+    expect(await screen.findByText('5 of 5')).toBeInTheDocument();
+    await waitFor(() => expect(queryClient.getQueryData<{ onboarded: boolean }>(['me'])?.onboarded).toBe(true));
+    expect(sent(fetch, '/api/me')).toHaveLength(1);
+  });
+
   it("says so when the checklist can't be read, and tries again", async () => {
     let fail = true;
     fakeViewport(true);
