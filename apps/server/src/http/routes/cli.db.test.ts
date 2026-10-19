@@ -19,12 +19,9 @@ async function post(path: string, body: unknown, headers: Record<string, string>
   return app().request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
 }
 
-async function approveForm(code: string, decision: 'approve' | 'deny', cookie: string, headers: Record<string, string> = ORIGIN) {
-  return app().request('/cli/approve', {
-    method: 'POST',
-    headers: { cookie, 'content-type': 'application/x-www-form-urlencoded', ...headers },
-    body: new URLSearchParams({ code, decision }).toString(),
-  });
+/** The approve page's button (`POST /api/cli/requests/:userCode`), pressed by someone signed in with `cookie`. */
+async function decide(code: string, decision: 'approve' | 'deny', cookie: string, headers: Record<string, string> = ORIGIN) {
+  return post(`/api/cli/requests/${code}`, { decision }, { cookie, ...headers });
 }
 
 describe('nitpilot login', () => {
@@ -37,13 +34,11 @@ describe('nitpilot login', () => {
     expect(start.verifyUrl).toBe(`http://localhost:8787/cli/approve?code=${start.userCode}`);
     expect(await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()).toEqual({ status: 'pending' });
 
-    const page = await app().request(`/cli/approve?code=${start.userCode}`, { headers: { cookie } });
-    const html = await page.text();
-    expect(html).toContain(start.userCode);
-    expect(html).toContain('Maya&#39;s MacBook Pro');
+    const request = await app().request(`/api/cli/requests/${start.userCode}`, { headers: { cookie } });
+    expect(await request.json()).toMatchObject({ userCode: start.userCode, deviceName: "Maya's MacBook Pro", status: 'pending' });
 
-    expect((await approveForm(start.userCode, 'approve', cookie, {})).status).toBe(403);
-    expect(await (await approveForm(start.userCode, 'approve', cookie)).text()).toContain('Device approved');
+    expect((await decide(start.userCode, 'approve', cookie, {})).status).toBe(403);
+    expect(await (await decide(start.userCode, 'approve', cookie)).json()).toMatchObject({ status: 'approved' });
 
     const approved = (await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()) as { status: string; token: string };
     expect(approved.status).toBe('approved');
@@ -93,7 +88,7 @@ describe('nitpilot login', () => {
   it('reports a denied login', async () => {
     const user = await makeUser();
     const start = (await (await post('/api/cli/login', { deviceName: 'laptop' })).json()) as LoginStart;
-    await approveForm(start.userCode, 'deny', await sessionCookieFor(user.id));
+    await decide(start.userCode, 'deny', await sessionCookieFor(user.id));
     expect(await (await post('/api/cli/login/poll', { deviceCode: start.deviceCode })).json()).toEqual({ status: 'denied' });
   });
 
@@ -101,14 +96,8 @@ describe('nitpilot login', () => {
     const user = await makeUser();
     const old = await startCliLogin('laptop', new Date(Date.now() - 11 * 60_000));
     expect(await (await post('/api/cli/login/poll', { deviceCode: old.deviceCode })).json()).toEqual({ status: 'expired' });
-    const page = await app().request(`/cli/approve?code=${old.userCode}`, { headers: { cookie: await sessionCookieFor(user.id) } });
-    expect(await page.text()).toContain('This code expired');
-  });
-
-  it('sends people who are not signed in to GitHub first, then back', async () => {
-    const res = await app().request('/cli/approve?code=WDJB-MJHT');
-    expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`/auth/github/login?next=${encodeURIComponent('/cli/approve?code=WDJB-MJHT')}`);
+    const request = await app().request(`/api/cli/requests/${old.userCode}`, { headers: { cookie: await sessionCookieFor(user.id) } });
+    expect(await request.json()).toMatchObject({ status: 'expired' });
   });
 
   it('rejects a bad request body', async () => {

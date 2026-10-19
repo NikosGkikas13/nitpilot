@@ -80,6 +80,25 @@ export const Onboarding = z.object({
 export type Onboarding = z.infer<typeof Onboarding>;
 
 /**
+ * A `nitpilot login` waiting on the approve page (`GET /api/cli/requests/:userCode`, `/cli/approve?code=…`, handoff
+ * §6). `userCode` is the short code the terminal printed, for the person to compare. `requestedAt` is when the CLI
+ * asked; `expiresAt` is 10 minutes later, and the page counts down to it. `status`: `pending` until someone decides,
+ * then `approved` (also once the CLI has collected its token) or `denied`; `expired` once the 10 minutes ran out first.
+ */
+export const CliRequestView = z.object({
+  userCode: z.string(),
+  deviceName: z.string(),
+  requestedAt: z.string(),
+  expiresAt: z.string(),
+  status: z.enum(['pending', 'approved', 'denied', 'expired']),
+});
+export type CliRequestView = z.infer<typeof CliRequestView>;
+
+/** `POST /api/cli/requests/:userCode`: the person pressed Approve or Deny. It answers the request's new `CliRequestView`. */
+export const CliRequestDecision = z.object({ decision: z.enum(['approve', 'deny']) });
+export type CliRequestDecision = z.infer<typeof CliRequestDecision>;
+
+/**
  * True for an address the server may send a push to: `https:`, and a host name that is neither an IP address nor
  * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
  * call its own neighbours (127.0.0.1, the cloud's 169.254.169.254, …): a blind SSRF. Real push services are all

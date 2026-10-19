@@ -16,7 +16,7 @@ import { chatActionRoutes } from './routes/chat-actions';
 import { chatDraftRoutes } from './routes/chat-drafts';
 import { chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
-import { cliApproveRoutes } from './routes/cli-approve';
+import { cliRequestRoutes } from './routes/cli-requests';
 import { deviceRoutes, type DeviceClis } from './routes/devices';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
@@ -67,7 +67,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', chatActionRoutes(deps));
   app.route('/', chatDraftRoutes(deps));
   app.route('/', cliRoutes(deps));
-  app.route('/', cliApproveRoutes());
+  app.route('/', cliRequestRoutes());
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));
   // Last: everything else is the web app's (spec §7).

@@ -12,7 +12,7 @@ export async function startCliLogin(deviceName: string, now = new Date()) {
   for (let attempt = 0; ; attempt++) {
     const userCode = generateUserCode();
     try {
-      await prisma.cliLoginRequest.create({ data: { deviceCodeHash: hashToken(deviceCode), userCode, deviceName, expiresAt } });
+      await prisma.cliLoginRequest.create({ data: { deviceCodeHash: hashToken(deviceCode), userCode, deviceName, expiresAt, createdAt: now } });
       return { deviceCode, userCode, expiresAt };
     } catch (err) {
       if (isUniqueViolation(err) && attempt < 5) continue; // two identical user codes: pick another
@@ -60,7 +60,7 @@ export async function findCliLogin(userCode: string) {
   return prisma.cliLoginRequest.findUnique({ where: { userCode: userCode.trim().toUpperCase() } });
 }
 
-/** The person pressed Approve or Deny on /cli/approve. */
+/** The person pressed Approve or Deny on the web app's /cli/approve page (http/routes/cli-requests.ts). */
 export async function decideCliLogin(userCode: string, userId: string, decision: 'approve' | 'deny', now = new Date()) {
   const req = await findCliLogin(userCode);
   if (!req) return 'not_found' as const;

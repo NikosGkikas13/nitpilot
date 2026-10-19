@@ -1,13 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { retryUnlessClientError } from './api/client';
 import { Chat } from './routes/Chat/Chat';
 import { Home } from './routes/Home/Home';
 import { Settings } from './routes/Settings/Settings';
-import { Setup } from './routes/Setup/Setup';
 import { EmptyPane } from './routes/Shell/Pane';
 import { InboxLayout } from './routes/Shell/Shell';
+
+/**
+ * Device approval and the setup checklist are pages most people open once (from `nitpilot login`, and after their first
+ * sign-in), so each is a file of its own that the browser fetches only when that page opens (and the rest of the app
+ * stays under Vite's 500 kB chunk warning).
+ */
+const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
+const Setup = lazy(() => import('./routes/Setup/Setup').then((module) => ({ default: module.Setup })));
 
 /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
 export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
@@ -29,7 +36,8 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
 
 /**
  * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
- * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own.
+ * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own. Device
+ * approval (`/cli/approve`, the link `nitpilot login` opens) stands outside Home: no landing page, no inbox, no socket.
  */
 export function AppRoutes() {
   return (
@@ -41,8 +49,23 @@ export function AppRoutes() {
           <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
         </Route>
         <Route path="settings" element={<Settings />} />
-        <Route path="setup" element={<Setup />} />
+        <Route
+          path="setup"
+          element={
+            <Suspense fallback={null}>
+              <Setup />
+            </Suspense>
+          }
+        />
       </Route>
+      <Route
+        path="cli/approve"
+        element={
+          <Suspense fallback={null}>
+            <Approve />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 }

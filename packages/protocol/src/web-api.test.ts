@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
-  ActionResponse, AutoRequest, ChatResponse, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
   Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
@@ -147,5 +147,14 @@ describe('web API bodies', () => {
     expect(Onboarding.parse(JSON.parse(JSON.stringify(onboarding)))).toEqual(onboarding);
     expect(Onboarding.safeParse({ ...onboarding, steps: { appInstalled: true } }).success).toBe(false);
     expect(WebMe.safeParse({ ...me, onboarded: undefined }).success).toBe(false);
+  });
+
+  it('round-trips a device login waiting on /cli/approve, and takes only approve or deny', () => {
+    const request: CliRequestView = { userCode: 'WDJB-MJHT', deviceName: "Maya's MacBook Pro", requestedAt: '2026-10-19T18:02:00.000Z', expiresAt: '2026-10-19T18:12:00.000Z', status: 'pending' };
+    expect(CliRequestView.parse(JSON.parse(JSON.stringify(request)))).toEqual(request);
+    // `consumed` is the server's word for approved and collected; the page never sees it.
+    expect(CliRequestView.safeParse({ ...request, status: 'consumed' }).success).toBe(false);
+    expect(CliRequestDecision.parse({ decision: 'deny' })).toEqual({ decision: 'deny' });
+    expect(CliRequestDecision.safeParse({ decision: 'maybe' }).success).toBe(false);
   });
 });

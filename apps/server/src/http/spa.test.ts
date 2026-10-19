@@ -31,6 +31,13 @@ describe('serving the web app', () => {
     expect(res.headers.get('cache-control')).toBe('no-cache');
   });
 
+  it("answers the device approval page with the app too: the server no longer renders a page of its own", async () => {
+    const res = await testApp({ webDistDir: dist }).request('/cli/approve?code=WDJB-MJHT');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<title>app</title>');
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  });
+
   it('answers / with the app', async () => {
     const res = await testApp({ webDistDir: dist }).request('/');
     expect(await res.text()).toContain('<title>app</title>');

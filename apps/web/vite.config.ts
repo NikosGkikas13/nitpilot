@@ -19,8 +19,6 @@ export default defineConfig({
       '/auth': SERVER,
       '/github': SERVER,
       '/ws': { target: SERVER, ws: true },
-      // Still rendered by the server: device approval, until Task 23.
-      '/cli/': SERVER,
     },
   },
   test: {

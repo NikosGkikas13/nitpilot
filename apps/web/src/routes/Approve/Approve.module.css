@@ -1,0 +1,250 @@
+/* handoff §6 "CLI approval" (NitpilotScreens screen=approve): the wordmark top left, then a centered 440px card with
+   a 24px radius in one of four states, plus "Code not found". */
+.page {
+  box-sizing: border-box;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  padding: 0 4px 8px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.loading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+  border: 1px solid var(--b1);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* The code's size follows the card's width (cqw), as in the prototype. */
+  container-type: inline-size;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.code {
+  padding: 20px 12px;
+  border: 1px solid var(--b1);
+  border-radius: 16px;
+  background: var(--code);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: clamp(30px, 9cqw, 38px);
+  letter-spacing: 0.14em;
+  color: var(--fg1);
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A laptop outline, as on the Settings page's devices. */
+.laptop {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  height: 30px;
+  border: 2px solid var(--fg2);
+  border-radius: 7px;
+}
+
+.deviceText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deviceName {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--fg3);
+}
+
+.buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.approve,
+.deny {
+  flex: 1;
+  height: 48px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.approve {
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.deny {
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+.deny:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.approve:disabled,
+.deny:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.fine {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg3);
+  text-align: center;
+}
+
+/* Approved, Denied, Expired and Code not found: a 56px glyph, the title, one line, sometimes the login command. */
+.outcome {
+  align-items: center;
+  gap: 14px;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  text-align: center;
+}
+
+.icon {
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon[data-kind='approved'] {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.icon[data-kind='denied'] {
+  background: var(--muted);
+  color: var(--fg2);
+  font-size: 24px;
+}
+
+.icon[data-kind='expired'],
+.icon[data-kind='not_found'] {
+  border: 2px solid var(--b1);
+}
+
+.ring {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg3);
+  border-radius: var(--radius-pill);
+}
+
+.outcomeTitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Focus lands here after a decision so a screen reader says the result; it isn't something to click. */
+.outcomeTitle:focus {
+  outline: none;
+}
+
+.outcomeBody {
+  margin: 0;
+  max-width: 22em;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.command {
+  align-self: stretch;
+  text-align: left;
+}
+
+/* Phone: the 16px side gutters every screen keeps, and a little less padding inside the card. */
+@media (max-width: 759px) {
+  .page {
+    padding: 14px 16px 16px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .outcome {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+}

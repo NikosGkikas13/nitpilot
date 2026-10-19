@@ -308,12 +308,12 @@ W7 was written at step level on 2026-10-19, against branch `plan-2-web-app` at `
 **Task 23 (device approval; the server pages go)**
 - **Ruling (controller): the approve routes take the session cookie only**; a POST on a code that's no longer pending answers 200 with how it stands (a double click or an old tab just shows what happened); `pending` past its time reads `expired`, `consumed` reads `approved`; an unknown code is a 404, shown as "Code not found" with the login command (the handoff draws no such state).
 - **The device row shows the name and "requested HH:MM" only:** the login request carries no OS or CLI version (adding them needs a field on `POST /api/cli/login`). `startCliLogin` now saves `createdAt: now`, so `requestedAt` and `expiresAt` come from one clock.
-- **The approve page is a route of its own**, outside the signed-in app: signed out it sends the browser to GitHub's sign-in with `next`; it opens no socket. It's **lazy-loaded**, because with it the main bundle crossed Vite's 500 kB warning (the build must print no new warning). `lib/browser.ts` exists so a test can see the redirect. The countdown uses the browser's clock; the server still decides whether a late Approve is too late. Not found and Expired end with the command block with Copy.
+- **The approve page is a route of its own**, outside the signed-in app: signed out it sends the browser to GitHub's sign-in with `next`; it opens no socket. It's **lazy-loaded**, because with it the main bundle crossed Vite's 500 kB warning (the build must print no new warning). **Ruling (user, while building Task 23): Setup is lazy-loaded too.** After Tasks 21 and 22's fix rounds the main chunk measured 500.57 kB with Approve already split off; moving `/setup` into its own chunk brings it to about 495.3 kB. `lib/browser.ts` exists so a test can see the redirect. The countdown uses the browser's clock; the server still decides whether a late Approve is too late. Not found and Expired end with the command block with Copy.
 - **Deleted:** `cli-approve.tsx`, `pages/approve.tsx`, `pages/layout.tsx` (their tests lived in `cli.db.test.ts` and moved to the new API), the server's JSX settings, and Vite's `/cli/` proxy entry. `/cli/approve` is served by the SPA fallback with the CSP header (a new `spa.test.ts` case). `http/errors.ts` was already JSON only; the CLI needed no change.
 - The explainer is `docs/why/cli-login.md`, extended (it already covered the device flow), not a new `device-login.md`.
 
 **Deferred**
-- The main bundle is 0.2 kB under Vite's 500 kB warning: the next code that lands in it trips the warning (lazy-load Settings or Setup then, or raise `chunkSizeWarningLimit`).
+- The main bundle is about 4.7 kB under Vite's 500 kB warning (Approve and Setup are lazy); the next pages to split off, if it grows, are Settings, or raise `chunkSizeWarningLimit`.
 - No live `usedToday` (Settings reads it when it opens); no scroll-spy in the Settings nav; the Auto-fix hint is the handoff's fixed "Off: fixes wait as drafts for you to send".
 - The approve page hears a decision made elsewhere only when its tab comes back into view; no rate limit on reading codes (signed-in only, 8 letters, 10 minutes: Plan 1's page had the same).
 - A revoked computer that holds a draft's publish job leaves that job waiting until the draft is discarded.
@@ -32952,7 +32952,7 @@ apps/web/src/
   routes/Shell/Shell.tsx         SignedIn (every provider) and InboxLayout (the inbox beside the page)
   routes/Settings/{Settings,Section,Switch,Devices,Agent,Notifications,Defaults,Account}.tsx   (SettingsPlaceholder deleted)
   routes/Setup/{Setup,ChecklistRow,CommandBlock}.tsx
-  routes/Approve/Approve.tsx     lazy-loaded, outside the signed-in app
+  routes/Approve/Approve.tsx     lazy-loaded, outside the signed-in app (Setup is lazy-loaded too)
   api/{settings,onboarding,cli-requests}.ts, lib/browser.ts
   e2e/{settings,setup,approve}.spec.ts
 docs/why/revoking-devices.md, docs/why/onboarding-facts.md (docs/why/cli-login.md extended)
@@ -38903,7 +38903,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Create (server): `apps/server/src/http/routes/cli-requests.ts` and `cli-requests.db.test.ts`.
 - Create (web): `apps/web/src/api/cli-requests.ts`, `apps/web/src/lib/browser.ts`, `apps/web/src/routes/Approve/{Approve.tsx,Approve.module.css,Approve.test.tsx}`, `apps/web/e2e/approve.spec.ts`.
-- Modify: `packages/protocol/src/web-api.ts` and `web-api.test.ts` (`CliRequestView`, `CliRequestDecision`); `apps/server/src/http/app.ts`; `apps/server/src/auth/cli-login.ts` (`createdAt: now`, a comment); `apps/server/src/http/routes/cli.db.test.ts` and `apps/server/src/http/spa.test.ts`; `apps/server/tsconfig.json` (no JSX left); `apps/web/src/app.tsx` (the lazy route); `apps/web/vite.config.ts` (the `/cli/` proxy entry goes); `docs/superpowers/specs/2026-10-07-nitpilot-design.md`; `docs/why/cli-login.md`.
+- Modify: `packages/protocol/src/web-api.ts` and `web-api.test.ts` (`CliRequestView`, `CliRequestDecision`); `apps/server/src/http/app.ts`; `apps/server/src/auth/cli-login.ts` (`createdAt: now`, a comment); `apps/server/src/http/routes/cli.db.test.ts` and `apps/server/src/http/spa.test.ts`; `apps/server/tsconfig.json` (no JSX left); `apps/web/src/app.tsx` (the lazy routes: Approve, and Setup moved out of the main chunk); `apps/web/vite.config.ts` (the `/cli/` proxy entry goes); `docs/superpowers/specs/2026-10-07-nitpilot-design.md`; `docs/why/cli-login.md`.
 - Delete: `apps/server/src/http/routes/cli-approve.tsx`, `apps/server/src/http/pages/approve.tsx`, `apps/server/src/http/pages/layout.tsx` (they had no test files of their own; their tests lived in `cli.db.test.ts` and move to the new API there). Nothing is left under `apps/server/src/http/pages/`.
 - No migration, no new dependency. `apps/server/src/http/errors.ts` was already JSON-only and `apps/cli` already says `/cli/approve?code=` (the server builds the URL), so neither changes.
 
@@ -38929,7 +38929,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - A read or a decision that fails (network, 5xx) shows the error state with **Try again**, which reads the login again instead of sending the decision twice. Focus moves to the outcome's heading after a decision. The code box is spelled out letter by letter to a screen reader.
 - **The countdown uses the browser's clock.** A computer whose clock is minutes off shows a wrong count; the server still decides (a late Approve answers `expired`).
 - **The server renders no page any more.** `/cli/approve` is answered by the web app's fallback (`http/spa.ts`) with the `frame-ancestors 'none'` header. `grep -rn renderPage apps/server/src` is empty and `apps/server/src/http/pages/` is gone. The server's `tsconfig.json` loses `jsx` and `jsxImportSource`, and Vite's dev proxy loses its `/cli/` entry.
-- **The page is its own file** (`React.lazy`): with it in the main chunk, the build crossed Vite's 500 kB warning (504 kB). Now the main chunk is 499.8 kB and the page is a 5 kB chunk the browser fetches only when this page opens. The main chunk is 0.2 kB under the limit, so the next code that lands in it needs the same treatment (see the notes).
+- **The page is its own file** (`React.lazy`): with it in the main chunk, the build crossed Vite's 500 kB warning (504 kB). On top of Tasks 21 and 22's fix rounds even the lazy wiring tipped the main chunk over (500.6 kB), so the setup checklist (`/setup`, a page most people open once) is lazy-loaded too. Now the main chunk is about 495.3 kB, and Approve (5.1 kB), Setup (5.2 kB) and the `CommandBlock` they share (0.5 kB) are chunks the browser fetches only when those pages open.
 - **Spec and explainer.** Spec §7 and §10 describe the web page and the two routes; the Plan 1 lines for `GET|POST /cli/approve` and "Every server-rendered page sends…" become history notes. `docs/why/cli-login.md` (it already covers the device flow) gains the web page and a "Why the page is careful" section: the two codes, the stored hash, the Origin check, the harmless second click, and `frame-ancestors`.
 
 **Tests this task must include:**
@@ -38940,7 +38940,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `Approve.test.tsx`: the four states, not found (unknown code, no code), the countdown flipping to Expired (fake timers), the signed-out redirect, busy buttons, a failed request.
 - Playwright `approve.spec.ts`: a real `POST /api/cli/login`, open `/cli/approve?code=…` signed in as maya, Approve, and the poll returns a token; signed out, the page asks for `/auth/github/login?next=…` with the same code.
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 The two shapes, in the protocol's web API test. `consumed` is the server's word for approved and collected; the page must never see it:
 
@@ -38976,12 +38976,12 @@ index 644cdc6..dcc138b 100644
  });
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w packages/protocol`
 Expected: FAIL, 1 failed and 81 passed (82). `web-api.test.ts` has 1 failed and 25 passed: `CliRequestView` is not exported yet (`CliRequestView.parse` is not a function or undefined).
 
-- [ ] **Step 3: The two schemas**
+- [x] **Step 3: The two schemas**
 
 Modify `packages/protocol/src/web-api.ts`:
 
@@ -39018,12 +39018,12 @@ index ca466ef..2dc67ce 100644
   * localhost. The server POSTs to whatever endpoint a browser registers, so without this anyone signed in could make it
 ```
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w packages/protocol`
 Expected: PASS, 82 tests (`web-api.test.ts` 26).
 
-- [ ] **Step 5: Write the failing server tests**
+- [x] **Step 5: Write the failing server tests**
 
 Three server test files. The new route's tests go in `cli-requests.db.test.ts`; `cli.db.test.ts` stops using the old page (its `approveForm` helper becomes `decide`, which presses the new API's button, and the signed-out redirect test goes); `spa.test.ts` gains the check that `/cli/approve` is the app's now.
 
@@ -39263,12 +39263,12 @@ index 35df785..7d6f9f2 100644
      expect(await res.text()).toContain('<title>app</title>');
 ```
 
-- [ ] **Step 6: Run them to see them fail**
+- [x] **Step 6: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/cli-requests.db.test.ts src/http/routes/cli.db.test.ts && npm run test:unit -w apps/server -- src/http/spa.test.ts`
 Expected: FAIL, 17 failed and 21 passed (38) in all: 13 of the 14 `cli-requests` tests (the route doesn't exist, so the answers are 404 where 200, 401, 403 or 400 are expected; "answers 404 for a code that doesn't exist" already passes, since an unknown route is also a JSON 404), 3 in `cli.db.test.ts` (the handshake, denied and expired tests, which now use the new API) and the `spa.test.ts` one (the old server page still answers `/cli/approve`). (If `-- <files>` isn't passed through by your npm, run `cd apps/server && npx vitest run --project db --project unit <files>`.)
 
-- [ ] **Step 7: The route, and the server pages go**
+- [x] **Step 7: The route, and the server pages go**
 
 The route file, whole. It maps the stored row to the page's view (`pending` past its time reads `expired`; `consumed`, the row's word for approved and collected, reads `approved`), takes the session cookie only, and re-reads the row after a decision so a late or repeated click answers how things stand:
 
@@ -39434,12 +39434,12 @@ Check that nothing is left:
 Run: `ls apps/server/src/http/pages; grep -rn renderPage apps/server/src`
 Expected: `ls` says there is no such directory, and `grep` prints nothing.
 
-- [ ] **Step 8: Run the server tests to see them pass**
+- [x] **Step 8: Run the server tests to see them pass**
 
 Run: `npm run test:db -w apps/server -- src/http/routes/cli-requests.db.test.ts src/http/routes/cli.db.test.ts && npm run test:unit -w apps/server -- src/http/spa.test.ts && npm run typecheck -w apps/server`
 Expected: PASS, 38 tests (14 + the `cli.db.test.ts` ones + the `spa.test.ts` ones); typecheck clean.
 
-- [ ] **Step 9: Write the failing Playwright spec**
+- [x] **Step 9: Write the failing Playwright spec**
 
 It starts a login with the same request `nitpilot login` makes, signs maya in, and uses the real page. The second test answers GitHub itself, so nothing leaves the machine:
 
@@ -39494,14 +39494,14 @@ test('signed out, the page sends you through GitHub sign-in and asks to come bac
 });
 ```
 
-- [ ] **Step 10: Run it to see it fail**
+- [x] **Step 10: Run it to see it fail**
 
 The web app has no `/cli/approve` route yet, and the server no longer renders one, so the address shows the app's own front page.
 
 Run: `npm run build && npm run test:e2e -w apps/web`
 Expected: FAIL, 2 failed and 14 passed (16): both `approve.spec.ts` tests (no "Approve this device?" heading; no request to `/auth/github/login`). Ports 4319 and 4320 must be free (`lsof -i :4319`).
 
-- [ ] **Step 11: Write the failing Approve tests**
+- [x] **Step 11: Write the failing Approve tests**
 
 A small seam first: `browser.goTo` is the one way the app leaves for another address, because jsdom won't let a test replace `window.location.assign`, and a test can spy on this. Then the page's tests, which use the real app (`renderApp`) at `/cli/approve?code=WDJB-MJHT` with a fake server and fake timers for the countdown:
 
@@ -39700,12 +39700,12 @@ describe('Approve: signed out', () => {
 });
 ```
 
-- [ ] **Step 12: Run them to see them fail**
+- [x] **Step 12: Run them to see them fail**
 
 Run: `npm test -w apps/web -- src/routes/Approve`
 Expected: FAIL, 12 failed and 0 passed (the file loads; the app has no `/cli/approve` route, so the page shows the inbox's "Nothing here" pane and each test's `findByRole`/`findByText` for "Approve this device?", "Device approved", "This code expired" or "Code not found" times out).
 
-- [ ] **Step 13: The data hooks, the page, its styles, the route**
+- [x] **Step 13: The data hooks, the page, its styles, the route**
 
 The two hooks. Coming back to the tab reads the login again (TanStack's default), so a login decided in another tab shows when you return; the mutation writes the server's answer into the same key:
 
@@ -40172,36 +40172,40 @@ Create `apps/web/src/routes/Approve/Approve.module.css`:
 }
 ```
 
-The route, loaded lazily, and Vite's dev proxy loses the `/cli/` entry (the app answers that address now):
+The route, loaded lazily (and the setup checklist, now lazy too, so the main chunk stays under the warning), and Vite's dev proxy loses the `/cli/` entry (the app answers that address now):
 
 Modify `apps/web/src/app.tsx`:
 
 ```diff
 diff --git a/apps/web/src/app.tsx b/apps/web/src/app.tsx
-index 08653db..b8a88bf 100644
+index 08653db..2e81e5c 100644
 --- a/apps/web/src/app.tsx
 +++ b/apps/web/src/app.tsx
-@@ -1,5 +1,5 @@
+@@ -1,14 +1,21 @@
  import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 -import { useState } from 'react';
 +import { lazy, Suspense, useState } from 'react';
  import { BrowserRouter, Route, Routes } from 'react-router';
  import { retryUnlessClientError } from './api/client';
  import { Chat } from './routes/Chat/Chat';
-@@ -9,6 +9,12 @@ import { Setup } from './routes/Setup/Setup';
+ import { Home } from './routes/Home/Home';
+ import { Settings } from './routes/Settings/Settings';
+-import { Setup } from './routes/Setup/Setup';
  import { EmptyPane } from './routes/Shell/Pane';
  import { InboxLayout } from './routes/Shell/Shell';
  
 +/**
-+ * Device approval is the one page most people open once, from `nitpilot login`, so it's a file of its own that the
-+ * browser fetches only when that page opens (and the rest of the app stays under Vite's 500 kB chunk warning).
++ * Device approval and the setup checklist are pages most people open once (from `nitpilot login`, and after their first
++ * sign-in), so each is a file of its own that the browser fetches only when that page opens (and the rest of the app
++ * stays under Vite's 500 kB chunk warning).
 + */
 +const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
++const Setup = lazy(() => import('./routes/Setup/Setup').then((module) => ({ default: module.Setup })));
 +
  /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
  export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
    return new QueryClient({ defaultOptions: { queries: { retry: retryUnlessClientError, ...queries } } });
-@@ -29,7 +35,8 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
+@@ -29,7 +36,8 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
  
  /**
   * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
@@ -40211,9 +40215,19 @@ index 08653db..b8a88bf 100644
   */
  export function AppRoutes() {
    return (
-@@ -43,6 +50,14 @@ export function AppRoutes() {
+@@ -41,8 +49,23 @@ export function AppRoutes() {
+           <Route path="*" element={<EmptyPane title="Nothing here" body="This page doesn't exist." />} />
+         </Route>
          <Route path="settings" element={<Settings />} />
-         <Route path="setup" element={<Setup />} />
+-        <Route path="setup" element={<Setup />} />
++        <Route
++          path="setup"
++          element={
++            <Suspense fallback={null}>
++              <Setup />
++            </Suspense>
++          }
++        />
        </Route>
 +      <Route
 +        path="cli/approve"
@@ -40246,17 +40260,17 @@ index eef811f..37bd8e6 100644
    test: {
 ```
 
-- [ ] **Step 14: Run the web tests**
+- [x] **Step 14: Run the web tests**
 
 Run: `npm test -w apps/web && npm run typecheck -w apps/web && npm run lint`
 Expected: PASS, 319 web tests (307 + 12 in `Approve.test.tsx`); typecheck and lint clean.
 
-- [ ] **Step 15: Run Playwright**
+- [x] **Step 15: Run Playwright**
 
 Run: `npm run build && npm run test:e2e -w apps/web`
-Expected: PASS, 16 tests. The build prints no chunk-size warning: `index-*.js` is about 499.8 kB and `Approve-*.js` about 5 kB. Run `npm run test:e2e -w apps/web` twice more: it must pass every time.
+Expected: PASS, 16 tests. The build prints no chunk-size warning: `index-*.js` is about 495.3 kB, `Approve-*.js` and `Setup-*.js` about 5 kB each. Run `npm run test:e2e -w apps/web` twice more: it must pass every time.
 
-- [ ] **Step 16: The spec and the explainer**
+- [x] **Step 16: The spec and the explainer**
 
 Spec §7 says the server renders no page since W7, §10's CLI approval bullet gets the shape, the status mapping, the 401/403/404 rules, the 200-on-decided rule, the countdown and the signed-out redirect, and the two Plan 1 lines become history notes pointing at `http/spa.ts`:
 
@@ -40339,7 +40353,7 @@ index f31a098..807a4f8 100644
  - `requireCliToken` is middleware, like a route guard (`<RequireAuth>`) that runs before the page and redirects if you're not allowed in.
 ```
 
-- [ ] **Step 17: Look at it (controller, in the in-app browser)**
+- [x] **Step 17: Look at it (controller, in the in-app browser)**
 
 Build, then start the Playwright server (launch config `nitpilot-e2e-web-w7`, ports 4319 and 4320; or `E2E_WEB_PORT=4319 E2E_CONTROL_PORT=4320 npm run e2e:web-server -w apps/server` after `npm run build`). Sign maya in and set her cookie in the tab, as in Task 18's look. Start the logins the way the CLI does (the web app only shows what the CLI asked for):
 
@@ -40352,7 +40366,7 @@ curl -s -X POST $W/api/cli/login -H 'content-type: application/json' -d '{"devic
 
 The second line prints `deviceCode`, `userCode` and `verifyUrl` (`/cli/approve?code=XXXX-XXXX`); start three of them (Approve, Deny and a spare; the endpoint allows 10 starts a minute). In the tab on `http://127.0.0.1:4319`, run `document.cookie = "nitpilot_session=<value>; path=/"` and open a `verifyUrl`.
 
-- **The page.** `GET /cli/approve?code=…` is the app's `index.html` with `Content-Security-Policy: frame-ancestors 'none'`. The main chunk is about 499.8 kB and the Approve chunk about 5 kB.
+- **The page.** `GET /cli/approve?code=…` is the app's `index.html` with `Content-Security-Policy: frame-ancestors 'none'`. The main chunk is about 495.3 kB; the Approve and Setup chunks about 5 kB each.
 - **Pending, 1280 px, light then dark.** A 440 px card centered on the page: the eyebrow "Device login", "Approve this device?", the code spaced out in mono in the code box, "Maya's MacBook Pro / requested HH:MM", **Approve** (accent) and **Deny** (outlined), and the fine print counting down ("…expires in 9:51.").
 - **Approve.** "Device approved / Maya's MacBook Pro can now run your agent. You can close this tab." Then poll as the CLI would: `curl -s -X POST $W/api/cli/login/poll -H 'content-type: application/json' -d '{"deviceCode":"<deviceCode>"}'` answers `{"status":"approved","token":"nit_…"}` once, and `expired` on the next poll.
 - **Deny.** Open another code typed in lower case (it is found): "Login denied / Nothing was connected…".
@@ -40361,10 +40375,10 @@ The second line prints `deviceCode`, `userCode` and `verifyUrl` (`/cli/approve?c
 - Clean up: the tokens an approval made show as devices; `curl -s -X POST $C/forget-devices -d '{"login":"maya"}'` revokes them.
 - Not exercised here: the signed-out redirect (it leaves for the real github.com); `Approve.test.tsx` and `approve.spec.ts` cover it.
 
-- [ ] **Step 18: Run everything, then commit**
+- [x] **Step 18: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
-Expected: protocol 82, CLI 333 passed + 14 skipped, server 1021, web 319; end to end 6; Playwright 16; typecheck and lint clean; the build prints no warning.
+Expected: protocol 82, CLI 333 passed + 14 skipped, server 1021, web 319 (1023 and 326 on top of Tasks 21 and 22's fix rounds, which added two server and seven web tests); end to end 6; Playwright 16; typecheck and lint clean; the build prints no warning.
 
 ```bash
 git add apps/server apps/web packages/protocol docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/why docs/superpowers/plans/2026-10-15-plan-2-web-app.md
