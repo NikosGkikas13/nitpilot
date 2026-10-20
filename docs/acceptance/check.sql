@@ -15,10 +15,10 @@ from "Job" j join "PrChat" c on c.id = j."chatId" join "Repo" r on r.id = c."rep
 where r."fullName" = :repo and c.number = :pr order by j."createdAt";
 
 \echo
-\echo '== 3. Duplicate jobs (must print 0 rows; a cancelled job and the one that replaced it are not a duplicate)'
+\echo '== 3. Duplicate jobs (must print 0 rows; a cancelled or failed job and the one that replaced it (Retry) are not a duplicate)'
 select j."participantId", j.type, j.round, count(*) as rows
 from "Job" j join "PrChat" c on c.id = j."chatId" join "Repo" r on r.id = c."repoId"
-where r."fullName" = :repo and c.number = :pr and j.status <> 'cancelled' group by 1, 2, 3 having count(*) > 1;
+where r."fullName" = :repo and c.number = :pr and j.status not in ('cancelled', 'failed') group by 1, 2, 3 having count(*) > 1;
 
 \echo
 \echo '== 4. Webhooks about this PR, with the time each reached the server (compare with the CLI terminals)'

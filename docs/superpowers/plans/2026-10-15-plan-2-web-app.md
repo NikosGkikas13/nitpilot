@@ -342,6 +342,16 @@ W8 was written at step level on 2026-10-20, against branch `plan-2-web-app` at `
 - **Push is on for NikosGkikas13 only** (normal Chrome window and the iPhone's Home Screen app): Chrome's private windows can't receive push, which is where ngkdev93-jpg signs in.
 - **New:** `docs/acceptance/check-web.sql` (Auto, attention, drafts' `applyState`, notes and the job after each, push subscriptions) and a `README.md` (there was none; the task-level text said to modify it). `docs/architecture.md` §4.12 and §6 are brought up to date. There is no `docs/why/` index to update.
 
+**Live run (Task 25, 2026-10-20)**
+- Run 08:35–10:20 UTC at `6225cd4`, Claude Code 2.1.277, Chrome 155 on macOS 15.1, iPhone on iOS 16.7; sandbox PRs #11–#14 and a throwaway private repo (deleted). Every criterion of spec §20's Plan 2 acceptance test passed; the evidence is in `docs/acceptance/plan-2.md` section 9. About 3 Claude runs.
+- **Live updates, Retry, push** (section 4, #11): passed. Three `crash` attempts, the Retry banner only in the reviewer's browser, Retry ran the review again; the progress line moved in both browsers; push arrived on the Mac and the iPhone and opened the chat; no CLI OS notification for the person with push.
+- **Note** (sections 4 and 5): the note reached the bundle, but Claude refused it: every note was untrusted. **Fix `74c4e6d`** (ruling, the person's choice: an agent follows the notes of the person it works for; everyone else's stay untrusted, so a fork author can't steer the reviewer's agent). Checked again in section 5: the pushed `orders.js` carries the note's line.
+- **Drafts** (section 5, #12): passed. Both drafts waited; the author's diff showed while GitHub's head stayed put; Send pushed `9ad3f64`, authored by ngkdev93-jpg.
+- **Escalation** (section 6, #13): passed with `sandbox-escalation.json`: Continue ran a Claude round, the second escalation was resolved by its reviewer, chat ready; ngkdev93-jpg never saw Resolve.
+- **Read-only and 404** (section 7): passed, as ruled (NikosGkikas13 on a PR with no reviewer; ngkdev93-jpg on a private repo of NikosGkikas13's).
+- **Also fixed: `a0a1bc5`**: the server's tests read the push keys the runbook puts in `apps/server/.env`; `TEST_ENV` blanks them. The runbook's wording was corrected where the run showed it wrong (type `https://`; GitHub's *Redirect URI*; the reviewer's points stay in the chat when both people are on Nitpilot), and `check.sql` no longer counts a failed job and its Retry as a duplicate.
+- **Deferred** (spec §22 has the first two): sign-in over plain http fails with only "link expired" (Safari doesn't upgrade a typed address; Plan 3's proxy redirects); a resent `closed` processed before an older `synchronize` creates a chat for a merged PR; a re-review right after our own push fails once with `stale_head` (refunded, harmless); `gh pr create --reviewer` failed once (REST fallback worked).
+
 **Deferred**
 - The `/reset` deadlock retry has no automated test (it needs a race on purpose); other work that can outlive the harness's `close()` (the lease sweep, catch-up) is left alone: no log shows it.
 - Seen in the server's logs while building Task 24, predating W8: `ChatRead_userId_chatId_key` unique-constraint errors (two mark-read requests for a new chat at once). Not investigated.
@@ -41781,7 +41791,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 From here the steps need the person. Everything in `docs/acceptance/plan-2.md` is ticked as it is done, and its section 9 is filled in.
 
-- [ ] **Step 10: Live: be ready (the person and the controller)**
+- [x] **Step 10: Live: be ready (the person and the controller)**
 
 Everything from here writes to GitHub (the sandbox repo, the dev app's settings, one throwaway private repo), Steps 13 to 15 start Claude Code, and Step 12 registers two browsers with push services. Tell the person what is coming (about 2½ hours; about 4 Claude runs; the phone is needed in Steps 12 and 13) and get a clear yes before starting.
 
@@ -41798,19 +41808,19 @@ npm run build && npm run build -w apps/cli && node apps/cli/dist/index.js --vers
 ```
 Expected: no changes; `nitpilot-postgres-1`; `"loggedIn": true`; six paths; both gh accounts; `1` (if `0`, section 0's push-keys box says how to add them without printing them); `PUBLIC_REPOS_ONLY=false`; the build and a version number. If Claude Code isn't signed in, the person runs `claude auth login` themselves.
 
-- [ ] **Step 11: Live: sections 0 to 2 (database, tunnel, server, callback URL, both people join)**
+- [x] **Step 11: Live: sections 0 to 2 (database, tunnel, server, callback URL, both people join)**
 
 Follow `docs/acceptance/plan-2.md` sections **0, 1 and 2**. The controller creates the database and starts the tunnel (**T1**) and the server (**T2**, with `PUBLIC_URL=$TUNNEL`) in Terminal-panel tabs, and leaves both running until Step 17; then runs `nit-b login --no-open` and `nit-a login --no-open` in **T5** and gives the person each link to paste, naming the browser. The person adds the callback URL (section 1, step 6, in NikosGkikas13's browser), signs in to the web app in both browsers and approves both computers. The controller starts **T4** (`nit-b start`) and **T3** (`nit-a start`).
 
 Capture: a screenshot of NikosGkikas13's checklist at *5 of 5*, and the T3/T4 `Connected as …` lines. Tick sections 0 to 2.
 
-- [ ] **Step 12: Live: section 3 (push on desktop Chrome and the iPhone)**
+- [x] **Step 12: Live: section 3 (push on desktop Chrome and the iPhone)**
 
 Ask first (push services). Follow section **3**: the person turns push on in NikosGkikas13's Chrome window, then on the iPhone adds the app to the Home Screen and turns push on there. The controller runs `check-web.sql` and confirms two subscriptions.
 
 If the iPhone never asks for permission: check iOS is 16.4 or later and that the app was opened from the Home Screen icon (not a Safari tab). If Chrome says *Blocked*, reset the site's notification permission (the icon left of the address → *Site settings*) and reload.
 
-- [ ] **Step 13: Live: section 4 (live updates, a note, Retry, push)**
+- [x] **Step 13: Live: section 4 (live updates, a note, Retry, push)**
 
 Ask before the PR (a GitHub write) and before Claude runs (after Retry). Follow section **4**. The controller restarts T4 on `crash.json`, opens the PR with `gh` as ngkdev93-jpg, waits for the third failed attempt, tells the person to write the note in ngkdev93-jpg's browser, restarts T4 on the happy scenario, and tells the person to click **Retry** in NikosGkikas13's browser. Watch both browsers without reloading while Claude works.
 
@@ -41818,36 +41828,36 @@ Capture: screenshots of the progress line in both browsers, the **Retry** banner
 
 If Claude ignores the note (the line isn't in `orders.js`), look at what the address job's bundle carried before calling it a bug: section 3 of `check-web.sql` says whether the note came before the job.
 
-- [ ] **Step 14: Live: section 5 (drafts with Auto off)**
+- [x] **Step 14: Live: section 5 (drafts with Auto off)**
 
 Ask before the PR and before Claude runs. Follow section **5**: both people turn their default off in Settings, the controller opens the PR, NikosGkikas13 sends the reviewer draft, Claude's fix waits as an author draft (the controller checks GitHub's head and the draft ref), ngkdev93-jpg sends it, NikosGkikas13 sends the re-review's draft. Both defaults go back on at the end.
 
 Capture: screenshots of both draft cards (the author's with its diff), the `gh` commit-author output, `check-web.sql`. Tick the four boxes. The PR ends closed.
 
-- [ ] **Step 15: Live: section 6 (escalate, Continue, Resolve)**
+- [x] **Step 15: Live: section 6 (escalate, Continue, Resolve)**
 
 Ask before the PR and before Claude runs (Continue starts it). Follow section **6**: T4 on `sandbox-escalation.json`; ngkdev93-jpg clicks **Continue**; after the round, NikosGkikas13 clicks **Resolve** on the second escalation. T4 goes back to the happy scenario at the end.
 
 Capture: screenshots of the banner in both browsers (Continue only for ngkdev93-jpg; Resolve and Continue for NikosGkikas13), the ready banner, `check.sql`. Tick the four boxes. The PR ends closed.
 
-- [ ] **Step 16: Live: section 7 (read-only and a 404)**
+- [x] **Step 16: Live: section 7 (read-only and a 404)**
 
 Ask before each GitHub write; ask separately before 7.2 creates the private repo, and again before it is deleted. Follow section **7**. The controller runs the `gh` commands; the person opens the addresses in the named browsers. If `gh repo delete` lacks the `delete_repo` permission, the person runs `gh auth refresh -h github.com -s delete_repo` themselves or deletes the repo in the browser.
 
 Capture: screenshots of the read-only chat (NikosGkikas13) and the not-found page (ngkdev93-jpg, for the private chat and for PR 999). Tick the three boxes.
 
-- [ ] **Step 17: Live: wrap up**
+- [x] **Step 17: Live: wrap up**
 
 Follow section **8**: the person removes the tunnel's callback URL from `nitpilot-dev` and the Home Screen app from the iPhone; the controller checks every PR of the run is closed, stops T1 to T4, and drops `nitpilot_acceptance` once section 9 is written (Step 18).
 
-- [ ] **Step 18: Write down what the run showed**
+- [x] **Step 18: Write down what the run showed**
 
 Fill in the runbook's section 9: the date, the commit, the versions (Claude Code, Chrome, macOS, the iPhone and iOS), each criterion's evidence in its table row (what was seen, the `check*.sql` lines that prove it), every fix made during the run with its commit, and a note for any box not ticked. Then:
 
 - **Spec §22:** replace the "Web Push on a phone needs HTTPS and, on iPhone, a Home Screen app" item's last sentence with what the run showed (whether the Home Screen app needed its own sign-in, how long the push took to arrive), and add an item for anything else the run found about GitHub, push services or browsers that the spec didn't know.
 - **This plan:** add a "Live run" paragraph to "Checked against the code (W8)": the date, the result per criterion, the fixes and their commits, and anything deferred.
 
-- [ ] **Step 19: Run everything, and commit the results**
+- [x] **Step 19: Run everything, and commit the results**
 
 Docker must be running.
 

@@ -25,16 +25,16 @@ The sandbox is `NikosGkikas13/nitpilot-sandbox`, as in [plan-1.md](plan-1.md). P
 
 ## 0. Before you start
 
-- [ ] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
-- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
-- [ ] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
-- [ ] Nothing uses port 8787 (stop the dev server with Ctrl-C if it runs).
-- [ ] Private repos aren't filtered out: `grep '^PUBLIC_REPOS_ONLY=' apps/server/.env` prints `false` (section 7.2 needs a private repo).
-- [ ] The web app and the CLI are built: `npm run build && npm run build -w apps/cli` (the first builds the web app only), then `node apps/cli/dist/index.js --version` prints a version and `ls apps/web/dist/index.html` finds the page.
-- [ ] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, and both clones exist (`ls "$CLONE_A" "$CLONE_B"`). If not, do [plan-1.md](plan-1.md) section 1 first.
-- [ ] Push keys: `grep -c '^VAPID_PUBLIC_KEY=.' apps/server/.env` prints `1`. If it prints `0`, run `npm run -s vapid:keys -w apps/server >> apps/server/.env` (the keys go straight into the file, never onto the screen), then open `apps/server/.env` in your editor and change the last line's `mailto:you@example.com` to a contact address of yours (the push services may write to it).
-- [ ] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
-- [ ] The iPhone runs iOS 16.4 or later (Settings → General → About → iOS Version). Web Push on iPhone only works from a Home Screen app.
+- [x] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
+- [x] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [x] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
+- [x] Nothing uses port 8787 (stop the dev server with Ctrl-C if it runs).
+- [x] Private repos aren't filtered out: `grep '^PUBLIC_REPOS_ONLY=' apps/server/.env` prints `false` (section 7.2 needs a private repo).
+- [x] The web app and the CLI are built: `npm run build && npm run build -w apps/cli` (the first builds the web app only), then `node apps/cli/dist/index.js --version` prints a version and `ls apps/web/dist/index.html` finds the page.
+- [x] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, and both clones exist (`ls "$CLONE_A" "$CLONE_B"`). If not, do [plan-1.md](plan-1.md) section 1 first.
+- [x] Push keys: `grep -c '^VAPID_PUBLIC_KEY=.' apps/server/.env` prints `1`. If it prints `0`, run `npm run -s vapid:keys -w apps/server >> apps/server/.env` (the keys go straight into the file, never onto the screen), then open `apps/server/.env` in your editor and change the last line's `mailto:you@example.com` to a contact address of yours (the push services may write to it).
+- [x] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
+- [x] The iPhone runs iOS 16.4 or later (Settings → General → About → iOS Version). Web Push on iPhone only works from a Home Screen app.
 
 ## 1. A clean database, the tunnel, the server and the callback URL (about 10 minutes)
 
@@ -59,16 +59,16 @@ A fresh database `nitpilot_acceptance` keeps your dev data untouched, and means 
    DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB PUBLIC_URL=$TUNNEL npm run start -w apps/server
    ```
    Expect `Nitpilot server listening on http://localhost:8787` and a `[boot]` line. It serves the built web app from `apps/web/dist`. Leave it running.
-5. **T5:** `curl -s $TUNNEL/healthz` prints `ok` (the tunnel reaches the server), and `curl -sI $TUNNEL/ | grep -i content-security` shows the `frame-ancestors 'none'` header.
+5. **T5:** `curl -s $TUNNEL/healthz` prints `{"ok":true,"version":…}` (the tunnel reaches the server), and `curl -sI $TUNNEL/ | grep -i content-security` shows the `frame-ancestors 'none'` header.
 6. **NikosGkikas13's browser** (this account owns the GitHub App): give the app its sign-in callback for this address.
    1. Open `https://github.com/settings/apps/nitpilot-dev`. GitHub may ask for your password or a passkey first ("Confirm access").
-   2. Scroll down to the section **Identifying and authorizing users**. Under **Callback URL** there is a box with the address you use for development (leave it as it is).
-   3. Click the grey **Add Callback URL** button under it. A new empty box appears.
+   2. Scroll down to the section **Identifying and authorizing users**. GitHub calls the callback a **Redirect URI** (it said *Callback URL* before 2026): there are one or more boxes with the addresses you use for development (leave them as they are).
+   3. Click the grey **Add Redirect URI** button under them (or use a box that is empty). A new empty box appears. Leave *Allow wildcard matching* off.
    4. Click into the new box and type your address followed by `/auth/github/callback`, for example `https://<words>.trycloudflare.com/auth/github/callback` (in **T5**, `echo $TUNNEL/auth/github/callback` prints it to copy).
    5. Scroll to the very bottom of the page and click the green **Save changes** button. A blue banner at the top says the app was updated.
 
-- [ ] The database has `1 | <n> | 0`; the tunnel and the server are up; `healthz` answers through the tunnel.
-- [ ] The tunnel's callback URL is saved on `nitpilot-dev`.
+- [x] The database has `1 | <n> | 0`; the tunnel and the server are up; `healthz` answers through the tunnel.
+- [x] The tunnel's callback URL is saved on `nitpilot-dev`.
 
 `dbq` (from `env.sh`) runs `psql` inside the Postgres container against this database, so you don't need `psql` installed.
 
@@ -76,7 +76,7 @@ A fresh database `nitpilot_acceptance` keeps your dev data untouched, and means 
 
 Nobody is on Nitpilot yet. Each person signs in to the web app, approves their computer on the web app's approve page, and starts their CLI. NikosGkikas13's checklist should tick itself off step by step, without a reload.
 
-1. **NikosGkikas13's browser:** open a new tab, paste the `$TUNNEL` address and press Enter. You see the landing page: the heading *Your agents review each other's PRs the moment they open.* and a **Sign in with GitHub** button. Click it.
+1. **NikosGkikas13's browser:** open a new tab, paste the `$TUNNEL` address, with its `https://`, and press Enter. You see the landing page: the heading *Your agents review each other's PRs the moment they open.* and a **Sign in with GitHub** button. Click it.
 2. GitHub shows *Authorize nitpilot-dev* the first time (a green **Authorize nitpilot-dev** button at the bottom): click it. If you authorized it before, GitHub sends you straight back.
 3. You land on **Set up Nitpilot**, a checklist of five rows with "… of 5" at the top. Row 1 is ticked: *Signed in as @NikosGkikas13.* Row 2, *Install the GitHub App on your repos*, is ticked too (this account owns the installation). Row 3, *Connect your computer*, is the active one: a command block with a **Copy** button and *Waiting for your terminal…*. Leave this tab open.
 4. **T5:** connect NikosGkikas13's computer:
@@ -98,9 +98,9 @@ Nobody is on Nitpilot yet. Each person signs in to the web app, approves their c
 11. **T5:** `nit-a doctor`. Expect no `✗` lines; Claude Code shows as installed and logged in.
 12. **T3:** start ngkdev93-jpg's CLI: `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as ngkdev93-jpg.` In ngkdev93-jpg's browser, the checklist ticks rows 3 to 5 the same way; click **Open your inbox** (or **Skip for now**, if row 2 stayed open).
 
-- [ ] Both people signed in to the web app and approved their computer on its approve page.
-- [ ] NikosGkikas13's checklist went from row 3 to *5 of 5* without a reload.
-- [ ] Both CLIs say `Connected as …`.
+- [x] Both people signed in to the web app and approved their computer on its approve page.
+- [x] NikosGkikas13's checklist went from row 3 to *5 of 5* without a reload.
+- [x] Both CLIs say `Connected as …`.
 
 ## 3. Push on desktop Chrome and on the iPhone (about 15 minutes)
 
@@ -108,13 +108,13 @@ Ask first: turning push on registers each browser with its push service (Google'
 
 1. **NikosGkikas13's browser**, in the inbox: click your avatar, top left beside the Nitpilot wordmark (its label is *Settings · NikosGkikas13*). The **Settings** page opens, with a menu on the left: Devices, Agent, Notifications, Defaults, Account.
 2. In the **Notifications** card, click the **Push notifications** switch (it's off: grey). Chrome shows a small box under the address bar: *<words>.trycloudflare.com wants to Show notifications*. Click **Allow**. The switch turns blue (on).
-3. **NikosGkikas13's iPhone:** open **Safari**, type the `$TUNNEL` address in the address bar (AirDrop it or type it), and go. Tap **Sign in with GitHub** and sign in as `NikosGkikas13` (GitHub on the phone may ask for your password and a two-factor code). You land in the inbox (the account is set up already).
+3. **NikosGkikas13's iPhone:** open **Safari**, type the `$TUNNEL` address in the address bar **with `https://` in front** (AirDrop it or type it), and go. Safari doesn't upgrade a typed address to https, and the tunnel answers plain http too: the sign-in cookie is `Secure`, so over http it is dropped and GitHub's sign-in ends in *This sign-in link expired or was changed* (seen in the 2026-10-20 run). Tap **Sign in with GitHub** and sign in as `NikosGkikas13` (GitHub on the phone may ask for your password and a two-factor code). You land in the inbox (the account is set up already).
 4. Tap the **Share** button (the square with an arrow pointing up, in the bar at the bottom). Scroll the sheet down and tap **Add to Home Screen**. The name says *Nitpilot*; tap **Add** (top right).
 5. Go to the Home Screen (swipe up from the bottom) and tap the new **Nitpilot** icon. The app opens full screen, without Safari's address bar. If it shows the landing page, tap **Sign in with GitHub** again inside it (a Home Screen app keeps its own cookies).
 6. Tap your avatar (top left) → **Settings** → in **Notifications**, tap the **Push notifications** switch. iOS asks *"Nitpilot" Would Like to Send You Notifications*: tap **Allow**. The switch turns on.
 7. **T5:** `dbq -v pr=0 -f - < docs/acceptance/check-web.sql`. Section 4 lists two rows for `NikosGkikas13`, one per browser.
 
-- [ ] Push is on in NikosGkikas13's Chrome window and in the iPhone's Home Screen app: two subscriptions in `check-web.sql` section 4.
+- [x] Push is on in NikosGkikas13's Chrome window and in the iPhone's Home Screen app: two subscriptions in `check-web.sql` section 4.
 
 ## 4. Live updates, a note, a failed job and Retry, and push (the first PR; one Claude run)
 
@@ -162,17 +162,17 @@ This PR covers four criteria. NikosGkikas13's agent fails its review on purpose 
    ```
 10. **T5:** close the PR so later sections don't touch it: `gh pr close $PR --repo $SANDBOX`.
 
-- [ ] **Live (spec §20):** the inbox rows and the open chat changed while the agents worked, including the progress line, in both browsers, without a reload.
-- [ ] **A note reaches the agents' next job:** `orders.js` starts with `// checked in the Plan 2 acceptance run`, and `check-web.sql` section 3 shows the note followed by an `address for ngkdev93-jpg` job.
-- [ ] **A failed job shows Retry, and Retry runs it again:** `check.sql` section 2 shows NikosGkikas13's first review `failed` (`crash`, attempt 3) and a second review `done`; the timeline says *NikosGkikas13 asked their agent to try again*; the **Retry** banner showed only in NikosGkikas13's browser.
-- [ ] **Web Push** arrived on desktop Chrome and on the iPhone (from the Home Screen app), and clicking each opened the chat.
-- [ ] **With push on, the CLI showed no OS notification:** T4 has the `🔔` line, and no *Script Editor* notification appeared.
+- [x] **Live (spec §20):** the inbox rows and the open chat changed while the agents worked, including the progress line, in both browsers, without a reload.
+- [x] **A note reaches the agents' next job:** `orders.js` starts with `// checked in the Plan 2 acceptance run`, and `check-web.sql` section 3 shows the note written before the `address for ngkdev93-jpg` job (in this section the next job is NikosGkikas13's retried review, then the address job).
+- [x] **A failed job shows Retry, and Retry runs it again:** `check.sql` section 2 shows NikosGkikas13's first review `failed` (`crash`, attempt 3) and a second review `done`; the timeline says *NikosGkikas13 asked their agent to try again*; the **Retry** banner showed only in NikosGkikas13's browser.
+- [x] **Web Push** arrived on desktop Chrome and on the iPhone (from the Home Screen app), and clicking each opened the chat.
+- [x] **With push on, the CLI showed no OS notification:** T4 has the `🔔` line, and no *Script Editor* notification appeared.
 
 ## 5. Drafts with Auto off (the second PR; one Claude run)
 
 With Auto off, an agent's work waits as a draft for its person to read and send. NikosGkikas13 turns Auto-review off and ngkdev93-jpg turns Auto-fix off before the PR opens, so the new chat starts with both off.
 
-1. **NikosGkikas13's browser:** avatar → **Settings** → in **Defaults for new chats**, click the **Auto-review** switch so it turns grey (off). **ngkdev93-jpg's browser:** avatar → **Settings** → **Defaults for new chats** → click **Auto-fix** so it turns grey. Each switch saves at once.
+1. **NikosGkikas13's browser:** avatar → **Settings** → in **Defaults for new chats**, click the **Auto-review** switch so it turns grey (off). **ngkdev93-jpg's browser:** avatar → **Settings** → **Defaults for new chats** → click **Auto-fix** (not Auto-review: ngkdev93-jpg is the author) so it turns grey. Each switch saves at once. **T5:** `dbq -c 'select login, "autoReview", "autoAddress" from "User"'` shows NikosGkikas13 `f | t` and ngkdev93-jpg `… | f`.
 2. **T5:** new branch and PR (ask first: writes to GitHub):
    ```bash
    cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" drafts && cd "$REPO"
@@ -180,8 +180,8 @@ With Auto off, an agent's work waits as a draft for its person to read and send.
      --title "Plan 2: drafts" --body "Plan 2 acceptance run." --reviewer NikosGkikas13
    ```
    `PR=…`. Open the chat in both browsers from the inbox. In each chat's header, your own switch reads off (*Auto-review* for NikosGkikas13, *Auto-fix* for ngkdev93-jpg).
-3. **T4:** `→ review of …` and `✓ review of …: done`. **NikosGkikas13's browser:** a draft card appears in the timeline, *Draft: Your agent wants to raise 3 points*, with **Send** and **Discard** buttons. Nothing is on GitHub yet: in **T5**, `gh api repos/$SANDBOX/pulls/$PR/comments --jq length` prints `0`.
-4. **NikosGkikas13's browser:** click **Send** on the card. The card goes, the three point cards appear in the chat, and GitHub gets the review: the same command now prints `3`. (Ask first: the next step starts Claude Code.)
+3. **T4:** `→ review of …` and `✓ review of …: done`. **NikosGkikas13's browser:** a draft card appears in the timeline, *Draft: Your agent wants to raise 3 points*, with **Send** and **Discard** buttons. Nothing is on GitHub: in **T5**, `gh api repos/$SANDBOX/pulls/$PR/comments --jq length` prints `0`.
+4. **NikosGkikas13's browser:** click **Send** on the card. The card goes and the three point cards appear in the chat. GitHub gets no review: both people are on Nitpilot, so the points live in the chat (only a reviewer whose author isn't on Nitpilot answers on GitHub, spec §6.1), and the same command still prints `0`. (Ask first: the next step starts Claude Code.)
 5. **T3:** `→ address of …`, then `✓ address of …: done`. The fix commit stays on ngkdev93-jpg's laptop. **ngkdev93-jpg's browser:** a draft card *Draft: Your agent wants to push fixes for P1, P2 and P3* (or a mix of fixes and replies) with the words *Not pushed*, a list of the changed files, and the diff of `orders-demo/src/orders.js` open under it (green `+` and red `−` lines). Check GitHub still has the old head and the commit is only local:
    ```bash
    gh api repos/$SANDBOX/pulls/$PR --jq .head.sha
@@ -199,10 +199,10 @@ With Auto off, an agent's work waits as a draft for its person to read and send.
    ```
 9. Turn the defaults back on: **Auto-review** in NikosGkikas13's Settings, **Auto-fix** in ngkdev93-jpg's (both switches blue again).
 
-- [ ] **A reviewer draft waited for Send**, and Send put its three points into the chat and onto GitHub (`0` before Send, `3` after).
-- [ ] **An author draft, with its diff, waited for Send**, while GitHub's head stayed on the old commit; Send pushed it.
-- [ ] **The pushed commit is authored by ngkdev93-jpg** (`author: "ngkdev93-jpg"`), and the draft ref is gone from the clone afterwards.
-- [ ] `check-web.sql` section 1 shows both people with `auto` false, and section 2 shows the drafted jobs `applied` (a `publish` job among them).
+- [x] **A reviewer draft waited for Send**, and Send put its three points into the chat (and none on GitHub, both before and after).
+- [x] **An author draft, with its diff, waited for Send**, while GitHub's head stayed on the old commit; Send pushed it.
+- [x] **The pushed commit is authored by ngkdev93-jpg** (`author: "ngkdev93-jpg"`), and the draft ref is gone from the clone afterwards.
+- [x] `check-web.sql` section 1 shows both people with `auto` false, and section 2 shows the drafted jobs `applied` (a `publish` job among them).
 
 ## 6. A security point escalates: Continue, then Resolve (the third PR; one Claude run)
 
@@ -232,10 +232,10 @@ NikosGkikas13's agent follows `sandbox-escalation.json`: it raises a security po
    ```
 8. **T4:** back to the happy scenario: Ctrl-C, `unset B_SCENARIO`, then `nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`.
 
-- [ ] **A security point escalated** (`check.sql` section 6: P1 `escalated` with reason `category` before Continue).
-- [ ] **Continue let the agents run one more round on it:** an address job and a re-review after the Continue, and P1 `resolved`.
-- [ ] **On the second escalation, Resolve made the chat ready:** P2 resolved by NikosGkikas13, the chat `ready` (section 1).
-- [ ] ngkdev93-jpg never saw a **Resolve** button.
+- [x] **A security point escalated** (`check.sql` section 6: P1 `escalated` with reason `category` before Continue).
+- [x] **Continue let the agents run one more round on it:** an address job and a re-review after the Continue, and P1 `resolved`.
+- [x] **On the second escalation, Resolve made the chat ready:** P2 resolved by NikosGkikas13, the chat `ready` (section 1).
+- [x] ngkdev93-jpg never saw a **Resolve** button.
 
 ## 7. Read-only, and a 404 (no agent runs)
 
@@ -254,7 +254,7 @@ The sandbox is public, so everyone can read it. NikosGkikas13 isn't in a chat fo
 3. **ngkdev93-jpg's browser:** the same address shows the chat with the *Auto-fix* switch and the message box (ngkdev93-jpg is the author).
 4. **T5:** `gh pr close $PR --repo $SANDBOX`.
 
-- [ ] NikosGkikas13 saw the chat read-only: no message box, no Auto switch, no action buttons, and not in the inbox.
+- [x] NikosGkikas13 saw the chat read-only: no message box, no Auto switch, no action buttons, and not in the inbox.
 
 ### 7.2 Someone who can't read the repo gets a 404
 
@@ -276,8 +276,8 @@ This needs a repo ngkdev93-jpg can't read: a private one of NikosGkikas13's, mad
 4. **ngkdev93-jpg's browser:** open the same address. The page shows **Nothing here** / *This chat doesn't exist, or your GitHub account can't see its repo.* Then open `$TUNNEL/c/$PRIV/999` (a PR that doesn't exist): exactly the same page.
 5. **T5:** clean up (ask first): `gh pr close 1 --repo $PRIV`, then delete the repo. `gh repo delete $PRIV --yes` needs the `delete_repo` permission; if it refuses, run `gh auth refresh -h github.com -s delete_repo` yourself (it shows a code to approve in the browser), or delete it in **NikosGkikas13's browser**: the repo → **Settings** (top tabs) → scroll to the red **Danger Zone** → **Delete this repository** → follow the prompts.
 
-- [ ] ngkdev93-jpg got the not-found page for the private repo's chat, the same page as for a PR that doesn't exist.
-- [ ] The private repo is deleted.
+- [x] ngkdev93-jpg got the not-found page for the private repo's chat, the same page as for a PR that doesn't exist.
+- [x] The private repo is deleted.
 
 ## 8. Wrap up
 
@@ -290,22 +290,34 @@ This needs a repo ngkdev93-jpg can't read: a private one of NikosGkikas13's, mad
 
 ## 9. Results
 
-Run on: (date), with Nitpilot at commit `(sha)`. Agent ngkdev93-jpg: Claude Code (version) through the built CLI; agent NikosGkikas13: the fake agent from source. Desktop: Chrome (version) on macOS (version). Phone: iPhone (model), iOS (version).
+Run on: 2026-10-20, 08:35–10:20 UTC, with Nitpilot at commit `6225cd4` (the fixes below landed during the run, at `74c4e6d` and `a0a1bc5`). Agent ngkdev93-jpg: Claude Code 2.1.277 through the built CLI; agent NikosGkikas13: the fake agent from source. Desktop: Chrome 155.0.8059.85 on macOS 15.1. Phone: iPhone on iOS 16.7 (Safari 16.6). Tunnel: `https://dealers-mason-madonna-scene.trycloudflare.com`. PRs: sandbox #11 (section 4), #12 (5), #13 (6), #14 (7.1), and `nitpilot-private-check` #1 (7.2, repo deleted after).
 
 **Criteria** (spec §20, Plan 2 acceptance), each with its evidence:
 
 | Criterion | Section | Evidence |
 |---|---|---|
-| The inbox and an open chat update live while the agents work, including the progress line, without a reload | 4 | |
-| With Auto off, a reviewer draft and an author draft (with its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's commit, authored by ngkdev93-jpg | 5 | |
-| A security point escalates; Continue runs one more round; on a second escalation Resolve makes the chat ready | 6 | |
-| A note sent from the composer reaches the agents' next job | 4 | |
-| A failed job shows Retry, and Retry runs it again | 4 | |
-| Web Push arrives on desktop Chrome and on the iPhone (Home Screen app), and clicking it opens the chat; with push on, the CLI shows no OS notification | 3, 4 | |
-| Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404 | 7 | |
+| The inbox and an open chat update live while the agents work, including the progress line, without a reload | 4 | PR #11 appeared in both inboxes and the chats followed the run with no reload: the note showed in the other browser at once, and the progress line (*…'s agent is reviewing… / is …*) moved in both browsers while Claude worked (09:20:28–09:21:20), with the inbox pills changing (seen by the person) |
+| With Auto off, a reviewer draft and an author draft (with its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's commit, authored by ngkdev93-jpg | 5 | PR #12: `check-web.sql` §1 both `auto` f. The review waited as a draft card, Send put P1–P3 in the chat. Claude's fix waited as *Draft … Not pushed* with the `orders.js` diff while GitHub's head stayed `e92c9f2` and the clone held one `refs/nitpilot/drafts/…`; Send ran a `publish` job that pushed `9ad3f64`, author `ngkdev93-jpg`, and the draft ref was gone after. The re-review's draft was sent, chat `ready`. §2: review, address, publish, re_review all `applied` |
+| A security point escalates; Continue runs one more round; on a second escalation Resolve makes the chat ready | 6 | PR #13: P1 `escalated` (reason `category`) at 10:01:38, red banner in both browsers, **Resolve** only in NikosGkikas13's. ngkdev93-jpg's **Continue** → address (Claude pushed `9872c50`, a parameterized query) → re-review: P1 resolved, P2 escalated → NikosGkikas13's **Resolve** → `ready`, round 2 |
+| A note sent from the composer reaches the agents' next job | 4, 5 | Section 4 (#11): the note reached the address job's bundle, but Claude refused it: *"Did not act on the PR note… since it was untrusted PR text"*. Fixed in `74c4e6d` (an agent's own person's notes are theirs to follow). Section 5 (#12), same note written at 09:56:28 before the address job at 09:56:48: the pushed `orders.js` starts with `// checked in the Plan 2 acceptance run` |
+| A failed job shows Retry, and Retry runs it again | 4 | PR #11 on `crash.json`: attempts at 09:08:02, 09:08:39, 09:09:44, then `failed` (`crash`, attempt 3) and the amber **Your agent couldn't finish** banner with **Retry** in NikosGkikas13's browser only. Retry at 09:20:25: timeline *NikosGkikas13 asked their agent to try again*, a second review `done` |
+| Web Push arrives on desktop Chrome and on the iPhone (Home Screen app), and clicking it opens the chat; with push on, the CLI shows no OS notification | 3, 4 | `check-web.sql` §4: *Chrome on macOS* (`fcm.googleapis.com`) and *Safari on iPhone* (`web.push.apple.com`). At *Ready* (09:21:23.774, T4 `🔔`) both devices showed the notification and clicking each opened chat #11; no Script Editor notification for NikosGkikas13. ngkdev93-jpg (no push) did get the CLI's Script Editor notification in section 6, as it should |
+| Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404 | 7 | #14 (no reviewer): not in NikosGkikas13's inbox; its address showed *You're reading along…*, no Auto switch, no buttons; ngkdev93-jpg saw the composer and Auto-fix. `nitpilot-private-check` #1 (collaborators: NikosGkikas13 only): NikosGkikas13 saw the chat, ngkdev93-jpg got *This chat doesn't exist, or your GitHub account can't see its repo.*, the same page as for PR 999. Repo deleted after (GitHub answers 404) |
 
 **What was found and fixed during the run** (each with its commit):
 
-- (none yet)
+- **An agent refused its own person's note** (section 4): every note was wrapped as untrusted text, so Claude read the author's request and declined it. `74c4e6d`: `get_job` marks each note `fromYou`; the notes of the person the agent works for come as plain text to act on, everyone else's stay untrusted (so a fork PR's author still can't steer the reviewer's agent). Spec §11 and docs/why/prompt-injection.md updated. Checked live in section 5.
+- **The server's tests read the developer's push keys** (section 0 put real VAPID keys in `apps/server/.env`, which `vitest.config.ts` loads): two env tests failed. `a0a1bc5`: `TEST_ENV` blanks the three keys.
+- This runbook, corrected where the run showed it wrong: type the tunnel address with `https://` (Safari, see section 3); GitHub now says **Redirect URI**; `healthz` answers JSON; with both people on Nitpilot the reviewer's points stay in the chat, not on GitHub (section 5); say which switch ngkdev93-jpg turns off. `check.sql` §3 no longer counts a failed job and its Retry as a duplicate.
 
-**Ticks:** every box in sections 0 to 8 is ticked, or has a note here saying why not.
+**Seen, not fixed** (deferred):
+
+- **Sign-in over plain http fails without a word of why.** Safari on the Mac and the iPhone loaded the tunnel address typed without `https://` over http; the `Secure` sign-in cookie was dropped, and the callback said *This sign-in link expired or was changed*. With `https://` it works. Production sits behind a proxy that redirects http (Plan 3); a fix would send `/auth/github/login` to `PUBLIC_URL` when the request came in on another address.
+- **A resent webhook can bring back a merged PR.** At the first boot the server asked GitHub to resend 3 deliveries that had failed while no tunnel ran (the app is also installed on `NikosGkikas13/nitpilot`). The resent `closed` of `nitpilot` #1 was processed before an older `synchronize`, ignored as untracked, and the `synchronize` then created a chat for the merged PR, which sits idle in the inbox.
+- **A re-review right after our own push fails once with `stale_head`** (sections 5 and 6): it starts before GitHub reports the new head, and runs again 10 s later without counting as an attempt. Harmless.
+- `gh pr create --reviewer` failed once with a GraphQL error (section 4); the REST fallback in step 2 worked.
+- The server log showed the known `ChatRead_userId_chatId_key` unique-constraint errors (a mark-read race; deferred before this run).
+
+**The phone:** the Home Screen app needed its own sign-in (it keeps its own cookies, apart from Safari's), and the push arrived on the iPhone as on the Mac and opened the chat (the delay wasn't timed; it came while the person was watching both).
+
+**Ticks:** every box in sections 0 to 8 is ticked.
