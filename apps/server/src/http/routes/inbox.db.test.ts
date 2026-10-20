@@ -1,5 +1,6 @@
 import { InboxResponse } from '@nitpilot/protocol';
 import { describe, expect, it, vi } from 'vitest';
+import { recordQueries } from '../../../test/queries';
 import { testApp } from '../../../test/app';
 import { makeChat, makeMessage, makeParticipant, makeRepo, makeUser } from '../../../test/db';
 import { json } from '../../../test/fake-fetch';
@@ -165,5 +166,13 @@ describe('POST /api/chats/:id/read', () => {
     const rows = await prisma.chatRead.findMany({ where: { userId: maya.id, chatId: chat.id } });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.lastReadSeq).toBe(4);
+  });
+
+  it("never makes Postgres refuse a duplicate when two tabs create the cursor at the same moment (no ERROR in the database's log)", async () => {
+    const { read } = await scene();
+    const sql = await recordQueries(() => Promise.all([read(1), read(2), read(3), read(4)]));
+    const inserts = sql.filter((q) => q.startsWith('INSERT INTO "public"."ChatRead"'));
+    expect(inserts.length).toBeGreaterThan(0);
+    for (const insert of inserts) expect(insert).toContain('ON CONFLICT DO NOTHING');
   });
 });

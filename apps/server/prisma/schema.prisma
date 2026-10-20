@@ -307,6 +307,7 @@ model Job {
 
   @@index([status, runAfter])
   @@index([chatId, expectedPushSha])
+  @@index([draftOfId])
 }
 
 /// Server-side outbox and timers (spec §7). The task runner executes due rows.

@@ -4,7 +4,7 @@ import type { RepoAccess, RepoAccessResult } from '../../auth/repo-access';
 import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
 import type { LiveClis } from '../../chats/activity';
 import { loadInboxRows } from '../../chats/inbox';
-import { isUniqueViolation, prisma } from '../../lib/prisma';
+import { prisma } from '../../lib/prisma';
 import { HttpError } from '../errors';
 
 /** `GET /api/inbox` and `POST /api/chats/:id/read` (spec §10 "REST endpoints in Plan 2"). */
@@ -29,13 +29,10 @@ export function inboxRoutes(deps: { clis: LiveClis; access: RepoAccess }): Hono<
     // Never past the newest item: items that arrive later must count as unread.
     const upTo = Math.min(seq, chat.lastSeq);
     const key = { userId: user.id, chatId: chat.id };
-    // Two tabs can mark the same chat at the same moment. Both may find no row and both create one; the
-    // unique (userId, chatId) lets only one through, and the other carries on. Then the cursor only moves forward.
-    try {
-      await prisma.chatRead.create({ data: { ...key, lastReadSeq: upTo } });
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-    }
+    // Two tabs can mark the same chat at the same moment, and both try to create the row. skipDuplicates makes it
+    // INSERT … ON CONFLICT DO NOTHING: the unique (userId, chatId) keeps one row, and the second insert does nothing
+    // instead of failing (a failed insert would log an ERROR in Postgres). Then the cursor only moves forward.
+    await prisma.chatRead.createMany({ data: [{ ...key, lastReadSeq: upTo }], skipDuplicates: true });
     await prisma.chatRead.updateMany({ where: { ...key, lastReadSeq: { lt: upTo } }, data: { lastReadSeq: upTo } });
     return c.body(null, 204);
   });

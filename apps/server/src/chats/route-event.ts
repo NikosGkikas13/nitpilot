@@ -36,7 +36,10 @@ export async function routePrEvent(ne: PrNormalizedEvent, deps: RouterDeps): Pro
   if (!chat) {
     if (event.type === 'pr_closed') return 'closed PR that was never tracked';
     if (event.type === 'pr_retargeted') return 'retargeted PR that was never tracked';
-    const snapshot = ne.snapshot ?? (await deps.platform.getPr(ne.pr));
+    // Anything but "opened" may be old news: a comment on a long-merged PR, or a push webhook that waited behind the
+    // merge. Its own copy of the PR can still say open, so ask GitHub how the PR is now.
+    const snapshot = event.type === 'pr_opened' && ne.snapshot ? ne.snapshot : await deps.platform.getPr(ne.pr);
+    if (snapshot.state !== 'open') return 'closed PR that was never tracked';
     chat = await createChat(repo.id, snapshot, rules);
     // A PR we first meet through a comment or review still starts with "opened".
     if (event.type !== 'pr_opened') {

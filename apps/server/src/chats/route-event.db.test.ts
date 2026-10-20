@@ -235,6 +235,22 @@ describe('a base retarget (pull_request.edited)', () => {
     expect(await chat()).toMatchObject({ baseRef: 'release', trusted: true });
   });
 
+  it('ignores a comment on a PR it never tracked that is already merged: no chat, no reviews', async () => {
+    const { platform, deliver } = await setup();
+    platform.addPr(snapshotFromPull(ref, pull({ state: 'closed', merged: true })));
+    expect(await deliver('pull_request_review_comment', reviewCommentEvent('created'))).toEqual({ status: 'ignored', note: 'closed PR that was never tracked' });
+    expect(await prisma.prChat.count()).toBe(0);
+    expect(await prisma.job.count()).toBe(0);
+  });
+
+  it('asks GitHub, not the webhook, whether an untracked PR is still open: an older push processed after the merge starts nothing', async () => {
+    const { platform, deliver } = await setup();
+    platform.addPr(snapshotFromPull(ref, pull({ state: 'closed', merged: true })));
+    // The synchronize webhook was sent before the merge, so its copy of the PR still says open.
+    expect(await deliver('pull_request', prEvent('synchronize', { before: 'a'.repeat(40), after: 'b'.repeat(40) }))).toEqual({ status: 'ignored', note: 'closed PR that was never tracked' });
+    expect(await prisma.prChat.count()).toBe(0);
+  });
+
   it('ignores a retarget of a PR it never tracked', async () => {
     const { deliver } = await setup();
     expect(await deliver('pull_request', retarget())).toEqual({ status: 'ignored', note: 'retargeted PR that was never tracked' });

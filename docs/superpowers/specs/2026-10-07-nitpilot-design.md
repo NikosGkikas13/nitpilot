@@ -587,6 +587,7 @@ In Plan 1 this file also held `auto` (the Auto defaults for new chats) and `dail
   - Every body we write carries a hidden marker, `<!-- nitpilot:v1 chat=… -->`, and every id we create is stored in `GithubWrite`. Webhook events for those are ignored.
   - Our own pushes are announced in advance with `job.pushing` and matched by sha.
   - GitHub wraps each thread reply we post in a review of its own, with no body. A review that holds nothing but our own comments is our own write too (seen on the Plan 1 acceptance run).
+- **A PR met for the first time** through anything but `opened` (a comment, a review, a push) starts a chat only if GitHub says it's still open now. The event's own copy of the PR can be older than a merge (a redelivered webhook, or one that waited behind the `closed`), so the server reads the PR from the API instead. A closed PR that was never tracked is ignored.
 - **Event order:** on `pull_request_review.submitted`, fetch that review's comments through the API instead of trusting the order webhooks arrive in.
 - **Debounce:** loose comments wait for `debounce_seconds` of quiet. A submitted review is processed immediately, unless it is a `commented` review with no body of its own: GitHub's *Add single comment* looks exactly like that, so it waits like a loose comment (a reviewer's inline-only review waits the same 30 seconds).
 - **Re-requested reviews:**
