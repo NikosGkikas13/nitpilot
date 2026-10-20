@@ -197,7 +197,12 @@ export function getJob(ctx: McpJobContext) {
     sinceSha: bundle.sinceSha,
     // From the base branch, never the PR's own copy: a PR can't rewrite its rules (spec §11 step 3).
     conventions: worktree.conventions,
-    notes: bundle.notes.map((note) => ({ author: note.author, at: note.at, body: wrapUntrusted('note', note.body) })),
+    // A note from the person this agent works for is that person asking: theirs to follow (spec §11). Anyone else's is
+    // untrusted like the rest of the PR's text, so a fork's author can't steer the reviewer's agent with a note.
+    notes: bundle.notes.map((note) => {
+      const fromYou = note.author.toLowerCase() === bundle.you.login.toLowerCase(); // GitHub logins ignore case
+      return { author: note.author, at: note.at, fromYou, body: fromYou ? note.body : wrapUntrusted('note', note.body) };
+    }),
     points: bundle.points.map((point) => ({
       ...point,
       title: wrapUntrusted('point_title', point.title),

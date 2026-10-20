@@ -368,7 +368,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 
 | Tool | Job types | Input → output |
 |---|---|---|
-| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes, points with their replies and whether each is trusted (§6.1: an outsider's point is for information only), rules (ignored paths, categories, max points) |
+| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes (each with `fromYou`: the person the agent works for wrote it), points with their replies and whether each is trusted (§6.1: an outsider's point is for information only), rules (ignored paths, categories, max points) |
 | `list_changed_files` | all | `{since?}` → `[{path, oldPath?, status, adds, dels, binary, ignored}]`. `since` is a full commit sha; if it's no longer in head's history (a force-push), the whole PR, with a note saying so |
 | `get_diff` | all | `{path, since?}` → a unified diff of one changed file (merge-base..head, or since..head), capped at 100 KB |
 | `get_file` | all | `{path, ref: base\|head, from?, to?}` → the content with line numbers, read with `git cat-file blob`, never from the filesystem, capped at 100 KB |
@@ -378,7 +378,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 | `run_check` | address | `{name}` → `{ok, exitCode, outputTail}`. Runs a command from the repo's `checks` in the personal config through `spawn` (no shell), in the worktree, with an allowlisted environment plus `CI=true`. It runs in its own process group: a 10-minute timeout, a cancel or its own exit stops everything it started (a program that leaves the group on purpose isn't stopped, but Nitpilot stops waiting for it a second after the check ends). `outputTail` is the last 4 KB of output |
 | `finish` | all | `{summary}`. Optional; derived from the results if missing |
 
-Untrusted text (the PR's title and body, human notes, points and their comments) is wrapped in `<untrusted source="…">` in tool results, and a `<untrusted` or `</untrusted` inside it is escaped. The read tools run git on the job's objects only, and every diff runs with `--no-ext-diff --no-textconv`, so no diff program from the user's git config or the PR's `.gitattributes` runs.
+Untrusted text (the PR's title and body, other people's notes, points and their comments) is wrapped in `<untrusted source="…">` in tool results, and a `<untrusted` or `</untrusted` inside it is escaped. A note written by the person the agent works for is theirs: it comes as plain text with `fromYou: true`, and the prompt says to do what it asks when it's about the PR (the Plan 2 live run: an author's note to their own agent was refused while every note was untrusted). Anyone else's note stays untrusted, so the author of a fork PR can't steer the reviewer's agent with a note. The read tools run git on the job's objects only, and every diff runs with `--no-ext-diff --no-textconv`, so no diff program from the user's git config or the PR's `.gitattributes` runs.
 
 ## 12. Adapters
 
