@@ -15,4 +15,9 @@ export const TEST_ENV = {
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret',
   PUBLIC_REPOS_ONLY: 'false',
   ALLOWED_LOGINS: '',
+  // Push off unless a test turns it on: a developer's .env with real keys (docs/acceptance/plan-2.md section 0) must not
+  // leak into tests that expect none. Empty counts as not set.
+  VAPID_PUBLIC_KEY: '',
+  VAPID_PRIVATE_KEY: '',
+  VAPID_SUBJECT: '',
 };
