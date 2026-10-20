@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: W1–W7 at step level; W8 at task level.** W7 (Tasks 21–23) was written at step level on 2026-10-19 against the branch at `e6a779f`; see "Checked against the code (W7)". W6 (Tasks 19–20) was written at step level on 2026-10-18 against the branch at `3285e9b`; see "Checked against the code (W6)". W5 (Tasks 14–18) was written at step level on 2026-10-18 against the branch at `03241c8`; see "Checked against the code (W5)". W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
+> **Status: W1–W8 at step level.** W8 (Tasks 24–25) was written at step level on 2026-10-20 against the branch at `f0d2a98`; see "Checked against the code (W8)". W7 (Tasks 21–23) was written at step level on 2026-10-19 against the branch at `e6a779f`; see "Checked against the code (W7)". W6 (Tasks 19–20) was written at step level on 2026-10-18 against the branch at `3285e9b`; see "Checked against the code (W6)". W5 (Tasks 14–18) was written at step level on 2026-10-18 against the branch at `03241c8`; see "Checked against the code (W5)". W4 (Tasks 11–13) was written at step level on 2026-10-17 against the branch at `d3863bc`; see "Checked against the code (W4)". W3 (Tasks 7–10) was written at step level on 2026-10-16 against the branch at `16ca658`; see "Checked against the code (W3)". W2 (Tasks 4–6) was written at step level on 2026-10-15 against the branch at `b6cf319`; see "Checked against the code (W2)". The task-level plan was written on 2026-10-15 against `main` at `97268c9` (Plans 1a and 1b merged) plus the Plan 2 spec decisions in `6330847` on branch `plan-2-web-app`. W1 (Tasks 1–3) has full TDD steps (test and implementation code, exact commands, expected output), written on 2026-10-15 against the branch at `eebbddd`; "Checked against the code (W1)" below lists where it differs from the task-level text. Each later milestone is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Wn)" section.
 
 **Goal:** Give Nitpilot its web app: an installable PWA, served by the Nitpilot server, where people see their PR inbox and each PR's chat live, drive the chat (notes, Resolve / Continue, Retry, Review, Auto, drafts) and get Web Push notifications, built pixel-accurately from the Claude Design handoff.
 
@@ -320,6 +320,32 @@ W7 was written at step level on 2026-10-19, against branch `plan-2-web-app` at `
 - No installed-repo list on the checklist; the public-repos note can't be seen on the Playwright server (its test env forces the setting off; unit-tested).
 - Playwright: one writer saw a single unnamed failure in one run of 16 (three later runs green): watch for a flake.
 - From W4–W6, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing, the failure reason in the failed banner, a publish crash plus a push on top, `pr_retargeted` with a queued review, no chat banner for a waiting draft, the Home Screen sheet's icon appearing late, Task 20's live step.
+
+## Checked against the code (W8)
+
+W8 was written at step level on 2026-10-20, against branch `plan-2-web-app` at `f0d2a98` (W7 done, with its fix rounds; W6 and W7 not pushed). Task 24's code and Task 25's offline half were built and run in a scratch worktree first, on a database of their own (protocol 82, CLI 333 + 14 skipped → 334 + 14, server 1026 → 1031, web 331, end to end 6, Playwright 16 → 18; typecheck, lint and build clean, main chunk 495.33 kB), and every code block below was generated from those tested commits by a script. Each step's "Expected: FAIL" counts were checked by applying only that step's tests to the commit before it. No new dependencies. Task 24's suite passed three times in a row (`npm run test:web-e2e` 18/18, `npm run test:e2e` 6/6), and every Playwright file passed on its own. Task 25's live run hasn't happened: its steps are the runbook, and their results land in a second commit. Where W8 differs from the task-level text, and why:
+
+**Task 24 (Playwright in CI)**
+- **Most of it already existed.** The four flows of spec §19 were written by earlier tasks (`inbox`, `chat-live`, `escalation`, `drafts` specs), `playwright.config.ts` already had one worker, no retries and a trace on failure, and CI already installed Chromium, ran Playwright after the build and uploaded the traces. **Ruling (controller): the flow specs stay where they are, unchanged**; each resets the chats and opens its own PR, and each passes when run alone, so they don't depend on each other's order.
+- **Ruling (controller): no control-API `GET /state`.** Every wait is on the page or on a control-API answer, and no spec sleeps; a test that needs to wait on something invisible can add it then.
+- **The read-only test is a new `readonly.spec.ts`, with both halves of spec §20's last criterion:** `rita` (GitHub shows rita the repo) sees an escalated chat with the "You're reading along…" sentence, no Auto switch and no banner buttons, and not in rita's inbox; `otto` (GitHub answers 404 for otto's token) gets "Nothing here", and the API's 404 for otto's view of the chat has the same body as for a chat that doesn't exist. They exist only on the Playwright server (`web-server.ts`); `control.ts` gains `type Person` for `signIn`.
+- **CI:** Chromium is cached on `~/.cache/ms-playwright`, keyed on the installed Playwright version (a browser build belongs to one version, so other dependency changes don't throw the cache away); on a hit only the system libraries are installed. `forbidOnly` in CI; traces kept 14 days. The YAML is checked by reading it: it only runs on GitHub, at the next push.
+- **The deadlock (`40P01` in `resetDb`'s TRUNCATE), at its cause.** Postgres's own log showed the same circle three times: the summary task (update `PrChat`, then insert into `GithubWrite`, in one transaction) was still running when the next test emptied the tables, because `TaskRunner.stop()` only cleared its timer. `stop()` now returns a promise that waits for the pass in flight, and a stopped runner starts and claims nothing more; the harness and `main.ts`'s shutdown await it (builder's ruling, accepted: a task in flight at shutdown now finishes instead of re-running at the next boot). The Playwright server's `/reset` keeps running between tests by design, so it retries a TRUNCATE that Postgres cancelled as a deadlock, up to 3 times (Postgres's own advice; no automated test, exercised by slowing the summary task). New explainer `docs/why/deadlocks.md`.
+- **The env test flake, at its cause.** The test's key maker used Node's `createECDH`, whose private key is 31 bytes about 1 time in 256 (a leading zero is dropped); the server rightly refuses that, so the test's "valid" pair was refused. The test now makes pairs as `npm run vapid:keys` does (web-push pads to 32), and two tests pin the rule. No server change.
+- `docs/why/end-to-end-test.md` gains "The browser suite in CI".
+
+**Task 25 (the acceptance run)**
+- **Ruling (controller): one address for the run.** The tunnel's HTTPS URL is `PUBLIC_URL` for the desktop browsers too, not only the phone: the session cookie and the Origin check follow `PUBLIC_URL`, so a browser on `localhost:8787` would be refused its writes. Spec §20 says so.
+- **Ruling (controller): who plays whom.** The non-participant is NikosGkikas13 on a PR that doesn't ask them to review (the sandbox is public). The outsider for the 404 is ngkdev93-jpg on a throwaway private repo of NikosGkikas13's, created for the check and deleted after (asked first).
+- **Ruling (controller): a scenario that escalates twice.** Plan 1's `sandbox-security.json` resolves its point on re-review, so the run would never reach the second escalation that Resolve is for; `sandbox-escalation.json` raises a second security point on a line Claude's fix doesn't move, pinned by `acceptance.test.ts`.
+- **Ruling (controller): Retry costs no Claude run.** NikosGkikas13's CLI runs the fake agent's `crash.json` until the review has failed 3 times, then the happy scenario before Retry. The note is checked by asking Claude Code for a line it then has to add.
+- **Push is on for NikosGkikas13 only** (normal Chrome window and the iPhone's Home Screen app): Chrome's private windows can't receive push, which is where ngkdev93-jpg signs in.
+- **New:** `docs/acceptance/check-web.sql` (Auto, attention, drafts' `applyState`, notes and the job after each, push subscriptions) and a `README.md` (there was none; the task-level text said to modify it). `docs/architecture.md` §4.12 and §6 are brought up to date. There is no `docs/why/` index to update.
+
+**Deferred**
+- The `/reset` deadlock retry has no automated test (it needs a race on purpose); other work that can outlive the harness's `close()` (the lease sweep, catch-up) is left alone: no log shows it.
+- Seen in the server's logs while building Task 24, predating W8: `ChatRead_userId_chatId_key` unique-constraint errors (two mark-read requests for a new chat at once). Not investigated.
+- From W4–W7, still deferred: the expired-session reconnect loop (`live/socket.ts`), `useMediaQuery` re-subscribing, the failure reason in the failed banner, a publish crash plus a push on top, `pr_retargeted` with a queued review, no chat banner for a waiting draft, the Home Screen sheet's icon appearing late, no live `usedToday`, no scroll-spy in Settings, the main bundle about 4.7 kB under Vite's warning, Task 20's live step (Task 25's sections 3 and 4 cover it).
 
 ## How to work in this repo
 
@@ -40393,28 +40419,1448 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Milestone W8: Proof
 
-W8 makes the browser suite part of CI, then proves Plan 2 live on the sandbox repo, on desktop and on the person's phone.
+W8 makes the browser suite part of CI, with its two known flakes fixed at their causes, then proves Plan 2 live on the sandbox repo, on desktop and on the person's phone.
+
+**Files at the end of W8:**
+```
+apps/server/src/tasks/runner.ts            stop() waits for the pass in flight (main.ts's shutdown and the e2e harness await it)
+apps/server/test/e2e/web-server.ts         /reset retries a TRUNCATE Postgres cancelled as a deadlock; rita (reads the repo) and otto (GitHub says 404)
+apps/web/e2e/readonly.spec.ts              someone who can read sees the chat read-only; someone who can't gets the 404 (control.ts: type Person)
+apps/web/playwright.config.ts              forbidOnly in CI
+.github/workflows/ci.yml                   Chromium cached by Playwright version; traces kept 14 days
+docs/why/deadlocks.md                      (docs/why/end-to-end-test.md and live-acceptance.md extended)
+docs/acceptance/plan-2.md                  the live runbook; check-web.sql; scenarios/sandbox-escalation.json
+README.md                                  what Nitpilot is, the web app, running it, the tests
+```
+
+---
 
 ### Task 24: Playwright suite in CI
 
 **Files:**
-- Modify: `apps/web/e2e/*.spec.ts` (gathered from Tasks 3, 6, 10, 13 and 18), `apps/web/playwright.config.ts` (one worker, retries 0, trace on failure), `apps/server/test/e2e/web-server.ts`, `.github/workflows/ci.yml` (cache Playwright's Chromium, upload traces on failure).
+- Create (server): none.
+- Create (web): `apps/web/e2e/readonly.spec.ts`.
+- Create (docs): `docs/why/deadlocks.md`.
+- Modify (server): `apps/server/src/lib/env.test.ts` (a test-helper fix, plus two tests that pin the rule), `apps/server/src/tasks/runner.ts` and `runner.db.test.ts` (`stop()` waits), `apps/server/src/main.ts` (shutdown waits), `apps/server/test/e2e/harness.ts` (`close()` waits), `apps/server/test/e2e/web-server.ts` (`/reset` retries a deadlock; two more people, `rita` and `otto`).
+- Modify (web): `apps/web/e2e/control.ts` (`Person`), `apps/web/playwright.config.ts` (`forbidOnly`).
+- Modify (CI and docs): `.github/workflows/ci.yml` (cache Chromium, keep the traces 14 days), `docs/why/end-to-end-test.md`.
+- Not touched, on purpose: the four flow specs (`inbox`, `chat-live`, `escalation`, `drafts`) and the other specs. They already live in `apps/web/e2e`, none uses a fixed sleep, and each passes on its own (Step 16). No migration, no new dependency, no spec change.
 
-**Behavior:**
-- The suite covers the four flows of spec §19: the inbox opens; a chat updates live while agents work; Resolve on an escalation; Send on a draft. Each test seeds its own chat and user through the control API, so tests don't depend on each other's order.
-- Flakes: no fixed sleeps; every wait is on something visible (`expect(locator).toBeVisible()`), or on the control API's `GET /state`.
-- `npm run test:web-e2e` runs three times in a row green locally before the task is done.
+**Interfaces:**
+- Consumes: the control API of `apps/server/test/e2e/web-server.ts` (`/signin`, `/reset`, `/pr`) through `signIn`, `openPr`, `resetChats`, `startCli`, `stopCli`, `pageProblems` (`apps/web/e2e/control.ts`); `fakeFetch` and `json` (`apps/server/test/fake-fetch.ts`); `startE2e` (`apps/server/test/e2e/harness.ts`); `TaskRunner` (`apps/server/src/tasks/runner.ts`).
+- Produces (server): `TaskRunner.stop(): Promise<void>`: no new pass starts (not even on `wake()`), the pass in flight stops after the task it is running, and the promise resolves once that task's outcome is saved. `start()` clears the stopped flag. The harness's `close()` and `main.ts`'s shutdown both `await` it.
+- Produces (Playwright server): `POST /reset` retries its `TRUNCATE` up to 3 times when Postgres cancels it as a deadlock (`40P01`); `POST /signin { login }` also takes `rita` (GitHub id 3101) and `otto` (3102); the pretend GitHub's `GET /repos/octo/sandbox` answers 404 to otto's token (`ghu_<his user id>`) and `{ id: 1 }` to everyone else.
+- Produces (web e2e): `type Person = 'maya' | 'leo' | 'rita' | 'otto'` (`e2e/control.ts`), the type of `signIn`'s `login`; every other helper stays `'maya' | 'leo'` (only they have CLIs).
 
-**Tests this task must include:** the four flows above, plus the read-only view: a second seeded user with read access but no role sees the chat without the composer or action buttons.
+**Behavior** (spec §19 the four browser flows, §20 Plan 2 acceptance; the controller's W8 rulings):
+- **The suite covers the four flows of spec §19**: the inbox opens (`inbox.spec.ts`), a chat updates live while agents work (`chat-live.spec.ts`), Resolve on an escalation (`escalation.spec.ts`), Send on a draft (`drafts.spec.ts`). Each test resets the chats and opens its own PR, so no test depends on another's order: every spec file also passes alone.
+- **The read-only view and the 404** (spec §20: "Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404"), in a new `readonly.spec.ts` with two people only the Playwright server knows:
+  - `rita` can read `octo/sandbox` on GitHub but takes no part in maya's PR (leo reviews it). With leo's CLI on `escalation.json` (so a participant would see Continue and Resolve), she opens the chat: the heading and the "Needs a human decision" banner show, the escalated point card shows, the composer is the sentence "You're reading along. Only the author and the reviewers can message the agents." with no text field, there is no Auto switch, the banner has no buttons, and the PR isn't in her inbox (the inbox lists the chats you take part in).
+  - `otto` is someone GitHub hides the repo from (GitHub answers a private repo you can't read with a 404). The same kind of chat URL shows the app's "Nothing here" state, and the API answers 404 with the same body as for a PR that has no chat (spec §16: a chat you can't see and one that doesn't exist look the same).
+- **No fixed sleeps.** No spec calls `waitForTimeout`; every wait is on something visible (`expect(locator)…`) or on a control-API response. There is no control-API `GET /state`: no test needs one (YAGNI; the first test that must wait on something invisible adds it).
+- **Playwright config.** One worker, no retries, trace `retain-on-failure` were already set; the task adds `forbidOnly: !!process.env.CI` (a stray `test.only` fails CI instead of silently running one test).
+- **CI.** Chromium is cached in `~/.cache/ms-playwright` (`actions/cache@v4`), keyed on the runner OS and the installed `@playwright/test` version (a new Playwright downloads once; other dependency bumps don't throw 150 MB away). On a cache hit only the system libraries are installed (`npx playwright install-deps chromium`); on a miss `npx playwright install --with-deps chromium`. The failure trace upload stays, keeps files 14 days and doesn't warn when there are none (a failure before Playwright ran, e.g. in `npm test`).
+- **Two flakes, fixed at their causes** (Steps 1 to 8):
+  - `env.test.ts` failed once in a full run. Its `makeKeyPair()` used Node's `createECDH().getPrivateKey()`, which drops a leading zero byte (about 1 key in 256 is 31 bytes), and `isVapidKeyPair` rightly refuses a private key that isn't 32 bytes (web-push signs only with 32). The test's key maker now makes pairs the way `npm run vapid:keys` does; the server is right and unchanged.
+  - `npm run test:e2e` once failed with Postgres `40P01 deadlock detected` inside `resetDb`'s `TRUNCATE`. A task's transaction (the summary task: update `PrChat`, then insert into `GithubWrite`) was still running when the harness's `close()` returned, because `runner.stop()` only cleared the timer. `stop()` now waits for the pass in flight. The Playwright server's `/reset` can meet the same deadlock (that server keeps running between tests, and more than the task runner can be writing), so it retries the `TRUNCATE`, as Postgres advises for a cancelled transaction.
+- **Docs.** `docs/why/deadlocks.md` (new, in React terms) and a "The browser suite in CI" section in `docs/why/end-to-end-test.md`. The spec needs no change.
+- **Done means** `npm run test:web-e2e` and `npm run test:e2e` each green three times in a row (Step 17).
+
+**Tests this task must include:** the four flows (already specs, run in Step 16 and 17), plus `readonly.spec.ts` (rita reads along without the composer or buttons; otto gets the not-found page and a 404), `env.test.ts` (a pair whose private key starts with a zero byte is accepted; the same key with that byte dropped is refused), and `runner.db.test.ts` (`stop()` waits for the pass in flight; a stopped runner starts no pass; a pass stopped between tasks leaves the rest pending).
+
+- [ ] **Step 1: Fix the first flake: the env test's key maker (this one has no RED)**
+
+The cause is in the test's helper, not the server, so the two new tests pin the server's rule and pass at once (a RED here would need a one-in-256 key). The evidence the builder gathered: 75 of 20 000 `createECDH()` private keys were 31 bytes, 0 of 20 000 from `webpush.generateVAPIDKeys()`; a throwaway test running `getEnv()` on 5 000 pairs from each maker was refused 20 times with the old maker and 0 with web-push's. First the tests and the maker, in one diff (`LEADING_ZERO` is a real pair written out in full, as web-push makes it):
+
+Modify `apps/server/src/lib/env.test.ts`:
+
+```diff
+diff --git a/apps/server/src/lib/env.test.ts b/apps/server/src/lib/env.test.ts
+index c05e730..ea845e7 100644
+--- a/apps/server/src/lib/env.test.ts
++++ b/apps/server/src/lib/env.test.ts
+@@ -1,17 +1,25 @@
+-import { createECDH } from 'node:crypto';
++import webpush from 'web-push';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { getEnv, vapidDetails } from './env';
+ 
+ afterEach(() => vi.unstubAllEnvs());
+ 
+-/** A real VAPID key pair, as `npm run vapid:keys` makes one: P-256, public key uncompressed, both base64url. */
++/**
++ * A real VAPID key pair, made the way `npm run vapid:keys` makes one: P-256, public key uncompressed, both base64url,
++ * the private key always 32 bytes. (Node's `createECDH().getPrivateKey()` drops a leading zero byte, about one key in
++ * 256, and the server rightly refuses a 31-byte key: that made this file fail now and then.)
++ */
+ function makeKeyPair() {
+-  const ecdh = createECDH('prime256v1');
+-  ecdh.generateKeys();
+-  return { publicKey: ecdh.getPublicKey('base64url'), privateKey: ecdh.getPrivateKey('base64url') };
++  return webpush.generateVAPIDKeys();
+ }
+ const pair = makeKeyPair();
+ 
++/** A pair whose private key starts with a zero byte (`AA…` in base64url), written out in full as web-push makes it. */
++const LEADING_ZERO = {
++  publicKey: 'BLmuHbGwGubCWsg20vhXJYV2i85rIPGXUwmYuZXwlZHh_pxHE744lZbuk45bbKp-1z5J1OJlQMq0n70ejMeyKQY',
++  privateKey: 'AAg4Z59vqJAxyx-IR91D0aH0EXXfoLk7eJcF_8wZlvw',
++};
++
+ describe('getEnv', () => {
+   it('reads the test environment', () => {
+     const env = getEnv();
+@@ -78,6 +86,17 @@ describe('getEnv', () => {
+       expect(() => getEnv()).toThrow(NOT_A_PAIR);
+     });
+ 
++    it('accept a private key that starts with a zero byte, written out to its full 32 bytes', () => {
++      stub({ ...keys, VAPID_PUBLIC_KEY: LEADING_ZERO.publicKey, VAPID_PRIVATE_KEY: LEADING_ZERO.privateKey });
++      expect(vapidDetails(getEnv())).toEqual({ ...LEADING_ZERO, subject: 'mailto:admin@example.com' });
++    });
++
++    it('refuse that key with its zero byte dropped (31 bytes): web-push signs only with 32', () => {
++      const short = Buffer.from(LEADING_ZERO.privateKey, 'base64url').subarray(1).toString('base64url');
++      stub({ ...keys, VAPID_PUBLIC_KEY: LEADING_ZERO.publicKey, VAPID_PRIVATE_KEY: short });
++      expect(() => getEnv()).toThrow(NOT_A_PAIR);
++    });
++
+     it('refuse a subject that is neither mailto: nor https:', () => {
+       stub({ ...keys, VAPID_SUBJECT: 'admin@example.com' });
+       expect(() => getEnv()).toThrow(/VAPID_SUBJECT/);
+```
+
+Run: `cd apps/server && npx vitest run src/lib/env.test.ts` (then `cd ../..`)
+Expected: PASS, 12 passed (10 before: the file gains the two zero-byte tests). Every run is now free of the 1-in-256 failure.
+
+- [ ] **Step 2: Write the failing test for a runner that waits when stopped**
+
+A task's transaction must be finished when `stop()` returns, or the next test's `TRUNCATE` deadlocks with it (Step 8 explains it). Three tests in the runner's database test: `stop()` waits for the pass in flight, a stopped runner starts no pass (even when a commit wakes it), and a pass stopped between tasks leaves the rest pending:
+
+Modify `apps/server/src/tasks/runner.db.test.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/runner.db.test.ts b/apps/server/src/tasks/runner.db.test.ts
+index c78370f..dca9faa 100644
+--- a/apps/server/src/tasks/runner.db.test.ts
++++ b/apps/server/src/tasks/runner.db.test.ts
+@@ -95,6 +95,52 @@ describe('TaskRunner', () => {
+     await Promise.all([runner.tick(), runner.tick(), runner.tick()]);
+     expect(maxConcurrent).toBe(1);
+   });
++
++  // A test's next database reset (a TRUNCATE) met a task's transaction still running after stop(), and Postgres
++  // killed one of them as a deadlock (docs/why/deadlocks.md). So stop() waits for the pass in flight.
++  it('stop() resolves only once the pass in flight has finished', async () => {
++    const task = await newTask();
++    let started!: () => void;
++    const running = new Promise<void>((resolve) => (started = resolve));
++    let release!: () => void;
++    const gate = new Promise<void>((resolve) => (release = resolve));
++    const runner = new TaskRunner({ test: async () => { started(); await gate; } }, { now: () => NOW });
++    const pass = runner.tick();
++    await running;
++
++    let stopped = false;
++    const stopping = runner.stop().then(() => (stopped = true));
++    await new Promise((resolve) => setImmediate(resolve));
++    expect(stopped).toBe(false);
++    release();
++    await stopping;
++    // By the time stop() resolves, the task's outcome is saved.
++    expect(await statusOf(task.id)).toBe('done');
++    await pass;
++  });
++
++  it('starts no pass once stopped, even when a commit wakes it', async () => {
++    const task = await newTask();
++    const handler = vi.fn(async () => {});
++    const runner = new TaskRunner({ test: handler }, { now: () => NOW });
++    runner.start();
++    await runner.stop();
++    await runner.tick();
++    runner.wake();
++    await runner.stop();
++    expect(handler).not.toHaveBeenCalled();
++    expect(await statusOf(task.id)).toBe('pending');
++  });
++
++  it('leaves the rest of a pass for later when stopped between tasks', async () => {
++    const first = await newTask();
++    const second = await newTask({ runAt: new Date(NOW.getTime() - 1) });
++    const runner = new TaskRunner({ test: async () => void runner.stop() }, { now: () => NOW });
++    await runner.tick();
++    // Oldest first: `second` ran, and stopped the runner before `first` was claimed.
++    expect(await statusOf(second.id)).toBe('done');
++    expect(await statusOf(first.id)).toBe('pending');
++  });
+ });
+ 
+ describe('recoverRunningTasks', () => {
+```
+
+- [ ] **Step 3: Run them to see them fail**
+
+Run: `cd apps/server && npx vitest run --project db src/tasks/runner.db.test.ts` (then `cd ../..`)
+Expected: FAIL, 3 failed and 10 passed (13). `stop()` waits for the pass in flight: `TypeError: Cannot read properties of undefined (reading 'then')` (`stop()` returns nothing). No pass once stopped: `expected "vi.fn()" to not be called at all, but actually been called 1 times`. Stopped between tasks: `expected 'done' to be 'pending'` (the next task still ran).
+
+- [ ] **Step 4: Fix the second flake: `stop()` waits for the pass in flight**
+
+The cause, from Postgres's own log (`docker logs nitpilot-postgres-1`): three earlier deadlocks, all the same circle. The `TRUNCATE` in `resetDb` waited for `PrChat`, held by a summary task's transaction that was waiting to insert into `GithubWrite`, which the `TRUNCATE` already held. Only the summary task updates `PrChat` and then inserts into `GithubWrite` in one transaction, so the task runner's pass was still running when `close()` returned. A race can't be made to fail on demand, so the builder forced it: a throwaway database test with a runner task doing the summary's two writes with a gate between them gave `40P01` with the old `stop()` and a clean reset with `await runner.stop()`; in the real Vitest end to end, with the summary task slowed by 1.5 seconds between its writes, the old `close()` gave 2 deadlocks in one run and the new one 0 in 2 runs. Now the fix, in the three places that stop the runner (`docs/why/deadlocks.md` in Step 8 explains it in React terms):
+
+Modify `apps/server/src/tasks/runner.ts`:
+
+```diff
+diff --git a/apps/server/src/tasks/runner.ts b/apps/server/src/tasks/runner.ts
+index 545ac2b..e1d7872 100644
+--- a/apps/server/src/tasks/runner.ts
++++ b/apps/server/src/tasks/runner.ts
+@@ -30,8 +30,10 @@ export type GiveUpHandler = (task: Task, error: unknown) => Promise<void>;
+  */
+ export class TaskRunner {
+   private timer: ReturnType<typeof setInterval> | null = null;
+-  private busy = false;
++  /** The pass running now, if any: stop() waits for it. */
++  private pass: Promise<void> | null = null;
+   private again = false;
++  private stopped = false;
+ 
+   constructor(
+     private readonly handlers: TaskHandlers,
+@@ -39,12 +41,21 @@ export class TaskRunner {
+   ) {}
+ 
+   start(): void {
++    this.stopped = false;
+     if (!this.timer) this.timer = setInterval(() => void this.tick(), this.opts.tickMs ?? 1000);
+   }
+ 
+-  stop(): void {
++  /**
++   * Stop for good: no new pass starts (not even when a commit wakes the runner), the pass in flight stops after the
++   * task it is running, and the promise resolves once that task's outcome is saved. Shutdown and the tests wait for
++   * it, so nothing of ours still holds a transaction open when the process exits or a test empties the database
++   * (docs/why/deadlocks.md).
++   */
++  async stop(): Promise<void> {
++    this.stopped = true;
+     if (this.timer) clearInterval(this.timer);
+     this.timer = null;
++    await this.pass;
+   }
+ 
+   /** Run due tasks now instead of waiting for the next tick. */
+@@ -54,20 +65,28 @@ export class TaskRunner {
+ 
+   /** One pass over due tasks. Never overlaps itself: a call during a pass asks for one more pass. */
+   async tick(): Promise<void> {
+-    if (this.busy) {
++    if (this.stopped) return;
++    if (this.pass) {
+       this.again = true;
+       return;
+     }
+-    this.busy = true;
++    this.pass = this.passes();
++    try {
++      await this.pass;
++    } finally {
++      this.pass = null;
++    }
++  }
++
++  /** Passes until nobody asked for another one (or the runner was stopped). Never throws: a failed pass is logged. */
++  private async passes(): Promise<void> {
+     try {
+       do {
+         this.again = false;
+         await this.runDue();
+-      } while (this.again);
++      } while (this.again && !this.stopped);
+     } catch (err) {
+       console.error('[tasks] pass failed:', err);
+-    } finally {
+-      this.busy = false;
+     }
+   }
+ 
+@@ -81,6 +100,8 @@ export class TaskRunner {
+     });
+     let ran = 0;
+     for (const { id } of due) {
++      // Stopped mid-pass: the tasks not claimed yet stay pending, for the next start.
++      if (this.stopped) break;
+       if (await this.claim(id)) {
+         await this.runOne(id);
+         ran += 1;
+```
+
+Modify `apps/server/src/main.ts`:
+
+```diff
+diff --git a/apps/server/src/main.ts b/apps/server/src/main.ts
+index dc48ce6..100fe7d 100644
+--- a/apps/server/src/main.ts
++++ b/apps/server/src/main.ts
+@@ -92,7 +92,8 @@ async function main(): Promise<void> {
+   const shutdown = async () => {
+     clearInterval(purge);
+     clearInterval(retries);
+-    runner.stop();
++    // Let the task in flight finish and save its outcome, so it isn't cut off mid-write and run again at the next boot.
++    await runner.stop();
+     cliJobs.stop();
+     live.stop();
+     // 1012 tells every CLI the server is restarting, so they reconnect.
+```
+
+Modify `apps/server/test/e2e/harness.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/harness.ts b/apps/server/test/e2e/harness.ts
+index 8d069f4..790fcd1 100644
+--- a/apps/server/test/e2e/harness.ts
++++ b/apps/server/test/e2e/harness.ts
+@@ -93,7 +93,9 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
+       for (const cli of clis) await cli.stop().catch(() => {});
+       cliJobs.stop();
+       live.stop();
+-      runner.stop();
++      // Wait for the task in flight (a summary comment, say): the next test's resetDb() empties every table at once,
++      // and a transaction still open here would deadlock with it (docs/why/deadlocks.md).
++      await runner.stop();
+       await hub.idle();
+       hub.closeAll(1001, 'test over');
+       webHub.close(1001, 'test over');
+```
+
+- [ ] **Step 5: Run them to see them pass**
+
+Run: `cd apps/server && npx vitest run --project db src/tasks/runner.db.test.ts && npm run test:e2e && npm run typecheck` (then `cd ../..`)
+Expected: PASS, 13 passed in the runner file; end to end 6 passed; typecheck clean. (`npm run test:e2e` needs Docker running, like the database tests.)
+
+- [ ] **Step 6: Check the deadlock is gone from Postgres's log**
+
+Run `npm run test:e2e` three times, then `docker logs nitpilot-postgres-1 2>&1 | grep -c "deadlock detected"` before and after: the count must not grow during these runs (the three old deadlocks stay in the log; compare the numbers, don't expect zero). If it grows, find which transaction was still open (the log names both statements) before going on. The builder saw 0 new deadlocks across three Vitest end-to-end runs and three Playwright runs.
+
+- [ ] **Step 7: The Playwright server's `/reset` retries a deadlock**
+
+That server keeps running between tests on purpose, and more than the task runner can be writing when the next test resets (a CLI's last message being dispatched, a lease sweep, a catch-up), so waiting for the runner can't cover it. Postgres's own advice for a transaction it cancelled in a deadlock is to run it again, and emptying tables twice is harmless, so `/reset` retries up to 3 times. `resetDb` (the Vitest end to end) does not retry: its harness stops everything first, so a deadlock there is a new finding and should stay visible. There is no automated test; the builder exercised it by slowing the summary task by 1.5 seconds and running the Playwright suite: the log showed `[web-e2e] /reset met a deadlock (attempt 1), trying again` (Postgres's log showed the `/reset` `TRUNCATE` as the victim) and the run finished 18 passed. The slowdown was reverted.
+
+Modify `apps/server/test/e2e/web-server.ts`:
+
+```diff
+diff --git a/apps/server/test/e2e/web-server.ts b/apps/server/test/e2e/web-server.ts
+index 6f393d8..e05d400 100644
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -117,11 +117,35 @@ control.post('/pr', async (c) => {
+  * setup checklist is unfinished again, and GitHub lists no installation for anyone until /installations says so.
+  */
+ control.post('/reset', async (c) => {
+-  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
++  await truncateChats();
+   await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40, onboardedAt: null } });
+   e2e.platform.userInstalls.clear();
+   return c.body(null, 204);
+ });
++/**
++ * Empty the chat tables. Unlike the Vitest end to end (whose harness stops everything before the next test), this
++ * server keeps running between tests, so the last test's work may still be writing (a summary task, a CLI's last
++ * message, a lease sweep). When that write and this TRUNCATE wait on each other, Postgres cancels one of them as a
++ * deadlock (docs/why/deadlocks.md), and its advice is to run the cancelled one again: emptying tables twice is safe.
++ */
++async function truncateChats(): Promise<void> {
++  for (let attempt = 1; ; attempt++) {
++    try {
++      await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
++      return;
++    } catch (err) {
++      if (attempt === 3 || !isDeadlock(err)) throw err;
++      console.warn(`[web-e2e] /reset met a deadlock (attempt ${attempt}), trying again`);
++    }
++  }
++}
++
++/** Postgres cancelled the statement to end a deadlock (its error code 40P01), as Prisma reports it. */
++function isDeadlock(err: unknown): boolean {
++  const meta = (err as { meta?: { driverAdapterError?: { cause?: { originalCode?: string } } } } | null)?.meta;
++  return meta?.driverAdapterError?.cause?.originalCode === '40P01';
++}
++
+ /**
+  * What GitHub's `GET /user/installations` lists for someone (the setup checklist's "Install the GitHub App" step):
+  * the app installed on their account. /reset lists none again.
+```
+
+- [ ] **Step 8: Write the explainer**
+
+A deadlock is a backend idea the code didn't have before. The new file (the cause, the exact circle, both fixes, and where they live), in React terms:
+
+Create `docs/why/deadlocks.md`:
+
+```markdown
+# Deadlocks: two transactions each waiting for the other
+
+**In one sentence:** when two database transactions each hold a lock the other one needs, neither can ever go on, so Postgres notices, cancels one of them with error `40P01 deadlock detected`, and lets the other finish; Nitpilot's tests met this when one test emptied the database while the last test's task was still writing.
+
+## Locks, briefly
+
+While a transaction changes rows, Postgres locks them (and notes "someone is writing here" on their table) until it commits, so nobody else changes the same rows halfway. Usually a second transaction that wants the same thing just waits its turn. `TRUNCATE` (empty these tables, now) is the greediest: it needs each table all to itself, so it waits for everyone using a table, and everyone waits for it once it holds one.
+
+## How two waits become a deadlock
+
+A test's `resetDb()` (`apps/server/test/db.ts`) empties 16 tables in one `TRUNCATE`, taking them in the order it lists them. The summary task (`apps/server/src/tasks/handlers/summary.ts`) writes in one transaction: first the chat's row in `PrChat`, then a `GithubWrite` row. Now let both run at once:
+
+1. The summary task updates `PrChat` and holds that row.
+2. The `TRUNCATE` takes `Task`, …, `GithubWrite`, then waits for `PrChat` (the task holds it).
+3. The task now wants to insert into `GithubWrite`: the `TRUNCATE` holds it.
+
+Each waits for the other, forever. After a second Postgres checks for such a circle, finds it, and cancels one side. When it cancelled the `TRUNCATE`, the next end-to-end test failed before it had begun. Postgres's log said exactly this: the `INSERT INTO "GithubWrite"` and the `TRUNCATE`, each blocked by the other, on `PrChat` and `GithubWrite`.
+
+## Why a task was still running
+
+Between two tests the harness's `close()` stopped the task runner, but stopping only cleared its timer: a task already running went on, and a commit could even wake the runner for a new pass. So `close()` returned while the summary task's transaction was still open, and the next test's `TRUNCATE` walked into it.
+
+## The fixes
+
+- **`TaskRunner.stop()` waits** (`apps/server/src/tasks/runner.ts`): it starts no new pass (not even when woken), stops the pass in flight after the task it's on, and resolves once that task's outcome is saved. The harness's `close()` (`apps/server/test/e2e/harness.ts`) awaits it, so nothing of the last test is still writing when the next one empties the tables. The server's shutdown (`apps/server/src/main.ts`) awaits it too, so a GitHub write in flight finishes instead of being cut off and run again at the next boot.
+- **The Playwright server's `/reset` tries again** (`apps/server/test/e2e/web-server.ts`): that server keeps running between browser tests on purpose, so the last test's work (a task, a CLI's last message, a lease sweep) may still be writing when the next test resets. There a wait can't cover everything, so `/reset` follows Postgres's own advice for a cancelled transaction: run it again (up to three times). Emptying tables twice is harmless.
+
+## The React analogy
+
+Two components that each wait for the other's state before rendering their own: A shows a spinner until B is ready, B shows a spinner until A is ready, and the page spins forever. Postgres is the parent that notices the circle and unmounts one of them so the other can finish. The real fix, in React as here, is not to start the second thing while the first is still mid-way: `await` the cleanup (like a `useEffect` cleanup that finishes before the next effect runs) before you reset.
+```
+
+- [ ] **Step 9: Write the failing Playwright spec for the read-only view and the 404**
+
+Two tests, with the others' style (`pageProblems`, a `finally` that stops the CLI, roles and names). `rita` and `otto` don't exist on the Playwright server yet:
+
+Create `apps/web/e2e/readonly.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { openPr, pageProblems, resetChats, signIn, startCli, stopCli } from './control';
+
+test.beforeEach(resetChats);
+
+// Spec §20: "Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a
+// 404." rita can read octo/sandbox on GitHub but takes no part in its PRs; GitHub hides the repo from otto.
+
+test("someone who can read the repo but takes no part sees the chat, without the composer or the banner's buttons", async ({ page, context }) => {
+  await openPr({ number: 81, title: 'Bound the export size', author: 'maya', reviewer: 'leo' });
+  const errors = pageProblems(page);
+  // leo's agent raises a security point, so the people in the PR would see Continue and Resolve.
+  await startCli('leo', 'escalation.json');
+  try {
+    await signIn(context, 'rita');
+    await page.goto('/c/octo/sandbox/81');
+    await expect(page.getByRole('heading', { level: 1, name: 'Bound the export size' })).toBeVisible();
+    const banner = page.getByRole('alert');
+    await expect(banner).toContainText('Needs a human decision', { timeout: 15_000 });
+    await expect(page.getByRole('article', { name: /P1, Blocker security point, Escalated/ })).toBeVisible();
+
+    // She reads along: a sentence instead of the field, no Auto switch, and nothing to press on the banner.
+    await expect(page.getByText("You're reading along. Only the author and the reviewers can message the agents.")).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Message the agents' })).toHaveCount(0);
+    await expect(page.getByRole('switch')).toHaveCount(0);
+    await expect(banner.getByRole('button')).toHaveCount(0);
+
+    // The inbox lists the chats you take part in: this one isn't there.
+    await expect(page.getByRole('listbox', { name: 'Pull requests' }).getByRole('option')).toHaveCount(0);
+  } finally {
+    await stopCli('leo');
+  }
+  expect(errors).toEqual([]);
+});
+
+test("someone GitHub doesn't show the repo gets the not-found page, the same as for a chat that doesn't exist", async ({ page, context }) => {
+  await openPr({ number: 82, title: 'Bound the import size', author: 'maya', reviewer: 'leo' });
+  const errors = pageProblems(page);
+  await signIn(context, 'otto');
+  await page.goto('/c/octo/sandbox/82');
+  await expect(page.getByRole('heading', { level: 1, name: 'Nothing here' })).toBeVisible();
+  await expect(page.getByText("This chat doesn't exist, or your GitHub account can't see its repo.")).toBeVisible();
+  await expect(page.getByText('Bound the import size')).toHaveCount(0);
+
+  // The API says the same: 404, as for a PR that has no chat.
+  const hidden = await page.request.get('/api/chats/octo/sandbox/82');
+  const missing = await page.request.get('/api/chats/octo/sandbox/999');
+  expect(hidden.status()).toBe(404);
+  expect(missing.status()).toBe(404);
+  expect(await hidden.json()).toEqual(await missing.json());
+  expect(errors).toEqual([]);
+});
+```
+
+- [ ] **Step 10: Run it to see it fail**
+
+Build the web app first (the Playwright server serves `apps/web/dist`), then run the one file. Playwright uses ports 4319 and 4320; if a server from an earlier run is still on 4319 (`lsof -iTCP:4319 -sTCP:LISTEN`), stop it first.
+
+Run: `npm run build && cd apps/web && npx playwright test readonly.spec.ts` (then `cd ../..`)
+Expected: FAIL, 2 failed and 0 passed. Both stop at `signIn`: `signing in rita failed: 400 {"error":"no test user \"rita\""}`, and the same for otto.
+
+- [ ] **Step 11: Add `rita` and `otto` to the Playwright server, and the `Person` type**
+
+Both get a `User` and a `GithubAuth` like maya and leo. The pretend GitHub's `GET /repos/octo/sandbox` answers by the request's token: 404 for otto's, `{ id: 1 }` for everyone else. Their GitHub ids (3101, 3102) don't collide with `test/fixtures/github.ts` `people` or the newcomer (3003). The `web-server.ts` diff is against the file as Step 7 left it:
+
+Modify `apps/server/test/e2e/web-server.ts` (the diff is against the file as Step 7 left it):
+
+```diff
+diff --git a/apps/server/test/e2e/web-server.ts b/apps/server/test/e2e/web-server.ts
+index e05d400..9b6e3f3 100644
+--- a/apps/server/test/e2e/web-server.ts
++++ b/apps/server/test/e2e/web-server.ts
+@@ -34,7 +34,7 @@ Object.assign(process.env, TEST_ENV, { PUBLIC_URL: `http://127.0.0.1:${webPort}`
+ const { startE2e } = await import('./harness');
+ const { sessionCookieFor } = await import('../http');
+ const { people, prEvent, pull } = await import('../fixtures/github');
+-const { fakeFetch } = await import('../fake-fetch');
++const { fakeFetch, json } = await import('../fake-fetch');
+ const { encrypt } = await import('../../src/lib/crypto');
+ const { prisma } = await import('../../src/lib/prisma');
+ const { GithubClient } = await import('../../src/platform/github/client');
+@@ -62,12 +62,22 @@ const realPush = env.E2E_REAL_PUSH === '1';
+  */
+ const NEWCOMER = { id: 3003, login: 'sam' };
+ 
++/**
++ * Two people who take no part in the test PRs (readonly.spec.ts, spec §20): GitHub shows `rita` the repo, so she reads
++ * its chats along; it hides it from `otto` (GitHub answers a private repo you can't read with a 404), so every chat
++ * there is a 404 for him. Their ids don't collide with test/fixtures/github.ts `people` or the newcomer.
++ */
++const READERS = { rita: { id: 3101, login: 'rita' }, otto: { id: 3102, login: 'otto' } };
++/** otto's GitHub token: each test user's token is `ghu_<their user id>` (see the sign-ins below). */
++let ottoToken = '';
++
+ const e2e = await startE2e({
+   port: webPort,
+   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
+   github: new GithubClient(
+     fakeFetch({
+-      'GET /repos/octo/sandbox': () => ({ id: 1 }),
++      // Whether someone can read the test repo, asked with their own token: everyone can, except otto.
++      'GET /repos/octo/sandbox': (req) => (req.headers.get('authorization') === `Bearer ${ottoToken}` ? json({ message: 'Not Found' }, 404) : { id: 1 }),
+       // GitHub's half of a sign-in: any code buys a token, and the token belongs to the newcomer.
+       'POST /login/oauth/access_token': () => ({ access_token: 'ghu_newcomer', expires_in: 28_800, refresh_token: 'ghr_newcomer', refresh_token_expires_in: 15_811_200 }),
+       'GET /user': () => ({ ...NEWCOMER, avatar_url: null }),
+@@ -75,17 +85,24 @@ const e2e = await startE2e({
+   ),
+   push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
+ });
++// Everyone who can sign in through the control API: the harness's two people, who have CLIs, and the two readers.
++const users = {
++  ...e2e.users,
++  rita: await prisma.user.create({ data: { githubId: String(READERS.rita.id), login: READERS.rita.login } }),
++  otto: await prisma.user.create({ data: { githubId: String(READERS.otto.id), login: READERS.otto.login } }),
++};
++ottoToken = `ghu_${users.otto.id}`;
+ // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
+ const later = new Date(Date.now() + 365 * 86_400_000);
+-for (const user of Object.values(e2e.users)) {
++for (const user of Object.values(users)) {
+   await prisma.githubAuth.create({ data: { userId: user.id, accessTokenEnc: encrypt(`ghu_${user.id}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status: 'ok' } });
+ }
+ 
+ const control = new Hono();
+-/** Sign someone in: answers the session cookie for the browser to use. */
++/** Sign someone in (maya, leo, rita or otto): answers the session cookie for the browser to use. */
+ control.post('/signin', async (c) => {
+-  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
+-  const user = e2e.users[login];
++  const { login } = (await c.req.json()) as { login: keyof typeof users };
++  const user = users[login];
+   if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+   const [name, value] = (await sessionCookieFor(user.id)).split('=') as [string, string];
+   return c.json({ name, value });
+```
+
+And the one login type, used by `signIn`:
+
+Modify `apps/web/e2e/control.ts`:
+
+```diff
+diff --git a/apps/web/e2e/control.ts b/apps/web/e2e/control.ts
+index c7e7d36..5feae3d 100644
+--- a/apps/web/e2e/control.ts
++++ b/apps/web/e2e/control.ts
+@@ -1,8 +1,14 @@
+ import type { BrowserContext, Page } from '@playwright/test';
+ import { BASE_URL, CONTROL_URL } from './ports';
+ 
++/**
++ * The people the Playwright server knows (apps/server/test/e2e/web-server.ts): maya and leo, who open and review the
++ * test PRs and have CLIs; rita, who can read the repo but takes no part; and otto, from whom GitHub hides it.
++ */
++export type Person = 'maya' | 'leo' | 'rita' | 'otto';
++
+ /** Sign a test user in: the browser gets the session cookie a real GitHub sign-in would have set. */
+-export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Promise<void> {
++export async function signIn(context: BrowserContext, login: Person): Promise<void> {
+   const res = await fetch(`${CONTROL_URL}/signin`, { method: 'POST', body: JSON.stringify({ login }) });
+   if (!res.ok) throw new Error(`signing in ${login} failed: ${res.status} ${await res.text()}`);
+   const cookie = (await res.json()) as { name: string; value: string };
+```
+
+- [ ] **Step 12: Run it to see it pass, and check it can fail**
+
+Run: `npm run build && cd apps/web && npx playwright test readonly.spec.ts` (then `cd ../..`)
+Expected: PASS, 2 passed.
+
+Mutation check (don't commit it): in `readonly.spec.ts` sign `leo` in instead of `rita` in the first test, and `rita` instead of `otto` in the second. Both tests must fail (the composer field is present; there is no "Nothing here"), which shows they see the difference they claim to. Put the file back.
+
+- [ ] **Step 13: `forbidOnly` in the Playwright config**
+
+One worker and no retries were already set; this adds the stray-`test.only` guard and says why the retries stay at 0:
+
+Modify `apps/web/playwright.config.ts`:
+
+```diff
+diff --git a/apps/web/playwright.config.ts b/apps/web/playwright.config.ts
+index 9473de7..771ff65 100644
+--- a/apps/web/playwright.config.ts
++++ b/apps/web/playwright.config.ts
+@@ -5,7 +5,10 @@ export default defineConfig({
+   testDir: './e2e',
+   // One server and one database for every test, so one test at a time.
+   workers: 1,
++  // A failure is a finding, not something to try again: a flaky test gets fixed at its cause.
+   retries: 0,
++  // A `test.only` left in by mistake fails CI instead of quietly running that one test.
++  forbidOnly: !!process.env.CI,
+   reporter: process.env.CI ? 'github' : 'list',
+   use: {
+     baseURL: BASE_URL,
+```
+
+- [ ] **Step 14: Cache Chromium in CI, and keep the traces**
+
+Chromium is about 150 MB. The cache is keyed on the installed `@playwright/test` version, read in a one-line step, rather than on a hash of `package-lock.json`: Chromium belongs to one Playwright version, so the key says exactly what the cache depends on, and an unrelated dependency bump doesn't throw it away. On a hit only the system libraries (which the cache doesn't hold) are installed. The trace upload keeps files 14 days and ignores a run with none:
+
+Modify `.github/workflows/ci.yml`:
+
+```diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index bcf374c..d776b25 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -44,10 +44,28 @@ jobs:
+       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
+       - run: npm run test:e2e
+       # Plan 2: the web app in a real browser against that same setup (spec §19).
+-      - run: npx playwright install --with-deps chromium
++      # Chromium (about 150 MB) is kept between runs. Each Playwright version needs its own browser build, so the
++      # cache is keyed on the installed version: a new Playwright downloads once, other dependency changes don't.
++      - name: Read the Playwright version
++        id: playwright
++        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
++      - uses: actions/cache@v4
++        id: playwright-cache
++        with:
++          path: ~/.cache/ms-playwright
++          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
++      # The cache holds the browser, not the system libraries it needs: those are installed on every run.
++      - if: steps.playwright-cache.outputs.cache-hit != 'true'
++        run: npx playwright install --with-deps chromium
++      - if: steps.playwright-cache.outputs.cache-hit == 'true'
++        run: npx playwright install-deps chromium
+       - run: npm run test:e2e -w apps/web
++      # A failed test keeps its trace (playwright.config.ts): download it from the run's page and open it with
++      # `npx playwright show-trace <trace.zip>` to step through what the browser saw.
+       - uses: actions/upload-artifact@v4
+         if: failure()
+         with:
+           name: playwright-traces
+           path: apps/web/test-results/
++          retention-days: 14
++          if-no-files-found: ignore
+```
+
+- [ ] **Step 15: Check the workflow as far as it can be checked here**
+
+The workflow runs only on GitHub, so this step can't prove it. What the implementer checks instead: read the YAML once more (indentation, the two `if:` lines being opposites, the `id`s used by `steps.playwright` and `steps.playwright-cache`); run the version step's command in the shell, `node -p "require('@playwright/test/package.json').version"` (it prints `1.64.1` today); and parse the file with the repo's own `yaml` package, which needs nothing new:
+
+Run: `node -e "const y=require('yaml');const s=Object.values(y.parse(require('fs').readFileSync('.github/workflows/ci.yml','utf8')).jobs)[0].steps;console.log(s.length, s.filter(x=>x.if).map(x=>x.if))"`
+Expected: `15` and the three conditions: `steps.playwright-cache.outputs.cache-hit != 'true'`, `steps.playwright-cache.outputs.cache-hit == 'true'` and `failure()`.
+
+Not checked until the first push shows it (pushing is the user's call, never the implementer's): that `actions/cache@v4` restores `~/.cache/ms-playwright` on the second run, and that `install-deps` alone is enough on a hit. Both are standard Playwright CI practice. The first run after the push is a miss (full install), the second a hit; look at those two runs' "Cache" and "install" steps.
+
+- [ ] **Step 16: Document the browser suite, then prove each spec passes on its own**
+
+The explainer for the end-to-end test gains a section on what runs in CI, why one worker, why no sleeps, and what the cache and the trace upload are for:
+
+Modify `docs/why/end-to-end-test.md`:
+
+```diff
+diff --git a/docs/why/end-to-end-test.md b/docs/why/end-to-end-test.md
+index 2eb95e5..5a544fd 100644
+--- a/docs/why/end-to-end-test.md
++++ b/docs/why/end-to-end-test.md
+@@ -18,6 +18,18 @@ The CLI only pushes to a remote that looks like GitHub (`git@github-test:octo/sa
+ 
+ It takes a few seconds and starts many programs, so `npm test` leaves it out. CI runs it as its own step, and you can run it with `npm run test:e2e` (Docker must be running, like for the database tests).
+ 
++## The browser suite in CI
++
++Plan 2 adds a second end-to-end suite: Playwright drives a real Chromium against the same setup (`apps/server/test/e2e/web-server.ts` serves the built web app, plus a small control API the tests use to sign people in, open PRs and start CLIs). Its specs (`apps/web/e2e/*.spec.ts`) cover the four flows of spec §19 (the inbox opens, a chat updates live while agents work, Resolve on an escalation, Send on a draft), plus the read-only view and the not-found page for someone who can't see the repo, and the landing, PWA, Settings, Setup and device-approval pages. Each test resets the chats and opens its own PR, so any one spec file passes on its own.
++
++- **One worker.** All tests share one server and one database, so they run one at a time; two at once would reset each other's chats.
++- **No sleeps.** A test never waits a fixed time ("wait 2 seconds"): it waits for something it can see (`await expect(page.getByText('Ready for your approval')).toBeVisible()`), which Playwright keeps retrying until it shows or times out. A fixed wait is either too short on a slow CI machine (a flaky failure) or wasted time on a fast one.
++- **No retries.** A test that fails is a finding: it gets fixed at its cause, not run again until it passes. A stray `test.only` fails CI (`forbidOnly`).
++- **The browser cache.** CI keeps Playwright's Chromium in `~/.cache/ms-playwright` between runs, keyed on the Playwright version, so most runs skip the ~150 MB download and only install the system libraries Chromium needs.
++- **The trace upload.** A failed test keeps a trace (every action, network request, console line and a DOM snapshot at each step). CI uploads `apps/web/test-results/` as the `playwright-traces` artifact; open one with `npx playwright show-trace trace.zip` to watch what the browser saw, like Redux DevTools' time travel, for a whole test.
++
++Locally: `npm run test:web-e2e` (it builds the web app first). If a server from an earlier run is still on port 4319, Playwright reuses it, except on CI.
++
+ ## The React analogy
+ 
+ It's a Playwright test for the backend: unit tests check each component with props you choose, and this one mounts the whole app and clicks through a real user journey.
+```
+
+Order independence is proved, not assumed. After `npm run build`, run each spec file alone from `apps/web` (each starts its own server; check `lsof -iTCP:4319 -sTCP:LISTEN` is empty between runs):
+
+Run: `for f in approve chat-live drafts escalation inbox landing pwa readonly settings setup; do npx playwright test e2e/$f.spec.ts 2>&1 | grep -E "passed|failed"; done`
+Expected: every line `passed`, none `failed`: approve 2, chat-live 1, drafts 1, escalation 1, inbox 1, landing 3, pwa 3, readonly 2, settings 2, setup 2 (18). A spec that only passes after another is a finding: fix it with a test of its own, then start this step again.
+
+- [ ] **Step 17: Three green runs in a row, both suites**
+
+Nothing may listen on 4319 between runs (`reuseExistingServer` is off only in CI, so a leftover server would be reused locally and hide a startup problem). Docker must be running.
+
+Run, three times in a row: `npm run test:web-e2e` (it builds the web app first)
+Expected: `18 passed` every time (about 18 seconds each), no `failed`, no `flaky`.
+
+Run, three times in a row: `npm run test:e2e`
+Expected: `6 passed` every time (about 17 seconds each).
+
+If any run fails, that is a finding, not bad luck: find the cause (the Playwright trace in `apps/web/test-results/`, or Postgres's log for a `40P01`), fix it with a test, and start the three runs of both suites again. Do not add a retry or a sleep.
+
+- [ ] **Step 18: Run everything, then commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: protocol 82, CLI 333 passed + 14 skipped, server 1031 (1026 before: 2 env tests and 3 runner tests), web 331; end to end 6; Playwright 18 (16 before: the 2 read-only tests); typecheck and lint clean; the build prints no warning (main chunk 495.33 kB, unchanged).
+
+```bash
+git add apps/server apps/web docs/why .github/workflows/ci.yml docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "test(web): the Playwright suite runs in CI with a cached browser, covers the read-only view and the 404, and both flakes are fixed at their causes
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 25: Acceptance runbook, the live run and docs
 
 **Files:**
-- Create: `docs/acceptance/plan-2.md` (the runbook: numbered click-steps per account, spelled out), any helper SQL beside it.
-- Modify: `README.md` (web app section), `docs/why/` index if one exists, the spec (§20 and §22 notes from the run), this plan's "Checked against the code (W8)".
+- Create: `docs/acceptance/plan-2.md` (the runbook), `docs/acceptance/check-web.sql` (the web side of a PR in the database), `docs/acceptance/scenarios/sandbox-escalation.json` (the reviewer's fake agent escalates twice), `README.md` (there was none: what Nitpilot is, the web app, running it, the tests).
+- Modify: `apps/cli/src/agents/fake/acceptance.test.ts` (the new scenario stays in line with the seed), `docs/why/live-acceptance.md` (Plan 2's run), `docs/architecture.md` (§4.12 testing layers, §6 "Not built yet"), the spec (§20 Plan 2 acceptance setup); after the live run: the runbook's section 9, the spec's §22 notes, this plan's "Checked against the code (W8)".
+- Not touched: any server, CLI or web code. A bug the live run finds gets its own failing test and fix commit first, as in Plan 1b Task 24.
+
+**Interfaces:**
+- Consumes: Plan 1's acceptance kit (`docs/acceptance/env.sh` with `nit-a`, `nit-b`, `nit-edit`, `dbq`; `new-branch.sh`; `stamp.pl`; `check.sql`; the seed `docs/acceptance/seed/orders-demo`; `sandbox-happy.json`), the fake agent's `crash.json` (`apps/cli/src/agents/fake/scenarios`), `NITPILOT_FAKE_SCENARIO` (`B_SCENARIO` in `env.sh`), `npm run dev:tunnel`, `npm run vapid:keys -w apps/server`, `nitpilot login --no-open`.
+- Produces: the runbook and its helpers; `docs/acceptance/scenarios/sandbox-escalation.json` (review: the SQL point on `search.js` line 5, blocker, security; re-review: resolve P1, then a major security point on line 1).
 
 **Behavior:**
-- The runbook follows spec §20's Plan 2 acceptance test: setup (fresh database as in Plan 1, the web app built and served, both accounts signed in to the web app in their own browsers, A on Claude Code with the built CLI, B on the fake agent), then each criterion with what to click and what you should see, and the phone section: the tunnel's HTTPS URL as `PUBLIC_URL`, adding its `/auth/github/callback` to `nitpilot-dev` for the run, Add to Home Screen on iPhone, turning push on, and removing the callback URL afterwards.
-- **Live steps (ask before each):** starting the tunnel and server, every GitHub write, and each Claude Code run. Results are recorded in a second commit, as in Plan 1b Task 24.
+- The runbook follows spec §20's Plan 2 acceptance test section by section, one PR per group of criteria, and every click names the GitHub account whose browser it happens in (`ngkdev93-jpg`'s private Chrome window, `NikosGkikas13`'s normal Chrome window, `NikosGkikas13`'s iPhone), says where on the page the thing is and what you should see next.
+- **One address for the run:** the tunnel's `https://….trycloudflare.com` URL is the server's `PUBLIC_URL` for both browsers and the phone, because the session cookie (`Secure` on https) and the Origin check follow `PUBLIC_URL`; the CLIs keep talking to `http://localhost:8787`. Its `/auth/github/callback` is added to `nitpilot-dev` in section 1 and removed in section 8.
+- **Sections:** 0 checks (VAPID keys in `.env`, `PUBLIC_REPOS_ONLY=false`, Chrome allowed to notify, iOS 16.4+); 1 a fresh `nitpilot_acceptance` database, the tunnel, the server serving `apps/web/dist`, the callback URL; 2 both people join through the web app: sign-in, the setup checklist ticking itself off, `nitpilot login` approved on the web app's approve page; 3 push on in NikosGkikas13's Chrome and in the iPhone's Home Screen app; 4 one PR for live updates (inbox, chat, progress line), a note that Claude Code must follow, a failed review (`crash.json`) and Retry, and the ready push on desktop and phone with no CLI OS notification; 5 drafts with Auto-review and Auto-fix off (a reviewer draft, then an author draft with its diff, then Send pushes a commit authored by ngkdev93-jpg); 6 escalate, Continue, escalate again, Resolve (`sandbox-escalation.json`); 7 read-only for the repo owner on a PR without a reviewer, and a 404 for ngkdev93-jpg on a private repo made for the check and deleted after; 8 wrap up; 9 results.
+- **Ruling (controller): the 404 uses a throwaway private repo.** The sandbox is public, so "someone who can't read the repo" needs a repo ngkdev93-jpg can't see: NikosGkikas13 creates `nitpilot-private-check`, opens a PR there, and deletes the repo after. Cost if wrong: one repo created and deleted in NikosGkikas13's account (asked first); the Playwright suite (Task 24) already covers the 404 against the pretend GitHub.
+- **Ruling (controller): the escalation needs a scenario of its own.** Plan 1's `sandbox-security.json` resolves its point on re-review, so the run would never see the second escalation that Resolve is for. `sandbox-escalation.json` raises a second security point on `search.js` line 1 (a comment Claude's SQL fix doesn't move); `acceptance.test.ts` pins both lines against the seed.
+- **Ruling (controller): Retry is shown with the fake agent, not Claude Code.** NikosGkikas13's CLI runs `crash.json` until the review has failed 3 times, then restarts on the happy scenario before Retry, so no Claude run is spent on a failure.
+- **Ask before** (the runbook says so at the top and at each place): starting the tunnel and the server, every GitHub write (each PR, the callback URL, the private repo), each Claude Code run (about 4), and turning push on (it registers the browsers with Google's and Apple's push services). The controller runs the terminals in Terminal-panel tabs and the `gh` commands; the person does the browser and phone clicks.
+- **Tests:** every criterion of spec §20's Plan 2 acceptance test checked off live, with its evidence (screenshots, `check.sql`/`check-web.sql` output, the CLI terminal lines) in the runbook's section 9.
 
-**Tests this task must include:** every criterion of spec §20's Plan 2 acceptance test checked off live, with the evidence (screenshots, the database checks, the CLI terminal lines) recorded in the runbook's results section.
+**Which steps are live.**
+
+| Steps | What | Needs | Writes to GitHub | Uses Claude |
+|---|---|---|---|---|
+| 1 to 9 | the scenario and its test, the helpers, the runbook, README and docs, commit | Docker | no | no |
+| 10 | be ready | the person | no | no |
+| 11 | sections 0 to 2: database, tunnel, server, callback URL, both people join | the person in both browsers | the app's callback URL | no |
+| 12 | section 3: push on desktop and iPhone | the person and the phone | no (push services only) | no |
+| 13 | section 4: live, note, Retry, push | the person | a PR, a review, a push | **yes (1 run)** |
+| 14 | section 5: drafts | the person | a PR, reviews, a push | **yes (1 run)** |
+| 15 | section 6: escalation | the person | a PR, a review, a push | **yes (1 run)** |
+| 16 | section 7: read-only and 404 | the person | two PRs; a private repo created and deleted | no |
+| 17, 18 | wrap up, results, docs, commit | Docker | the callback URL removed | no |
+
+- [ ] **Step 1: Write the failing test for the escalation scenario**
+
+`acceptance.test.ts` keeps the scenario files and the seed together: if a line number drifts, the fake agent would comment on the wrong line and nobody would notice until the live run. The new case reads `sandbox-escalation.json` (which doesn't exist yet) and checks both of its security points land on the lines they name:
+
+```diff
+diff --git a/apps/cli/src/agents/fake/acceptance.test.ts b/apps/cli/src/agents/fake/acceptance.test.ts
+index 9d126ab..fc72778 100644
+--- a/apps/cli/src/agents/fake/acceptance.test.ts
++++ b/apps/cli/src/agents/fake/acceptance.test.ts
+@@ -11,10 +11,12 @@ const ACCEPTANCE = fileURLToPath(new URL('../../../../../docs/acceptance/', impo
+ const SEED = `${ACCEPTANCE}seed/`;
+ 
+ type AddPoint = { add_point: { path: string; line: number; severity: string; category: string; title: string } };
+-type Scenario = { review: ({ finish: string } | AddPoint)[]; re_review: ({ finish: string } | { decide: { point: number; decision: string } })[] };
++type Scenario = { review: ({ finish: string } | AddPoint)[]; re_review: ({ finish: string } | { decide: { point: number; decision: string } } | AddPoint)[] };
+ 
+ const scenario = (name: string) => JSON.parse(readFileSync(`${ACCEPTANCE}scenarios/${name}.json`, 'utf8')) as Scenario;
+ const pointsOf = (s: Scenario) => s.review.filter((step): step is AddPoint => 'add_point' in step).map((step) => step.add_point);
++/** The points a scenario raises when it reviews again. */
++const raisedAgain = (s: Scenario) => s.re_review.filter((step): step is AddPoint => 'add_point' in step).map((step) => step.add_point);
+ const lineOf = (path: string, line: number) => readFileSync(`${SEED}${path}`, 'utf8').split('\n')[line - 1];
+ const seedModule = (file: string) => import(pathToFileURL(`${SEED}orders-demo/src/${file}`).href);
+ 
+@@ -41,6 +43,19 @@ describe('the sandbox scenarios and the seed', () => {
+     expect(lineOf(point!.path, point!.line)).toContain('SELECT * FROM orders WHERE customer =');
+   });
+ 
++  it('the escalation scenario raises the SQL point, then settles it and escalates a second security point (Plan 2)', () => {
++    // docs/acceptance/plan-2.md section 6: Continue on P1, a round runs, and the re-review escalates again for Resolve.
++    const s = scenario('sandbox-escalation');
++    const [first] = pointsOf(s);
++    expect(first).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
++    expect(lineOf(first!.path, first!.line)).toContain('SELECT * FROM orders WHERE customer =');
++    expect(s.re_review[0]).toMatchObject({ decide: { point: 1, decision: 'resolve' } });
++    const [second] = raisedAgain(s);
++    expect(second).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
++    // The file's first line, a comment: fixing the SQL line doesn't move it, so the point still lands where it says.
++    expect(lineOf(second!.path, second!.line)).toBe('// Looks orders up by customer name.');
++  });
++
+   it('the planted bugs are real, and the seed passes its own tests anyway', async () => {
+     const { paginate, averageTotal, describeOrder } = await seedModule('orders.js');
+     expect(paginate(['a', 'b', 'c', 'd'], 1, 2)).toEqual(['c', 'd']); // page 1 should be ['a', 'b']
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm test -w apps/cli -- src/agents/fake/acceptance.test.ts`
+Expected: FAIL: 1 test fails (`ENOENT: no such file or directory, open '…/docs/acceptance/scenarios/sandbox-escalation.json'`); the other 5 pass.
+
+- [ ] **Step 3: The escalation scenario**
+
+The review raises Plan 1's SQL point; after the author's agent has worked on it (Continue), the re-review settles it and raises a second security point, which escalates again for Resolve:
+
+Create `docs/acceptance/scenarios/sandbox-escalation.json`:
+
+```json
+{
+  "review": [
+    { "add_point": { "path": "orders-demo/src/search.js", "line": 5, "severity": "blocker", "category": "security", "title": "The customer name goes straight into the SQL", "body": "A name like ' OR '1'='1 returns every order. Pass the name as a query parameter instead of joining strings." } },
+    { "finish": "One security point in search.js." }
+  ],
+  "re_review": [
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Parameterized now." } },
+    { "add_point": { "path": "orders-demo/src/search.js", "line": 1, "severity": "major", "category": "security", "title": "Anyone who can call this reads any customer's orders", "body": "Nothing checks that the caller may see this customer. Say in the comment above who is allowed to call it, or check it here." } },
+    { "finish": "P1 is settled; one more security point." }
+  ]
+}
+```
+
+- [ ] **Step 4: Run it to see it pass**
+
+Run: `npm test -w apps/cli -- src/agents/fake/acceptance.test.ts`
+Expected: PASS: 6 tests.
+
+- [ ] **Step 5: The web side of a PR in the database**
+
+`check.sql` (Plan 1) shows the chat, its jobs, webhooks, points and timeline. The new criteria need four more things: each person's Auto switch and attention, the drafted jobs' `applyState`, each note with the job that started after it, and the push subscriptions:
+
+Create `docs/acceptance/check-web.sql`:
+
+```sql
+-- What the database says about one sandbox PR's web side, for the Plan 2 acceptance runbook (docs/acceptance/plan-2.md).
+-- Run it after check.sql, which covers the chat, its jobs, webhooks, points and timeline:
+--   docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot_acceptance -v pr=5 -f - < docs/acceptance/check-web.sql
+-- Times are UTC.
+\set repo '''NikosGkikas13/nitpilot-sandbox'''
+
+\echo
+\echo '== 1. People in the chat: Auto (false = their agent''s work waits as a draft), what needs them, and the round limit'
+select p.role, p.login, p.auto, p.attention, p."byHand" as by_hand, c."extraRounds" as extra_rounds
+from "Participant" p join "PrChat" c on c.id = p."chatId" join "Repo" r on r.id = c."repoId"
+where r."fullName" = :repo and c.number = :pr order by p.role, p.login;
+
+\echo
+\echo '== 2. Jobs and their drafts: applyState draft = waiting for Send, applied = sent (or Auto was on), discarded = Discard'
+select j.type, j.round, j.status, j.attempt, u.login as for_person, j."applyState" as apply_state, coalesce(j.failure, '') as failure
+from "Job" j join "PrChat" c on c.id = j."chatId" join "Repo" r on r.id = c."repoId" join "User" u on u.id = j."userId"
+where r."fullName" = :repo and c.number = :pr order by j."createdAt";
+
+\echo
+\echo '== 3. Notes people wrote in the composer, and the job that started next for each agent'
+select m.seq, m."authorLogin" as who, left(m.body, 60) as note, to_char(m."createdAt", 'HH24:MI:SS') as written_utc,
+  (select j.type || ' for ' || u.login || ' at ' || to_char(j."createdAt", 'HH24:MI:SS')
+     from "Job" j join "User" u on u.id = j."userId"
+    where j."chatId" = c.id and j."createdAt" > m."createdAt" and j.type <> 'publish' order by j."createdAt" limit 1) as next_job
+from "Message" m join "PrChat" c on c.id = m."chatId" join "Repo" r on r.id = c."repoId"
+where r."fullName" = :repo and c.number = :pr and m.kind = 'human' order by m.seq;
+
+\echo
+\echo '== 4. Push subscriptions (one row per browser that turned push on; a failed one is deleted)'
+select u.login, s.label, s."failCount" as fail_count, to_char(s."createdAt", 'YYYY-MM-DD HH24:MI') as since_utc
+from "PushSubscription" s join "User" u on u.id = s."userId" order by u.login, s."createdAt";
+```
+
+Check it runs (the dev database has every table; an empty answer is fine):
+
+Run: `docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot -v pr=1 -v ON_ERROR_STOP=1 -f - < docs/acceptance/check-web.sql`
+Expected: four `==` headings, each followed by a table (rows or `(0 rows)`), and no `ERROR`.
+
+- [ ] **Step 6: The runbook**
+
+The checklist the person follows in Steps 10 to 17, in the style of `plan-1.md`, with every click naming the account's browser:
+
+Create `docs/acceptance/plan-2.md`:
+
+````markdown
+# Plan 2 acceptance run (live)
+
+The manual end-to-end test of the web app, from [spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) ("Plan 2 acceptance test"): the real server serving the built web app, real GitHub, two real accounts in two browsers and on a phone, and a real agent. Follow it top to bottom and tick the boxes. [why/live-acceptance.md](../why/live-acceptance.md) explains why this is a document and not a test.
+
+**Time:** about 2½ hours. **Cost:** ngkdev93-jpg's agent is Claude Code, so a full run uses about 4 agent runs of your Claude plan (one each in sections 4, 5 and 6, and maybe one more if a round needs it). NikosGkikas13's reviewer is the scripted fake agent and costs nothing. If a run ends with a `quota` failure, wait for the plan's window to reset and carry on.
+
+## Who is who
+
+| Account | Role | CLI | Agent | Where you click |
+|---|---|---|---|---|
+| `ngkdev93-jpg` | author | the built bundle (`nit-a`) | **Claude Code** | **ngkdev93-jpg's browser**: a Chrome private window (⇧⌘N) signed in to GitHub as `ngkdev93-jpg` |
+| `NikosGkikas13` | reviewer, owns the sandbox repo | from source (`nit-b`) | **fake agent** (scenario files) | **NikosGkikas13's browser**: your normal Chrome window, signed in to GitHub as `NikosGkikas13`; and **NikosGkikas13's iPhone** |
+
+The sandbox is `NikosGkikas13/nitpilot-sandbox`, as in [plan-1.md](plan-1.md). Push is turned on for NikosGkikas13 only, in the normal Chrome window and on the iPhone: a private window can't receive push, and ngkdev93-jpg doesn't need it (that account's notifications come through its CLI, as in Plan 1).
+
+**The address everyone uses.** The tunnel's `https://….trycloudflare.com` address is the server's `PUBLIC_URL` for the whole run, in both browsers and on the phone. The session cookie and the web app's Origin check both follow `PUBLIC_URL`, so a browser on `http://localhost:8787` would be refused its writes. The CLIs still talk to `http://localhost:8787` directly (`env.sh`); they send no cookie and no Origin. The address changes every time the tunnel starts, so the GitHub App gets its sign-in callback for this address in section 1 and loses it in section 8.
+
+**Terminals:** **T1** tunnel, **T2** server, **T3** ngkdev93-jpg's CLI, **T4** NikosGkikas13's CLI, **T5** commands. In each, first run `cd /path/to/nitpilot && source docs/acceptance/env.sh`.
+
+**If something goes wrong**, stop and keep the evidence: a screenshot of the page, the T2, T3 and T4 output, and the output of `check.sql` and `check-web.sql`. A bug found here gets a failing test first and a fix after, like any other bug; don't patch it live and carry on.
+
+**Ask before:** starting the tunnel and the server; every step that writes to GitHub (each PR, the callback URL, the private repo in 7.2); each Claude Code run; turning push on (it registers the browser with Google's and Apple's push services).
+
+---
+
+## 0. Before you start
+
+- [ ] Docker is running: `docker ps` lists `nitpilot-postgres-1`.
+- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [ ] The tools exist: `command -v jq perl cloudflared gh git node` prints six paths.
+- [ ] Nothing uses port 8787 (stop the dev server with Ctrl-C if it runs).
+- [ ] Private repos aren't filtered out: `grep '^PUBLIC_REPOS_ONLY=' apps/server/.env` prints `false` (section 7.2 needs a private repo).
+- [ ] The web app and the CLI are built: `npm run build && npm run build -w apps/cli` (the first builds the web app only), then `node apps/cli/dist/index.js --version` prints a version and `ls apps/web/dist/index.html` finds the page.
+- [ ] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, and both clones exist (`ls "$CLONE_A" "$CLONE_B"`). If not, do [plan-1.md](plan-1.md) section 1 first.
+- [ ] Push keys: `grep -c '^VAPID_PUBLIC_KEY=.' apps/server/.env` prints `1`. If it prints `0`, run `npm run -s vapid:keys -w apps/server >> apps/server/.env` (the keys go straight into the file, never onto the screen), then open `apps/server/.env` in your editor and change the last line's `mailto:you@example.com` to a contact address of yours (the push services may write to it).
+- [ ] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
+- [ ] The iPhone runs iOS 16.4 or later (Settings → General → About → iOS Version). Web Push on iPhone only works from a Home Screen app.
+
+## 1. A clean database, the tunnel, the server and the callback URL (about 10 minutes)
+
+A fresh database `nitpilot_acceptance` keeps your dev data untouched, and means nobody has joined Nitpilot yet, so both people go through the web app's setup. It borrows the dev database's installation and repository rows, because GitHub only sends those once.
+
+1. **T5:** create it, migrate it, copy the two tables:
+   ```bash
+   docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "create database $ACC_DB"
+   DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB npm run db:deploy -w apps/server
+   docker exec nitpilot-postgres-1 pg_dump -U nitpilot -d nitpilot --data-only --table='"Installation"' --table='"Repo"' \
+     | docker exec -i nitpilot-postgres-1 psql -U nitpilot -d $ACC_DB -q
+   dbq -c 'select (select count(*) from "Installation") as installations, (select count(*) from "Repo") as repos, (select count(*) from "User") as users'
+   ```
+   Expect `All migrations have been successfully applied.` and then `1 | <n> | 0` (one installation, however many repos the app sees, no users).
+2. **T1:** start the tunnel (webhooks reach your laptop only while it runs): `npm run dev:tunnel`. Expect `✓ nitpilot-dev now sends webhooks to https://<words>.trycloudflare.com/webhooks/github`. Leave it running.
+3. **T2** and **T5:** remember the address, without `/webhooks/github` (paste yours):
+   ```bash
+   export TUNNEL=https://<words>.trycloudflare.com
+   ```
+4. **T2:** start the server on the new database, with the tunnel as its address. The environment wins over `apps/server/.env`:
+   ```bash
+   DATABASE_URL=postgresql://nitpilot:nitpilot@localhost:5433/$ACC_DB PUBLIC_URL=$TUNNEL npm run start -w apps/server
+   ```
+   Expect `Nitpilot server listening on http://localhost:8787` and a `[boot]` line. It serves the built web app from `apps/web/dist`. Leave it running.
+5. **T5:** `curl -s $TUNNEL/healthz` prints `ok` (the tunnel reaches the server), and `curl -sI $TUNNEL/ | grep -i content-security` shows the `frame-ancestors 'none'` header.
+6. **NikosGkikas13's browser** (this account owns the GitHub App): give the app its sign-in callback for this address.
+   1. Open `https://github.com/settings/apps/nitpilot-dev`. GitHub may ask for your password or a passkey first ("Confirm access").
+   2. Scroll down to the section **Identifying and authorizing users**. Under **Callback URL** there is a box with the address you use for development (leave it as it is).
+   3. Click the grey **Add Callback URL** button under it. A new empty box appears.
+   4. Click into the new box and type your address followed by `/auth/github/callback`, for example `https://<words>.trycloudflare.com/auth/github/callback` (in **T5**, `echo $TUNNEL/auth/github/callback` prints it to copy).
+   5. Scroll to the very bottom of the page and click the green **Save changes** button. A blue banner at the top says the app was updated.
+
+- [ ] The database has `1 | <n> | 0`; the tunnel and the server are up; `healthz` answers through the tunnel.
+- [ ] The tunnel's callback URL is saved on `nitpilot-dev`.
+
+`dbq` (from `env.sh`) runs `psql` inside the Postgres container against this database, so you don't need `psql` installed.
+
+## 2. Both people join through the web app (about 15 minutes)
+
+Nobody is on Nitpilot yet. Each person signs in to the web app, approves their computer on the web app's approve page, and starts their CLI. NikosGkikas13's checklist should tick itself off step by step, without a reload.
+
+1. **NikosGkikas13's browser:** open a new tab, paste the `$TUNNEL` address and press Enter. You see the landing page: the heading *Your agents review each other's PRs the moment they open.* and a **Sign in with GitHub** button. Click it.
+2. GitHub shows *Authorize nitpilot-dev* the first time (a green **Authorize nitpilot-dev** button at the bottom): click it. If you authorized it before, GitHub sends you straight back.
+3. You land on **Set up Nitpilot**, a checklist of five rows with "… of 5" at the top. Row 1 is ticked: *Signed in as @NikosGkikas13.* Row 2, *Install the GitHub App on your repos*, is ticked too (this account owns the installation). Row 3, *Connect your computer*, is the active one: a command block with a **Copy** button and *Waiting for your terminal…*. Leave this tab open.
+4. **T5:** connect NikosGkikas13's computer:
+   ```bash
+   nit-b login --no-open
+   ```
+   It prints a link and a code like `ABCD-EFGH`. Copy the link.
+5. **NikosGkikas13's browser:** open a second tab, paste the link, press Enter. The page says **Approve this device?** and shows the code in big letters: check it is the same as in T5. Below it is your computer's name and *requested HH:MM*. Click the blue **Approve** button. The page changes to **Device approved**.
+6. **T5:** expect `Logged in as NikosGkikas13.` Then go back to the **Set up Nitpilot** tab (don't reload it): row 3 is ticked and says *Connected: <your computer's name>*.
+7. **T5:** check the CLI: `nit-b doctor`. Expect no `✗` lines (the agent is `fake`, from Plan 1's config).
+8. **T4:** start NikosGkikas13's CLI with timestamps, on the happy scenario:
+   ```bash
+   unset B_SCENARIO
+   nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+   Expect `Connected as NikosGkikas13.` Back on the **Set up Nitpilot** tab, without a reload, rows 4 (*Link a repo*) and 5 (*Start your agent*) tick, the top says *5 of 5*, and the *Skip for now* link at the bottom is replaced by **Open your inbox**. Click it: the inbox, with the tabs *To review* and *Mine*, and nothing in them yet.
+9. **ngkdev93-jpg's browser** (the private window): paste the `$TUNNEL` address, press Enter, click **Sign in with GitHub**. If GitHub asks you to sign in, sign in as `ngkdev93-jpg`; click **Authorize nitpilot-dev** if it asks. You land on **Set up Nitpilot** with row 1 *Signed in as @ngkdev93-jpg.* Row 2 may or may not be ticked (this account doesn't own the installation; GitHub may still list it because the account is a collaborator on the sandbox). Either is fine: don't install anything.
+10. **T5:** connect ngkdev93-jpg's computer: `nit-a login --no-open`. Copy the link it prints into a **new tab of ngkdev93-jpg's browser** (not NikosGkikas13's: approving there would connect the wrong account). Check the code, click **Approve**, see **Device approved**. T5: `Logged in as ngkdev93-jpg.`
+11. **T5:** `nit-a doctor`. Expect no `✗` lines; Claude Code shows as installed and logged in.
+12. **T3:** start ngkdev93-jpg's CLI: `nit-a start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as ngkdev93-jpg.` In ngkdev93-jpg's browser, the checklist ticks rows 3 to 5 the same way; click **Open your inbox** (or **Skip for now**, if row 2 stayed open).
+
+- [ ] Both people signed in to the web app and approved their computer on its approve page.
+- [ ] NikosGkikas13's checklist went from row 3 to *5 of 5* without a reload.
+- [ ] Both CLIs say `Connected as …`.
+
+## 3. Push on desktop Chrome and on the iPhone (about 15 minutes)
+
+Ask first: turning push on registers each browser with its push service (Google's for Chrome, Apple's for the iPhone), and every notification of the run goes through them.
+
+1. **NikosGkikas13's browser**, in the inbox: click your avatar, top left beside the Nitpilot wordmark (its label is *Settings · NikosGkikas13*). The **Settings** page opens, with a menu on the left: Devices, Agent, Notifications, Defaults, Account.
+2. In the **Notifications** card, click the **Push notifications** switch (it's off: grey). Chrome shows a small box under the address bar: *<words>.trycloudflare.com wants to Show notifications*. Click **Allow**. The switch turns blue (on).
+3. **NikosGkikas13's iPhone:** open **Safari**, type the `$TUNNEL` address in the address bar (AirDrop it or type it), and go. Tap **Sign in with GitHub** and sign in as `NikosGkikas13` (GitHub on the phone may ask for your password and a two-factor code). You land in the inbox (the account is set up already).
+4. Tap the **Share** button (the square with an arrow pointing up, in the bar at the bottom). Scroll the sheet down and tap **Add to Home Screen**. The name says *Nitpilot*; tap **Add** (top right).
+5. Go to the Home Screen (swipe up from the bottom) and tap the new **Nitpilot** icon. The app opens full screen, without Safari's address bar. If it shows the landing page, tap **Sign in with GitHub** again inside it (a Home Screen app keeps its own cookies).
+6. Tap your avatar (top left) → **Settings** → in **Notifications**, tap the **Push notifications** switch. iOS asks *"Nitpilot" Would Like to Send You Notifications*: tap **Allow**. The switch turns on.
+7. **T5:** `dbq -v pr=0 -f - < docs/acceptance/check-web.sql`. Section 4 lists two rows for `NikosGkikas13`, one per browser.
+
+- [ ] Push is on in NikosGkikas13's Chrome window and in the iPhone's Home Screen app: two subscriptions in `check-web.sql` section 4.
+
+## 4. Live updates, a note, a failed job and Retry, and push (the first PR; one Claude run)
+
+This PR covers four criteria. NikosGkikas13's agent fails its review on purpose (the `crash` scenario), so the chat shows Retry. While it's failed, ngkdev93-jpg writes a note to the agents. Then NikosGkikas13's CLI comes back on the happy scenario, Retry runs the review again, Claude Code fixes the three points (and follows the note), and the chat ends ready, which notifies NikosGkikas13 by push.
+
+1. **T4:** stop NikosGkikas13's CLI (Ctrl-C), then start it on the crash scenario:
+   ```bash
+   export B_SCENARIO="$REPO/apps/cli/src/agents/fake/scenarios/crash.json"
+   nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+2. **T5:** make the branch, then open the PR as ngkdev93-jpg with NikosGkikas13 as reviewer (ask first: this writes to GitHub):
+   ```bash
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" live && cd "$REPO"
+   GH_TOKEN=$(gh auth token --user ngkdev93-jpg) gh pr create --repo $SANDBOX --head acc/live --base main \
+     --title "Plan 2: live updates and Retry" --body "Plan 2 acceptance run." --reviewer NikosGkikas13
+   ```
+   It prints the PR's address; note the number: `PR=…`. (If `gh` says the reviewer request failed, GitHub made the PR anyway: request the review with `GH_TOKEN=$(gh auth token --user ngkdev93-jpg) gh api -X POST repos/$SANDBOX/pulls/$PR/requested_reviewers -f 'reviewers[]=NikosGkikas13'`.)
+3. **Both browsers**, in the inbox (don't reload from here on): the PR appears by itself, in NikosGkikas13's **To review** tab and in ngkdev93-jpg's **Mine** tab (click **Mine** at the top of the list). Click the row in each browser to open the chat. The URL ends `/c/NikosGkikas13/nitpilot-sandbox/<PR>`.
+4. Watch **T4** and **NikosGkikas13's browser**: T4 prints `→ review of …#<PR> (attempt 1)` and a failure, three times (the server tries a crashed job 3 times). The chat then shows an amber banner under the header: **Your agent couldn't finish** / *The timeline says why.*, with a **Retry** button. In NikosGkikas13's inbox the row's pill changes too.
+5. **ngkdev93-jpg's browser**, in the chat: click the box at the bottom (*Message the agents…*) and type this note exactly, then press Enter (↵):
+   ```
+   Please also add the line // checked in the Plan 2 acceptance run as the first line of orders-demo/src/orders.js.
+   ```
+   The note appears at the end of the timeline under your name, and the box empties. It also appears in NikosGkikas13's browser, live.
+6. **T4:** stop the CLI (Ctrl-C) and start it on the happy scenario:
+   ```bash
+   export B_SCENARIO="$REPO/docs/acceptance/scenarios/sandbox-happy.json"
+   nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+7. **NikosGkikas13's browser:** click **Retry** in the banner. It says *Retrying…* for a moment; the banner goes. Then watch both browsers, without reloading (ask first: the next step starts Claude Code):
+   - Under the timeline, a progress line with a pulsing dot: *NikosGkikas13's agent is reviewing…* (in NikosGkikas13's own browser: *Your agent is reviewing…*), with what it's doing beside it.
+   - Three point cards appear (P1 to P3, on lines 5, 12 and 18 of `orders.js`), and the progress line goes.
+   - **T3:** `→ address of …#<PR> (attempt 1)`. Both chats now show *ngkdev93-jpg's agent is …* (or *Your agent is …* in ngkdev93-jpg's own browser), its words changing as Claude works (getting the code, running, pushing). The inbox rows' pills change with it, in both browsers.
+   - Claude's replies appear on each point; a commit lands; then *NikosGkikas13's agent is re-reviewing…*, the points turn resolved, and NikosGkikas13's chat shows the green **Ready for your approval** banner.
+8. **Push**, the moment the chat is ready:
+   - **NikosGkikas13's Mac:** a notification from **Google Chrome** (top right of the screen) titled *Ready for your approval*, showing the trycloudflare address. Click it: Chrome comes to the front on the chat.
+   - **NikosGkikas13's iPhone:** the same notification on the lock screen or as a banner, from **Nitpilot**. Tap it: the Home Screen app opens on the chat.
+   - **T4** prints a `🔔 Ready for your approval …` line, and **no** second notification appears on the Mac from **Script Editor** titled *Nitpilot* (that is what the CLI shows when push didn't reach you).
+9. **T5:** check it all:
+   ```bash
+   dbq -v pr=$PR -f - < docs/acceptance/check.sql
+   dbq -v pr=$PR -f - < docs/acceptance/check-web.sql
+   gh api "repos/$SANDBOX/contents/orders-demo/src/orders.js?ref=acc/live" --jq .content | base64 -d | head -2
+   gh api repos/$SANDBOX/pulls/$PR/commits | jq '[.[] | {sha: .sha[0:7], author: .author.login}]'
+   ```
+10. **T5:** close the PR so later sections don't touch it: `gh pr close $PR --repo $SANDBOX`.
+
+- [ ] **Live (spec §20):** the inbox rows and the open chat changed while the agents worked, including the progress line, in both browsers, without a reload.
+- [ ] **A note reaches the agents' next job:** `orders.js` starts with `// checked in the Plan 2 acceptance run`, and `check-web.sql` section 3 shows the note followed by an `address for ngkdev93-jpg` job.
+- [ ] **A failed job shows Retry, and Retry runs it again:** `check.sql` section 2 shows NikosGkikas13's first review `failed` (`crash`, attempt 3) and a second review `done`; the timeline says *NikosGkikas13 asked their agent to try again*; the **Retry** banner showed only in NikosGkikas13's browser.
+- [ ] **Web Push** arrived on desktop Chrome and on the iPhone (from the Home Screen app), and clicking each opened the chat.
+- [ ] **With push on, the CLI showed no OS notification:** T4 has the `🔔` line, and no *Script Editor* notification appeared.
+
+## 5. Drafts with Auto off (the second PR; one Claude run)
+
+With Auto off, an agent's work waits as a draft for its person to read and send. NikosGkikas13 turns Auto-review off and ngkdev93-jpg turns Auto-fix off before the PR opens, so the new chat starts with both off.
+
+1. **NikosGkikas13's browser:** avatar → **Settings** → in **Defaults for new chats**, click the **Auto-review** switch so it turns grey (off). **ngkdev93-jpg's browser:** avatar → **Settings** → **Defaults for new chats** → click **Auto-fix** so it turns grey. Each switch saves at once.
+2. **T5:** new branch and PR (ask first: writes to GitHub):
+   ```bash
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" drafts && cd "$REPO"
+   GH_TOKEN=$(gh auth token --user ngkdev93-jpg) gh pr create --repo $SANDBOX --head acc/drafts --base main \
+     --title "Plan 2: drafts" --body "Plan 2 acceptance run." --reviewer NikosGkikas13
+   ```
+   `PR=…`. Open the chat in both browsers from the inbox. In each chat's header, your own switch reads off (*Auto-review* for NikosGkikas13, *Auto-fix* for ngkdev93-jpg).
+3. **T4:** `→ review of …` and `✓ review of …: done`. **NikosGkikas13's browser:** a draft card appears in the timeline, *Draft: Your agent wants to raise 3 points*, with **Send** and **Discard** buttons. Nothing is on GitHub yet: in **T5**, `gh api repos/$SANDBOX/pulls/$PR/comments --jq length` prints `0`.
+4. **NikosGkikas13's browser:** click **Send** on the card. The card goes, the three point cards appear in the chat, and GitHub gets the review: the same command now prints `3`. (Ask first: the next step starts Claude Code.)
+5. **T3:** `→ address of …`, then `✓ address of …: done`. The fix commit stays on ngkdev93-jpg's laptop. **ngkdev93-jpg's browser:** a draft card *Draft: Your agent wants to push fixes for P1, P2 and P3* (or a mix of fixes and replies) with the words *Not pushed*, a list of the changed files, and the diff of `orders-demo/src/orders.js` open under it (green `+` and red `−` lines). Check GitHub still has the old head and the commit is only local:
+   ```bash
+   gh api repos/$SANDBOX/pulls/$PR --jq .head.sha
+   git -C "$CLONE_A" for-each-ref refs/nitpilot/drafts
+   ```
+   The first prints the same commit as before the job (the seed's); the second lists one draft ref.
+6. **ngkdev93-jpg's browser:** click **Send** on that card. The banner says *Sending your agent's fixes.* and the timeline *ngkdev93-jpg is sending the drafted fixes*; T3 prints a publish job; then the timeline says *ngkdev93-jpg's agent pushed <sha>* and the card goes.
+7. **T4:** `→ re-review of …`, `✓ … done`. **NikosGkikas13's browser:** a second draft card, *Draft: Your agent wants to settle P1, P2 and P3*. Click **Send**. The points turn resolved and the chat shows **Ready for your approval**.
+8. **T5:**
+   ```bash
+   dbq -v pr=$PR -f - < docs/acceptance/check-web.sql
+   gh api repos/$SANDBOX/pulls/$PR/commits | jq '[.[] | select(.commit.message | contains("Nitpilot-Job")) | {sha: .sha[0:7], author: .author.login, email: .commit.author.email}]'
+   git -C "$CLONE_A" for-each-ref refs/nitpilot/drafts
+   gh pr close $PR --repo $SANDBOX
+   ```
+9. Turn the defaults back on: **Auto-review** in NikosGkikas13's Settings, **Auto-fix** in ngkdev93-jpg's (both switches blue again).
+
+- [ ] **A reviewer draft waited for Send**, and Send put its three points into the chat and onto GitHub (`0` before Send, `3` after).
+- [ ] **An author draft, with its diff, waited for Send**, while GitHub's head stayed on the old commit; Send pushed it.
+- [ ] **The pushed commit is authored by ngkdev93-jpg** (`author: "ngkdev93-jpg"`), and the draft ref is gone from the clone afterwards.
+- [ ] `check-web.sql` section 1 shows both people with `auto` false, and section 2 shows the drafted jobs `applied` (a `publish` job among them).
+
+## 6. A security point escalates: Continue, then Resolve (the third PR; one Claude run)
+
+NikosGkikas13's agent follows `sandbox-escalation.json`: it raises a security point, which goes to the people. ngkdev93-jpg lets the agents continue; Claude fixes it; the re-review settles it and raises a second security point; NikosGkikas13, who raised it, resolves it, and the chat is ready.
+
+1. **T4:** stop the CLI (Ctrl-C), start it on the escalation scenario:
+   ```bash
+   export B_SCENARIO="$REPO/docs/acceptance/scenarios/sandbox-escalation.json"
+   nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+2. **T5:** new branch `escalation`, and the PR (ask first: writes to GitHub):
+   ```bash
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" escalation && cd "$REPO"
+   GH_TOKEN=$(gh auth token --user ngkdev93-jpg) gh pr create --repo $SANDBOX --head acc/escalation --base main \
+     --title "Plan 2: escalation" --body "Plan 2 acceptance run." --reviewer NikosGkikas13
+   ```
+   `PR=…`. Open the chat in both browsers.
+3. Both chats show a red banner, **Needs a human decision**, about P1 (*The customer name goes straight into the SQL*). In **ngkdev93-jpg's browser** it has a **Continue** button and no **Resolve** (only the reviewer who raised a point may resolve it). In **NikosGkikas13's browser** it has both. NikosGkikas13 also gets a push (desktop and iPhone); ngkdev93-jpg gets the notice in T3 (`🔔`) and as a desktop notification from the CLI.
+4. **ngkdev93-jpg's browser:** click **Continue** (ask first: this starts Claude Code). A message says *Agents will keep going on P1.* and the timeline *ngkdev93-jpg let the agents continue on P1*. T3: `→ address of …`; Claude fixes the SQL; T4: `→ re-review of …`.
+5. Both chats: P1 turns resolved, and a new point P2 (*Anyone who can call this reads any customer's orders*) escalates: the red banner is back, about P2.
+6. **NikosGkikas13's browser:** click **Resolve** in the banner. A message says *P2 resolved.*; the banner turns green: **Ready for your approval**.
+7. **T5:**
+   ```bash
+   dbq -v pr=$PR -f - < docs/acceptance/check.sql
+   dbq -v pr=$PR -f - < docs/acceptance/check-web.sql
+   gh pr close $PR --repo $SANDBOX
+   ```
+8. **T4:** back to the happy scenario: Ctrl-C, `unset B_SCENARIO`, then `nit-b start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`.
+
+- [ ] **A security point escalated** (`check.sql` section 6: P1 `escalated` with reason `category` before Continue).
+- [ ] **Continue let the agents run one more round on it:** an address job and a re-review after the Continue, and P1 `resolved`.
+- [ ] **On the second escalation, Resolve made the chat ready:** P2 resolved by NikosGkikas13, the chat `ready` (section 1).
+- [ ] ngkdev93-jpg never saw a **Resolve** button.
+
+## 7. Read-only, and a 404 (no agent runs)
+
+### 7.1 Someone who can read the repo but isn't in the chat sees it read-only
+
+The sandbox is public, so everyone can read it. NikosGkikas13 isn't in a chat for a PR that doesn't ask NikosGkikas13 to review it.
+
+1. **T5:** a PR with no reviewer (ask first: writes to GitHub):
+   ```bash
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" readonly && cd "$REPO"
+   GH_TOKEN=$(gh auth token --user ngkdev93-jpg) gh pr create --repo $SANDBOX --head acc/readonly --base main \
+     --title "Plan 2: read-only" --body "Plan 2 acceptance run."
+   ```
+   `PR=…`. Nothing runs: nobody was asked to review.
+2. **NikosGkikas13's browser:** the PR is **not** in NikosGkikas13's inbox (neither tab). Type the chat's address into the address bar: `$TUNNEL/c/NikosGkikas13/nitpilot-sandbox/<PR>` (in T5, `echo $TUNNEL/c/$SANDBOX/$PR` prints it). The chat opens: the PR's title, the timeline. Where the message box would be, it says *You're reading along. Only the author and the reviewers can message the agents.* There is no Auto switch in the header and no buttons in the timeline.
+3. **ngkdev93-jpg's browser:** the same address shows the chat with the *Auto-fix* switch and the message box (ngkdev93-jpg is the author).
+4. **T5:** `gh pr close $PR --repo $SANDBOX`.
+
+- [ ] NikosGkikas13 saw the chat read-only: no message box, no Auto switch, no action buttons, and not in the inbox.
+
+### 7.2 Someone who can't read the repo gets a 404
+
+This needs a repo ngkdev93-jpg can't read: a private one of NikosGkikas13's, made for this check and deleted after it. **Ask first:** it creates a private repo in NikosGkikas13's account, a branch and a PR in it, and deletes the repo at the end.
+
+1. **T5:** make the repo, a branch with one file, and a PR, all as NikosGkikas13 (`gh`'s own account):
+   ```bash
+   PRIV=NikosGkikas13/nitpilot-private-check
+   gh repo create $PRIV --private --add-readme --description "Nitpilot Plan 2 acceptance: a repo ngkdev93-jpg can't read"
+   MAIN=$(gh api repos/$PRIV/git/ref/heads/main --jq .object.sha)
+   gh api -X POST repos/$PRIV/git/refs -f ref=refs/heads/acc/private -f sha=$MAIN
+   gh api -X PUT repos/$PRIV/contents/notes.md -f message="A private note" -f content="$(printf 'private\n' | base64)" -f branch=acc/private
+   gh pr create --repo $PRIV --head acc/private --base main --title "Private check" --body "Plan 2 acceptance run."
+   gh api repos/$PRIV/collaborators --jq '.[].login'
+   ```
+   The last line prints only `NikosGkikas13`.
+2. **T5:** the app must see the repo: `dbq -c "select \"fullName\", private from \"Repo\" where \"fullName\" = '$PRIV'"` prints one row within a few seconds (GitHub tells the server about a new repo when the app is installed on all of NikosGkikas13's repos). If it prints no row, the app is installed on chosen repos only: **NikosGkikas13's browser** → `https://github.com/settings/installations` → **Configure** next to *nitpilot-dev* → under **Repository access**, *Only select repositories* → **Select repositories** → type `nitpilot-private-check` and click it → green **Save**. Then run the `dbq` line again. If the PR opened before the repo was added, push nothing more: close the PR and open a second one on a new branch `acc/private2` the same way.
+3. **NikosGkikas13's browser:** open `$TUNNEL/c/$PRIV/1` (or the number `gh pr create` printed). The chat opens: NikosGkikas13 wrote the PR.
+4. **ngkdev93-jpg's browser:** open the same address. The page shows **Nothing here** / *This chat doesn't exist, or your GitHub account can't see its repo.* Then open `$TUNNEL/c/$PRIV/999` (a PR that doesn't exist): exactly the same page.
+5. **T5:** clean up (ask first): `gh pr close 1 --repo $PRIV`, then delete the repo. `gh repo delete $PRIV --yes` needs the `delete_repo` permission; if it refuses, run `gh auth refresh -h github.com -s delete_repo` yourself (it shows a code to approve in the browser), or delete it in **NikosGkikas13's browser**: the repo → **Settings** (top tabs) → scroll to the red **Danger Zone** → **Delete this repository** → follow the prompts.
+
+- [ ] ngkdev93-jpg got the not-found page for the private repo's chat, the same page as for a PR that doesn't exist.
+- [ ] The private repo is deleted.
+
+## 8. Wrap up
+
+1. **NikosGkikas13's browser:** remove the tunnel's callback URL from the app: `https://github.com/settings/apps/nitpilot-dev` → **Identifying and authorizing users** → next to the `…trycloudflare.com/auth/github/callback` box, click its **Remove** button (leave the development one) → **Save changes** at the bottom.
+2. **NikosGkikas13's iPhone:** the Home Screen app points at an address that dies with the tunnel. Press and hold its icon → **Remove App** → **Delete App** (or **Remove from Home Screen**).
+3. **T5:** every PR of this run is closed: `gh pr list --repo $SANDBOX --state open` prints nothing of this run's (`Plan 2: …`).
+4. Stop T1 to T4 (Ctrl-C).
+5. Fill in section 9. Keep this file as the record of the run.
+6. **T5:** drop the database: `docker exec nitpilot-postgres-1 psql -U nitpilot -d postgres -c "drop database $ACC_DB"`. Your dev database was never touched.
+
+## 9. Results
+
+Run on: (date), with Nitpilot at commit `(sha)`. Agent ngkdev93-jpg: Claude Code (version) through the built CLI; agent NikosGkikas13: the fake agent from source. Desktop: Chrome (version) on macOS (version). Phone: iPhone (model), iOS (version).
+
+**Criteria** (spec §20, Plan 2 acceptance), each with its evidence:
+
+| Criterion | Section | Evidence |
+|---|---|---|
+| The inbox and an open chat update live while the agents work, including the progress line, without a reload | 4 | |
+| With Auto off, a reviewer draft and an author draft (with its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's commit, authored by ngkdev93-jpg | 5 | |
+| A security point escalates; Continue runs one more round; on a second escalation Resolve makes the chat ready | 6 | |
+| A note sent from the composer reaches the agents' next job | 4 | |
+| A failed job shows Retry, and Retry runs it again | 4 | |
+| Web Push arrives on desktop Chrome and on the iPhone (Home Screen app), and clicking it opens the chat; with push on, the CLI shows no OS notification | 3, 4 | |
+| Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404 | 7 | |
+
+**What was found and fixed during the run** (each with its commit):
+
+- (none yet)
+
+**Ticks:** every box in sections 0 to 8 is ticked, or has a note here saying why not.
+````
+
+- [ ] **Step 7: The README**
+
+The repo has no README yet. A short one says what Nitpilot is, what is in each folder, what the web app does, and how to run it and its tests (Plan 3 adds the demo video and the install instructions):
+
+Create `README.md`:
+
+````markdown
+# Nitpilot
+
+Developers' own AI agents review each other's pull requests the moment they open. The author's agent fixes what the reviewer's agent raises, the reviewer's agent checks the fixes, and a person is pinged only when there's a decision to make: the PR is ready to approve, or the agents need a human.
+
+The agents run on each developer's own machine, under their own login (Claude Code today). Nitpilot is the coordinator: a server that hears about PRs from GitHub, decides whose turn it is and hands jobs to the right laptop; a CLI on each laptop that runs the agent; and a web app where people follow and steer each PR's chat.
+
+Not released yet: the hosted version, self-hosting and the npm package come with Plan 3. [docs/architecture.md](docs/architecture.md) explains how it works and why; the design is in [the spec](docs/superpowers/specs/2026-10-07-nitpilot-design.md).
+
+## What's in the repo
+
+| Folder | What it is |
+|---|---|
+| `apps/server` | The server: one Node process (Hono, Prisma) and Postgres. Webhooks, the workflow engine, the CLI and web sockets, and the web app's files |
+| `apps/cli` | `nitpilot`: logs a computer in, links repos, and runs the agent for the jobs it's given |
+| `apps/web` | The web app: an installable PWA (React, Vite) with the inbox, each PR's chat, Settings and push notifications |
+| `packages/protocol` | The shared contract: every message and REST body as a zod schema, and the `BRAND` names |
+| `docs/` | The architecture, plain-language explainers in [`docs/why/`](docs/why/), and the live acceptance runbooks in [`docs/acceptance/`](docs/acceptance/) |
+
+## The web app
+
+The server serves the built web app from the same address as its API, so there is one origin and no CORS ([why/serving-a-spa.md](docs/why/serving-a-spa.md)). Signed in with GitHub, a person sees:
+
+- **The inbox:** the PRs they review and their own, each with a status pill (working, waiting, needs you, ready…) and an unread count, updated live.
+- **Each PR's chat:** the agents' points, replies and decisions as a timeline, a live line saying what an agent is doing this second, and the actions that are theirs to take: a note to the agents, Resolve or Continue on an escalated point, Retry on a failed job, and Send or Discard on a draft when their Auto switch is off.
+- **Settings:** their computers (with Revoke), their agents, push notifications, the defaults for new chats, the daily cap.
+- **Setup:** a checklist that ticks itself off as they install the GitHub App, log in a computer and start their agent.
+
+It installs to the Home Screen (desktop and iPhone) and sends Web Push notifications, falling back to the CLI's desktop notification when push isn't on ([why/web-push.md](docs/why/web-push.md), [why/service-workers-and-pwa.md](docs/why/service-workers-and-pwa.md)).
+
+## Running it locally
+
+You need Node 22, Docker, and a GitHub App of your own for development (its settings go in `apps/server/.env`; see `apps/server/.env.example`).
+
+```bash
+npm ci
+docker compose up -d                       # Postgres on port 5433
+npm run db:deploy -w apps/server           # create the tables
+npm run dev -w apps/server                 # the server on http://localhost:8787
+npm run dev -w apps/web                    # the web app on http://localhost:5173 (it passes /api and /ws to the server)
+npm run dev:tunnel                         # GitHub's webhooks reach your laptop while this runs
+```
+
+`npm run vapid:keys -w apps/server` makes the key pair Web Push needs; without it, push is off and notifications go to the CLI.
+
+## Tests
+
+```bash
+npm test                 # every package's unit and database tests
+npm run typecheck && npm run lint
+npm run test:e2e         # the server, two CLIs and a scripted agent, end to end
+npm run test:web-e2e     # builds the web app, then Playwright drives it in Chromium against that same setup
+```
+
+CI runs all of them on every pull request. The live acceptance runs, against real GitHub, real accounts and a real agent, are checklists: [Plan 1](docs/acceptance/plan-1.md) for the agents and the CLI, [Plan 2](docs/acceptance/plan-2.md) for the web app.
+````
+
+- [ ] **Step 8: The docs and the spec**
+
+The live-acceptance explainer gains Plan 2's run, the architecture's testing layers gain Playwright and the second runbook (and "Not built yet" loses the web app), and spec §20 says which address the desktop browsers use and who plays the non-participant and the outsider:
+
+Modify `docs/why/live-acceptance.md`:
+
+```diff
+diff --git a/docs/why/live-acceptance.md b/docs/why/live-acceptance.md
+index 7e03997..e3983c7 100644
+--- a/docs/why/live-acceptance.md
++++ b/docs/why/live-acceptance.md
+@@ -1,6 +1,6 @@
+ # The live acceptance run: the manual test that uses the real thing
+ 
+-**In one sentence:** after every automated test passes, a person runs the whole product once against real GitHub and a real agent, following a checklist, and writes down what happened (spec §20, `docs/acceptance/plan-1.md`).
++**In one sentence:** after every automated test passes, a person runs the whole product once against real GitHub and a real agent, following a checklist, and writes down what happened (spec §20, `docs/acceptance/plan-1.md` for the agents and the CLI, `docs/acceptance/plan-2.md` for the web app).
+ 
+ ## Why it can't be automated
+ 
+@@ -26,6 +26,15 @@ Two reasons. A leftover job from earlier experiments would be handed to your rea
+ 
+ One pass criterion is "the review job starts within 5 seconds of the request". Nothing in the database records when a job started, so the runbook pipes each CLI's output through `docs/acceptance/stamp.pl`, which puts the time (UTC, to the millisecond) in front of each line as it arrives. `docs/acceptance/check.sql` prints the time each webhook reached the server in the same clock, so the two are compared by eye.
+ 
++## Plan 2: the web app, on a desktop and a phone
++
++The browser suite ([end-to-end-test.md](end-to-end-test.md)) clicks through the web app against a pretend GitHub. The Plan 2 run (`docs/acceptance/plan-2.md`) does it for real, and adds what Playwright can't reach:
++
++- **Real sign-ins and real push.** Both accounts sign in with GitHub in their own browsers, and the reviewer turns push on in desktop Chrome and in the iPhone's Home Screen app. A real notification has to arrive, from Google's and Apple's push services, and open the chat when clicked. Headless Chromium always says no to notifications, so no automated test can do this.
++- **One public address.** A phone can't reach `localhost`, and Web Push needs HTTPS, so the whole run uses the tunnel's `https://….trycloudflare.com` address as the server's `PUBLIC_URL`. GitHub only sends a sign-in back to callback URLs the app lists, so the run adds the tunnel's for the day and removes it after.
++- **Agents that change what's on screen.** The criteria are things you watch happen: the progress line moving while Claude Code works, a draft's diff waiting on the author's laptop until Send, an escalation coming back after Continue. Each section says what to click and what you should see next, without a reload.
++- **Scripted failures.** The reviewer's fake agent follows a scenario file per section: `crash` to make a job fail (so Retry shows), the happy one, and `sandbox-escalation.json`, which settles the first security point and raises a second one.
++
+ ## The React analogy
+ 
+ It's the pre-release click-through before you ship a frontend: automated tests are green, and you still open the real app, in a real browser, signed in as real users, and go through the main journeys with a checklist. You do it once per release, and it's where you find the things nobody thought to test.
+```
+
+Modify `docs/architecture.md`:
+
+```diff
+diff --git a/docs/architecture.md b/docs/architecture.md
+index 1a98e1c..5a0dfa2 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -129,8 +129,8 @@ Three programs, one shared package:
+ 
+ ### 4.12 Testing: five layers
+ 
+-- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) one end-to-end test with real server, two real CLIs and the fake agent (`npm run test:e2e`); (5) a manual live acceptance run against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md)). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
+-- **Alternatives:** mocks only; full browser-level tests.
++- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) end-to-end tests with the real server, two real CLIs and the fake agent (`npm run test:e2e`), and the same setup driven through the web app by Playwright in Chromium (`npm run test:web-e2e`); (5) manual live acceptance runs against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md) for the agents, [acceptance/plan-2.md](acceptance/plan-2.md) for the web app, a phone included). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
++- **Alternatives:** mocks only; browser tests for everything.
+ - **Why:** each layer catches what the one below can't. Mocks can't tell us what GitHub really sends, and the live run is the only place a real agent meets a real PR. The live run is manual because it needs two accounts and a subscription; it is written down so it can be repeated.
+ 
+ ### 4.13 A monorepo with a shared protocol package
+@@ -158,4 +158,4 @@ Three programs, one shared package:
+ 
+ ## 6. Not built yet
+ 
+-The web app (inbox, chats, Auto switches, Web Push, drafts) is Plan 2. The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
++The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
+```
+
+Modify `docs/superpowers/specs/2026-10-07-nitpilot-design.md`:
+
+```diff
+diff --git a/docs/superpowers/specs/2026-10-07-nitpilot-design.md b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+index 97651a4..8a9342c 100644
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -789,7 +789,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
+ | W8 | Playwright in CI, the acceptance runbook, the live acceptance run, docs |
+ 
+    **Plan 2 acceptance test (live):**
+-   - **Setup:** as in Plan 1 (the `nitpilot-dev` app, the sandbox repo, A on Claude Code, B on the fake agent), the web app built and served by the server, and both accounts signed in to it in their own browsers. For the phone, the server runs behind the dev tunnel's HTTPS URL as `PUBLIC_URL`, and that URL's `/auth/github/callback` is added to the dev app's callback URLs for the run.
++   - **Setup:** as in Plan 1 (the `nitpilot-dev` app, the sandbox repo, A on Claude Code, B on the fake agent), the web app built and served by the server, and both accounts signed in to it in their own browsers. For the phone, the server runs behind the dev tunnel's HTTPS URL as `PUBLIC_URL`, and that URL's `/auth/github/callback` is added to the dev app's callback URLs for the run. The desktop browsers use that URL too: the session cookie and the Origin check follow `PUBLIC_URL`. The non-participant is the repo owner opening a PR they weren't asked to review (the sandbox is public); the person who can't read is the author, on a private repo made for the check (`docs/acceptance/plan-2.md` §7).
+    - **It passes when:**
+      - The inbox and an open chat update live while the agents work, including the progress line, without a reload.
+      - With Auto off, a reviewer draft and an author draft (including its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's draft commit, which is authored by A.
+```
+
+- [ ] **Step 9: Run everything, and commit the offline half**
+
+Docker must be running.
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: all green: protocol 82, CLI 334 passed + 14 skipped (one more than after Task 24), server 1031, web 331; end to end 6; Playwright 18. Typecheck, lint and build clean, with no build warning.
+
+```bash
+git add apps/cli/src/agents/fake/acceptance.test.ts docs/acceptance README.md docs/why/live-acceptance.md docs/architecture.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "docs(acceptance): the Plan 2 runbook, its helpers and a twice-escalating scenario, and a README
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+From here the steps need the person. Everything in `docs/acceptance/plan-2.md` is ticked as it is done, and its section 9 is filled in.
+
+- [ ] **Step 10: Live: be ready (the person and the controller)**
+
+Everything from here writes to GitHub (the sandbox repo, the dev app's settings, one throwaway private repo), Steps 13 to 15 start Claude Code, and Step 12 registers two browsers with push services. Tell the person what is coming (about 2½ hours; about 4 Claude runs; the phone is needed in Steps 12 and 13) and get a clear yes before starting.
+
+The controller checks:
+```bash
+git status --short            # clean, on plan-2-web-app with Step 9's commit on top
+docker ps --format '{{.Names}}'
+claude auth status
+command -v jq perl cloudflared gh git node
+gh auth status                # NikosGkikas13 active, ngkdev93-jpg also signed in
+grep -c '^VAPID_PUBLIC_KEY=.' apps/server/.env
+grep '^PUBLIC_REPOS_ONLY=' apps/server/.env
+npm run build && npm run build -w apps/cli && node apps/cli/dist/index.js --version
+```
+Expected: no changes; `nitpilot-postgres-1`; `"loggedIn": true`; six paths; both gh accounts; `1` (if `0`, section 0's push-keys box says how to add them without printing them); `PUBLIC_REPOS_ONLY=false`; the build and a version number. If Claude Code isn't signed in, the person runs `claude auth login` themselves.
+
+- [ ] **Step 11: Live: sections 0 to 2 (database, tunnel, server, callback URL, both people join)**
+
+Follow `docs/acceptance/plan-2.md` sections **0, 1 and 2**. The controller creates the database and starts the tunnel (**T1**) and the server (**T2**, with `PUBLIC_URL=$TUNNEL`) in Terminal-panel tabs, and leaves both running until Step 17; then runs `nit-b login --no-open` and `nit-a login --no-open` in **T5** and gives the person each link to paste, naming the browser. The person adds the callback URL (section 1, step 6, in NikosGkikas13's browser), signs in to the web app in both browsers and approves both computers. The controller starts **T4** (`nit-b start`) and **T3** (`nit-a start`).
+
+Capture: a screenshot of NikosGkikas13's checklist at *5 of 5*, and the T3/T4 `Connected as …` lines. Tick sections 0 to 2.
+
+- [ ] **Step 12: Live: section 3 (push on desktop Chrome and the iPhone)**
+
+Ask first (push services). Follow section **3**: the person turns push on in NikosGkikas13's Chrome window, then on the iPhone adds the app to the Home Screen and turns push on there. The controller runs `check-web.sql` and confirms two subscriptions.
+
+If the iPhone never asks for permission: check iOS is 16.4 or later and that the app was opened from the Home Screen icon (not a Safari tab). If Chrome says *Blocked*, reset the site's notification permission (the icon left of the address → *Site settings*) and reload.
+
+- [ ] **Step 13: Live: section 4 (live updates, a note, Retry, push)**
+
+Ask before the PR (a GitHub write) and before Claude runs (after Retry). Follow section **4**. The controller restarts T4 on `crash.json`, opens the PR with `gh` as ngkdev93-jpg, waits for the third failed attempt, tells the person to write the note in ngkdev93-jpg's browser, restarts T4 on the happy scenario, and tells the person to click **Retry** in NikosGkikas13's browser. Watch both browsers without reloading while Claude works.
+
+Capture: screenshots of the progress line in both browsers, the **Retry** banner, the Chrome and iPhone notifications; T3/T4 lines with stamps; `check.sql`, `check-web.sql` and the `orders.js` first line. Tick the five boxes. The PR ends closed.
+
+If Claude ignores the note (the line isn't in `orders.js`), look at what the address job's bundle carried before calling it a bug: section 3 of `check-web.sql` says whether the note came before the job.
+
+- [ ] **Step 14: Live: section 5 (drafts with Auto off)**
+
+Ask before the PR and before Claude runs. Follow section **5**: both people turn their default off in Settings, the controller opens the PR, NikosGkikas13 sends the reviewer draft, Claude's fix waits as an author draft (the controller checks GitHub's head and the draft ref), ngkdev93-jpg sends it, NikosGkikas13 sends the re-review's draft. Both defaults go back on at the end.
+
+Capture: screenshots of both draft cards (the author's with its diff), the `gh` commit-author output, `check-web.sql`. Tick the four boxes. The PR ends closed.
+
+- [ ] **Step 15: Live: section 6 (escalate, Continue, Resolve)**
+
+Ask before the PR and before Claude runs (Continue starts it). Follow section **6**: T4 on `sandbox-escalation.json`; ngkdev93-jpg clicks **Continue**; after the round, NikosGkikas13 clicks **Resolve** on the second escalation. T4 goes back to the happy scenario at the end.
+
+Capture: screenshots of the banner in both browsers (Continue only for ngkdev93-jpg; Resolve and Continue for NikosGkikas13), the ready banner, `check.sql`. Tick the four boxes. The PR ends closed.
+
+- [ ] **Step 16: Live: section 7 (read-only and a 404)**
+
+Ask before each GitHub write; ask separately before 7.2 creates the private repo, and again before it is deleted. Follow section **7**. The controller runs the `gh` commands; the person opens the addresses in the named browsers. If `gh repo delete` lacks the `delete_repo` permission, the person runs `gh auth refresh -h github.com -s delete_repo` themselves or deletes the repo in the browser.
+
+Capture: screenshots of the read-only chat (NikosGkikas13) and the not-found page (ngkdev93-jpg, for the private chat and for PR 999). Tick the three boxes.
+
+- [ ] **Step 17: Live: wrap up**
+
+Follow section **8**: the person removes the tunnel's callback URL from `nitpilot-dev` and the Home Screen app from the iPhone; the controller checks every PR of the run is closed, stops T1 to T4, and drops `nitpilot_acceptance` once section 9 is written (Step 18).
+
+- [ ] **Step 18: Write down what the run showed**
+
+Fill in the runbook's section 9: the date, the commit, the versions (Claude Code, Chrome, macOS, the iPhone and iOS), each criterion's evidence in its table row (what was seen, the `check*.sql` lines that prove it), every fix made during the run with its commit, and a note for any box not ticked. Then:
+
+- **Spec §22:** replace the "Web Push on a phone needs HTTPS and, on iPhone, a Home Screen app" item's last sentence with what the run showed (whether the Home Screen app needed its own sign-in, how long the push took to arrive), and add an item for anything else the run found about GitHub, push services or browsers that the spec didn't know.
+- **This plan:** add a "Live run" paragraph to "Checked against the code (W8)": the date, the result per criterion, the fixes and their commits, and anything deferred.
+
+- [ ] **Step 19: Run everything, and commit the results**
+
+Docker must be running.
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
+Expected: the counts of Step 9 (protocol 82, CLI 334 + 14, server 1031, web 331, e2e 6, Playwright 18), plus the tests of any fix made during the run.
+
+```bash
+git add docs/acceptance/plan-2.md docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/superpowers/plans/2026-10-15-plan-2-web-app.md
+git commit -m "test(acceptance): the Plan 2 live run, desktop and iPhone, with its results
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+Fixes made during the live run were committed on their own, each with its failing test, before this commit.
+
+**Done when:** `docs/acceptance/plan-2.md` has every box ticked (or a note saying why not), its section 9 has the evidence for each criterion of spec §20's Plan 2 acceptance test, and the full suite is green. Plan 2 is then complete except Task 20's Step 26 (the hand-run push check, which section 3 and 4 of this run cover) and the final whole-branch review.
