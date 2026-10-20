@@ -12,10 +12,11 @@ function start() {
   const received: ServerToWeb[] = [];
   const onSignedOut = vi.fn();
   const onResume = vi.fn();
+  const onRefused = vi.fn();
   // No jitter: random() 0.5 makes each wait exactly the backoff.
-  const live = new LiveSocket({ url: 'ws://app/ws/web', onMessage: (m) => received.push(m), onSignedOut, onResume, open: sockets.open, backoff: { startMs: 1_000, maxMs: 30_000, random: () => 0.5 } });
+  const live = new LiveSocket({ url: 'ws://app/ws/web', onMessage: (m) => received.push(m), onSignedOut, onResume, onRefused, open: sockets.open, backoff: { startMs: 1_000, maxMs: 30_000, random: () => 0.5 } });
   live.start();
-  return { live, sockets, received, onSignedOut, onResume };
+  return { live, sockets, received, onSignedOut, onResume, onRefused };
 }
 
 const items = (chatId: string, seqs: number[]): ServerToWeb => ({ v: 1, t: 'chat.items', d: { chatId, items: seqs.map((s) => item(s)), lastSeq: seqs.at(-1)! } });
@@ -59,6 +60,20 @@ describe('LiveSocket (spec §10 "Resuming without gaps")', () => {
     vi.advanceTimersByTime(60_000);
     expect(onSignedOut).toHaveBeenCalledOnce();
     expect(sockets.all).toHaveLength(1);
+    live.stop();
+  });
+
+  it('reports each socket that closed without ever opening (a refused upgrade reaches the browser as 1006, not 4401)', () => {
+    const { live, sockets, onRefused } = start();
+    sockets.last().drop();
+    expect(onRefused).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(1_000);
+    sockets.last().open();
+    sockets.last().drop();
+    expect(onRefused).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(1_000);
+    sockets.last().drop();
+    expect(onRefused).toHaveBeenCalledTimes(2);
     live.stop();
   });
 

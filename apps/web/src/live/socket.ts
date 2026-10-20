@@ -17,6 +17,11 @@ export type LiveSocketOptions = {
   /** The server closed with 4401: the session ended. */
   onSignedOut?(): void;
   /**
+   * A socket closed without ever opening. The server refuses the upgrade of an expired session with a plain 401,
+   * which a browser reports as 1006 like any dropped connection, so the page should ask whether it's still signed in.
+   */
+  onRefused?(): void;
+  /**
    * Called right after the socket subscribed again to these chats following a gap (a reconnect, or the 5 s retry of
    * a chat GitHub couldn't check). Subscribing sends the missed items but not the chat's view, so a screen that
    * wants its phase, points and banner current should ask for them again.
@@ -87,7 +92,9 @@ export class LiveSocket {
   private connect(): void {
     const ws = (this.opts.open ?? ((url) => new WebSocket(url)))(this.opts.url);
     this.ws = ws;
+    let opened = false;
     ws.onopen = () => {
+      opened = true;
       this.delayMs = this.backoff.startMs;
       for (const [chatId, afterSeq] of this.chats) this.send({ v: 1, t: 'chat.subscribe', d: { chatId, afterSeq } });
       const reopened = this.hasOpened;
@@ -100,6 +107,7 @@ export class LiveSocket {
       this.ws = null;
       if (!this.running) return;
       if (event.code === 4401) return this.opts.onSignedOut?.();
+      if (!opened) this.opts.onRefused?.();
       this.reconnectLater();
     };
   }

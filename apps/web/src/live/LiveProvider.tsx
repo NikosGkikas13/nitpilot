@@ -1,6 +1,7 @@
 import type { ChatResponse } from '@nitpilot/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useEffectEvent, useState, type ReactNode } from 'react';
+import { checkStillSignedIn } from '../api/me';
 import { applyServerMessage } from './apply';
 import { LiveSocket, liveUrl, type SocketLike } from './socket';
 
@@ -23,6 +24,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         open,
         onMessage: (msg) => applyServerMessage(queryClient, msg),
         onSignedOut: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
+        // An expired session's socket is refused before it opens, with no 4401: ask, or it would retry forever.
+        onRefused: () => void checkStillSignedIn(queryClient),
         // The socket only brings back missed items: read the chats' views again (REST merges, so no item is lost).
         onResume: (chatIds) =>
           void queryClient.invalidateQueries({ queryKey: ['chat'], predicate: (q) => chatIds.includes((q.state.data as ChatResponse | undefined)?.view.id ?? '') }),
