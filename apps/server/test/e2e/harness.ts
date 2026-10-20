@@ -93,7 +93,9 @@ export async function startE2e(opts: { port?: number; webDistDir?: string; githu
       for (const cli of clis) await cli.stop().catch(() => {});
       cliJobs.stop();
       live.stop();
-      runner.stop();
+      // Wait for the task in flight (a summary comment, say): the next test's resetDb() empties every table at once,
+      // and a transaction still open here would deadlock with it (docs/why/deadlocks.md).
+      await runner.stop();
       await hub.idle();
       hub.closeAll(1001, 'test over');
       webHub.close(1001, 'test over');

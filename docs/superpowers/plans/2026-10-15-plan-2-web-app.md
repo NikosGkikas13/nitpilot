@@ -40468,7 +40468,7 @@ README.md                                  what Nitpilot is, the web app, runnin
 
 **Tests this task must include:** the four flows (already specs, run in Step 16 and 17), plus `readonly.spec.ts` (rita reads along without the composer or buttons; otto gets the not-found page and a 404), `env.test.ts` (a pair whose private key starts with a zero byte is accepted; the same key with that byte dropped is refused), and `runner.db.test.ts` (`stop()` waits for the pass in flight; a stopped runner starts no pass; a pass stopped between tasks leaves the rest pending).
 
-- [ ] **Step 1: Fix the first flake: the env test's key maker (this one has no RED)**
+- [x] **Step 1: Fix the first flake: the env test's key maker (this one has no RED)**
 
 The cause is in the test's helper, not the server, so the two new tests pin the server's rule and pass at once (a RED here would need a one-in-256 key). The evidence the builder gathered: 75 of 20 000 `createECDH()` private keys were 31 bytes, 0 of 20 000 from `webpush.generateVAPIDKeys()`; a throwaway test running `getEnv()` on 5 000 pairs from each maker was refused 20 times with the old maker and 0 with web-push's. First the tests and the maker, in one diff (`LEADING_ZERO` is a real pair written out in full, as web-push makes it):
 
@@ -40533,7 +40533,7 @@ index c05e730..ea845e7 100644
 Run: `cd apps/server && npx vitest run src/lib/env.test.ts` (then `cd ../..`)
 Expected: PASS, 12 passed (10 before: the file gains the two zero-byte tests). Every run is now free of the 1-in-256 failure.
 
-- [ ] **Step 2: Write the failing test for a runner that waits when stopped**
+- [x] **Step 2: Write the failing test for a runner that waits when stopped**
 
 A task's transaction must be finished when `stop()` returns, or the next test's `TRUNCATE` deadlocks with it (Step 8 explains it). Three tests in the runner's database test: `stop()` waits for the pass in flight, a stopped runner starts no pass (even when a commit wakes it), and a pass stopped between tasks leaves the rest pending:
 
@@ -40599,12 +40599,12 @@ index c78370f..dca9faa 100644
  describe('recoverRunningTasks', () => {
 ```
 
-- [ ] **Step 3: Run them to see them fail**
+- [x] **Step 3: Run them to see them fail**
 
 Run: `cd apps/server && npx vitest run --project db src/tasks/runner.db.test.ts` (then `cd ../..`)
 Expected: FAIL, 3 failed and 10 passed (13). `stop()` waits for the pass in flight: `TypeError: Cannot read properties of undefined (reading 'then')` (`stop()` returns nothing). No pass once stopped: `expected "vi.fn()" to not be called at all, but actually been called 1 times`. Stopped between tasks: `expected 'done' to be 'pending'` (the next task still ran).
 
-- [ ] **Step 4: Fix the second flake: `stop()` waits for the pass in flight**
+- [x] **Step 4: Fix the second flake: `stop()` waits for the pass in flight**
 
 The cause, from Postgres's own log (`docker logs nitpilot-postgres-1`): three earlier deadlocks, all the same circle. The `TRUNCATE` in `resetDb` waited for `PrChat`, held by a summary task's transaction that was waiting to insert into `GithubWrite`, which the `TRUNCATE` already held. Only the summary task updates `PrChat` and then inserts into `GithubWrite` in one transaction, so the task runner's pass was still running when `close()` returned. A race can't be made to fail on demand, so the builder forced it: a throwaway database test with a runner task doing the summary's two writes with a gate between them gave `40P01` with the old `stop()` and a clean reset with `await runner.stop()`; in the real Vitest end to end, with the summary task slowed by 1.5 seconds between its writes, the old `close()` gave 2 deadlocks in one run and the new one 0 in 2 runs. Now the fix, in the three places that stop the runner (`docs/why/deadlocks.md` in Step 8 explains it in React terms):
 
@@ -40734,16 +40734,16 @@ index 8d069f4..790fcd1 100644
        webHub.close(1001, 'test over');
 ```
 
-- [ ] **Step 5: Run them to see them pass**
+- [x] **Step 5: Run them to see them pass**
 
 Run: `cd apps/server && npx vitest run --project db src/tasks/runner.db.test.ts && npm run test:e2e && npm run typecheck` (then `cd ../..`)
 Expected: PASS, 13 passed in the runner file; end to end 6 passed; typecheck clean. (`npm run test:e2e` needs Docker running, like the database tests.)
 
-- [ ] **Step 6: Check the deadlock is gone from Postgres's log**
+- [x] **Step 6: Check the deadlock is gone from Postgres's log**
 
 Run `npm run test:e2e` three times, then `docker logs nitpilot-postgres-1 2>&1 | grep -c "deadlock detected"` before and after: the count must not grow during these runs (the three old deadlocks stay in the log; compare the numbers, don't expect zero). If it grows, find which transaction was still open (the log names both statements) before going on. The builder saw 0 new deadlocks across three Vitest end-to-end runs and three Playwright runs.
 
-- [ ] **Step 7: The Playwright server's `/reset` retries a deadlock**
+- [x] **Step 7: The Playwright server's `/reset` retries a deadlock**
 
 That server keeps running between tests on purpose, and more than the task runner can be writing when the next test resets (a CLI's last message being dispatched, a lease sweep, a catch-up), so waiting for the runner can't cover it. Postgres's own advice for a transaction it cancelled in a deadlock is to run it again, and emptying tables twice is harmless, so `/reset` retries up to 3 times. `resetDb` (the Vitest end to end) does not retry: its harness stops everything first, so a deadlock there is a new finding and should stay visible. There is no automated test; the builder exercised it by slowing the summary task by 1.5 seconds and running the Playwright suite: the log showed `[web-e2e] /reset met a deadlock (attempt 1), trying again` (Postgres's log showed the `/reset` `TRUNCATE` as the victim) and the run finished 18 passed. The slowdown was reverted.
 
@@ -40793,7 +40793,7 @@ index 6f393d8..e05d400 100644
   * the app installed on their account. /reset lists none again.
 ```
 
-- [ ] **Step 8: Write the explainer**
+- [x] **Step 8: Write the explainer**
 
 A deadlock is a backend idea the code didn't have before. The new file (the cause, the exact circle, both fixes, and where they live), in React terms:
 
@@ -40832,7 +40832,7 @@ Between two tests the harness's `close()` stopped the task runner, but stopping 
 Two components that each wait for the other's state before rendering their own: A shows a spinner until B is ready, B shows a spinner until A is ready, and the page spins forever. Postgres is the parent that notices the circle and unmounts one of them so the other can finish. The real fix, in React as here, is not to start the second thing while the first is still mid-way: `await` the cleanup (like a `useEffect` cleanup that finishes before the next effect runs) before you reset.
 ```
 
-- [ ] **Step 9: Write the failing Playwright spec for the read-only view and the 404**
+- [x] **Step 9: Write the failing Playwright spec for the read-only view and the 404**
 
 Two tests, with the others' style (`pageProblems`, a `finally` that stops the CLI, roles and names). `rita` and `otto` don't exist on the Playwright server yet:
 
@@ -40893,14 +40893,14 @@ test("someone GitHub doesn't show the repo gets the not-found page, the same as 
 });
 ```
 
-- [ ] **Step 10: Run it to see it fail**
+- [x] **Step 10: Run it to see it fail**
 
 Build the web app first (the Playwright server serves `apps/web/dist`), then run the one file. Playwright uses ports 4319 and 4320; if a server from an earlier run is still on 4319 (`lsof -iTCP:4319 -sTCP:LISTEN`), stop it first.
 
 Run: `npm run build && cd apps/web && npx playwright test readonly.spec.ts` (then `cd ../..`)
 Expected: FAIL, 2 failed and 0 passed. Both stop at `signIn`: `signing in rita failed: 400 {"error":"no test user \"rita\""}`, and the same for otto.
 
-- [ ] **Step 11: Add `rita` and `otto` to the Playwright server, and the `Person` type**
+- [x] **Step 11: Add `rita` and `otto` to the Playwright server, and the `Person` type**
 
 Both get a `User` and a `GithubAuth` like maya and leo. The pretend GitHub's `GET /repos/octo/sandbox` answers by the request's token: 404 for otto's, `{ id: 1 }` for everyone else. Their GitHub ids (3101, 3102) don't collide with `test/fixtures/github.ts` `people` or the newcomer (3003). The `web-server.ts` diff is against the file as Step 7 left it:
 
@@ -41002,14 +41002,14 @@ index c7e7d36..5feae3d 100644
    const cookie = (await res.json()) as { name: string; value: string };
 ```
 
-- [ ] **Step 12: Run it to see it pass, and check it can fail**
+- [x] **Step 12: Run it to see it pass, and check it can fail**
 
 Run: `npm run build && cd apps/web && npx playwright test readonly.spec.ts` (then `cd ../..`)
 Expected: PASS, 2 passed.
 
 Mutation check (don't commit it): in `readonly.spec.ts` sign `leo` in instead of `rita` in the first test, and `rita` instead of `otto` in the second. Both tests must fail (the composer field is present; there is no "Nothing here"), which shows they see the difference they claim to. Put the file back.
 
-- [ ] **Step 13: `forbidOnly` in the Playwright config**
+- [x] **Step 13: `forbidOnly` in the Playwright config**
 
 One worker and no retries were already set; this adds the stray-`test.only` guard and says why the retries stay at 0:
 
@@ -41033,7 +41033,7 @@ index 9473de7..771ff65 100644
      baseURL: BASE_URL,
 ```
 
-- [ ] **Step 14: Cache Chromium in CI, and keep the traces**
+- [x] **Step 14: Cache Chromium in CI, and keep the traces**
 
 Chromium is about 150 MB. The cache is keyed on the installed `@playwright/test` version, read in a one-line step, rather than on a hash of `package-lock.json`: Chromium belongs to one Playwright version, so the key says exactly what the cache depends on, and an unrelated dependency bump doesn't throw it away. On a hit only the system libraries (which the cache doesn't hold) are installed. The trace upload keeps files 14 days and ignores a run with none:
 
@@ -41076,7 +41076,7 @@ index bcf374c..d776b25 100644
 +          if-no-files-found: ignore
 ```
 
-- [ ] **Step 15: Check the workflow as far as it can be checked here**
+- [x] **Step 15: Check the workflow as far as it can be checked here**
 
 The workflow runs only on GitHub, so this step can't prove it. What the implementer checks instead: read the YAML once more (indentation, the two `if:` lines being opposites, the `id`s used by `steps.playwright` and `steps.playwright-cache`); run the version step's command in the shell, `node -p "require('@playwright/test/package.json').version"` (it prints `1.64.1` today); and parse the file with the repo's own `yaml` package, which needs nothing new:
 
@@ -41085,7 +41085,7 @@ Expected: `15` and the three conditions: `steps.playwright-cache.outputs.cache-h
 
 Not checked until the first push shows it (pushing is the user's call, never the implementer's): that `actions/cache@v4` restores `~/.cache/ms-playwright` on the second run, and that `install-deps` alone is enough on a hit. Both are standard Playwright CI practice. The first run after the push is a miss (full install), the second a hit; look at those two runs' "Cache" and "install" steps.
 
-- [ ] **Step 16: Document the browser suite, then prove each spec passes on its own**
+- [x] **Step 16: Document the browser suite, then prove each spec passes on its own**
 
 The explainer for the end-to-end test gains a section on what runs in CI, why one worker, why no sleeps, and what the cache and the trace upload are for:
 
@@ -41122,7 +41122,7 @@ Order independence is proved, not assumed. After `npm run build`, run each spec 
 Run: `for f in approve chat-live drafts escalation inbox landing pwa readonly settings setup; do npx playwright test e2e/$f.spec.ts 2>&1 | grep -E "passed|failed"; done`
 Expected: every line `passed`, none `failed`: approve 2, chat-live 1, drafts 1, escalation 1, inbox 1, landing 3, pwa 3, readonly 2, settings 2, setup 2 (18). A spec that only passes after another is a finding: fix it with a test of its own, then start this step again.
 
-- [ ] **Step 17: Three green runs in a row, both suites**
+- [x] **Step 17: Three green runs in a row, both suites**
 
 Nothing may listen on 4319 between runs (`reuseExistingServer` is off only in CI, so a leftover server would be reused locally and hide a startup problem). Docker must be running.
 
@@ -41134,7 +41134,7 @@ Expected: `6 passed` every time (about 17 seconds each).
 
 If any run fails, that is a finding, not bad luck: find the cause (the Playwright trace in `apps/web/test-results/`, or Postgres's log for a `40P01`), fix it with a test, and start the three runs of both suites again. Do not add a retry or a sleep.
 
-- [ ] **Step 18: Run everything, then commit**
+- [x] **Step 18: Run everything, then commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run build && npm run test:e2e -w apps/web`
 Expected: protocol 82, CLI 333 passed + 14 skipped, server 1031 (1026 before: 2 env tests and 3 runner tests), web 331; end to end 6; Playwright 18 (16 before: the 2 read-only tests); typecheck and lint clean; the build prints no warning (main chunk 495.33 kB, unchanged).

@@ -1,16 +1,24 @@
-import { createECDH } from 'node:crypto';
+import webpush from 'web-push';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getEnv, vapidDetails } from './env';
 
 afterEach(() => vi.unstubAllEnvs());
 
-/** A real VAPID key pair, as `npm run vapid:keys` makes one: P-256, public key uncompressed, both base64url. */
+/**
+ * A real VAPID key pair, made the way `npm run vapid:keys` makes one: P-256, public key uncompressed, both base64url,
+ * the private key always 32 bytes. (Node's `createECDH().getPrivateKey()` drops a leading zero byte, about one key in
+ * 256, and the server rightly refuses a 31-byte key: that made this file fail now and then.)
+ */
 function makeKeyPair() {
-  const ecdh = createECDH('prime256v1');
-  ecdh.generateKeys();
-  return { publicKey: ecdh.getPublicKey('base64url'), privateKey: ecdh.getPrivateKey('base64url') };
+  return webpush.generateVAPIDKeys();
 }
 const pair = makeKeyPair();
+
+/** A pair whose private key starts with a zero byte (`AA…` in base64url), written out in full as web-push makes it. */
+const LEADING_ZERO = {
+  publicKey: 'BLmuHbGwGubCWsg20vhXJYV2i85rIPGXUwmYuZXwlZHh_pxHE744lZbuk45bbKp-1z5J1OJlQMq0n70ejMeyKQY',
+  privateKey: 'AAg4Z59vqJAxyx-IR91D0aH0EXXfoLk7eJcF_8wZlvw',
+};
 
 describe('getEnv', () => {
   it('reads the test environment', () => {
@@ -75,6 +83,17 @@ describe('getEnv', () => {
       stub({ ...keys, VAPID_PUBLIC_KEY: makeKeyPair().publicKey });
       expect(() => getEnv()).toThrow(NOT_A_PAIR);
       stub({ ...keys, VAPID_PUBLIC_KEY: 'BPublic', VAPID_PRIVATE_KEY: 'private' });
+      expect(() => getEnv()).toThrow(NOT_A_PAIR);
+    });
+
+    it('accept a private key that starts with a zero byte, written out to its full 32 bytes', () => {
+      stub({ ...keys, VAPID_PUBLIC_KEY: LEADING_ZERO.publicKey, VAPID_PRIVATE_KEY: LEADING_ZERO.privateKey });
+      expect(vapidDetails(getEnv())).toEqual({ ...LEADING_ZERO, subject: 'mailto:admin@example.com' });
+    });
+
+    it('refuse that key with its zero byte dropped (31 bytes): web-push signs only with 32', () => {
+      const short = Buffer.from(LEADING_ZERO.privateKey, 'base64url').subarray(1).toString('base64url');
+      stub({ ...keys, VAPID_PUBLIC_KEY: LEADING_ZERO.publicKey, VAPID_PRIVATE_KEY: short });
       expect(() => getEnv()).toThrow(NOT_A_PAIR);
     });
 

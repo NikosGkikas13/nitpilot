@@ -95,6 +95,52 @@ describe('TaskRunner', () => {
     await Promise.all([runner.tick(), runner.tick(), runner.tick()]);
     expect(maxConcurrent).toBe(1);
   });
+
+  // A test's next database reset (a TRUNCATE) met a task's transaction still running after stop(), and Postgres
+  // killed one of them as a deadlock (docs/why/deadlocks.md). So stop() waits for the pass in flight.
+  it('stop() resolves only once the pass in flight has finished', async () => {
+    const task = await newTask();
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => (started = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const runner = new TaskRunner({ test: async () => { started(); await gate; } }, { now: () => NOW });
+    const pass = runner.tick();
+    await running;
+
+    let stopped = false;
+    const stopping = runner.stop().then(() => (stopped = true));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(stopped).toBe(false);
+    release();
+    await stopping;
+    // By the time stop() resolves, the task's outcome is saved.
+    expect(await statusOf(task.id)).toBe('done');
+    await pass;
+  });
+
+  it('starts no pass once stopped, even when a commit wakes it', async () => {
+    const task = await newTask();
+    const handler = vi.fn(async () => {});
+    const runner = new TaskRunner({ test: handler }, { now: () => NOW });
+    runner.start();
+    await runner.stop();
+    await runner.tick();
+    runner.wake();
+    await runner.stop();
+    expect(handler).not.toHaveBeenCalled();
+    expect(await statusOf(task.id)).toBe('pending');
+  });
+
+  it('leaves the rest of a pass for later when stopped between tasks', async () => {
+    const first = await newTask();
+    const second = await newTask({ runAt: new Date(NOW.getTime() - 1) });
+    const runner = new TaskRunner({ test: async () => void runner.stop() }, { now: () => NOW });
+    await runner.tick();
+    // Oldest first: `second` ran, and stopped the runner before `first` was claimed.
+    expect(await statusOf(second.id)).toBe('done');
+    expect(await statusOf(first.id)).toBe('pending');
+  });
 });
 
 describe('recoverRunningTasks', () => {

@@ -5,7 +5,10 @@ export default defineConfig({
   testDir: './e2e',
   // One server and one database for every test, so one test at a time.
   workers: 1,
+  // A failure is a finding, not something to try again: a flaky test gets fixed at its cause.
   retries: 0,
+  // A `test.only` left in by mistake fails CI instead of quietly running that one test.
+  forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: BASE_URL,

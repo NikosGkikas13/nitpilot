@@ -34,7 +34,7 @@ Object.assign(process.env, TEST_ENV, { PUBLIC_URL: `http://127.0.0.1:${webPort}`
 const { startE2e } = await import('./harness');
 const { sessionCookieFor } = await import('../http');
 const { people, prEvent, pull } = await import('../fixtures/github');
-const { fakeFetch } = await import('../fake-fetch');
+const { fakeFetch, json } = await import('../fake-fetch');
 const { encrypt } = await import('../../src/lib/crypto');
 const { prisma } = await import('../../src/lib/prisma');
 const { GithubClient } = await import('../../src/platform/github/client');
@@ -62,12 +62,22 @@ const realPush = env.E2E_REAL_PUSH === '1';
  */
 const NEWCOMER = { id: 3003, login: 'sam' };
 
+/**
+ * Two people who take no part in the test PRs (readonly.spec.ts, spec §20): GitHub shows `rita` the repo, so she reads
+ * its chats along; it hides it from `otto` (GitHub answers a private repo you can't read with a 404), so every chat
+ * there is a 404 for him. Their ids don't collide with test/fixtures/github.ts `people` or the newcomer.
+ */
+const READERS = { rita: { id: 3101, login: 'rita' }, otto: { id: 3102, login: 'otto' } };
+/** otto's GitHub token: each test user's token is `ghu_<their user id>` (see the sign-ins below). */
+let ottoToken = '';
+
 const e2e = await startE2e({
   port: webPort,
   webDistDir: fileURLToPath(new URL('../../../web/dist', import.meta.url)),
   github: new GithubClient(
     fakeFetch({
-      'GET /repos/octo/sandbox': () => ({ id: 1 }),
+      // Whether someone can read the test repo, asked with their own token: everyone can, except otto.
+      'GET /repos/octo/sandbox': (req) => (req.headers.get('authorization') === `Bearer ${ottoToken}` ? json({ message: 'Not Found' }, 404) : { id: 1 }),
       // GitHub's half of a sign-in: any code buys a token, and the token belongs to the newcomer.
       'POST /login/oauth/access_token': () => ({ access_token: 'ghu_newcomer', expires_in: 28_800, refresh_token: 'ghr_newcomer', refresh_token_expires_in: 15_811_200 }),
       'GET /user': () => ({ ...NEWCOMER, avatar_url: null }),
@@ -75,17 +85,24 @@ const e2e = await startE2e({
   ),
   push: { vapidPublicKey: vapid.publicKey, send: realPush ? webPushSend(vapid) : recordPush },
 });
+// Everyone who can sign in through the control API: the harness's two people, who have CLIs, and the two readers.
+const users = {
+  ...e2e.users,
+  rita: await prisma.user.create({ data: { githubId: String(READERS.rita.id), login: READERS.rita.login } }),
+  otto: await prisma.user.create({ data: { githubId: String(READERS.otto.id), login: READERS.otto.login } }),
+};
+ottoToken = `ghu_${users.otto.id}`;
 // The inbox asks GitHub whether each person can read a repo, so the test users need a GitHub sign-in on file.
 const later = new Date(Date.now() + 365 * 86_400_000);
-for (const user of Object.values(e2e.users)) {
+for (const user of Object.values(users)) {
   await prisma.githubAuth.create({ data: { userId: user.id, accessTokenEnc: encrypt(`ghu_${user.id}`), accessExpiresAt: later, refreshTokenEnc: encrypt('ghr_x'), refreshExpiresAt: later, status: 'ok' } });
 }
 
 const control = new Hono();
-/** Sign someone in: answers the session cookie for the browser to use. */
+/** Sign someone in (maya, leo, rita or otto): answers the session cookie for the browser to use. */
 control.post('/signin', async (c) => {
-  const { login } = (await c.req.json()) as { login: 'maya' | 'leo' };
-  const user = e2e.users[login];
+  const { login } = (await c.req.json()) as { login: keyof typeof users };
+  const user = users[login];
   if (!user) return c.json({ error: `no test user "${login}"` }, 400);
   const [name, value] = (await sessionCookieFor(user.id)).split('=') as [string, string];
   return c.json({ name, value });
@@ -117,11 +134,35 @@ control.post('/pr', async (c) => {
  * setup checklist is unfinished again, and GitHub lists no installation for anyone until /installations says so.
  */
 control.post('/reset', async (c) => {
-  await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
+  await truncateChats();
   await prisma.user.updateMany({ data: { autoReview: true, autoAddress: true, dailyJobCap: 40, onboardedAt: null } });
   e2e.platform.userInstalls.clear();
   return c.body(null, 204);
 });
+/**
+ * Empty the chat tables. Unlike the Vitest end to end (whose harness stops everything before the next test), this
+ * server keeps running between tests, so the last test's work may still be writing (a summary task, a CLI's last
+ * message, a lease sweep). When that write and this TRUNCATE wait on each other, Postgres cancels one of them as a
+ * deadlock (docs/why/deadlocks.md), and its advice is to run the cancelled one again: emptying tables twice is safe.
+ */
+async function truncateChats(): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await prisma.$executeRawUnsafe('TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "PrChat", "PushSubscription" CASCADE');
+      return;
+    } catch (err) {
+      if (attempt === 3 || !isDeadlock(err)) throw err;
+      console.warn(`[web-e2e] /reset met a deadlock (attempt ${attempt}), trying again`);
+    }
+  }
+}
+
+/** Postgres cancelled the statement to end a deadlock (its error code 40P01), as Prisma reports it. */
+function isDeadlock(err: unknown): boolean {
+  const meta = (err as { meta?: { driverAdapterError?: { cause?: { originalCode?: string } } } } | null)?.meta;
+  return meta?.driverAdapterError?.cause?.originalCode === '40P01';
+}
+
 /**
  * What GitHub's `GET /user/installations` lists for someone (the setup checklist's "Install the GitHub App" step):
  * the app installed on their account. /reset lists none again.

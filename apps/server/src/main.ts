@@ -92,7 +92,8 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     clearInterval(purge);
     clearInterval(retries);
-    runner.stop();
+    // Let the task in flight finish and save its outcome, so it isn't cut off mid-write and run again at the next boot.
+    await runner.stop();
     cliJobs.stop();
     live.stop();
     // 1012 tells every CLI the server is restarting, so they reconnect.

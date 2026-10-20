@@ -30,8 +30,10 @@ export type GiveUpHandler = (task: Task, error: unknown) => Promise<void>;
  */
 export class TaskRunner {
   private timer: ReturnType<typeof setInterval> | null = null;
-  private busy = false;
+  /** The pass running now, if any: stop() waits for it. */
+  private pass: Promise<void> | null = null;
   private again = false;
+  private stopped = false;
 
   constructor(
     private readonly handlers: TaskHandlers,
@@ -39,12 +41,21 @@ export class TaskRunner {
   ) {}
 
   start(): void {
+    this.stopped = false;
     if (!this.timer) this.timer = setInterval(() => void this.tick(), this.opts.tickMs ?? 1000);
   }
 
-  stop(): void {
+  /**
+   * Stop for good: no new pass starts (not even when a commit wakes the runner), the pass in flight stops after the
+   * task it is running, and the promise resolves once that task's outcome is saved. Shutdown and the tests wait for
+   * it, so nothing of ours still holds a transaction open when the process exits or a test empties the database
+   * (docs/why/deadlocks.md).
+   */
+  async stop(): Promise<void> {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    await this.pass;
   }
 
   /** Run due tasks now instead of waiting for the next tick. */
@@ -54,20 +65,28 @@ export class TaskRunner {
 
   /** One pass over due tasks. Never overlaps itself: a call during a pass asks for one more pass. */
   async tick(): Promise<void> {
-    if (this.busy) {
+    if (this.stopped) return;
+    if (this.pass) {
       this.again = true;
       return;
     }
-    this.busy = true;
+    this.pass = this.passes();
+    try {
+      await this.pass;
+    } finally {
+      this.pass = null;
+    }
+  }
+
+  /** Passes until nobody asked for another one (or the runner was stopped). Never throws: a failed pass is logged. */
+  private async passes(): Promise<void> {
     try {
       do {
         this.again = false;
         await this.runDue();
-      } while (this.again);
+      } while (this.again && !this.stopped);
     } catch (err) {
       console.error('[tasks] pass failed:', err);
-    } finally {
-      this.busy = false;
     }
   }
 
@@ -81,6 +100,8 @@ export class TaskRunner {
     });
     let ran = 0;
     for (const { id } of due) {
+      // Stopped mid-pass: the tasks not claimed yet stay pending, for the next start.
+      if (this.stopped) break;
       if (await this.claim(id)) {
         await this.runOne(id);
         ran += 1;

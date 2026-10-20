@@ -44,10 +44,28 @@ jobs:
       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
       - run: npm run test:e2e
       # Plan 2: the web app in a real browser against that same setup (spec §19).
-      - run: npx playwright install --with-deps chromium
+      # Chromium (about 150 MB) is kept between runs. Each Playwright version needs its own browser build, so the
+      # cache is keyed on the installed version: a new Playwright downloads once, other dependency changes don't.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # The cache holds the browser, not the system libraries it needs: those are installed on every run.
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - run: npm run test:e2e -w apps/web
+      # A failed test keeps its trace (playwright.config.ts): download it from the run's page and open it with
+      # `npx playwright show-trace <trace.zip>` to step through what the browser saw.
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces
           path: apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,8 +1,14 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { BASE_URL, CONTROL_URL } from './ports';
 
+/**
+ * The people the Playwright server knows (apps/server/test/e2e/web-server.ts): maya and leo, who open and review the
+ * test PRs and have CLIs; rita, who can read the repo but takes no part; and otto, from whom GitHub hides it.
+ */
+export type Person = 'maya' | 'leo' | 'rita' | 'otto';
+
 /** Sign a test user in: the browser gets the session cookie a real GitHub sign-in would have set. */
-export async function signIn(context: BrowserContext, login: 'maya' | 'leo'): Promise<void> {
+export async function signIn(context: BrowserContext, login: Person): Promise<void> {
   const res = await fetch(`${CONTROL_URL}/signin`, { method: 'POST', body: JSON.stringify({ login }) });
   if (!res.ok) throw new Error(`signing in ${login} failed: ${res.status} ${await res.text()}`);
   const cookie = (await res.json()) as { name: string; value: string };
