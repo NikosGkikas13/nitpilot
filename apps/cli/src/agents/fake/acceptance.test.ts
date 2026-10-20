@@ -11,10 +11,12 @@ const ACCEPTANCE = fileURLToPath(new URL('../../../../../docs/acceptance/', impo
 const SEED = `${ACCEPTANCE}seed/`;
 
 type AddPoint = { add_point: { path: string; line: number; severity: string; category: string; title: string } };
-type Scenario = { review: ({ finish: string } | AddPoint)[]; re_review: ({ finish: string } | { decide: { point: number; decision: string } })[] };
+type Scenario = { review: ({ finish: string } | AddPoint)[]; re_review: ({ finish: string } | { decide: { point: number; decision: string } } | AddPoint)[] };
 
 const scenario = (name: string) => JSON.parse(readFileSync(`${ACCEPTANCE}scenarios/${name}.json`, 'utf8')) as Scenario;
 const pointsOf = (s: Scenario) => s.review.filter((step): step is AddPoint => 'add_point' in step).map((step) => step.add_point);
+/** The points a scenario raises when it reviews again. */
+const raisedAgain = (s: Scenario) => s.re_review.filter((step): step is AddPoint => 'add_point' in step).map((step) => step.add_point);
 const lineOf = (path: string, line: number) => readFileSync(`${SEED}${path}`, 'utf8').split('\n')[line - 1];
 const seedModule = (file: string) => import(pathToFileURL(`${SEED}orders-demo/src/${file}`).href);
 
@@ -39,6 +41,19 @@ describe('the sandbox scenarios and the seed', () => {
     const [point] = pointsOf(scenario('sandbox-security'));
     expect(point).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
     expect(lineOf(point!.path, point!.line)).toContain('SELECT * FROM orders WHERE customer =');
+  });
+
+  it('the escalation scenario raises the SQL point, then settles it and escalates a second security point (Plan 2)', () => {
+    // docs/acceptance/plan-2.md section 6: Continue on P1, a round runs, and the re-review escalates again for Resolve.
+    const s = scenario('sandbox-escalation');
+    const [first] = pointsOf(s);
+    expect(first).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
+    expect(lineOf(first!.path, first!.line)).toContain('SELECT * FROM orders WHERE customer =');
+    expect(s.re_review[0]).toMatchObject({ decide: { point: 1, decision: 'resolve' } });
+    const [second] = raisedAgain(s);
+    expect(second).toMatchObject({ path: 'orders-demo/src/search.js', category: 'security' });
+    // The file's first line, a comment: fixing the SQL line doesn't move it, so the point still lands where it says.
+    expect(lineOf(second!.path, second!.line)).toBe('// Looks orders up by customer name.');
   });
 
   it('the planted bugs are real, and the seed passes its own tests anyway', async () => {

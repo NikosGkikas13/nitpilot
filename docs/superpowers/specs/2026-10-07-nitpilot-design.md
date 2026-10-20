@@ -789,7 +789,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 | W8 | Playwright in CI, the acceptance runbook, the live acceptance run, docs |
 
    **Plan 2 acceptance test (live):**
-   - **Setup:** as in Plan 1 (the `nitpilot-dev` app, the sandbox repo, A on Claude Code, B on the fake agent), the web app built and served by the server, and both accounts signed in to it in their own browsers. For the phone, the server runs behind the dev tunnel's HTTPS URL as `PUBLIC_URL`, and that URL's `/auth/github/callback` is added to the dev app's callback URLs for the run.
+   - **Setup:** as in Plan 1 (the `nitpilot-dev` app, the sandbox repo, A on Claude Code, B on the fake agent), the web app built and served by the server, and both accounts signed in to it in their own browsers. For the phone, the server runs behind the dev tunnel's HTTPS URL as `PUBLIC_URL`, and that URL's `/auth/github/callback` is added to the dev app's callback URLs for the run. The desktop browsers use that URL too: the session cookie and the Origin check follow `PUBLIC_URL`. The non-participant is the repo owner opening a PR they weren't asked to review (the sandbox is public); the person who can't read is the author, on a private repo made for the check (`docs/acceptance/plan-2.md` §7).
    - **It passes when:**
      - The inbox and an open chat update live while the agents work, including the progress line, without a reload.
      - With Auto off, a reviewer draft and an author draft (including its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's draft commit, which is authored by A.

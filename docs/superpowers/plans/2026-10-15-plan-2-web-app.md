@@ -41181,7 +41181,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 | 16 | section 7: read-only and 404 | the person | two PRs; a private repo created and deleted | no |
 | 17, 18 | wrap up, results, docs, commit | Docker | the callback URL removed | no |
 
-- [ ] **Step 1: Write the failing test for the escalation scenario**
+- [x] **Step 1: Write the failing test for the escalation scenario**
 
 `acceptance.test.ts` keeps the scenario files and the seed together: if a line number drifts, the fake agent would comment on the wrong line and nobody would notice until the live run. The new case reads `sandbox-escalation.json` (which doesn't exist yet) and checks both of its security points land on the lines they name:
 
@@ -41226,12 +41226,12 @@ index 9d126ab..fc72778 100644
      expect(paginate(['a', 'b', 'c', 'd'], 1, 2)).toEqual(['c', 'd']); // page 1 should be ['a', 'b']
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm test -w apps/cli -- src/agents/fake/acceptance.test.ts`
 Expected: FAIL: 1 test fails (`ENOENT: no such file or directory, open '…/docs/acceptance/scenarios/sandbox-escalation.json'`); the other 5 pass.
 
-- [ ] **Step 3: The escalation scenario**
+- [x] **Step 3: The escalation scenario**
 
 The review raises Plan 1's SQL point; after the author's agent has worked on it (Continue), the re-review settles it and raises a second security point, which escalates again for Resolve:
 
@@ -41251,12 +41251,12 @@ Create `docs/acceptance/scenarios/sandbox-escalation.json`:
 }
 ```
 
-- [ ] **Step 4: Run it to see it pass**
+- [x] **Step 4: Run it to see it pass**
 
 Run: `npm test -w apps/cli -- src/agents/fake/acceptance.test.ts`
 Expected: PASS: 6 tests.
 
-- [ ] **Step 5: The web side of a PR in the database**
+- [x] **Step 5: The web side of a PR in the database**
 
 `check.sql` (Plan 1) shows the chat, its jobs, webhooks, points and timeline. The new criteria need four more things: each person's Auto switch and attention, the drafted jobs' `applyState`, each note with the job that started after it, and the push subscriptions:
 
@@ -41301,7 +41301,7 @@ Check it runs (the dev database has every table; an empty answer is fine):
 Run: `docker exec -i nitpilot-postgres-1 psql -U nitpilot -d nitpilot -v pr=1 -v ON_ERROR_STOP=1 -f - < docs/acceptance/check-web.sql`
 Expected: four `==` headings, each followed by a table (rows or `(0 rows)`), and no `ERROR`.
 
-- [ ] **Step 6: The runbook**
+- [x] **Step 6: The runbook**
 
 The checklist the person follows in Steps 10 to 17, in the style of `plan-1.md`, with every click naming the account's browser:
 
@@ -41621,7 +41621,7 @@ Run on: (date), with Nitpilot at commit `(sha)`. Agent ngkdev93-jpg: Claude Code
 **Ticks:** every box in sections 0 to 8 is ticked, or has a note here saying why not.
 ````
 
-- [ ] **Step 7: The README**
+- [x] **Step 7: The README**
 
 The repo has no README yet. A short one says what Nitpilot is, what is in each folder, what the web app does, and how to run it and its tests (Plan 3 adds the demo video and the install instructions):
 
@@ -41684,7 +41684,7 @@ npm run test:web-e2e     # builds the web app, then Playwright drives it in Chro
 CI runs all of them on every pull request. The live acceptance runs, against real GitHub, real accounts and a real agent, are checklists: [Plan 1](docs/acceptance/plan-1.md) for the agents and the CLI, [Plan 2](docs/acceptance/plan-2.md) for the web app.
 ````
 
-- [ ] **Step 8: The docs and the spec**
+- [x] **Step 8: The docs and the spec**
 
 The live-acceptance explainer gains Plan 2's run, the architecture's testing layers gain Playwright and the second runbook (and "Not built yet" loses the web app), and spec §20 says which address the desktop browsers use and who plays the non-participant and the outsider:
 
@@ -41765,7 +41765,7 @@ index 97651a4..8a9342c 100644
       - With Auto off, a reviewer draft and an author draft (including its diff) wait for Send; Send puts the reviewer's points into the chat and pushes the author's draft commit, which is authored by A.
 ```
 
-- [ ] **Step 9: Run everything, and commit the offline half**
+- [x] **Step 9: Run everything, and commit the offline half**
 
 Docker must be running.
 

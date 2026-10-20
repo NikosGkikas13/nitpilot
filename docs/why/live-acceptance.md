@@ -1,6 +1,6 @@
 # The live acceptance run: the manual test that uses the real thing
 
-**In one sentence:** after every automated test passes, a person runs the whole product once against real GitHub and a real agent, following a checklist, and writes down what happened (spec §20, `docs/acceptance/plan-1.md`).
+**In one sentence:** after every automated test passes, a person runs the whole product once against real GitHub and a real agent, following a checklist, and writes down what happened (spec §20, `docs/acceptance/plan-1.md` for the agents and the CLI, `docs/acceptance/plan-2.md` for the web app).
 
 ## Why it can't be automated
 
@@ -25,6 +25,15 @@ Two reasons. A leftover job from earlier experiments would be handed to your rea
 ## Why timestamps, and where each comes from
 
 One pass criterion is "the review job starts within 5 seconds of the request". Nothing in the database records when a job started, so the runbook pipes each CLI's output through `docs/acceptance/stamp.pl`, which puts the time (UTC, to the millisecond) in front of each line as it arrives. `docs/acceptance/check.sql` prints the time each webhook reached the server in the same clock, so the two are compared by eye.
+
+## Plan 2: the web app, on a desktop and a phone
+
+The browser suite ([end-to-end-test.md](end-to-end-test.md)) clicks through the web app against a pretend GitHub. The Plan 2 run (`docs/acceptance/plan-2.md`) does it for real, and adds what Playwright can't reach:
+
+- **Real sign-ins and real push.** Both accounts sign in with GitHub in their own browsers, and the reviewer turns push on in desktop Chrome and in the iPhone's Home Screen app. A real notification has to arrive, from Google's and Apple's push services, and open the chat when clicked. Headless Chromium always says no to notifications, so no automated test can do this.
+- **One public address.** A phone can't reach `localhost`, and Web Push needs HTTPS, so the whole run uses the tunnel's `https://….trycloudflare.com` address as the server's `PUBLIC_URL`. GitHub only sends a sign-in back to callback URLs the app lists, so the run adds the tunnel's for the day and removes it after.
+- **Agents that change what's on screen.** The criteria are things you watch happen: the progress line moving while Claude Code works, a draft's diff waiting on the author's laptop until Send, an escalation coming back after Continue. Each section says what to click and what you should see next, without a reload.
+- **Scripted failures.** The reviewer's fake agent follows a scenario file per section: `crash` to make a job fail (so Retry shows), the happy one, and `sandbox-escalation.json`, which settles the first security point and raises a second one.
 
 ## The React analogy
 

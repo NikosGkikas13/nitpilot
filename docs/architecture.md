@@ -129,8 +129,8 @@ Three programs, one shared package:
 
 ### 4.12 Testing: five layers
 
-- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) one end-to-end test with real server, two real CLIs and the fake agent (`npm run test:e2e`); (5) a manual live acceptance run against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md)). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
-- **Alternatives:** mocks only; full browser-level tests.
+- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) end-to-end tests with the real server, two real CLIs and the fake agent (`npm run test:e2e`), and the same setup driven through the web app by Playwright in Chromium (`npm run test:web-e2e`); (5) manual live acceptance runs against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md) for the agents, [acceptance/plan-2.md](acceptance/plan-2.md) for the web app, a phone included). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
+- **Alternatives:** mocks only; browser tests for everything.
 - **Why:** each layer catches what the one below can't. Mocks can't tell us what GitHub really sends, and the live run is the only place a real agent meets a real PR. The live run is manual because it needs two accounts and a subscription; it is written down so it can be repeated.
 
 ### 4.13 A monorepo with a shared protocol package
@@ -158,4 +158,4 @@ Three programs, one shared package:
 
 ## 6. Not built yet
 
-The web app (inbox, chats, Auto switches, Web Push, drafts) is Plan 2. The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
+The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
