@@ -318,6 +318,8 @@ Run on: 2026-10-20, 08:35–10:20 UTC, with Nitpilot at commit `6225cd4` (the fi
 - `gh pr create --reviewer` failed once with a GraphQL error (section 4); the REST fallback in step 2 worked.
 - The server log showed the known `ChatRead_userId_chatId_key` unique-constraint errors (a mark-read race; deferred before this run).
 
+**Fixed after the final review** (2026-10-20): the plain-http sign-in (`/auth/github/login` now sends a request that came in on another address to `PUBLIC_URL` first), the resent webhook that brought back a merged PR (an untracked PR is read from GitHub and ignored if closed), and the `ChatRead_userId_chatId_key` errors (mark-read inserts with `ON CONFLICT DO NOTHING`). The `stale_head` re-run stays as it is.
+
 **The phone:** the Home Screen app needed its own sign-in (it keeps its own cookies, apart from Safari's), and the push arrived on the iPhone as on the Mac and opened the chat (the delay wasn't timed; it came while the person was watching both).
 
 **Ticks:** every box in sections 0 to 8 is ticked.

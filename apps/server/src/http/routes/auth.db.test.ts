@@ -83,6 +83,27 @@ describe('GitHub sign-in', () => {
     expect(res.headers.get('location')).toBe('/');
   });
 
+  it('sends a sign-in that came in on another address to PUBLIC_URL first, so the cookie is set where the callback lands', async () => {
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    // test-env's PUBLIC_URL is http://localhost:8787. Another host (a www. name, the bare IP)…
+    const otherHost = await app.request('/auth/github/login?next=%2Fsettings', { headers: { host: '127.0.0.1:8787' } });
+    expect(otherHost.status).toBe(302);
+    expect(otherHost.headers.get('location')).toBe('http://localhost:8787/auth/github/login?next=%2Fsettings');
+    expect(otherHost.headers.get('set-cookie')).toBeNull();
+    // …or the right host reached over the other protocol, as a proxy reports it (Safari typing a tunnel's address).
+    vi.stubEnv('PUBLIC_URL', 'https://nitpilot.example');
+    const plainHttp = await app.request('/auth/github/login', { headers: { host: 'nitpilot.example', 'x-forwarded-proto': 'http' } });
+    expect(plainHttp.headers.get('location')).toBe('https://nitpilot.example/auth/github/login?next=%2F');
+  });
+
+  it('goes straight to GitHub when the sign-in came in on PUBLIC_URL, behind a proxy too (no redirect loop)', async () => {
+    vi.stubEnv('PUBLIC_URL', 'https://nitpilot.example');
+    const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
+    const res = await app.request('/auth/github/login', { headers: { host: 'nitpilot.example', 'x-forwarded-proto': 'https' } });
+    expect(new URL(res.headers.get('location')!).origin).toBe('https://github.com');
+    expect(res.headers.get('set-cookie')).toContain(BRAND.oauthCookie);
+  });
+
   it('rejects a callback whose state does not match', async () => {
     const app = testApp({ github: new GithubClient(githubFake({ id: ghId(), login: 'maya' })) });
     const { cookie } = await startLogin(app);
