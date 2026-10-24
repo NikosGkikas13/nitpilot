@@ -10,6 +10,7 @@ import { isAllowedOrigin } from '../../lib/csrf';
 import { decrypt, encrypt } from '../../lib/crypto';
 import { getEnv } from '../../lib/env';
 import { randomSecret } from '../../lib/tokens';
+import { githubApp } from '../../setup/credentials';
 import type { AppDeps } from '../app';
 import { HttpError } from '../errors';
 
@@ -63,7 +64,7 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
     return c.redirect(
       authorizeUrl({
         webBase: deps.github.webBase,
-        clientId: env.GITHUB_CLIENT_ID,
+        clientId: githubApp().clientId,
         redirectUri: `${env.PUBLIC_URL}/auth/github/callback`,
         state,
         codeChallenge: pkceChallenge(verifier),
@@ -80,9 +81,10 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
       throw new HttpError('validation_error', 'This sign-in link expired or was changed. Please sign in again.');
     }
 
+    const app = githubApp();
     const tokens = await exchangeCode(deps.github, {
-      clientId: env.GITHUB_CLIENT_ID,
-      clientSecret: env.GITHUB_CLIENT_SECRET,
+      clientId: app.clientId,
+      clientSecret: app.clientSecret,
       code,
       redirectUri: `${env.PUBLIC_URL}/auth/github/callback`,
       codeVerifier: saved.verifier,

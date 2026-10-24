@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testApp } from '../../test/app';
-import { BUILD_HINT, contentSecurityPolicy } from './spa';
+import { BUILD_HINT, contentSecurityPolicy, spaRoutes } from './spa';
 
 // A pretend build: dist/ with an index, a hashed asset and a service worker, and a secret next to it.
 let outer: string;
@@ -113,5 +113,16 @@ describe('the Content-Security-Policy', () => {
 
   it('allows a plain ws:// socket for the http dev address', () => {
     expect(contentSecurityPolicy('http://localhost:5173')).toContain("connect-src 'self' ws://localhost:5173;");
+  });
+
+  it('lets forms post to the other origins it is given, and nowhere else (first-run mode posts to GitHub)', () => {
+    const csp = contentSecurityPolicy('https://nitpilot.dev', { formActions: ['https://github.com'] });
+    expect(csp).toContain("; form-action 'self' https://github.com;");
+    expect(csp.match(/form-action/g)).toHaveLength(1);
+  });
+
+  it('is sent with those origins by the web app routes that were given them', async () => {
+    const res = await spaRoutes({ distDir: dist, publicUrl: 'https://nitpilot.dev', formActions: ['https://github.com'] }).request('/first-run');
+    expect(res.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com;");
   });
 });

@@ -18,7 +18,7 @@ Nitpilot shows text written by AI agents and by other people: point titles, repl
 | `style-src 'self' 'unsafe-inline'` | Our own CSS files, plus `style="…"` attributes written in HTML or set as an attribute, and `<style>` elements. | Kept so a library that writes style attributes or `<style>` tags still works. React's own `style={{ … }}` goes through the DOM's style object, which the policy doesn't restrict. |
 | `font-src 'self'` | Fonts from our own files only. | No `data:` fonts (see the Vite example below). |
 | `base-uri 'self'` | A page can't change what relative URLs resolve against with a `<base>` tag. | Closes a trick for redirecting our own relative links. |
-| `form-action 'self'` | Forms post only to us. | A form injected into the page can't send data elsewhere. |
+| `form-action 'self'` | Forms post only to us. In first-run mode, also to GitHub (`https://github.com`). | A form injected into the page can't send data elsewhere. The one exception is first-run mode, whose page posts the app manifest to GitHub as a real form (`createFirstRunApp` in `http/app.ts`, docs/why/first-run-and-app-manifests.md); a server with its app never allows it. |
 | `frame-ancestors 'none'` | No other site may show our pages in a frame. | Clickjacking: another site could load one of our pages in an invisible frame and trick you into clicking a button on it, such as "Approve" on the CLI approval page. |
 
 ## Why styles may be inline but scripts may not

@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
-import { getEnv } from '../src/lib/env';
 import { signGithubBody } from '../src/lib/hmac';
+import { githubApp } from '../src/setup/credentials';
 
 let n = 0;
 
@@ -14,7 +14,7 @@ export async function sendWebhook(app: Hono, event: string, payload: unknown, op
       'content-type': 'application/json',
       'x-github-event': event,
       'x-github-delivery': opts.deliveryId ?? `delivery-${Date.now()}-${n}`,
-      'x-hub-signature-256': signGithubBody(body, opts.secret ?? getEnv().GITHUB_WEBHOOK_SECRET),
+      'x-hub-signature-256': signGithubBody(body, opts.secret ?? githubApp().webhookSecret),
     },
     body,
   });

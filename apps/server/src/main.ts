@@ -12,11 +12,13 @@ import { createDeliveryHandler } from './ingest/handle';
 import { createIngest } from './ingest/process';
 import { purgeClosedChats, purgeOldRows } from './ingest/record';
 import { recoverOnBoot } from './ingest/recovery';
-import { acquireSingletonLock } from './lib/advisory-lock';
-import { getEnv, vapidDetails } from './lib/env';
+import { acquireSingletonLock, type SingletonLock } from './lib/advisory-lock';
+import { getEnv, vapidDetails, type Env } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
+import { startFirstRun } from './setup/boot';
+import { loadGithubApp, setGithubApp, type GithubAppCredentials } from './setup/credentials';
 import { CliNotifier } from './tasks/cli-notifier';
 import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
@@ -44,9 +46,46 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Which GitHub App this server is: the GITHUB_* variables, else the one first-run mode stored, else none yet.
+  // A stored app this ENCRYPTION_KEY can't read throws here, and the server refuses to start (setup/credentials.ts).
+  const loaded = await loadGithubApp(env);
+  if (!loaded) return runFirstRun(env, lock);
+  setGithubApp(loaded.creds);
+  console.log(`[boot] GitHub App ${loaded.creds.slug}, from the ${loaded.source === 'env' ? 'GITHUB_* variables' : 'database'}`);
+  await runNormally(env, lock, loaded.creds);
+}
+
+/**
+ * First-run mode (spec §17 "Self-hosting", docs/why/first-run-and-app-manifests.md): no GitHub App yet, so serve only
+ * the page that creates one. No task runner, hubs or recovery: none of them can work without an app. Once the app is
+ * stored the process exits with 0, and Docker (`restart: unless-stopped`) starts it again, in normal mode this time.
+ */
+function runFirstRun(env: Env, lock: SingletonLock): void {
+  // After the app is stored, and on SIGTERM. Exit code 0 either way: nothing went wrong. (`server` is made just below,
+  // long before either can happen.)
+  const exit = async () => {
+    server.close();
+    try {
+      await lock.release();
+    } finally {
+      process.exit(0);
+    }
+  };
+  const { app } = startFirstRun({ env, github: new GithubClient(), exit: () => void exit() });
+  const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+    console.log(`Nitpilot server listening on http://localhost:${info.port}, in first-run mode`);
+  }) as Server;
+  // No hub yet: every WebSocket upgrade gets a 404.
+  routeUpgrades(server, {});
+  process.on('SIGINT', exit);
+  process.on('SIGTERM', exit);
+}
+
+/** The server with its GitHub App: webhooks in, jobs out to the CLIs, the web app. */
+async function runNormally(env: Env, lock: SingletonLock, creds: GithubAppCredentials): Promise<void> {
   // The outside world.
   const github = new GithubClient();
-  const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
+  const appAuth = new AppAuth(github, creds.appId, creds.privateKey);
   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
   // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
   const hub = new CliHub();

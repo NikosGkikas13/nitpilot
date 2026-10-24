@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
-  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, FirstRunManifestRequest, FirstRunManifestResponse,
+  FirstRunStatus, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
   Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
@@ -163,5 +164,36 @@ describe('web API bodies', () => {
     expect(CliRequestView.safeParse({ ...request, status: 'consumed' }).success).toBe(false);
     expect(CliRequestDecision.parse({ decision: 'deny' })).toEqual({ decision: 'deny' });
     expect(CliRequestDecision.safeParse({ decision: 'maybe' }).success).toBe(false);
+  });
+});
+
+describe('first-run bodies', () => {
+  it('knows both modes of GET /api/first-run', () => {
+    expect(FirstRunStatus.parse({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' })).toEqual({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' });
+    expect(FirstRunStatus.parse({ mode: 'ready', installUrl: 'https://github.com/apps/nitpilot/installations/new' }).mode).toBe('ready');
+    expect(FirstRunStatus.safeParse({ mode: 'ready', publicUrl: 'https://nitpilot.example.com' }).success).toBe(false);
+  });
+
+  it('takes a manifest request for a personal account or an organization', () => {
+    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, name: 'Nitpilot (example)', isPublic: false };
+    expect(FirstRunManifestRequest.parse(request)).toEqual(request);
+    const forOrg = { ...request, owner: { kind: 'org', login: 'acme-inc' } };
+    expect(FirstRunManifestRequest.parse(forOrg)).toEqual(forOrg);
+  });
+
+  it("refuses an app name GitHub would refuse (1 to 34 characters), and a login that isn't GitHub's shape", () => {
+    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, isPublic: false };
+    expect(FirstRunManifestRequest.parse({ ...request, name: '  Nitpilot  ' }).name).toBe('Nitpilot');
+    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'x'.repeat(34) }).success).toBe(true);
+    for (const name of ['', '   ', 'x'.repeat(35)]) expect(FirstRunManifestRequest.safeParse({ ...request, name }).success).toBe(false);
+    for (const login of ['', '-acme', 'acme-', 'ac--me', 'acme/inc', 'x'.repeat(40)]) {
+      expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org', login } }).success, login).toBe(false);
+    }
+    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org' } }).success).toBe(false);
+  });
+
+  it('round-trips the answer the page posts as a form', () => {
+    const answer = { action: 'https://github.com/settings/apps/new?state=abc', manifest: { name: 'Nitpilot', public: false } };
+    expect(FirstRunManifestResponse.parse(answer)).toEqual(answer);
   });
 });

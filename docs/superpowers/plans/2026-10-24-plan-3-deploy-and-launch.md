@@ -1168,7 +1168,7 @@ docs/self-hosting.md; docs/why/{first-run-and-app-manifests,reverse-proxy-and-tl
 
 **Why this exists (docs/why/first-run-and-app-manifests.md, written in Step 21):** a self-hosted server needs its own GitHub App, and making one by hand means a long form and six values copied into `.env`. With no app at all, the server instead serves only a setup page. The page has GitHub create the app from a description the server wrote (a manifest); the server stores the secrets encrypted and exits; Docker starts it again in normal mode. In React terms it is a setup wizard that writes config and then reloads the app.
 
-- [ ] **Step 1: Write the failing env tests**
+- [x] **Step 1: Write the failing env tests**
 
 The six `GITHUB_*` variables become all-or-none. In `apps/server/src/lib/env.test.ts`, add this block (the diff shows where; it goes after the test that names every missing variable and before `describe('Web Push keys', …)`):
 
@@ -1202,12 +1202,12 @@ The six `GITHUB_*` variables become all-or-none. In `apps/server/src/lib/env.tes
      const stub = (values: Record<string, string>) => Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
 Expected: FAIL, 2 tests. "are optional: with none set the server starts in first-run mode" fails with `Invalid environment:` followed by `GITHUB_APP_ID: Too small: expected string to have >=1 characters` and the same for the other five. "are all or none" fails with `expected [Function] to throw error including 'set all six GitHub App variables, or …' but got 'Invalid environment:\n  GITHUB_CLIENT…'`. The other 13 tests pass.
 
-- [ ] **Step 3: Make the variables optional, all or none**
+- [x] **Step 3: Make the variables optional, all or none**
 
 In `apps/server/src/lib/env.ts`: the six names get a list and a helper, the schema takes them as `optionalText` (an empty value counts as not set, as in a copied `.env.example`), and a `superRefine` refuses a half-set app. A half-set app must stop the server: falling into first-run mode would hand the server to whoever opens `/first-run` first, and starting half configured would fail later in a confusing way. `{ when: () => true }` makes the check run even when another variable is also bad, so one start names every problem (zod 4 skips a `superRefine` after another issue otherwise, and the existing "names every missing variable" test needs both messages).
 
@@ -1289,14 +1289,14 @@ In `apps/server/src/lib/env.ts`: the six names get a list and a helper, the sche
      return set === 0 || set === 3;
 ```
 
-- [ ] **Step 4: Run them to see them pass**
+- [x] **Step 4: Run them to see them pass**
 
 Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
 Expected: PASS (15 tests).
 
 Note: `npm run typecheck -w apps/server` now fails, because the six values are `string | undefined`: it lists, at least, `src/main.ts` and `scripts/dev-tunnel.ts` (and every other reader until Step 11 switches it). That is the compiler finding the readers for you; Steps 11, 18 and 19 fix them, and Step 19 ends with a clean typecheck.
 
-- [ ] **Step 5: Write the setup-code tests**
+- [x] **Step 5: Write the setup-code tests**
 
 Create `apps/server/src/setup/setup-code.test.ts`. The code is what keeps a stranger who finds a fresh server first from claiming it: it is printed only in the server's log (see the explainer), so only the owner can type it.
 
@@ -1358,7 +1358,7 @@ describe('setupCodeMatches', () => {
 });
 ```
 
-- [ ] **Step 6: Run it to see it fail, implement, see it pass**
+- [x] **Step 6: Run it to see it fail, implement, see it pass**
 
 Run: `npm run test:unit -w apps/server -- src/setup/setup-code.test.ts`
 Expected: FAIL: `Error: Cannot find module` for `./setup-code` (no tests run).
@@ -1423,7 +1423,7 @@ export function setupCodeMatches(input: string, code: string): boolean {
 Run: `npm run test:unit -w apps/server -- src/setup/setup-code.test.ts`
 Expected: PASS (6 tests).
 
-- [ ] **Step 7: Write the manifest tests, see them fail, implement, see them pass**
+- [x] **Step 7: Write the manifest tests, see them fail, implement, see them pass**
 
 Create `apps/server/src/setup/manifest.test.ts`:
 
@@ -1560,7 +1560,7 @@ export function manifestFormAction(opts: { webBase: string; owner: ManifestOwner
 Run: `npm run test:unit -w apps/server -- src/setup/manifest.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 8: Write the credentials tests, and let the test database empty the new table**
+- [x] **Step 8: Write the credentials tests, and let the test database empty the new table**
 
 Create `apps/server/src/setup/credentials.db.test.ts`. It covers: the environment wins over a stored row; nothing set and no row gives `null`; a stored row decrypts; the wrong `ENCRYPTION_KEY` refuses with the message the Interfaces give; the encrypted columns differ from the plain values; a second save is refused and the first row stays.
 
@@ -1687,7 +1687,7 @@ describe('githubApp', () => {
 Run: `npm run test:db -w apps/server -- src/setup/credentials`
 Expected: FAIL: `Error: Cannot find module './credentials'` (no tests run).
 
-- [ ] **Step 9: The `GithubAppConfig` model and its migration**
+- [x] **Step 9: The `GithubAppConfig` model and its migration**
 
 One row (`id` is always `app`) holds the app a server made for itself. A fixed id plus an insert-only save means two callbacks racing can't both win. In `apps/server/prisma/schema.prisma`, add at the end of the file:
 
@@ -1752,7 +1752,7 @@ npm run db:generate -w apps/server
 
 Expected: `Generated Prisma Client (7.10.0) to ./src/generated/prisma`. (The test database is migrated by the test run itself, `test/global-setup.ts`.)
 
-- [ ] **Step 10: Implement `setup/credentials.ts`, and `githubApp()`**
+- [x] **Step 10: Implement `setup/credentials.ts`, and `githubApp()`**
 
 `credentialsFromEnv` turns the six variables into one value. `loadGithubApp` is the boot-time question "which app am I?": the environment first (development, or anyone who made their app by hand), else the stored row, else `null`, which means first-run mode. A row that won't decrypt must stop the server and must never fall into first-run mode, because the app still exists on GitHub and only the old key can bring it back. `saveGithubApp` encrypts the three secrets and inserts. `setGithubApp` / `githubApp()` are a process-wide holder in the style of `getEnv()` (see the deviations list): `main.ts` sets the app once at boot and every reader asks for it, and tests and scripts, which never boot the server, get the environment's app.
 
@@ -1883,7 +1883,7 @@ export function githubApp(): GithubAppCredentials {
 Run: `npm run test:db -w apps/server -- src/setup/credentials`
 Expected: PASS (9 tests).
 
-- [ ] **Step 11: Switch every reader of a `GITHUB_*` value to `githubApp()`**
+- [x] **Step 11: Switch every reader of a `GITHUB_*` value to `githubApp()`**
 
 Nothing new to test here: the existing suites already cover each reader (their environment has all six values, so `githubApp()` answers from it). Four source files read `env.GITHUB_*`, plus the test helper: the onboarding facts (the app slug), the token refresh (client id and secret), the sign-in routes (client id and secret), the webhook route (the secret) and the helper that signs webhooks in tests. `main.ts` and `scripts/dev-tunnel.ts` come in Steps 18 and 19. Apply each change:
 
@@ -2022,7 +2022,7 @@ Nothing new to test here: the existing suites already cover each reader (their e
 Run: `npm test -w apps/server -- src/auth src/http/routes test/`
 Expected: PASS (25 files, 350 tests).
 
-- [ ] **Step 12: Write the protocol schemas' tests, see them fail, implement, see them pass**
+- [x] **Step 12: Write the protocol schemas' tests, see them fail, implement, see them pass**
 
 The first-run page (Task 8) and the server share three request/response shapes, so they live in `packages/protocol`. In `packages/protocol/src/web-api.test.ts`, change the import and add the new `describe` at the end of the file:
 
@@ -2129,7 +2129,7 @@ In `packages/protocol/src/web-api.ts`, add at the end of the file:
 Run: `npm test -w packages/protocol`
 Expected: PASS (88 tests, 4 more than before).
 
-- [ ] **Step 13: The Content-Security-Policy's `form-action`, and the two error codes**
+- [x] **Step 13: The Content-Security-Policy's `form-action`, and the two error codes**
 
 GitHub accepts a manifest only as a real form post from the person's browser, so in first-run mode (and only then) the page's policy must let a form post to GitHub. First the tests, in `apps/server/src/http/spa.test.ts`:
 
@@ -2255,7 +2255,7 @@ And `apps/server/src/http/errors.ts` gets the two codes first-run mode answers w
 Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
 Expected: PASS (14 tests).
 
-- [ ] **Step 14: Write the first-run tests (routes and app), see them fail**
+- [x] **Step 14: Write the first-run tests (routes and app), see them fail**
 
 Two files. `first-run.db.test.ts` is the main one (18 tests): the routes, through a real first-run app and a fake GitHub. The review-focus cases are all here: no code gives 403 and nothing stored; 5 tries a minute per address, the 6th refused even with the right code; a wrong, missing, used or expired `state` gives 400 and stores nothing and asks GitHub nothing; a conversion answered by the fake GitHub gives one row with encrypted columns that differ from the plain values, and the exit hook called once, 500 ms later; a second callback gives 409. The last two tests are for normal mode (`readyRoutes`).
 
@@ -2616,7 +2616,7 @@ describe('the first-run routes once the server has its app', () => {
 Run: `npm run test:db -w apps/server -- src/setup/first-run && npm run test:unit -w apps/server -- src/http/app.test.ts`
 Expected: FAIL. In `first-run.db.test.ts` all 18 tests fail: 16 with `TypeError: createFirstRunApp is not a function`, plus the two normal-mode ones with `AssertionError: expected 404 to be 200` (for `GET /api/first-run`) and `expected 503 to be 404` (the callback fell through to the web app's "not built" 503). `app.test.ts` fails as a whole file with `TypeError: createFirstRunApp is not a function`.
 
-- [ ] **Step 15: Implement `setup/first-run.ts`**
+- [x] **Step 15: Implement `setup/first-run.ts`**
 
 The routes. Read the top comment first: it is the whole flow in four lines. The setup code is checked before the body is validated, so without it the route answers nothing but "no"; the attempts are counted before the code is looked at, so a wrong guess and a right one cost the same try. `state` is 32 random bytes kept in memory for an hour and good for one callback (like the `state` of "Sign in with GitHub", docs/why/oauth-pkce.md). The callback trades GitHub's code for the app (no token: the code is the proof), stores it, answers a redirect, and asks the process to exit 500 ms later so the browser gets its redirect first.
 
@@ -2814,7 +2814,7 @@ export function readyRoutes(deps: { github: GithubClient }): Hono {
 Run: `npm run test:db -w apps/server -- src/setup/first-run`
 Expected: still FAIL, the same 18 (the routes exist, but nothing builds an app around them yet).
 
-- [ ] **Step 16: `createFirstRunApp`, and `readyRoutes` in the normal app**
+- [x] **Step 16: `createFirstRunApp`, and `readyRoutes` in the normal app**
 
 In `apps/server/src/http/app.ts`: the health answer becomes a small `health` function shared by both apps; `createApp` mounts `readyRoutes` (so `GET /api/first-run` says `ready` once the server has its app); and `createFirstRunApp` is the first-run server: the health check, the first-run routes, a 503 `first_run` for every other server path whatever the method, and the web app's pages with `form-action` allowing `deps.github.webBase`.
 
@@ -2898,7 +2898,7 @@ In `apps/server/src/http/app.ts`: the health answer becomes a small `health` fun
 Run: `npm run test:db -w apps/server -- src/setup/first-run && npm run test:unit -w apps/server -- src/http/app.test.ts`
 Expected: PASS (18 tests in `first-run.db.test.ts`; 8 in `app.test.ts`).
 
-- [ ] **Step 17: The boot seam: write `boot.test.ts`, see it fail, implement `boot.ts`**
+- [x] **Step 17: The boot seam: write `boot.test.ts`, see it fail, implement `boot.ts`**
 
 `startFirstRun` is the small piece `main.ts` calls in first-run mode: it makes a setup code, prints where to go and the code (so only someone who can read the server's log, `docker compose logs nitpilot`, can create the app), and returns the first-run app. Create `apps/server/src/setup/boot.test.ts`:
 
@@ -2968,7 +2968,7 @@ export function startFirstRun(opts: { env: Env; github: GithubClient; exit: () =
 Run: `npm run test:unit -w apps/server -- src/setup/boot.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 18: `main.ts` picks the mode**
+- [x] **Step 18: `main.ts` picks the mode**
 
 No unit test: `main()` starts a real server, so this is checked by the live run in Step 20 (and, from Task 5, the image smoke test starts the server with all six variables set, which is the normal-mode branch). `main` now asks `loadGithubApp` which app it is. With none it runs first-run mode: no task runner, hubs or recovery (none can work without an app), WebSocket upgrades get a 404 (`routeUpgrades(server, {})`), and on SIGINT/SIGTERM or after the app is stored it closes the server, releases the lock and exits 0 (nothing went wrong; Docker's `restart: unless-stopped` starts it again). With an app, everything that was `main` becomes `runNormally`, which builds `AppAuth` from the credentials it is handed.
 
@@ -3041,7 +3041,7 @@ No unit test: `main()` starts a real server, so this is checked by the live run 
    const hub = new CliHub();
 ```
 
-- [ ] **Step 19: `.env.example` and the dev tunnel**
+- [x] **Step 19: `.env.example` and the dev tunnel**
 
 `.env.example` says the six are all or none. The reference build also emptied `GITHUB_APP_SLUG=nitpilot-dev`: with only the slug filled, a copied file would now refuse to start as half set. `scripts/dev-tunnel.ts` read the six variables straight from `getEnv()`; it now builds the credentials with `credentialsFromEnv` and exits with a message if the dev app isn't in `.env`.
 
@@ -3115,7 +3115,7 @@ No unit test: `main()` starts a real server, so this is checked by the live run 
 Run: `npm run typecheck -w apps/server`
 Expected: no errors (the failures Step 4 predicted are gone).
 
-- [ ] **Step 20: Try it for real (no GitHub involved)**
+- [x] **Step 20: Try it for real (no GitHub involved)**
 
 Start the server with the six `GITHUB_*` values emptied on the command line (real environment variables win over `.env`, and empty counts as not set), on a spare port, from the repo root:
 
@@ -3138,7 +3138,7 @@ Expected:
 
 Stop the server with Ctrl-C in the first terminal: it exits cleanly (code 0). (Reaching GitHub's "Create GitHub App" page needs Task 8's page; the callback is covered by the tests above.)
 
-- [ ] **Step 21: The explainer, the spec and the policy table**
+- [x] **Step 21: The explainer, the spec and the policy table**
 
 `docs/why/first-run-and-app-manifests.md` (new; the setup wizard comparison, what a manifest is, the setup code, why the server restarts itself):
 
@@ -3253,7 +3253,7 @@ And `docs/why/content-security-policy.md`'s `form-action` row names the one exce
  ## Why styles may be inline but scripts may not
 ```
 
-- [ ] **Step 22: Full suite, tick, ledger, commit**
+- [x] **Step 22: Full suite, tick, ledger, commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
 Expected: protocol 88, CLI 349 + 14 skipped, server 1106 (47 more than before: env 2, setup-code 6, manifest 4, credentials 9, spa 2, first-run routes 18, first-run app 4, boot 2), web 344, root 6, e2e 6, typecheck and lint clean.

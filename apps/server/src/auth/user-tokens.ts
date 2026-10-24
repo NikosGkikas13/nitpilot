@@ -1,8 +1,8 @@
 import type { GithubAuth } from '../generated/prisma/client';
 import { decrypt, encrypt } from '../lib/crypto';
-import { getEnv } from '../lib/env';
 import { prisma } from '../lib/prisma';
 import { GithubError, type GithubClient } from '../platform/github/client';
+import { githubApp } from '../setup/credentials';
 import { refreshTokens, type OAuthTokens } from './github-oauth';
 
 /** The user must sign in with GitHub again before Nitpilot can act as them. */
@@ -57,10 +57,10 @@ async function refreshOnce(auth: GithubAuth, github: GithubClient, now: Date): P
     throw new NeedsReauthError(auth.userId);
   }
 
-  const env = getEnv();
+  const app = githubApp();
   let tokens: OAuthTokens;
   try {
-    tokens = await refreshTokens(github, { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET, refreshToken: decrypt(auth.refreshTokenEnc) }, now);
+    tokens = await refreshTokens(github, { clientId: app.clientId, clientSecret: app.clientSecret, refreshToken: decrypt(auth.refreshTokenEnc) }, now);
   } catch (err) {
     // GitHub answered and said no (e.g. bad_refresh_token): only a new sign-in fixes that.
     if (err instanceof GithubError && err.status < 500) {

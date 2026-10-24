@@ -384,3 +384,39 @@ export type PrFile = z.infer<typeof PrFile>;
 /** The PR's changed files, at most 300; `truncated` when it has more. `adds` and `dels` add up the files listed. */
 export const FilesResponse = z.object({ files: z.array(PrFile), adds: z.number().int(), dels: z.number().int(), truncated: z.boolean() });
 export type FilesResponse = z.infer<typeof FilesResponse>;
+
+// ── First-run mode (Plan 3, spec §17 "Self-hosting"): a server with no GitHub App creates one on /first-run ──
+
+/**
+ * `GET /api/first-run`. `first_run`: the server has no GitHub App yet and the page shows the setup form. `ready`: it
+ * has one (from the environment or made here), and `installUrl` is where people install it on their repos. The page
+ * polls this after GitHub sends it back, while the server restarts.
+ */
+export const FirstRunStatus = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('first_run'), publicUrl: z.string() }),
+  z.object({ mode: z.literal('ready'), installUrl: z.string() }),
+]);
+export type FirstRunStatus = z.infer<typeof FirstRunStatus>;
+
+/** A GitHub login: letters, digits and single dashes between them, at most 39 characters. */
+const GithubLogin = z.string().regex(/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/, "isn't a GitHub login");
+
+/**
+ * `POST /api/first-run/manifest`. `code`: the setup code from the server's log. `owner`: the person's own account, or
+ * an organization they administer. `name`: the app's name on GitHub (GitHub allows 34 characters). `isPublic`: may
+ * anyone install the app, or only its owner.
+ */
+export const FirstRunManifestRequest = z.object({
+  code: z.string(),
+  owner: z.discriminatedUnion('kind', [z.object({ kind: z.literal('user') }), z.object({ kind: z.literal('org'), login: GithubLogin })]),
+  name: z.string().trim().min(1).max(34),
+  isPublic: z.boolean(),
+});
+export type FirstRunManifestRequest = z.infer<typeof FirstRunManifestRequest>;
+
+/**
+ * Its answer: the page posts `manifest` (as JSON, in a hidden field named `manifest`) to `action` in a real form.
+ * GitHub requires a form post from the browser, not a fetch.
+ */
+export const FirstRunManifestResponse = z.object({ action: z.string(), manifest: z.record(z.string(), z.unknown()) });
+export type FirstRunManifestResponse = z.infer<typeof FirstRunManifestResponse>;

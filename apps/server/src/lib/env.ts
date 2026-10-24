@@ -20,6 +20,26 @@ function isVapidKeyPair(publicKey: string, privateKey: string): boolean {
   }
 }
 
+/** The six variables a GitHub App needs, in the order .env.example lists them. */
+export const GITHUB_APP_VARIABLES = [
+  'GITHUB_APP_ID',
+  'GITHUB_APP_SLUG',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_CLIENT_ID',
+  'GITHUB_CLIENT_SECRET',
+  'GITHUB_WEBHOOK_SECRET',
+] as const;
+
+/**
+ * Which of the six are missing, when some are set and some aren't (a copy-paste slip in .env). Empty when all six or
+ * none are set. A half-set app must stop the server: falling into first-run mode would hand the server to whoever
+ * opens /first-run first, and starting half configured would fail later in a confusing way.
+ */
+function missingGithubAppVariables(env: Partial<Record<(typeof GITHUB_APP_VARIABLES)[number], string | undefined>>): string[] {
+  const missing = GITHUB_APP_VARIABLES.filter((name) => !env[name]);
+  return missing.length === GITHUB_APP_VARIABLES.length ? [] : missing;
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
@@ -28,13 +48,18 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   /** base64 of 32 random bytes: `openssl rand -base64 32` */
   ENCRYPTION_KEY: z.string().min(1),
-  GITHUB_APP_ID: z.string().min(1),
-  GITHUB_APP_SLUG: z.string().min(1),
+  /**
+   * The GitHub App (docs/why/github-app.md). Optional, but all six or none: with none the server starts in first-run
+   * mode and creates its own app (setup/first-run.ts, docs/why/first-run-and-app-manifests.md). Read them through
+   * `githubApp()` (setup/credentials.ts), which also knows about an app stored in the database.
+   */
+  GITHUB_APP_ID: optionalText,
+  GITHUB_APP_SLUG: optionalText,
   /** The app's private key (PEM). `\n` escapes are allowed so it fits on one line. */
-  GITHUB_APP_PRIVATE_KEY: z.string().min(1).transform((k) => k.replaceAll('\\n', '\n')),
-  GITHUB_CLIENT_ID: z.string().min(1),
-  GITHUB_CLIENT_SECRET: z.string().min(1),
-  GITHUB_WEBHOOK_SECRET: z.string().min(1),
+  GITHUB_APP_PRIVATE_KEY: optionalText.transform((k) => k?.replaceAll('\\n', '\n')),
+  GITHUB_CLIENT_ID: optionalText,
+  GITHUB_CLIENT_SECRET: optionalText,
+  GITHUB_WEBHOOK_SECRET: optionalText,
   /** Where the built web app is (apps/web/dist by default; see http/spa.ts). */
   WEB_DIST_DIR: z.string().min(1).optional(),
   /** Hosted instance: ignore private repos (spec §14.9). */
@@ -59,7 +84,19 @@ const EnvSchema = z.object({
   VAPID_PUBLIC_KEY: optionalText,
   VAPID_PRIVATE_KEY: optionalText,
   VAPID_SUBJECT: optionalText.refine((s) => s === undefined || /^(mailto|https):/.test(s), 'must start with mailto: or https:'),
-}).refine(
+}).superRefine(
+  (env, ctx) => {
+    const missing = missingGithubAppVariables(env);
+    if (missing.length === 0) return;
+    ctx.addIssue({
+      code: 'custom',
+      path: [missing[0]!],
+      message: `set all six GitHub App variables, or none to start in first-run mode; missing: ${missing.join(', ')}`,
+    });
+  },
+  // Run even when another variable is bad too, so one start names every problem.
+  { when: () => true },
+).refine(
   (env) => {
     const set = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT].filter(Boolean).length;
     return set === 0 || set === 3;

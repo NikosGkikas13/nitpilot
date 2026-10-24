@@ -3,6 +3,7 @@ import { getEnv } from '../lib/env';
 import { prisma } from '../lib/prisma';
 import { TtlCache } from '../lib/ttl-cache';
 import type { PlatformReads } from '../platform/types';
+import { githubApp } from '../setup/credentials';
 
 /** How long GitHub's "yes, the app is installed" is kept per person. A "no" is never kept. */
 export const INSTALLED_TTL_MS = 5 * 60_000;
@@ -42,7 +43,7 @@ export class OnboardingFacts {
       orderBy: { createdAt: 'desc' },
       select: { name: true, repos: true, agentId: true },
     });
-    const about = { deviceName: tokens[0]?.name ?? null, appSlug: env.GITHUB_APP_SLUG, publicReposOnly: env.PUBLIC_REPOS_ONLY };
+    const about = { deviceName: tokens[0]?.name ?? null, appSlug: githubApp().slug, publicReposOnly: env.PUBLIC_REPOS_ONLY };
     if (user.onboardedAt) return { steps: ALL_DONE, done: true, ...about };
 
     const steps: Onboarding['steps'] = {

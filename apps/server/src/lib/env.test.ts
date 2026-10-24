@@ -58,6 +58,24 @@ describe('getEnv', () => {
     expect(() => getEnv()).toThrow(/GITHUB_CLIENT_ID[\s\S]*PUBLIC_URL|PUBLIC_URL[\s\S]*GITHUB_CLIENT_ID/);
   });
 
+  describe('GitHub App variables', () => {
+    const SIX = ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET'];
+
+    it('are optional: with none set the server starts in first-run mode', () => {
+      // Left empty, as in a copied .env.example, counts as not set.
+      for (const name of SIX) vi.stubEnv(name, '');
+      expect(getEnv()).toMatchObject({ GITHUB_APP_ID: undefined, GITHUB_APP_PRIVATE_KEY: undefined, GITHUB_WEBHOOK_SECRET: undefined });
+    });
+
+    it('are all or none: half set refuses to start and names the missing ones', () => {
+      vi.stubEnv('GITHUB_CLIENT_SECRET', '');
+      vi.stubEnv('GITHUB_WEBHOOK_SECRET', ' ');
+      expect(() => getEnv()).toThrow(
+        'set all six GitHub App variables, or none to start in first-run mode; missing: GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET',
+      );
+    });
+  });
+
   describe('Web Push keys', () => {
     const keys = { VAPID_PUBLIC_KEY: pair.publicKey, VAPID_PRIVATE_KEY: pair.privateKey, VAPID_SUBJECT: 'mailto:admin@example.com' };
     const stub = (values: Record<string, string>) => Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
