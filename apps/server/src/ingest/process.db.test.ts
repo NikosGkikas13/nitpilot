@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeChat, makeMessage, makeRepo, resetDb, uid } from '../../test/db';
+import { makeChat, makeMessage, makeParticipant, makeRepo, makeUser, resetDb, uid } from '../../test/db';
 import { startCliLogin } from '../auth/cli-login';
 import { prisma } from '../lib/prisma';
 import { createIngest, MAX_DELIVERY_ATTEMPTS, processDelivery } from './process';
@@ -119,10 +119,16 @@ describe('purgeClosedChats', () => {
     await prisma.prChat.update({ where: { id: open.id }, data: { createdAt: daysAgo(200) } });
     await makeMessage(old.id, null);
     await makeMessage(recent.id, null);
+    const maya = await makeUser();
+    const participant = await makeParticipant(old.id, maya, 'reviewer');
+    await prisma.job.create({ data: { chatId: old.id, participantId: participant.id, userId: maya.id, type: 'review', round: 1, headSha: old.headSha } });
+    await prisma.task.create({ data: { kind: 'notify', chatId: old.id, payload: {} } });
 
     expect(await purgeClosedChats(now, 90)).toBe(1);
     expect((await prisma.prChat.findMany({ select: { id: true } })).map((c) => c.id).sort()).toEqual([recent.id, open.id].sort());
     expect(await prisma.message.count({ where: { chatId: old.id } })).toBe(0);
+    expect(await prisma.job.count({ where: { chatId: old.id } })).toBe(0);
+    expect(await prisma.task.count({ where: { chatId: old.id } })).toBe(0);
     expect(await prisma.message.count({ where: { chatId: recent.id } })).toBe(1);
   });
 });

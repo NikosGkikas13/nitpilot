@@ -29,6 +29,9 @@ export function retryAfterMs(headers: Headers, now = Date.now()): number | undef
   return undefined;
 }
 
+/** The most pages `apiAllPages` reads (5000 items at 100 a page): a Link header that points back at itself must not loop forever. */
+export const MAX_PAGES = 50;
+
 /** How long one GitHub call may take before we give up on it: a request waiting on GitHub never waits forever. */
 export const GITHUB_TIMEOUT_MS = 15_000;
 
@@ -85,7 +88,12 @@ export class GithubClient {
   async apiAllPages<Page, Item>(path: string, pick: (page: Page) => Item[], opts: GithubRequest = {}): Promise<Item[]> {
     const items: Item[] = [];
     let next: string | null = path;
-    while (next) {
+    for (let page = 1; next; page++) {
+      if (page > MAX_PAGES) {
+        // Keep what we have: a partial list beats failing the whole call.
+        console.warn(`[github] ${path} still had a next page after ${MAX_PAGES} pages; stopping there`);
+        break;
+      }
       const { data, headers }: GithubResponse<Page> = await this.api<Page>('GET', next, opts);
       items.push(...pick(data));
       next = nextPagePath(headers.get('link'));

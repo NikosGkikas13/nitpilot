@@ -10,11 +10,11 @@ In production we run Caddy in front of the server (it handles HTTPS). Caddy rece
 
 ## X-Forwarded-For
 
-A proxy fixes this by adding a header to the request it passes on: `X-Forwarded-For: <the address I just saw>`. If the request already had that header, the proxy adds its own entry to the **end**: `X-Forwarded-For: 6.6.6.6, 203.0.113.9`.
+A proxy fixes this by adding a header to the request it passes on: `X-Forwarded-For: <the address I just saw>`. Some proxies append their entry to the end of a header the visitor already sent (`6.6.6.6, 203.0.113.9`). Caddy, ours, does not trust a header from a visitor by default and writes its own value, so what arrives is the address Caddy saw. Either way, the last entry is the one our proxy wrote.
 
 ## Why only the last entry
 
-A header is just text, and the visitor writes the first copy of it. A visitor can send `X-Forwarded-For: 1.2.3.4` themselves, to pretend to be someone else, or a different "someone" on every request to dodge the limit. Only the entry added by **our** proxy is true, and a proxy adds to the end. So the last entry is ours to trust, and everything before it is whatever the client claimed.
+A header is just text, and the visitor writes the first copy of it. A visitor can send `X-Forwarded-For: 1.2.3.4` themselves, to pretend to be someone else, or a different "someone" on every request to dodge the limit. Only the entry written by **our** proxy is true, and it is the last one. So the last entry is ours to trust, and anything before it (if there is anything) is whatever the client or another hop claimed.
 
 React comparison: it is a prop you trust from your own parent component, and nothing else. A value that arrives from outside (the URL, `localStorage`) can say anything; a value your own parent computed is safe.
 
