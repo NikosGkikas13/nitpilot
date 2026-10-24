@@ -14,6 +14,7 @@ jobs:
   version:
     name: Check the tag
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -63,6 +64,7 @@ jobs:
     needs: [version, image]
     if: needs.version.outputs.kind == 'release'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       # Trusted publishing: npm checks a short-lived token GitHub signs for this run, instead of a stored npm token.

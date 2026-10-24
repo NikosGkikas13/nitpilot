@@ -10,9 +10,9 @@ A branch moves every time you commit. A **tag** is a label stuck on one commit t
 
 npm stores packages and hands them out by name and version. A **container registry** does the same for Docker images. Nitpilot's goes on GitHub's registry, GHCR, as `ghcr.io/nikosgkikas13/nitpilot:<version>`. The part after the colon is the image's **tag** (a second meaning of the word, sorry: a git tag marks a commit; an image tag marks an image).
 
-- `:0.1.0` is that exact release and never changes.
+- `:0.1.0` is that exact release. It should never change; treat it as final (a re-run of the image job would re-push it, maybe with a new digest).
 - `:latest` is "whatever the newest real release is". It moves with each release, like the `latest` dist-tag on npm. People who run `docker pull ...:latest` get the newest one.
-- `:0.1.0-rc.1` is a **release candidate**: "this should be 0.1.0, let's try it before we say so". An `-rc` tag never moves `:latest` and never publishes to npm, so you can test a real image on the server without anyone else getting it by accident. Pre-release ranges work the same way in npm: `1.0.0-rc.1` is skipped by `^0.9.0`.
+- `:0.1.0-rc.1` is a **release candidate**: "this should be 0.1.0, let's try it before we say so". An `-rc` tag never moves `:latest` and never publishes to npm, so you can test a real image on the server without anyone else getting it by accident. Pre-releases work the same way in npm: `^0.9.0` does not match `0.9.1-rc.1`, because pre-releases are skipped unless someone asks for them.
 
 The Dockerfile's `org.opencontainers.image.source` label is what links the image to this repo on GitHub, so it shows up under the repo's Packages.
 

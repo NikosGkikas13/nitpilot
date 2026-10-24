@@ -16,7 +16,7 @@ Anything else (`0.1.0`, `v0.1`, `v0.1.0-beta.1`) is refused by the first job and
 1. Choose the version. Set it in **both** places, to the same value (the `-rc.N` part is never written in the files, only in the tag):
    - `version` in `apps/cli/package.json`
    - `CLI_VERSION` in `apps/cli/src/version.ts`
-2. Commit that change and let CI go green.
+2. Commit that change, then open a PR (or push to `main`) and let CI go green before tagging.
 3. Tag the commit and push the tag (from the repo folder):
    ```bash
    git tag v0.1.0-rc.1        # or v0.1.0
@@ -27,7 +27,7 @@ Anything else (`0.1.0`, `v0.1`, `v0.1.0-beta.1`) is refused by the first job and
    - **Image to GHCR** builds the Dockerfile and pushes the tags in the table. Look at its log for the pushed tags and digest. The package appears under the repo's Packages.
    - **CLI to npm** (releases only, after the image) builds `apps/cli` and runs `npm publish --provenance`. Check https://www.npmjs.com/package/nitpilot for the new version and its provenance badge.
 
-You can try the package contents any time without publishing: `npm run build -w apps/cli && npm publish -w apps/cli --dry-run`. CI does exactly this on every push.
+You can try the package contents any time without publishing: `npm run build -w apps/cli && npm publish -w apps/cli --dry-run`. CI does exactly this on every PR and every push to `main`.
 
 ## If a job fails
 
