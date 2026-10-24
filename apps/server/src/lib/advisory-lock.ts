@@ -22,14 +22,17 @@ export async function acquireSingletonLock(
 ): Promise<SingletonLock | null> {
   const client = new pg.Client({ connectionString: databaseUrl });
   await client.connect();
+  // Only a lock we hold can be lost: closing the connection after "someone else has it" is not a loss.
+  let held = false;
   let releasing = false;
   let reported = false;
   const lost = (err: Error) => {
-    if (releasing || reported) return;
+    if (!held || releasing || reported) return;
     reported = true;
     onLost?.(err);
   };
-  // 'error' is usually followed by 'end'; without a listener, an 'error' would crash the process by itself.
+  // The listeners stay on from the start, so an 'error' event can never go unhandled and crash the process; they
+  // only report once the lock is held. 'error' is usually followed by 'end'.
   client.on('error', lost);
   client.on('end', () => lost(new Error('the lock connection ended')));
   const { rows } = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1) AS locked', [key]);
@@ -37,6 +40,7 @@ export async function acquireSingletonLock(
     await client.end();
     return null;
   }
+  held = true;
   return {
     async release() {
       releasing = true;

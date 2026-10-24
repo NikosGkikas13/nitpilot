@@ -36,6 +36,17 @@ describe('acquireSingletonLock', () => {
     expect(lost).toHaveBeenCalledOnce();
   });
 
+  it('does not call onLost when the lock is simply taken by another server', async () => {
+    const url = process.env.DATABASE_URL!;
+    const key = 900_000 + Math.floor(Math.random() * 99_999);
+    const first = await acquireSingletonLock(url, key);
+    const lost = vi.fn();
+    expect(await acquireSingletonLock(url, key, lost)).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(lost).not.toHaveBeenCalled();
+    await first!.release();
+  });
+
   it('does not call onLost when the lock is released on purpose', async () => {
     const lost = vi.fn();
     const lock = await acquireSingletonLock(process.env.DATABASE_URL!, 900_000 + Math.floor(Math.random() * 99_999), lost);
