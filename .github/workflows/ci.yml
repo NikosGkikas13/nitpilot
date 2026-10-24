@@ -40,6 +40,9 @@ jobs:
       # The web app's files, which the server serves (spec §7).
       - run: npm run build
       - run: npm run lint
+      # The CLI package as npm would get it: a broken package.json or a missing file fails here, not at release.
+      - run: npm run build -w apps/cli
+      - run: npm publish -w apps/cli --dry-run
       # Runs every workspace's tests: protocol, server and CLI.
       - run: npm test
       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).

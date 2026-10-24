@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "npm run build -w apps/web",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && node --test 'scripts/*.test.mjs'",
     "test:e2e": "npm run test:e2e -w apps/server",
     "test:web-e2e": "npm run build && npm run test:e2e -w apps/web",
     "typecheck": "npm run typecheck --workspaces --if-present",

@@ -1,0 +1,80 @@
+name: Release
+
+# A version tag releases Nitpilot (docs/releasing.md, docs/why/releasing.md):
+#   v0.1.0       → the image as :0.1.0 and :latest on GHCR, then the CLI on npm
+#   v0.1.0-rc.1  → the image as :0.1.0-rc.1 only (never :latest, never npm)
+on:
+  push:
+    tags: ['v*']
+
+# Nothing by default; each job asks for only what it needs.
+permissions: {}
+
+jobs:
+  version:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      kind: ${{ steps.check.outputs.kind }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      # Fails the whole release when the tag and the CLI's version disagree.
+      - id: check
+        run: |
+          kind=$(node scripts/check-release-version.mjs "$GITHUB_REF_NAME")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  image:
+    name: Image to GHCR
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # An rc gets only its own tag; the empty second line is skipped.
+          tags: |
+            ghcr.io/nikosgkikas13/nitpilot:${{ needs.version.outputs.version }}
+            ${{ needs.version.outputs.kind == 'release' && 'ghcr.io/nikosgkikas13/nitpilot:latest' || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  npm:
+    name: CLI to npm
+    needs: [version, image]
+    if: needs.version.outputs.kind == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted publishing: npm checks a short-lived token GitHub signs for this run, instead of a stored npm token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 comes with npm 10.
+      - run: npm install -g npm@^11.5.1
+      - run: npm ci
+      - run: npm run build -w apps/cli
+      - run: npm publish -w apps/cli --provenance --access public

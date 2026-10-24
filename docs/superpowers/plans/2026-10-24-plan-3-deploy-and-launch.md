@@ -761,7 +761,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces: `checkReleaseTag(tag: string, repoRoot: string): { ok: true, kind: 'rc' | 'release', version: string } | { ok: false, message: string }` exported from `scripts/check-release-version.mjs`; run as `node scripts/check-release-version.mjs <tag>` it prints `rc` or `release` (exit 0) or `check-release-version: <message>` on stderr (exit 1).
 - Produces: `release.yml` jobs `version` (outputs `kind`, `version`), `image` (pushes `ghcr.io/nikosgkikas13/nitpilot:<version>`, plus `:latest` only when `kind` is `release`), `npm` (only for `release`, after `image`; trusted publishing, provenance). D4 deploys the `-rc` image; D5 tags `v0.1.0`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `scripts/check-release-version.test.mjs` (Node's own test runner, so the root scripts need no Vitest setup):
 
@@ -823,12 +823,12 @@ In the root `package.json`, the test script becomes:
     "test": "npm run test --workspaces --if-present && node --test 'scripts/*.test.mjs'",
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `node --test 'scripts/*.test.mjs'`
 Expected: FAIL with `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '…/scripts/check-release-version.mjs' imported from …/scripts/check-release-version.test.mjs`.
 
-- [ ] **Step 3: Implement `scripts/check-release-version.mjs`, then see it pass**
+- [x] **Step 3: Implement `scripts/check-release-version.mjs`, then see it pass**
 
 ```js
 #!/usr/bin/env node
@@ -894,7 +894,7 @@ check-release-version: tag v0.2.0 but apps/cli/package.json says 0.1.0
 exit 1
 ```
 
-- [ ] **Step 4: The workflow, the package metadata, the docs; full suite; commit**
+- [x] **Step 4: The workflow, the package metadata, the docs; full suite; commit**
 
 Create `.github/workflows/release.yml`:
 
