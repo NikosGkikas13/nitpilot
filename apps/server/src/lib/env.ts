@@ -70,8 +70,8 @@ const EnvSchema = z.object({
     .default('')
     .transform((s) => s.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)),
   /**
-   * Hosted instance: this server sits behind our own reverse proxy (Caddy), which puts the real client address last in
-   * X-Forwarded-For. Leave it false anywhere else, or anyone could fake their address (docs/why/trusting-a-proxy.md).
+   * Behind our own reverse proxy (Caddy: the hosted instance and deploy/self-host), which puts the real client address
+   * last in X-Forwarded-For. Leave it false anywhere else, or anyone could fake their address (docs/why/trusting-a-proxy.md).
    */
   TRUST_PROXY: z.stringbool().default(false),
   /** Hosted instance: delete chats this many days after they closed. Empty = keep them forever. */

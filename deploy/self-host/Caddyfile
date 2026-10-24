@@ -1,0 +1,26 @@
+# Caddy: the front door (docs/why/reverse-proxy-and-tls.md). It answers on ports 80 and 443, does HTTPS, and passes
+# every request on to the Nitpilot server. Both {$NAME} values come from .env, through docker-compose.yml.
+{
+	servers {
+		# Only when SITE_ADDRESS=:80 behind another proxy that does HTTPS (TRUSTED_PROXIES in .env): believe the
+		# X-Forwarded-For and X-Forwarded-Proto that proxy sends. Empty (the default) believes nobody, and Caddy writes
+		# both headers itself from the connection it sees.
+		trusted_proxies static {$TRUSTED_PROXIES}
+		# Read X-Forwarded-For from the right, skipping the trusted proxies: the first address left is the visitor's.
+		trusted_proxies_strict
+	}
+}
+
+# SITE_ADDRESS is your domain (nitpilot.example.com): Caddy gets an HTTPS certificate for it from Let's Encrypt, renews
+# it, and redirects http:// to https://. Or `:80`, which means "any name, port 80, plain HTTP": for when something in
+# front already does HTTPS.
+{$SITE_ADDRESS} {
+	# WebSockets (/ws/cli, /ws/web) go through as they are, and Caddy sends the server X-Forwarded-For (who connected),
+	# X-Forwarded-Proto (http or https) and the original Host: all by default, nothing to configure.
+	reverse_proxy nitpilot:8787 {
+		# The visitor alone, as the last entry the server reads (docs/why/trusting-a-proxy.md). Directly on the internet
+		# that's what Caddy sends anyway; behind a trusted proxy Caddy would otherwise add that proxy's address last,
+		# and every visitor would share its rate limit.
+		header_up X-Forwarded-For {client_ip}
+	}
+}

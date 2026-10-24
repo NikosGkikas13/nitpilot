@@ -20,8 +20,12 @@ React comparison: it is a prop you trust from your own parent component, and not
 
 ## Why it is ignored without a proxy
 
-If there is no proxy (a self-hoster running the server directly, or `npm run dev`), nobody adds a true entry, so every `X-Forwarded-For` is the visitor's own claim. Trusting it would let anyone choose their own address. So the server only reads the header when `TRUST_PROXY=true` is set, which the hosted setup does and nothing else should.
+If there is no proxy (a self-hoster running the server directly, or `npm run dev`), nobody adds a true entry, so every `X-Forwarded-For` is the visitor's own claim. Trusting it would let anyone choose their own address. So the server only reads the header when `TRUST_PROXY=true` is set. The two Compose setups set it (the hosted instance, and `deploy/self-host/docker-compose.yml`, where Caddy is the only way in); a server run any other way should leave it off.
+
+## Two proxies
+
+When Caddy itself sits behind another HTTPS proxy (`SITE_ADDRESS=:80`), the last entry would be that outer proxy, the same for everyone. The self-host Caddyfile then trusts the outer proxy (`TRUSTED_PROXIES`) and sends the server only the real visitor's address, so the server's "last entry" rule still holds ([reverse-proxy-and-tls.md](reverse-proxy-and-tls.md)).
 
 ## Where
 
-`apps/server/src/lib/client-address.ts` (`clientAddress(c, trustProxy)`), used by the login rate limit in `http/routes/cli.ts`. The flag is `TRUST_PROXY` in `lib/env.ts`.
+`apps/server/src/lib/client-address.ts` (`clientAddress(c, trustProxy)`), used by the login rate limit in `http/routes/cli.ts` and the setup-code limit in `setup/first-run.ts`. The flag is `TRUST_PROXY` in `lib/env.ts`, set in `deploy/self-host/docker-compose.yml`; the headers come from `deploy/self-host/Caddyfile`.
