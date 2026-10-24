@@ -1128,7 +1128,7 @@ Checked at `c302c25` and in the scratch build; each line is where the step-level
 
 ## Milestone D3: Self-hosting
 
-D3 lets a server start with no GitHub App at all and create one itself, and packages that for a team as one Compose folder. It ends with a clean-folder run (first locally, then live with an `-rc.2` image through a tunnel) and the git-history secret scan, so the repo can go public at the start of D4.
+D3 lets a server start with no GitHub App at all and create one itself, and packages that for a team as one Compose folder. It ends with a clean-folder run (first locally, then live with an `-rc.2` image through a tunnel) the git-history secret scan, and (Task 10a, added after the live run) the image for ARM servers too, so the repo can go public at the start of D4.
 
 **Written at step level on 2026-10-24** against `d9fe4d8`. Every file below was built and run first in a scratch worktree (`~/Desktop/PracticeProjects/.nitpilot-scratch/d3`, its own databases `nitpilot_d3` / `nitpilot_d3_test`, no real `.env`, nothing written to GitHub): Task 7 is pinned at `refs/scratch/d3/task-7` (`b751eff`), Task 8 at `refs/scratch/d3/task-8` (`2d53716`), Task 9 at `refs/scratch/d3/task-9` (`cb8b010`), Task 10 at `refs/scratch/d3/task-10` (`78c1902`; first built on `d9fe4d8` as `4b0dce6`, the same change). The code blocks in the steps were copied from those commits by script, and every "Expected: FAIL" was seen by following the steps in a fresh worktree. Task 9's live run (Steps 6–8) and Task 8's look in the browser happen during the build. What differs from the task-level text is in "Checked against the code (D3)" at the end of the milestone.
 
@@ -6833,6 +6833,166 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 The scan is the gate for D4 Task 12 Step 1: the repo goes public only after Steps 1 and 2 pass on the final history.
 
+### Task 10a: The image for ARM servers too
+
+**Added on 2026-10-24, after Task 9's live run** (user's call). The `0.1.0-rc.2` image is `linux/amd64` only: on the user's Apple Silicon Mac `docker compose pull` said `no matching manifest for linux/arm64/v8`, and the live run needed `platform: linux/amd64` (emulation) in the scratch override. Self-hosters on ARM (Apple Silicon laptops trying it out, Hetzner's CAX line, a Raspberry Pi, AWS Graviton) would hit the same wall. The hosted instance (Hetzner CX23) is amd64 and is not affected. This task was not built in the scratch worktree first; Step 2 is its proof before anything is pushed, Step 4 the proof after.
+
+**What changes, in short.** The Dockerfile already works on ARM: Task 9 Step 3 built it on this Mac (a native `linux/arm64` build) and every check passed. Only the release workflow asks for one platform. One tag can carry several images, one per processor type (a "multi-platform image": the tag points at a small index, and `docker pull` picks the entry for its own machine). GitHub's runners are amd64, so the arm64 half is built under emulation (QEMU), which is slow; CI's per-PR image job stays amd64 only and keeps its speed.
+
+**Files:**
+- Modify: `.github/workflows/release.yml` (QEMU step, `platforms:`, a longer timeout), `docs/why/docker-images.md` (a section on multi-platform images), `docs/releasing.md` (the image job builds both), `docs/self-hosting.md` ("What you need"), this plan (ticks). The spec (§17 "One image", §20 D3 row) was updated when this task was written.
+
+**Interfaces:**
+- Consumes: the `Dockerfile` (unchanged), `scripts/image-smoke.sh` (`NITPILOT_SMOKE_SKIP_BUILD=1` tests an image already tagged `nitpilot:smoke`), the release workflow from Task 6.
+- Produces: every release tag from here on (`v0.1.0-rc.3` first, then D4's rc and `v0.1.0`) pushes one tag holding `linux/amd64` and `linux/arm64`. Task 12 Step 4 deploys whichever rc is newest; nothing there changes.
+
+- [ ] **Step 1: The workflow and the docs**
+
+In `.github/workflows/release.yml`, job `image`: raise `timeout-minutes: 30` to `timeout-minutes: 60` (the emulated arm64 `npm ci` and build take several times longer than the amd64 half), and replace
+
+```yaml
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+```
+
+(the only `setup-buildx-action` in the file) with
+
+```yaml
+      - uses: actions/checkout@v4
+      # Lets this amd64 runner build the arm64 half of the image by emulating an ARM processor (docs/why/docker-images.md).
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+```
+
+and in the `docker/build-push-action@v6` step, after `context: .`, add
+
+```yaml
+          # One tag, two images: Docker on an Intel/AMD server pulls the amd64 one, on ARM (Apple Silicon, Hetzner CAX,
+          # a Raspberry Pi) the arm64 one.
+          platforms: linux/amd64,linux/arm64
+```
+
+`.github/workflows/ci.yml` is not changed: its `image` job builds `--load`s one amd64 image for the smoke test, which a multi-platform build can't do, and the arm64 half is proven by Step 2 and Step 4.
+
+In `docs/why/docker-images.md`, add this section before `## Where`:
+
+```markdown
+## One tag, two kinds of processor
+
+A compiled program only runs on the processor family it was built for: Intel and AMD chips (`amd64`, also called x86-64) or ARM chips (`arm64`: Apple Silicon Macs, Hetzner's CAX servers, a Raspberry Pi). A Docker image is full of compiled programs (Node itself, Prisma's schema engine), so it has the same limit.
+
+You've met the fix in npm: `esbuild` ships one package per platform (`@esbuild/darwin-arm64`, `@esbuild/linux-x64`, …) and `npm install` picks the one for your machine. A **multi-platform image** does that for Docker: the tag `ghcr.io/nikosgkikas13/nitpilot:0.1.0` points at a small index listing one image per platform, and `docker pull` takes the entry for the machine it runs on. Nobody has to choose.
+
+The release workflow builds both halves on GitHub's runners, which are amd64. The arm64 half is built under **QEMU**, a program that pretends to be an ARM processor; it's correct but slow, which is why the image job has a long timeout. CI's per-PR image check builds only amd64, to stay fast. `docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:<tag>` lists the platforms a tag holds.
+```
+
+and append this sentence to the paragraph under its `## Where`:
+
+```markdown
+The two platforms are set in `.github/workflows/release.yml` (`platforms:` and the QEMU step).
+```
+
+In `docs/releasing.md`, replace
+
+```markdown
+   - **Image to GHCR** builds the Dockerfile and pushes the tags in the table. Look at its log for the pushed tags and digest. The package appears under the repo's Packages.
+```
+
+with
+
+```markdown
+   - **Image to GHCR** builds the Dockerfile for `linux/amd64` and `linux/arm64` and pushes the tags in the table (each tag holds both). The arm64 half is emulated, so this job takes the longest (well over ten minutes without cache). Look at its log for the pushed tags and digest. The package appears under the repo's Packages.
+```
+
+In `docs/self-hosting.md`, "What you need", replace
+
+```markdown
+- **A server with Docker** (Docker Engine with the Compose plugin: `docker compose version` prints a version). 1 GB of memory is plenty; Nitpilot is one Node process and Postgres.
+```
+
+with
+
+```markdown
+- **A server with Docker** (Docker Engine with the Compose plugin: `docker compose version` prints a version), Intel/AMD or ARM: the image is published for both, and Docker picks the right one. 1 GB of memory is plenty; Nitpilot is one Node process and Postgres.
+```
+
+Run: `git diff --stat`
+Expected: the four files above (`release.yml`, `docker-images.md`, `releasing.md`, `self-hosting.md`). The spec already says both platforms (§17 "One image" and §20's D3 row, written with this task).
+
+- [ ] **Step 2: Prove the Dockerfile builds and runs on the other platform, locally**
+
+The reverse of what GitHub will do: on this arm64 Mac, build the **amd64** image under Docker Desktop's emulation and run the Task 5 smoke test on it. (The native arm64 build was proven in Task 9 Step 3.) Ports and the dev database are untouched: the smoke test uses its own throwaway network and Postgres.
+
+Run (from the repo folder; several minutes):
+```bash
+docker buildx build --platform linux/amd64 --load -t nitpilot:smoke . && docker image inspect -f '{{.Architecture}}' nitpilot:smoke
+```
+Expected: the build ends with `naming to docker.io/library/nitpilot:smoke`, then `amd64`.
+
+Run: `NITPILOT_SMOKE_SKIP_BUILD=1 bash scripts/image-smoke.sh`
+Expected: ends with `image-smoke: PASS`. If it fails only on a timing check (`the server took …s to stop`), that is emulation's slowness, not the image: write down what it printed and go on (CI runs the same test natively on every PR). Any other failure: stop and report.
+
+Run: `docker rmi nitpilot:smoke`
+
+- [ ] **Step 3: Commit**
+
+Run: `npm run lint` (the workflow file isn't linted by it, but nothing else changed either; this is the usual gate). Expected: clean.
+
+```bash
+git add .github/workflows/release.yml docs/why/docker-images.md docs/releasing.md docs/self-hosting.md
+git commit -m "ci(release): publish the image for linux/arm64 as well as amd64
+
+Each release tag now holds a linux/amd64 and a linux/arm64 image, so Docker on Apple Silicon, Hetzner CAX or a
+Raspberry Pi pulls a native one. The arm64 half is built under QEMU on GitHub's amd64 runner (job timeout 60 min);
+CI's per-PR image check stays amd64 only. Task 9's live run found the gap: rc.2's pull failed on an arm64 Mac.
+Verified locally by building the amd64 image under emulation on an arm64 Mac and passing image-smoke.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 4: (user, say first: writes to GitHub and GHCR) `v0.1.0-rc.3`, and a plain pull on this Mac**
+
+I check `git status` is clean and `git log -1` is the Step 3 commit, say "this pushes the branch and a tag, and the tag pushes an image to GHCR", and wait for go. The user runs, from the repo folder, one at a time:
+
+```bash
+git push origin plan-3-deploy-and-launch
+```
+```bash
+git tag v0.1.0-rc.3
+```
+```bash
+git push origin v0.1.0-rc.3
+```
+
+I watch the **Release** run (read-only, `gh run watch`): **Check the tag** and **Image to GHCR** green, **CLI to npm** skipped. The image job takes longer than rc.2's (about 2 minutes then); note how long.
+
+Then (the image is still private until D4, so Docker needs the GHCR login from Task 9 Step 7a, with `read:packages`) the user runs in their own terminal:
+
+```bash
+gh auth token | docker login ghcr.io -u NikosGkikas13 --password-stdin
+```
+
+and I run (read-only on GitHub):
+
+Run: `docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3 | grep -E 'Platform:'`
+Expected: `Platform:    linux/amd64` and `Platform:    linux/arm64` (plus `unknown/unknown` entries, which are the provenance attestations, not images).
+
+Run: `docker pull ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3 && docker image inspect -f '{{.Architecture}}' ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3 && docker run --rm --entrypoint node ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3 -e "console.log(process.arch)"`
+Expected: the pull succeeds with no `platform` setting, then `arm64` and `arm64`: this Mac got the native half.
+
+Then the user runs `docker logout ghcr.io`, and I run `docker rmi ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3`. I note the tag's digest (`docker buildx imagetools inspect` prints it as `Digest:`) and the run time in the ledger.
+
+- [ ] **Step 5: Tick, ledger, commit**
+
+Tick Steps 1–5, append `Task 10a: complete` (with rc.3's digest) to the ledger, then:
+
+```bash
+git add docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "docs(plan): Task 10a's arm64 image verified with rc.3
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
 ### Checked against the code (D3)
 
 Checked at `d9fe4d8` and in the scratch build; each line is where the step-level text differs from the task-level text it replaced, or a fact the task-level text (or an earlier section of this plan) got wrong. Grouped by the task that found it.
@@ -6910,6 +7070,10 @@ Checked at `d9fe4d8` and in the scratch build; each line is where the step-level
 60. **The `dir .` working-tree scan** also reads untracked files (e.g. `.superpowers/`); clean at the checkpoint.
 61. **The scan is the gate for D4 Task 12 Step 1** (repo goes public); re-run it on the final history before then.
 
+**Task 10a**
+
+62. **Added after Task 9's live run, not built in the scratch worktree.** No checkpoint ref; Step 2 (an amd64 build under emulation on the arm64 Mac, plus image-smoke) is the proof before pushing, Step 4 (`imagetools inspect` and a plain `docker pull` on the Mac) the proof after. The native arm64 build was already proven by Task 9 Step 3. CI's `image` job stays amd64 (`--load` can't hold a multi-platform image).
+
 ---
 
 ## Milestone D4: nitpilot.dev
@@ -6934,7 +7098,7 @@ D4 runs Nitpilot for real next to Odyhook. Every step that touches GitHub, the r
 - [ ] **Step 1: (user) The repo and the image go public.** Click-steps, signed in as NikosGkikas13: github.com/NikosGkikas13/nitpilot → Settings → General → bottom "Danger Zone" → Change visibility → Make public → type the name → confirm. Then the repo page → right sidebar "Packages" → `nitpilot` → Package settings → bottom "Danger Zone" → Change visibility → Public.
 - [ ] **Step 2: Memory check.** `ssh root@157.180.91.106 'docker stats --no-stream; free -m'`. Write the numbers in the task report. If free memory plus what Odyhook's containers really use leaves less than 384 MB, stop and ask.
 - [ ] **Step 3: The database.** On the box: create role `nitpilot` with a password made there (`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed) and database `nitpilot` owned by it, inside Odyhook's Postgres container. Check: `psql` as `nitpilot` connects.
-- [ ] **Step 4: `/opt/nitpilot`.** If anything changed since the last `rc` (Tasks 10–11), the user pushes the next `rc` tag first; `NITPILOT_VERSION` is that rc. Copy `deploy/hosted/docker-compose.yml` there; build `.env` on the box from `.env.example` with `ENCRYPTION_KEY` and VAPID keys made there (`docker run --rm ghcr.io/nikosgkikas13/nitpilot:<the newest rc> node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"` appended to the file; the image has no `vapid:keys` script, see Checked D3). **(user)** The user runs `cat /opt/nitpilot/.env` in their own terminal and saves it in their password manager.
+- [ ] **Step 4: `/opt/nitpilot`.** If anything changed since the last `rc` (Tasks 10, 10a and 11), the user pushes the next `rc` tag first; `NITPILOT_VERSION` is that rc. Copy `deploy/hosted/docker-compose.yml` there; build `.env` on the box from `.env.example` with `ENCRYPTION_KEY` and VAPID keys made there (`docker run --rm ghcr.io/nikosgkikas13/nitpilot:<the newest rc> node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"` appended to the file; the image has no `vapid:keys` script, see Checked D3). **(user)** The user runs `cat /opt/nitpilot/.env` in their own terminal and saves it in their password manager.
 - [ ] **Step 5: Start it.** `docker compose up -d`; the log shows first-run mode and the setup code; `docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"` answers 200 (the image has no `wget` or `curl`), and `docker inspect -f '{{.State.Health.Status}}' nitpilot-server` says `healthy`.
 - [ ] **Step 6: (say first) Caddy, through Odyhook's repo.** In `~/Desktop/PracticeProjects/hooksmith` on a new branch `nitpilot-dev-site`: add the `nitpilot.dev` block (`reverse_proxy nitpilot-server:8787`) and `www.nitpilot.dev` → `https://nitpilot.dev{uri}` 301, with a comment saying they belong to Nitpilot. Commit there. The user reviews, merges and pushes it (Odyhook's workflow redeploys Caddy). Check odyhook.dev still answers afterwards.
 - [ ] **Step 7: (user) DNS**, done just before Step 6's push lands: at the registrar, for nitpilot.dev, `A @ 157.180.91.106` and `A www 157.180.91.106` (TTL 300, delete any parking records the registrar added). I check with `dig +short nitpilot.dev www.nitpilot.dev` until both answer the IP, then `curl -sI http://nitpilot.dev` (301 to https), `curl -sI https://www.nitpilot.dev` (301 to the apex), and the certificate from `curl -vI https://nitpilot.dev`.
