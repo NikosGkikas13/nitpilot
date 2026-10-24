@@ -3291,7 +3291,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Order:** the server's change first (the page needs to know the three `?error=` values), then the api client, the small "first run needed" screen, the page itself, the Playwright server and spec, the docs, and the checks.
 
-- [ ] **Step 1: The callback's failures become redirects: tests first**
+- [x] **Step 1: The callback's failures become redirects: tests first**
 
 Replace `apps/server/src/setup/first-run.db.test.ts`'s expectations. The change to the file (an `expectBackOnThePage` helper; each test that expected a JSON 400, 409 or 502 on the callback now expects a 302 to `/first-run?error=…`; the "ready server" test now has two parts):
 
@@ -3440,12 +3440,12 @@ Replace `apps/server/src/setup/first-run.db.test.ts`'s expectations. The change 
  });
 ```
 
-- [ ] **Step 2: Run the tests and watch them fail**
+- [x] **Step 2: Run the tests and watch them fail**
 
 Run: `npm run test:db -w apps/server -- src/setup/first-run.db.test.ts`
 Expected: FAIL, 8 failed | 11 passed (19), each with `AssertionError: expected 400 to be 302` (also `expected 409 to be 302`, `expected 502 to be 302`, and for a ready server's callback `expected 404 to be 302`). The callback still answers the JSON errors.
 
-- [ ] **Step 3: The protocol knows the three problems**
+- [x] **Step 3: The protocol knows the three problems**
 
 In `packages/protocol/src/web-api.ts`, after `FirstRunManifestResponse` (the end of the file), add:
 
@@ -3467,7 +3467,7 @@ In `packages/protocol/src/web-api.ts`, after `FirstRunManifestResponse` (the end
 +export type FirstRunProblem = z.infer<typeof FirstRunProblem>;
 ```
 
-- [ ] **Step 4: The callback redirects instead of throwing**
+- [x] **Step 4: The callback redirects instead of throwing**
 
 `convertManifest` now returns a result (`{ ok: true, … }` or `{ ok: false, problem }`) instead of throwing `HttpError`s, so the route can turn any problem into a redirect; the callback redirects, and the ready server's callback redirects to `exists`. In `apps/server/src/setup/first-run.ts`:
 
@@ -3597,7 +3597,7 @@ Expected: PASS (19 tests)
 Run: `npm run typecheck -w apps/server`
 Expected: no output (clean). (`HttpError` is still used by the other routes in the file.)
 
-- [ ] **Step 5: The api client keeps an error's `details` and doesn't retry a first-run 503: tests first**
+- [x] **Step 5: The api client keeps an error's `details` and doesn't retry a first-run 503: tests first**
 
 The page maps a server `400` to a field using `details.issues`, so `ApiError` has to carry `details`. And TanStack Query retries 5xx twice; a server in first-run mode answers 503 until someone sets it up, so retrying only makes the notice wait about 3 seconds. In `apps/web/src/api/client.test.ts`:
 
@@ -3631,7 +3631,7 @@ The page maps a server `400` to a field using `details.issues`, so `ApiError` ha
 Run: `npm test -w apps/web -- src/api/client.test.ts`
 Expected: FAIL, 2 failed | 6 passed (8): `AssertionError: expected ApiError: request validation failed { …(2) } to match object { status: 400, …(2) }` (no `details` on the error) and `AssertionError: expected true to be false // Object.is equality`.
 
-- [ ] **Step 6: `ApiError.details` and `isFirstRunMode`**
+- [x] **Step 6: `ApiError.details` and `isFirstRunMode`**
 
 In `apps/web/src/api/client.ts`:
 
@@ -3697,7 +3697,7 @@ In `apps/web/src/api/client.ts`:
 Run: `npm test -w apps/web -- src/api/client.test.ts`
 Expected: PASS (8 tests)
 
-- [ ] **Step 7: Every other page links to the setup page while the server is in first-run mode: tests first**
+- [x] **Step 7: Every other page links to the setup page while the server is in first-run mode: tests first**
 
 `Home` (which decides between the landing page and the app) and the device-approval page both ask `/api/me` first. While the server has no GitHub App, that answers 503 `first_run`. Instead of an error with a "Try again" button (or, on the approve page, a redirect to GitHub sign-in that can't work yet), they show "This server isn't set up yet" and a link. The Home test also checks the request count: the 503 is asked once, not three times.
 
@@ -3754,7 +3754,7 @@ In `apps/web/src/routes/Approve/Approve.test.tsx` (the same, at the end of the f
 Run: `npm test -w apps/web -- src/routes/Home/Home.test.tsx src/routes/Approve/Approve.test.tsx`
 Expected: FAIL, 4 failed | 23 passed (27): `TestingLibraryElementError: Unable to find role="heading" and name "This server isn't set up yet"` (three in Home, one in Approve).
 
-- [ ] **Step 8: The `FirstRunNeeded` screen, used by Home and Approve**
+- [x] **Step 8: The `FirstRunNeeded` screen, used by Home and Approve**
 
 It reuses the device-approval page's frame (wordmark top left, one centered card) and the app's tokens, so it needs no new design. Create `apps/web/src/components/FirstRunNeeded/FirstRunNeeded.tsx`:
 
@@ -3931,7 +3931,7 @@ In `apps/web/src/routes/Approve/Approve.tsx` (before anything else is chosen, so
 Run: `npm test -w apps/web -- src/routes/Home/Home.test.tsx src/routes/Approve/Approve.test.tsx`
 Expected: PASS (27 tests)
 
-- [ ] **Step 9: The page's tests, first**
+- [x] **Step 9: The page's tests, first**
 
 Create `apps/web/src/routes/FirstRun/FirstRun.test.tsx`. It covers each state: loading; the form with its defaults (`Nitpilot (<host>)`, trimmed to GitHub's 34 characters); the manifest request and the real form post (the test replaces `browser.submit` and reads the form it was given: `method`, `action`, one hidden `manifest` field); an organization app installable by anyone; keyboard order; Back from GitHub (the browser's back-forward cache shows the page as it was, with the button still "Opening GitHub…", so a `pageshow` event with `persisted` resets it); a wrong code (kept on the field, field focused, everything else kept), too many tries, the fields checked before asking, a server `400` mapped to its field, an unreachable server; a server that already has its app; `?done=1` (polling every 2 s through the downtime, a failed fetch and a proxy's 502 meaning "keep waiting", then Install and Sign in; "Taking a while?" after a minute); and each `?error=` with "Start again".
 
@@ -4288,7 +4288,7 @@ describe('FirstRun is a page of its own', () => {
 Run: `npm test -w apps/web -- src/routes/FirstRun`
 Expected: FAIL, 22 failed | 1 passed (23): `TestingLibraryElementError: Unable to find role="heading" and name "Set up Nitpilot"`, and for the form posts `Error: The property "submit" is not defined on the object.` (the one that passes is "says it is loading", which only sees Home's own loading text until the page exists).
 
-- [ ] **Step 10: `browser.submit` and the page's api hooks**
+- [x] **Step 10: `browser.submit` and the page's api hooks**
 
 `browser.submit` is the same trick as `browser.goTo` (it exists so a test can replace it: jsdom can't follow a form post). In `apps/web/src/lib/browser.ts`:
 
@@ -4350,7 +4350,7 @@ export function useManifest() {
 }
 ```
 
-- [ ] **Step 11: The page**
+- [x] **Step 11: The page**
 
 Create `apps/web/src/routes/FirstRun/FirstRun.tsx`. Its parts: `FirstRun` (the frame, and which of `Problem`, `Restarting` or `Start` to show from `?error=` / `?done=1`), `Start` (asks the server which mode it is in), the form (validates with the same `FirstRunManifestRequest` zod schema the server uses before sending anything, so a bad login is named on its field before a request is made), `Restarting` (polls, and says where to look after a minute), and `Problem` (an unknown `?error=` value shows the `expired` copy, the safest one: start again).
 
@@ -4771,7 +4771,7 @@ function issuesIn(err: ApiError) {
 }
 ```
 
-- [ ] **Step 12: The page's styles**
+- [x] **Step 12: The page's styles**
 
 Create `apps/web/src/routes/FirstRun/FirstRun.module.css` (Approve's frame and card, the app's tokens, and `--acc-tint` for the selected radio row; `white-space: nowrap` on the inline command so `docker compose logs nitpilot` doesn't break in the middle on a phone):
 
@@ -5099,7 +5099,7 @@ Create `apps/web/src/routes/FirstRun/FirstRun.module.css` (Approve's frame and c
 }
 ```
 
-- [ ] **Step 13: The lazy route**
+- [x] **Step 13: The lazy route**
 
 `/first-run` is opened once per server, so it is its own chunk, like device approval and Setup (the main chunk stays under Vite's 500 kB warning: Step 19). It sits next to `cli/approve`, outside `Home`: nobody can be signed in on a server with no app. In `apps/web/src/app.tsx`:
 
@@ -5160,7 +5160,7 @@ Expected: PASS (23 tests)
 Run: `npm test -w apps/web`
 Expected: PASS (373 tests)
 
-- [ ] **Step 14: A second Playwright server, in first-run mode**
+- [x] **Step 14: A second Playwright server, in first-run mode**
 
 The shared Playwright server (`web-server.ts`) always has a GitHub App, so it can never be in first-run mode. Rather than add a "no credentials" switch to it (and risk the other 19 specs), the first-run spec gets a server of its own: port 4321 for the app, port 4322 for the tests' control API, which is also the stand-in for github.com (the page posts its manifest form there; it records the post and sends the browser straight back to the callback, as GitHub does after "Create GitHub App"). GitHub's API half (trading the code for the app) is a fake fetch. Its own database keeps its stored app away from the shared server's tables.
 
@@ -5401,7 +5401,7 @@ In `apps/web/playwright.config.ts` (`webServer` becomes an array; both servers s
  });
 ```
 
-- [ ] **Step 15: The Playwright spec**
+- [x] **Step 15: The Playwright spec**
 
 Two tests: every other page sends you to the setup page (and from the link, the form is there); and the whole path: a wrong code is said on the field and what was typed stays, the right code posts the manifest to the stand-in GitHub (checked: the post went to `/settings/apps/new`, `state` is 43 URL-safe characters, the manifest has the name, `public: false`, the redirect URL and the webhook URL), the browser lands on `?done=1` with "Restarting the server…", the test restarts the server, and the page shows "Your GitHub App is ready" with Install and Sign in. Each test starts from `POST /reset` (a fresh first-run server), and `pageProblems` fails a test that logged a console error or a blocked request, which is what would catch the browser refusing the form post.
 
@@ -5482,7 +5482,7 @@ test('the setup code, the form post to GitHub, the restart, then Install and Sig
 Run: `npm run build -w apps/web && (cd apps/web && CI=1 npx playwright test first-run)`
 Expected: PASS (2 passed). (`CI=1` makes Playwright start its own servers instead of reusing one from an earlier run.)
 
-- [ ] **Step 16: Prove the spec can fail**
+- [x] **Step 16: Prove the spec can fail**
 
 The spec was written after the page it tests, so it never failed on its own. Break the one thing it exists to guard, the content security policy that lets the page post a form to GitHub. In `apps/server/src/http/app.ts` (line 103), temporarily change `formActions: [deps.github.webBase]` to `formActions: []`.
 
@@ -5492,7 +5492,7 @@ Expected: FAIL, 1 failed | 1 passed. The second test: `Error: expect(page).toHav
 Then put it back: `git checkout apps/server/src/http/app.ts`, and run the same command again.
 Expected: PASS (2 passed).
 
-- [ ] **Step 17: The spec (§10)**
+- [x] **Step 17: The spec (§10)**
 
 In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, in the "First-run mode" block: the callback bullet, the "With an app" bullet, and a new bullet for the page:
 
@@ -5514,7 +5514,7 @@ In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, in the "First-run mod
  - Webhooks: `POST /webhooks/github`
 ```
 
-- [ ] **Step 18: The explainers**
+- [x] **Step 18: The explainers**
 
 In `docs/why/first-run-and-app-manifests.md` (the `state` paragraph, the one-row paragraph, and the file list):
 
@@ -5573,7 +5573,7 @@ In `docs/why/end-to-end-test.md` (the second server, and the port note):
  
 ```
 
-- [ ] **Step 19: The bundle check**
+- [x] **Step 19: The bundle check**
 
 Vite warns when a chunk is over 500 kB, and the main chunk sat at 497.79 kB before this task (carry-forward: "the main bundle's margin").
 
@@ -5582,7 +5582,7 @@ Expected: no `Some chunks are larger than 500 kB` warning. `dist/assets/index-*.
 
 That leaves about 0.9 kB of margin: the next task that adds anything to the main chunk will trip the warning. If the warning shows up here, or in a later task: make `Settings` a lazy route as `Approve` and `Setup` already are. In `apps/web/src/app.tsx`, remove `import { Settings } from './routes/Settings/Settings';`, add `const Settings = lazy(() => import('./routes/Settings/Settings').then((module) => ({ default: module.Settings })));` next to the other three, and wrap the element: `<Route path="settings" element={<Suspense fallback={null}><Settings /></Suspense>} />`. Settings' tests render the whole app, so they keep passing; run them and the build again.
 
-- [ ] **Step 20: Look at it in the in-app browser (the controller does this; the implementer reports and stops)**
+- [x] **Step 20: Look at it in the in-app browser (the controller does this; the implementer reports and stops)**
 
 Build the web app, start a first-run server by hand on spare ports, and open it:
 
@@ -5600,7 +5600,7 @@ Setup code: `E2EF-RSTR`. Open `http://127.0.0.1:4331/first-run`. Check, in the l
 
 Stop the server by its PID when done. Fix anything that looks off in the CSS and re-run Step 13's tests; add a line to the Task's report for each fix.
 
-- [ ] **Step 21: Full suite, tick, ledger, commit**
+- [x] **Step 21: Full suite, tick, ledger, commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && CI=1 npm run test:web-e2e`
 Expected: protocol 88, CLI 349 + 14 skipped, server 1107, web 373, root 6, e2e 6, Playwright 21, typecheck and lint clean. (Server +1: the old "refuse another app with a JSON 404" test became two tests. Web +29: FirstRun 23, Home 3, client 2, Approve 1. Playwright +2: the two first-run specs.)

@@ -221,3 +221,15 @@ describe('Approve: signed out', () => {
     expect(sent(fetch, API)).toEqual([]);
   });
 });
+
+describe('Approve on a server that is not set up yet (first-run mode)', () => {
+  it('shows a link to the setup page instead of sending you to GitHub sign-in', async () => {
+    const goTo = vi.spyOn(browser, 'goTo').mockImplementation(() => {});
+    serveApprove({ me: (): Answer => [503, { error: { code: 'first_run', message: 'Finish setup at /first-run.' } }] });
+    renderApp(PATH);
+    expect(await screen.findByRole('heading', { level: 1, name: "This server isn't set up yet" })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the setup page' })).toHaveAttribute('href', '/first-run');
+    expect(goTo).not.toHaveBeenCalled();
+  });
+});
+

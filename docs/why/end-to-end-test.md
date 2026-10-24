@@ -22,13 +22,15 @@ It takes a few seconds and starts many programs, so `npm test` leaves it out. CI
 
 Plan 2 adds a second end-to-end suite: Playwright drives a real Chromium against the same setup (`apps/server/test/e2e/web-server.ts` serves the built web app, plus a small control API the tests use to sign people in, open PRs and start CLIs). Its specs (`apps/web/e2e/*.spec.ts`) cover the four flows of spec §19 (the inbox opens, a chat updates live while agents work, Resolve on an escalation, Send on a draft), plus the read-only view and the not-found page for someone who can't see the repo, and the landing, PWA, Settings, Setup and device-approval pages. Each test resets the chats and opens its own PR, so any one spec file passes on its own.
 
+One spec talks to a second server: `first-run.spec.ts` needs a server with no GitHub App yet (first-run mode, docs/why/first-run-and-app-manifests.md), which the shared one can never be. `apps/server/test/e2e/first-run-server.ts` starts one beside it, on port 4321 with its own database, and its control port (4322, on 127.0.0.1 only) also plays github.com: the page's manifest form is posted there, and it sends the browser straight back to the callback. Instead of exiting after the callback, it answers 502 like a proxy whose server is restarting, until the test calls `/restart`.
+
 - **One worker.** All tests share one server and one database, so they run one at a time; two at once would reset each other's chats.
 - **No sleeps.** A test never waits a fixed time ("wait 2 seconds"): it waits for something it can see (`await expect(page.getByText('Ready for your approval')).toBeVisible()`), which Playwright keeps retrying until it shows or times out. A fixed wait is either too short on a slow CI machine (a flaky failure) or wasted time on a fast one.
 - **No retries.** A test that fails is a finding: it gets fixed at its cause, not run again until it passes. A stray `test.only` fails CI (`forbidOnly`).
 - **The browser cache.** CI keeps Playwright's Chromium in `~/.cache/ms-playwright` between runs, keyed on the Playwright version, so most runs skip the ~150 MB download and only install the system libraries Chromium needs.
 - **The trace upload.** A failed test keeps a trace (every action, network request, console line and a DOM snapshot at each step). CI uploads `apps/web/test-results/` as the `playwright-traces` artifact; open one with `npx playwright show-trace trace.zip` to watch what the browser saw, like Redux DevTools' time travel, for a whole test.
 
-Locally: `npm run test:web-e2e` (it builds the web app first). If a server from an earlier run is still on port 4319, Playwright reuses it, except on CI.
+Locally: `npm run test:web-e2e` (it builds the web app first). If a server from an earlier run is still on port 4319 (or 4321), Playwright reuses it, except on CI.
 
 ## The React analogy
 

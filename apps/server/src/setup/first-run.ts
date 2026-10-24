@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunStatus } from '@nitpilot/protocol';
+import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunProblem, type FirstRunStatus } from '@nitpilot/protocol';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
@@ -23,8 +23,6 @@ export const EXIT_DELAY_MS = 500;
 /** The manifest request is a code, a login, a name of at most 34 characters and a boolean: far under 4 KB. */
 const MAX_MANIFEST_REQUEST_BYTES = 4 * 1024;
 
-const EXPIRED_LINK = 'This setup link expired or was changed. Start again at /first-run.';
-
 export type FirstRunDeps = {
   github: GithubClient;
   publicUrl: string;
@@ -40,7 +38,8 @@ export type FirstRunDeps = {
 
 /**
  * The `state` values handed out with a manifest, each good for one finished callback within the hour. (A callback that
- * fails on GitHub's side isn't finished: the state stays, with its original expiry, so the owner can reload.) In memory: a restart
+ * fails on GitHub's side isn't finished: the state stays, with its original expiry, so the page's "Try again" can
+ * retry.) In memory: a restart
  * forgets them, which only means starting again at /first-run. Like the `state` of "Sign in with GitHub"
  * (docs/why/oauth-pkce.md), it proves the browser coming back started here, through this server's own form.
  */
@@ -87,32 +86,41 @@ const Conversion = z.object({
   owner: z.object({ login: z.string().min(1) }),
 });
 
+type ConversionResult = { ok: true; creds: GithubAppCredentials; ownerLogin: string } | { ok: false; problem: FirstRunProblem };
+
 /**
  * Trade the code GitHub sent back for the app it just created. No token: the code is the proof, it works once, and only
- * for an hour. A GitHub that doesn't answer is a 502; one that refuses the code (expired, used) is a 400.
+ * for an hour. GitHub refusing the code (expired, used) is `expired`; GitHub not answering, or answering without every
+ * secret, is `github`.
  */
-async function convertManifest(github: GithubClient, code: string): Promise<{ creds: GithubAppCredentials; ownerLogin: string }> {
+async function convertManifest(github: GithubClient, code: string): Promise<ConversionResult> {
   let data: unknown;
   try {
     ({ data } = await github.api('POST', `/app-manifests/${encodeURIComponent(code)}/conversions`));
   } catch (err) {
-    if (err instanceof GithubError && err.status >= 400 && err.status < 500) {
-      throw new HttpError('validation_error', "GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
-    }
+    if (err instanceof GithubError && err.status >= 400 && err.status < 500) return { ok: false, problem: 'expired' };
     console.error('[first-run] GitHub manifest conversion failed:', err);
-    throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
+    return { ok: false, problem: 'github' };
   }
   const parsed = Conversion.safeParse(data);
   if (!parsed.success) {
     console.error('[first-run] GitHub answered the manifest conversion without', parsed.error.issues.map((i) => i.path.join('.')).join(', '));
-    throw new HttpError('github_unavailable', "GitHub's answer was missing part of the new app. Start again at /first-run.");
+    return { ok: false, problem: 'github' };
   }
   const app = parsed.data;
   return {
+    ok: true,
     creds: { appId: String(app.id), slug: app.slug, privateKey: app.pem, clientId: app.client_id, clientSecret: app.client_secret, webhookSecret: app.webhook_secret },
     ownerLogin: app.owner.login,
   };
 }
+
+/**
+ * The callback is a browser navigation (GitHub sends the person here), so a failure goes back to the page, which says
+ * what happened and offers to start again, rather than a JSON error in an empty tab. `extra` adds query parameters:
+ * for `github` the page gets the `code` and `state` back, so its "Try again" can open the callback once more.
+ */
+const backToThePage = (problem: FirstRunProblem, extra: Record<string, string> = {}) => `/first-run?${new URLSearchParams({ error: problem, ...extra })}`;
 
 /**
  * First-run mode's routes (spec §17 "Self-hosting", docs/why/first-run-and-app-manifests.md):
@@ -120,6 +128,7 @@ async function convertManifest(github: GithubClient, code: string): Promise<{ cr
  * 2. `POST /api/first-run/manifest`: with the setup code, the page gets a manifest and where to post it.
  * 3. The browser posts it to GitHub; GitHub creates the app and sends the browser to `GET /first-run/callback`.
  * 4. The callback trades GitHub's code for the app's credentials, stores them encrypted, and the server restarts.
+ *    If anything goes wrong there, nothing is stored and the browser goes back to /first-run?error=….
  */
 export function firstRunRoutes(deps: FirstRunDeps): Hono {
   const now = deps.now ?? (() => Date.now());
@@ -160,24 +169,24 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
   app.get('/first-run/callback', async (c) => {
     const code = c.req.query('code');
     const state = c.req.query('state');
-    if (!code || !state || !states.isUsable(state)) throw new HttpError('validation_error', EXPIRED_LINK);
+    if (!code || !state || !states.isUsable(state)) return c.redirect(backToThePage('expired'));
 
-    let converted;
-    try {
-      converted = await convertManifest(deps.github, code);
-    } catch (err) {
-      // GitHub failing on its side (no answer, a 5xx, a half answer) may have created the app already. Keep the state,
-      // so reloading this page retries instead of making the owner create a second app. Any other outcome ends the link.
-      const githubFailed = err instanceof HttpError && err.code === 'github_unavailable';
-      if (!githubFailed) states.forget(state);
-      throw err;
+    const conversion = await convertManifest(deps.github, code);
+    if (!conversion.ok) {
+      // GitHub failing on its side (no answer, a 5xx, a half answer) may have created the app already. Keep the state
+      // and hand the page the code and state back, so its "Try again" retries instead of making the owner create a
+      // second app. Any other outcome ends the link.
+      if (conversion.problem === 'github') return c.redirect(backToThePage('github', { code, state }));
+      states.forget(state);
+      return c.redirect(backToThePage(conversion.problem));
     }
     states.forget(state);
-    const { creds, ownerLogin } = converted;
+    const { creds, ownerLogin } = conversion;
     try {
       await saveGithubApp(creds, ownerLogin);
     } catch (err) {
-      if (err instanceof GithubAppExistsError) throw new HttpError('conflict', "This server already has a GitHub App. The one GitHub just made isn't used: delete it in your GitHub settings.");
+      // Two tabs, one finished first: its app stays, and the page asks the person to delete the one GitHub just made.
+      if (err instanceof GithubAppExistsError) return c.redirect(backToThePage('exists'));
       throw err;
     }
 
@@ -195,8 +204,9 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
 
 /**
  * The same three routes once the server has its app (http/app.ts createApp). The page, polling while the server
- * restarts, learns it's ready and where to install the app. The other two are a JSON 404 rather than the web app's
- * page: there is nothing left to set up, and a server with an app never makes a second one.
+ * restarts, learns it's ready and where to install the app. Asking for a manifest is a JSON 404 rather than the web
+ * app's page: there is nothing left to set up, and a server with an app never makes a second one. A browser GitHub
+ * sends back now (a second tab, finished after the restart) goes to the page, which says the new app is extra.
  */
 export function readyRoutes(deps: { github: GithubClient }): Hono {
   const app = new Hono();
@@ -208,7 +218,7 @@ export function readyRoutes(deps: { github: GithubClient }): Hono {
 
   const alreadySetUp = errorBody('not_found', 'This server already has its GitHub App.');
   app.post('/api/first-run/manifest', (c) => c.json(alreadySetUp, 404));
-  app.get('/first-run/callback', (c) => c.json(alreadySetUp, 404));
+  app.get('/first-run/callback', (c) => c.redirect(backToThePage('exists')));
 
   return app;
 }

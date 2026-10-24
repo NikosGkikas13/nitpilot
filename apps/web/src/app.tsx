@@ -9,12 +9,13 @@ import { EmptyPane } from './routes/Shell/Pane';
 import { InboxLayout } from './routes/Shell/Shell';
 
 /**
- * Device approval and the setup checklist are pages most people open once (from `nitpilot login`, and after their first
- * sign-in), so each is a file of its own that the browser fetches only when that page opens (and the rest of the app
- * stays under Vite's 500 kB chunk warning).
+ * Device approval, the setup checklist and the first-run page are pages most people open once (from `nitpilot login`,
+ * after their first sign-in, and once per self-hosted server), so each is a file of its own that the browser fetches
+ * only when that page opens (and the rest of the app stays under Vite's 500 kB chunk warning).
  */
 const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
 const Setup = lazy(() => import('./routes/Setup/Setup').then((module) => ({ default: module.Setup })));
+const FirstRun = lazy(() => import('./routes/FirstRun/FirstRun').then((module) => ({ default: module.FirstRun })));
 
 /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
 export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
@@ -35,9 +36,10 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
 }
 
 /**
- * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
- * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own. Device
- * approval (`/cli/approve`, the link `nitpilot login` opens) stands outside Home: no landing page, no inbox, no socket.
+ * Every page. Home decides between the landing page (signed out) and the app, or only a link to /first-run while the
+ * server has no GitHub App. Signed in, the chat pages open beside the inbox (routes/Shell/Shell.tsx `InboxLayout`);
+ * Settings and the setup checklist are pages of their own. Device approval (`/cli/approve`, the link `nitpilot login`
+ * opens) and the first-run page stand outside Home: no landing page, no inbox, no socket.
  */
 export function AppRoutes() {
   return (
@@ -63,6 +65,14 @@ export function AppRoutes() {
         element={
           <Suspense fallback={null}>
             <Approve />
+          </Suspense>
+        }
+      />
+      <Route
+        path="first-run"
+        element={
+          <Suspense fallback={null}>
+            <FirstRun />
           </Suspense>
         }
       />

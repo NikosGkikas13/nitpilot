@@ -61,4 +61,19 @@ describe('Home', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
   });
+
+  describe('a server that is not set up yet (first-run mode)', () => {
+    const firstRun = (): Answer => [503, { error: { code: 'first_run', message: 'Finish setup at /first-run.' } }];
+
+    for (const path of ['/', '/settings', '/c/octo/sandbox/7']) {
+      it(`shows a link to the setup page instead of ${path}, without retrying`, async () => {
+        const fetch = fakeApi({ 'GET /api/me': firstRun });
+        renderApp(path);
+        expect(await screen.findByRole('heading', { level: 1, name: "This server isn't set up yet" })).toBeInTheDocument();
+        expect(screen.getByText('Finish setup at /first-run.')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Open the setup page' })).toHaveAttribute('href', '/first-run');
+        expect(fetch).toHaveBeenCalledTimes(1);
+      });
+    }
+  });
 });

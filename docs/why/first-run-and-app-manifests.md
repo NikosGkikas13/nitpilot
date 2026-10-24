@@ -34,7 +34,7 @@ The code is 8 characters from 31 letters and digits (no `0`/`O` or `1`/`I`/`L`, 
 
 ## Why `state`
 
-The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one finished callback. If GitHub itself fails during the callback (no answer, a 5xx, a half answer), the `state` stays usable until its original expiry, so reloading retries instead of making the owner create a second app on GitHub; success, GitHub refusing the code and the 409 all use it up. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
+The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one finished callback. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. Because the callback is a page load in the person's browser, not a `fetch`, "refused" is a redirect back to `/first-run?error=expired`, where the page says what happened and offers "Start again" (a JSON error would be a blank tab with `{"error":…}` in it). If GitHub itself fails during the callback (no answer, a 5xx, a half answer), that is `?error=github`, and the `state` stays usable until its original expiry: the redirect carries the `code` and `state` along, and the page's "Try again" opens the callback again with them, so the owner doesn't have to create a second app on GitHub. Success, GitHub refusing the code (`expired`) and `exists` all use the `state` up. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
 
 ## Why the credentials are encrypted, and why a changed key stops the server
 
@@ -42,7 +42,7 @@ The private key and the two secrets are stored with AES-256-GCM under `ENCRYPTIO
 
 GCM refuses to decrypt with any other key than the one that encrypted. If `ENCRYPTION_KEY` changes (a new `.env` without the old value), the stored app can't be read. The server then **refuses to start** with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with." It never falls back into first-run mode: the app still exists on GitHub with every installation, and making a second one would strand them. Putting the old key back fixes it. That's why `.env.example` says to keep a copy of the key.
 
-There is only ever one row (`id = 'app'`), and it's insert-only: a second callback (two tabs, say) gets 409 and the first app stays.
+There is only ever one row (`id = 'app'`), and it's insert-only: a second callback (two tabs, say) stores nothing, the first app stays, and the browser lands on `/first-run?error=exists`, which asks the person to delete the extra app GitHub just made.
 
 ## Why the server exits instead of switching modes in place
 
@@ -58,6 +58,7 @@ If the six `GITHUB_*` variables are set (development with `nitpilot-dev`, or any
 - `apps/server/src/setup/manifest.ts`: `buildManifest`, `manifestFormAction`.
 - `apps/server/src/setup/setup-code.ts`: `makeSetupCode`, `setupCodeMatches`.
 - `apps/server/src/setup/first-run.ts`: the three routes (`firstRunRoutes`), and `readyRoutes` for a server that has its app.
+- `apps/web/src/routes/FirstRun/FirstRun.tsx`: the page (the form, the form post to GitHub, "Restarting the server…", the `?error=` messages and "Try again"); `apps/web/src/routes/Home/Home.tsx` shows a link to it on every other page while `/api/me` answers 503 `first_run`.
 - `apps/server/src/setup/boot.ts`: `startFirstRun`, which prints the code. `apps/server/src/main.ts` picks the mode.
 - `apps/server/src/http/app.ts`: `createFirstRunApp`, the 503 for everything else.
 - `apps/server/prisma/schema.prisma`: the `GithubAppConfig` model.

@@ -1,4 +1,4 @@
-import type { FirstRunManifestResponse } from '@nitpilot/protocol';
+import type { FirstRunManifestResponse, FirstRunProblem } from '@nitpilot/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../test/app';
 import { fakeFetch, json, type FakeRequest } from '../../test/fake-fetch';
@@ -65,6 +65,15 @@ function callback(server: Server, query: string) {
 
 const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
 
+/**
+ * The callback is a browser navigation, so a failure sends the browser back to the page, which says what happened.
+ * `extra` is for `github`, which also hands the page the `code` and `state` back so its "Try again" can retry.
+ */
+function expectBackOnThePage(res: Response, problem: FirstRunProblem, why = '', extra: Record<string, string> = {}) {
+  expect(res.status, why).toBe(302);
+  expect(res.headers.get('location'), why).toBe(`/first-run?${new URLSearchParams({ error: problem, ...extra })}`);
+}
+
 beforeEach(async () => {
   await prisma.githubAppConfig.deleteMany();
 });
@@ -109,7 +118,7 @@ describe('POST /api/first-run/manifest', () => {
       expect(await errorOf(res)).toEqual({ code: 'setup_code', message: "That code doesn't match the one in the server's log." });
     }
     // No state was handed out, so no callback can succeed.
-    expect((await callback(server, 'code=the-code&state=anything')).status).toBe(400);
+    expectBackOnThePage(await callback(server, 'code=the-code&state=anything'), 'expired');
   });
 
   it('refuses a body over 4 KB with 413 before reading it; it is not counted as a try at the code', async () => {
@@ -192,54 +201,49 @@ describe('GET /first-run/callback', () => {
     }
   });
 
-  it('refuses a missing, unknown or reused state, stores nothing and asks GitHub nothing', async () => {
+  it('sends a missing, unknown or reused state back to the page as expired, stores nothing and asks GitHub nothing', async () => {
     const { fetch, github } = fakeGithub();
     const server = firstRunServer({ github });
     const state = await stateFrom(await askForManifest(server));
-    await prisma.githubAppConfig.deleteMany();
 
     for (const query of ['code=the-code', `code=the-code&state=${state}x`, `state=${state}`]) {
-      const res = await callback(server, query);
-      expect(res.status, query).toBe(400);
-      expect(await errorOf(res)).toEqual({ code: 'validation_error', message: 'This setup link expired or was changed. Start again at /first-run.' });
+      expectBackOnThePage(await callback(server, query), 'expired', query);
     }
     expect(fetch.calls).toHaveLength(0);
     expect(await prisma.githubAppConfig.count()).toBe(0);
 
     // A state works once.
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(302);
+    expect((await callback(server, `code=the-code&state=${state}`)).headers.get('location')).toBe('/first-run?done=1');
     await prisma.githubAppConfig.deleteMany();
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
     expect(await prisma.githubAppConfig.count()).toBe(0);
   });
 
-  it('refuses a state older than an hour', async () => {
+  it('sends a state older than an hour back to the page as expired', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const server = firstRunServer();
     const state = await stateFrom(await askForManifest(server));
     vi.advanceTimersByTime(60 * 60_000 + 1);
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
     expect(await prisma.githubAppConfig.count()).toBe(0);
   });
 
-  it('refuses a second app with 409 and keeps the first (two tabs, one finished)', async () => {
+  it('keeps the first app when a second comes back (two tabs, one finished), and says the new one is extra', async () => {
     const server = firstRunServer();
     const first = await stateFrom(await askForManifest(server));
     const second = await stateFrom(await askForManifest(server));
-    expect((await callback(server, `code=the-code&state=${first}`)).status).toBe(302);
+    expect((await callback(server, `code=the-code&state=${first}`)).headers.get('location')).toBe('/first-run?done=1');
 
-    const res = await callback(server, `code=the-code&state=${second}`);
-    expect(res.status).toBe(409);
-    expect((await errorOf(res)).code).toBe('conflict');
-    expect(await prisma.githubAppConfig.count()).toBe(1);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${second}`), 'exists');
+    expect(await prisma.githubAppConfig.findMany()).toHaveLength(1);
   });
 
-  it('answers 502 and stores nothing when GitHub fails', async () => {
+  it('sends the browser back with a GitHub problem (and the code and state, to retry), stores nothing and keeps running when GitHub fails', async () => {
     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Server Error' }, 500)).github });
-    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
-    expect(res.status).toBe(502);
-    expect((await errorOf(res)).code).toBe('github_unavailable');
+    const state = await stateFrom(await askForManifest(server));
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'github', '', { code: 'the-code', state });
     expect(await prisma.githubAppConfig.count()).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 600));
     expect(server.exit).not.toHaveBeenCalled();
   });
 
@@ -249,9 +253,10 @@ describe('GET /first-run/callback', () => {
     const server = firstRunServer({ github });
     const state = await stateFrom(await askForManifest(server));
 
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(502);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'github', '', { code: 'the-code', state });
     expect(await prisma.githubAppConfig.count()).toBe(0);
 
+    // The page's "Try again" opens the callback again with the same code and state.
     const retry = await callback(server, `code=the-code&state=${state}`);
     expect(retry.status).toBe(302);
     expect(retry.headers.get('location')).toBe('/first-run?done=1');
@@ -263,36 +268,34 @@ describe('GET /first-run/callback', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Server Error' }, 500)).github });
     const state = await stateFrom(await askForManifest(server));
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(502);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'github', '', { code: 'the-code', state });
     vi.advanceTimersByTime(60 * 60_000 + 1);
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
   });
 
   it('uses the setup link up when GitHub refuses the code: a retry is refused without asking GitHub again', async () => {
     const { fetch, github } = fakeGithub(() => json({ message: 'Not Found' }, 404));
     const server = firstRunServer({ github });
     const state = await stateFrom(await askForManifest(server));
-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
-    const retry = await callback(server, `code=the-code&state=${state}`);
-    expect(retry.status).toBe(400);
-    expect((await errorOf(retry)).message).toBe('This setup link expired or was changed. Start again at /first-run.');
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
     expect(fetch.calls).toHaveLength(1);
   });
 
-  it("answers 400 when GitHub doesn't know the code (it lasts an hour)", async () => {
+  it("sends the browser back as expired when GitHub doesn't take the code (it lasts an hour)", async () => {
     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Not Found' }, 404)).github });
-    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
-    expect(res.status).toBe(400);
-    expect((await errorOf(res)).message).toBe("GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
+    expectBackOnThePage(await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`), 'expired');
     expect(await prisma.githubAppConfig.count()).toBe(0);
+    expect(server.exit).not.toHaveBeenCalled();
   });
 
   it('never stores an app with a secret missing', async () => {
     for (const missing of ['pem', 'webhook_secret', 'client_secret'] as const) {
       const server = firstRunServer({ github: fakeGithub(() => ({ ...CONVERSION, [missing]: null })).github });
-      const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
-      expect(res.status, missing).toBe(502);
+      const state = await stateFrom(await askForManifest(server));
+      expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'github', missing, { code: 'the-code', state });
       expect(await prisma.githubAppConfig.count()).toBe(0);
+      expect(server.exit).not.toHaveBeenCalled();
     }
   });
 });
@@ -306,13 +309,14 @@ describe('the first-run routes once the server has its app', () => {
   });
 
   it('refuse to make another app with a JSON 404, not the web app', async () => {
-    const app = testApp();
-    const manifest = await app.request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST) });
-    const back = await app.request('/first-run/callback?code=the-code&state=s');
-    for (const res of [manifest, back]) {
-      expect(res.status).toBe(404);
-      expect((await errorOf(res)).code).toBe('not_found');
-    }
+    const res = await testApp().request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST) });
+    expect(res.status).toBe(404);
+    expect((await errorOf(res)).code).toBe('not_found');
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+  });
+
+  it('send a browser GitHub returns late (a second tab, after the restart) to the page, which says the new app is extra', async () => {
+    expectBackOnThePage(await testApp().request('/first-run/callback?code=the-code&state=s'), 'exists');
     expect(await prisma.githubAppConfig.count()).toBe(0);
   });
 });

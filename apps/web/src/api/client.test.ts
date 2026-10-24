@@ -23,6 +23,12 @@ describe('api', () => {
     expect(err).toMatchObject({ status: 409, code: 'conflict', message: 'Someone already resolved P1.' });
   });
 
+  it("keeps the error's details, such as which fields a 400 refused", async () => {
+    const issues = [{ path: ['owner', 'login'], message: "isn't a GitHub login" }];
+    vi.stubGlobal('fetch', answer(400, { error: { code: 'validation_error', message: 'request validation failed', details: { issues } } }));
+    await expect(api.send('POST', '/api/x', {})).rejects.toMatchObject({ status: 400, code: 'validation_error', details: { issues } });
+  });
+
   it('refuses a body with the wrong shape instead of passing it on', async () => {
     vi.stubGlobal('fetch', answer(200, { nom: 'maya' }));
     await expect(api.get('/api/thing', Thing)).rejects.toMatchObject({ code: 'bad_response' });
@@ -47,5 +53,9 @@ describe('retryUnlessClientError', () => {
     expect(retryUnlessClientError(0, new ApiError(503, 'server_error', ''))).toBe(true);
     expect(retryUnlessClientError(2, new ApiError(503, 'server_error', ''))).toBe(false);
     expect(retryUnlessClientError(0, new ApiError(404, 'not_found', ''))).toBe(false);
+  });
+
+  it("doesn't retry a server in first-run mode: its 503 lasts until someone sets it up", () => {
+    expect(retryUnlessClientError(0, new ApiError(503, 'first_run', 'Finish setup at /first-run.'))).toBe(false);
   });
 });

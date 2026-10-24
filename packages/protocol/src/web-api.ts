@@ -420,3 +420,12 @@ export type FirstRunManifestRequest = z.infer<typeof FirstRunManifestRequest>;
  */
 export const FirstRunManifestResponse = z.object({ action: z.string(), manifest: z.record(z.string(), z.unknown()) });
 export type FirstRunManifestResponse = z.infer<typeof FirstRunManifestResponse>;
+
+/**
+ * Why `GET /first-run/callback` sent the browser back to `/first-run?error=…` instead of finishing. `expired`: the
+ * setup link is unknown, used, over an hour old, or GitHub refused its code. `github`: GitHub didn't answer, or its
+ * answer was missing part of the new app. `exists`: this server already has its app, so the one GitHub just made is
+ * extra. Nothing was stored in any of them.
+ */
+export const FirstRunProblem = z.enum(['expired', 'github', 'exists']);
+export type FirstRunProblem = z.infer<typeof FirstRunProblem>;

@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { BASE_URL, CONTROL_PORT, WEB_PORT } from './e2e/ports';
+import { BASE_URL, CONTROL_PORT, FIRST_RUN_BASE_URL, FIRST_RUN_CONTROL_PORT, FIRST_RUN_WEB_PORT, WEB_PORT } from './e2e/ports';
 
 export default defineConfig({
   testDir: './e2e',
@@ -15,13 +15,24 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  // The server for these tests: apps/server/test/e2e/web-server.ts.
-  webServer: {
-    command: 'npm run e2e:web-server -w apps/server',
-    cwd: '../..',
-    url: `${BASE_URL}/healthz`,
-    env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  // The servers for these tests: apps/server/test/e2e/web-server.ts for every spec, and first-run-server.ts (a server
+  // with no GitHub App yet) for first-run.spec.ts, which points its baseURL there. They start side by side.
+  webServer: [
+    {
+      command: 'npm run e2e:web-server -w apps/server',
+      cwd: '../..',
+      url: `${BASE_URL}/healthz`,
+      env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: 'npm run e2e:first-run-server -w apps/server',
+      cwd: '../..',
+      url: `${FIRST_RUN_BASE_URL}/healthz`,
+      env: { E2E_FIRST_RUN_WEB_PORT: String(FIRST_RUN_WEB_PORT), E2E_FIRST_RUN_CONTROL_PORT: String(FIRST_RUN_CONTROL_PORT) },
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
 });
