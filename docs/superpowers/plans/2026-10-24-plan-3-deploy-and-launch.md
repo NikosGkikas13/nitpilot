@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: task level, D1 with its tests spelled out.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
+> **Status: D1 and D2 at step level (D2 written 2026-10-24 against `c302c25`, see "Checked against the code (D2)"); D3–D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
 **Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README with a demo video and a Show HN draft.
 
@@ -333,41 +333,769 @@ Server db test: a chat whose reviewer's newest job failed with `quota` → `view
 
 ## Milestone D2: One image and the release workflow
 
-D2 makes the thing that gets deployed: one image that holds the server and the web app, built in CI on every PR, and a release workflow driven by tags. It ends with the npm name claimed and linked to the workflow, and an `-rc` image on GHCR built from this branch.
+D2 makes the thing that gets deployed: one image that holds the server and the web app, built and smoke-tested in CI on every PR, and a release workflow driven by tags. It ends with the npm name claimed and linked to the workflow, and an `-rc` image on GHCR built from this branch.
+
+**Written at step level on 2026-10-24** against `c302c25`. Every file below was built and run first in a scratch worktree (`~/Desktop/PracticeProjects/.nitpilot-scratch/d2`, its own throwaway Postgres containers, no `.env`): Task 5 is pinned at `refs/scratch/d2/task-5` (`0d9e5d3`), Task 6 at `refs/scratch/d2/task-6` (`069f775`). The file contents in the steps are copied from those commits. What differs from the task-level text is listed in "Checked against the code (D2)" at the end of the milestone.
+
+**Files at the end of D2:**
+```
+Dockerfile                                   the one image (deps → build → prod-deps → runtime)
+.dockerignore                                no .env, no node_modules, no docs in the build context
+scripts/image-smoke.sh                       npm run image:smoke: build, run against a throwaway Postgres, SIGTERM, restart
+scripts/check-release-version.mjs (+ .test.mjs)   is this tag a version we can release?
+.github/workflows/ci.yml                     Node 22.x; npm publish --dry-run; job `image` (build + smoke)
+.github/workflows/release.yml                v* tag → image to GHCR; real release → CLI to npm (trusted publishing)
+package.json                                 image:smoke; npm test also runs scripts/*.test.mjs
+apps/server/package.json, package-lock.json  prisma and tsx move to dependencies
+apps/cli/package.json                        repository, homepage, bugs, keywords, license
+eslint.config.mjs                            scripts/**/*.mjs get Node's globals
+LICENSE, apps/cli/LICENSE                    (the user's pick at review; see the D2 deviations)
+docs/why/docker-images.md, docs/why/releasing.md, docs/releasing.md
+```
 
 ### Task 5: The Dockerfile and its smoke test
 
 **Files:**
-- Create: `Dockerfile`, `.dockerignore`, `scripts/image-smoke.sh`, `docs/why/docker-images.md`
-- Modify: `.github/workflows/ci.yml` (a `docker build` job, no push; Node 22 pinned as `22.x`), `package.json` (`"image:smoke": "bash scripts/image-smoke.sh"`)
+- Create: `scripts/image-smoke.sh`, `Dockerfile`, `.dockerignore`, `docs/why/docker-images.md`
+- Modify: `package.json` (`image:smoke`), `apps/server/package.json` + `package-lock.json` (`prisma` and `tsx` become dependencies), `.github/workflows/ci.yml` (Node `22.x`; a new `image` job)
 
 **Interfaces:**
-- Produces: an image whose default command is `sh -c "npx prisma migrate deploy && npm start -w apps/server"` run as user `node`, `EXPOSE 8787`, `HEALTHCHECK CMD wget -qO- http://127.0.0.1:8787/healthz || exit 1`, `WEB_DIST_DIR=/app/apps/web/dist`. Stages: `deps` (`npm ci`), `build` (`prisma generate`, `npm run build -w apps/web`), `runtime` (`npm ci --omit=dev` plus `tsx` and the `prisma` CLI kept, the generated client, `apps/server`, `packages/protocol`, `apps/web/dist`). Odyhook's `Dockerfile` is the pattern (§23).
-- `scripts/image-smoke.sh`: builds `nitpilot:smoke`, starts a throwaway Postgres container on a private Docker network, runs the image against it with test-only `GITHUB_*` placeholders and `--init`, waits for `/healthz` = 200, checks `GET /` returns the web app's `index.html`, sends `docker stop` (SIGTERM) and expects exit code 0 within 10 s, runs the image a second time (migrations already applied) and expects `/healthz` again, then removes everything it made. Exit 0 = pass.
+- Consumes: `npm run db:generate -w apps/server` (Prisma client into `apps/server/src/generated/prisma`), `npm run build -w apps/web` (`apps/web/dist`), `WEB_DIST_DIR` (`lib/env.ts`, read by `http/spa.ts`), `GET /healthz` → `{ ok: true, version }` (`http/app.ts:58`), the SIGTERM `shutdown()` in `main.ts` (closes CLI sockets with `CLOSE_CODES.serverRestart` = 1012, then `process.exit(0)`), `authenticateCliToken` (sha256 of `nit_…` in `CliToken.tokenHash`), the CLI hub's 10 s hello timeout (`ws/cli-hub.ts:14`).
+- Produces: an image that runs as `node` (uid 1000) in `/app/apps/server`, `EXPOSE 8787`, `ENV NODE_ENV=production PORT=8787 WEB_DIST_DIR=/app/apps/web/dist CHECKPOINT_DISABLE=1`, label `org.opencontainers.image.source=https://github.com/NikosGkikas13/nitpilot` (Task 6's GHCR push relies on it), `HEALTHCHECK` via node's `fetch` on `/healthz`, and `CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && exec node --import tsx src/main.ts"]`. Containers are started with `--init` / compose `init: true` (D3, D4).
+- Produces: `npm run image:smoke` (exit 0 = pass; `NITPILOT_SMOKE_SKIP_BUILD=1` tests an image already tagged `nitpilot:smoke`). Task 6 and every later task run it.
 
-- [ ] **Step 1:** Write `scripts/image-smoke.sh` first and run it: `npm run image:smoke`. Expected: FAIL (no Dockerfile).
-- [ ] **Step 2:** Write `.dockerignore` (node_modules, every `.env*` except `.env.example`, `dist`, `test-results`, `.git`, `docs`, `.superpowers`, `.claude`) and the `Dockerfile`.
-- [ ] **Step 3:** `npm run image:smoke` → PASS. Record the image size (`docker image ls nitpilot:smoke`) and idle memory (`docker stats --no-stream` while it runs) in the task report; idle memory must be under 384 MB.
-- [ ] **Step 4:** Add the CI job (`docker/build-push-action` with `push: false`, GitHub Actions cache) and pin `node-version: 22.x`. Write `docs/why/docker-images.md` (image vs container, layers and stages, why non-root, why the image runs migrations, the React analogy: `npm run build` output vs the dev server).
-- [ ] **Step 5:** Full suite + `npm run image:smoke`; commit `build: one Docker image for the server and the web app, built in CI`.
+- [ ] **Step 1: Write the smoke test first**
+
+Create `scripts/image-smoke.sh`:
+
+```bash
+#!/usr/bin/env bash
+# The image smoke test (plan 3, Task 5): build the image, run it against a throwaway Postgres, and check that it
+# serves, stops cleanly on SIGTERM (exit 0, CLIs told 1012 "server restarting") and starts again on a database whose
+# migrations already ran. Everything it makes is removed at the end, pass or fail. See docs/why/docker-images.md.
+#
+#   npm run image:smoke                              build, then test
+#   NITPILOT_SMOKE_SKIP_BUILD=1 npm run image:smoke  test an image already tagged nitpilot:smoke (CI builds it first)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+IMAGE=nitpilot:smoke
+RUN="nitpilot-smoke-$$"
+NET="$RUN-net"
+DB="$RUN-db"
+APP="$RUN-app"
+WS="$RUN-ws"
+MEMORY_LIMIT_MIB=384
+
+# Test-only values for a database that lives for a minute. None of them is a secret.
+DB_URL="postgresql://nitpilot:smoke@$DB:5432/nitpilot"
+SMOKE_TOKEN='nit_image-smoke-only-not-a-real-token'
+SMOKE_TOKEN_HASH='74bf1f0eb2c7a3bd187e3c4af546ecf3b98d077eb1c3691865651b8c3276f7eb' # sha256 of SMOKE_TOKEN
+
+cleanup() {
+  docker rm -f "$WS" "$APP" "$DB" >/dev/null 2>&1 || true
+  docker network rm "$NET" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+fail() {
+  echo "image-smoke: FAIL: $*" >&2
+  if docker inspect "$APP" >/dev/null 2>&1; then
+    echo "--- server log (last 40 lines) ---" >&2
+    docker logs "$APP" 2>&1 | tail -40 >&2 || true
+  fi
+  exit 1
+}
+
+step() { echo "image-smoke: $*"; }
+
+# Does this text contain the pattern? (Not `cmd | grep -q`: grep stops reading early, and under pipefail the command
+# it cut off counts as failed.)
+contains() { grep -q -- "$2" <<<"$1"; }
+
+if [ "${NITPILOT_SMOKE_SKIP_BUILD:-}" != "1" ]; then
+  step "building $IMAGE"
+  docker build -t "$IMAGE" . || fail "docker build failed"
+fi
+docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "no image $IMAGE (is there a Dockerfile?)"
+
+step "starting a throwaway Postgres"
+docker network create "$NET" >/dev/null
+docker run -d --name "$DB" --network "$NET" \
+  -e POSTGRES_USER=nitpilot -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=nitpilot \
+  postgres:16-alpine >/dev/null
+for _ in $(seq 1 60); do
+  docker exec "$DB" pg_isready -U nitpilot -d nitpilot >/dev/null 2>&1 && break
+  sleep 1
+done
+docker exec "$DB" pg_isready -U nitpilot -d nitpilot >/dev/null 2>&1 || fail "Postgres never became ready"
+
+step "starting the server"
+# Placeholder GitHub App values: the server starts with them, and its one GitHub call at boot (asking for failed
+# deliveries) fails to sign and is logged and skipped, so the test never talks to GitHub.
+# --init puts a tiny init process (tini) in front, as compose's `init: true` does, so `docker stop` reaches node.
+docker run -d --init --name "$APP" --network "$NET" -p 127.0.0.1::8787 \
+  -e DATABASE_URL="$DB_URL" \
+  -e PUBLIC_URL=http://localhost:8787 \
+  -e ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+  -e GITHUB_APP_ID=1 \
+  -e GITHUB_APP_SLUG=nitpilot-smoke \
+  -e GITHUB_APP_PRIVATE_KEY=not-a-real-key \
+  -e GITHUB_CLIENT_ID=smoke-client-id \
+  -e GITHUB_CLIENT_SECRET=smoke-client-secret \
+  -e GITHUB_WEBHOOK_SECRET=smoke-webhook-secret \
+  "$IMAGE" >/dev/null
+# The host port is picked by Docker, and picked again on every start.
+base_url() { echo "http://127.0.0.1:$(docker port "$APP" 8787/tcp | head -1 | sed 's/.*://')"; }
+
+wait_healthy() {
+  BASE=$(base_url)
+  for _ in $(seq 1 90); do
+    [ "$(docker inspect -f '{{.State.Running}}' "$APP")" = "true" ] || fail "the server exited while starting"
+    contains "$(curl -fsS "$BASE/healthz" 2>/dev/null || true)" '"ok":true' && return 0
+    sleep 1
+  done
+  fail "/healthz never answered 200"
+}
+
+wait_healthy
+step "/healthz answers"
+
+# Docker's own HEALTHCHECK (the one compose and `docker ps` show) runs inside the container: wait for it too.
+for _ in $(seq 1 30); do
+  [ "$(docker inspect -f '{{.State.Health.Status}}' "$APP")" = "healthy" ] && break
+  sleep 1
+done
+[ "$(docker inspect -f '{{.State.Health.Status}}' "$APP")" = "healthy" ] || fail "Docker's HEALTHCHECK never reported healthy"
+step "Docker reports the container healthy"
+
+contains "$(curl -fsS "$BASE/" || true)" '<title>Nitpilot</title>' || fail "GET / is not the web app's index.html"
+step "GET / is the web app"
+
+# A connected CLI, to see the 1012 it gets on shutdown: a user and a CLI token straight into the throwaway database,
+# then a WebSocket client run from the same image (it has the ws package) on the same network. It never says hello,
+# and the hub closes such a socket after 10 s (ws/cli-hub.ts), so the stop below comes right after it opens.
+docker exec "$DB" psql -q -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot -c "
+  INSERT INTO \"User\" (id, \"githubId\", login, \"updatedAt\") VALUES ('smoke-user', '1', 'smoke', now());
+  INSERT INTO \"CliToken\" (id, \"userId\", name, \"tokenHash\", prefix, \"updatedAt\")
+    VALUES ('smoke-token', 'smoke-user', 'smoke', '$SMOKE_TOKEN_HASH', 'nit_imag', now());" >/dev/null \
+  || fail "could not add the smoke CLI token"
+docker run -d --name "$WS" --network "$NET" -e SMOKE_TOKEN="$SMOKE_TOKEN" "$IMAGE" node -e "
+  const WebSocket = require('ws');
+  const ws = new WebSocket('ws://$APP:8787/ws/cli', { headers: { authorization: 'Bearer ' + process.env.SMOKE_TOKEN } });
+  ws.on('open', () => console.log('open'));
+  ws.on('close', (code) => { console.log('close ' + code); process.exit(code === 1012 ? 0 : 1); });
+  ws.on('error', (err) => { console.log('error ' + err.message); process.exit(1); });
+" >/dev/null
+for _ in $(seq 1 20); do
+  contains "$(docker logs "$WS" 2>&1)" '^open' && break
+  sleep 0.5
+done
+contains "$(docker logs "$WS" 2>&1)" '^open' || fail "the CLI socket never opened: $(docker logs "$WS" 2>&1)"
+step "a CLI socket is connected"
+
+step "image size: $(docker image ls "$IMAGE" --format '{{.Size}}')"
+MEMORY=$(docker stats --no-stream --format '{{.MemUsage}}' "$APP" | cut -d/ -f1 | tr -d ' ')
+step "idle memory: $MEMORY"
+MEMORY_MIB=$(echo "$MEMORY" | awk '/GiB$/ { print int($0 * 1024); next } /MiB$/ { print int($0); next } /KiB$/ { print 0; next } { print 99999 }')
+[ "$MEMORY_MIB" -lt "$MEMORY_LIMIT_MIB" ] || fail "idle memory $MEMORY is over ${MEMORY_LIMIT_MIB} MiB"
+
+step "docker stop (SIGTERM)"
+START=$(date +%s)
+docker stop -t 10 "$APP" >/dev/null
+ELAPSED=$(( $(date +%s) - START ))
+EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' "$APP")
+[ "$EXIT_CODE" = "0" ] || fail "the server exited with $EXIT_CODE after SIGTERM, not 0 (137 means Docker had to kill it)"
+[ "$ELAPSED" -lt 10 ] || fail "the server took ${ELAPSED}s to stop"
+step "stopped with exit code 0 in ${ELAPSED}s"
+
+WS_EXIT=$(docker wait "$WS")
+[ "$WS_EXIT" = "0" ] || fail "the CLI socket did not close with 1012: $(docker logs "$WS" 2>&1 | tr '\n' ' ')"
+step "the CLI socket closed with 1012"
+
+step "starting the same container again (migrations already applied)"
+docker start "$APP" >/dev/null
+wait_healthy
+contains "$(docker logs "$APP" 2>&1)" 'No pending migrations to apply' || fail "the second start did not find the migrations already applied"
+step "/healthz answers after the restart"
+
+echo "image-smoke: PASS"
+```
+
+In the root `package.json` scripts, after `dev:tunnel`:
+
+```json
+    "image:smoke": "bash scripts/image-smoke.sh"
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `npm run image:smoke`
+Expected: exit 1, ending with
+```
+ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory
+image-smoke: FAIL: docker build failed
+```
+and nothing left behind: `docker ps -a --filter name=nitpilot-smoke -q` and `docker network ls --filter name=nitpilot-smoke -q` print nothing.
+
+- [ ] **Step 3: Make `prisma` and `tsx` runtime dependencies of the server**
+
+The image installs only runtime dependencies (`npm ci --omit=dev`), and the container needs both: `prisma` for `migrate deploy`, `tsx` to run `src/main.ts` (today `tsx` is a root devDependency and `prisma` a server devDependency).
+
+```bash
+cd apps/server && npm pkg delete devDependencies.prisma && npm pkg set dependencies.prisma='^7.10.0' dependencies.tsx='^4.23.15' && cd ../..
+npm install --ignore-scripts
+```
+
+Expected: `apps/server/package.json` lists `"prisma": "^7.10.0"` and `"tsx": "^4.23.15"` under `dependencies` (alphabetical, after `pg`), and `prisma` is gone from its `devDependencies`. `git diff --stat package-lock.json` shows about 166 changed lines, and every one apart from the two moved entries is a removed `"dev": true` / `"devOptional": true` flag (`git diff package-lock.json | grep '^[-+]' | grep -v '"dev": true\|"devOptional": true'` shows only the moves). No version changes. The root `tsx` devDependency stays (the web app's icon script uses it).
+
+- [ ] **Step 4: Write `.dockerignore` and the `Dockerfile`**
+
+`.dockerignore`:
+
+```
+# What `docker build` never sees (docs/why/docker-images.md). Secrets first: no .env file goes into the image.
+**/.env
+**/.env.*
+!**/.env.example
+
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+apps/server/src/generated
+
+.git
+.github
+.claude
+.superpowers
+docs
+**/.DS_Store
+```
+
+`Dockerfile`:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+# One image: the server and the built web app (spec §17 "One image", docs/why/docker-images.md).
+# Stages: deps (every dependency) → build (the Prisma client and the web app) → prod-deps (only what runs) → runtime.
+
+FROM node:22-bookworm-slim AS base
+WORKDIR /app
+
+# Each workspace's package.json first: this layer, and the npm ci below, are reused until a dependency changes.
+FROM base AS manifests
+COPY package.json package-lock.json ./
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/cli/package.json apps/cli/
+COPY packages/protocol/package.json packages/protocol/
+
+FROM manifests AS deps
+RUN npm ci --ignore-scripts
+
+FROM deps AS build
+COPY . .
+RUN npm run db:generate -w apps/server && npm run build -w apps/web
+
+# Only the server's runtime dependencies (tsx and the prisma CLI are among them: the server runs from its TypeScript
+# source, and the container runs its migrations).
+FROM manifests AS prod-deps
+RUN npm ci --omit=dev --ignore-scripts -w apps/server -w packages/protocol
+
+FROM base AS runtime
+# GHCR links the published image to this repository (its page, its README, who may push).
+LABEL org.opencontainers.image.source="https://github.com/NikosGkikas13/nitpilot"
+# CHECKPOINT_DISABLE: the prisma CLI doesn't phone home for a newer version at every start.
+ENV NODE_ENV=production \
+    PORT=8787 \
+    WEB_DIST_DIR=/app/apps/web/dist \
+    CHECKPOINT_DISABLE=1
+# The node image's non-root `node` user owns the files and runs the server (Odyhook's Dockerfile does the same).
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json /app/tsconfig.base.json ./
+COPY --from=build --chown=node:node /app/packages/protocol ./packages/protocol
+COPY --from=build --chown=node:node /app/apps/server/package.json /app/apps/server/tsconfig.json /app/apps/server/prisma.config.ts ./apps/server/
+COPY --from=build --chown=node:node /app/apps/server/prisma ./apps/server/prisma
+COPY --from=build --chown=node:node /app/apps/server/src ./apps/server/src
+COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
+USER node
+WORKDIR /app/apps/server
+EXPOSE 8787
+# The slim image has no curl or wget; node's own fetch asks /healthz.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:8787/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+# Migrations first (safe to run again: Prisma skips the ones already applied), then the server. `exec` replaces the
+# shell with node, so SIGTERM from `docker stop` reaches the server's shutdown code (apps/server/src/main.ts).
+CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && exec node --import tsx src/main.ts"]
+```
+
+- [ ] **Step 5: Run the smoke test to see it pass**
+
+Run: `npm run image:smoke` (the first build takes about 3 minutes; later ones reuse the `npm ci` layers).
+Expected: exit 0, with these lines among the build output:
+```
+image-smoke: building nitpilot:smoke
+image-smoke: starting a throwaway Postgres
+image-smoke: starting the server
+image-smoke: /healthz answers
+image-smoke: Docker reports the container healthy
+image-smoke: GET / is the web app
+image-smoke: a CLI socket is connected
+image-smoke: image size: 817MB
+image-smoke: idle memory: 189.6MiB
+image-smoke: docker stop (SIGTERM)
+image-smoke: stopped with exit code 0 in 0s
+image-smoke: the CLI socket closed with 1012
+image-smoke: starting the same container again (migrations already applied)
+image-smoke: /healthz answers after the restart
+image-smoke: PASS
+```
+The size and memory vary a little (the scratch runs saw 817–827 MB and 179–243 MiB); put the two numbers in the task report. Idle memory must stay under 384 MiB (the script fails otherwise). Then check by hand:
+
+```bash
+docker run --rm nitpilot:smoke sh -c 'id; find / -name ".env*" -not -path "/proc/*" 2>/dev/null; ls /app/apps/server'
+```
+Expected: `uid=1000(node) gid=1000(node) groups=1000(node)`, no `.env` file at all, and `package.json prisma prisma.config.ts src tsconfig.json`.
+
+- [ ] **Step 6: Prove the stop check can fail**
+
+The smoke test must catch a signal that never reaches node. Build a copy of the image without `exec` and test it (the copy lives in the scratchpad, never in the repo):
+
+```bash
+sed 's/&& exec node/\&\& node/' Dockerfile > "$TMPDIR/Dockerfile.noexec"
+docker build -q -t nitpilot:smoke -f "$TMPDIR/Dockerfile.noexec" . >/dev/null
+NITPILOT_SMOKE_SKIP_BUILD=1 npm run image:smoke
+```
+Expected: exit 1 with `image-smoke: FAIL: the server exited with 143 after SIGTERM, not 0 (137 means Docker had to kill it)` (the shell, not node, got the signal and died of it). Then `npm run image:smoke` again rebuilds the real image → PASS.
+
+- [ ] **Step 7: Build and smoke-test the image in CI, on Node 22.x**
+
+In `.github/workflows/ci.yml`, the `test` job's `setup-node`:
+
+```yaml
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22 LTS, the same major as the Docker image (spec §17).
+          node-version: 22.x
+          cache: npm
+```
+
+and a second job at the end of the file:
+
+```yaml
+  image:
+    name: Docker image (build + smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Build only, never push (the release workflow pushes). The layers are cached between runs, so a change that
+      # touches no dependency reuses the `npm ci` layers.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: nitpilot:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The image starts, serves the web app, stops cleanly on SIGTERM and starts again (scripts/image-smoke.sh).
+      - run: bash scripts/image-smoke.sh
+        env:
+          NITPILOT_SMOKE_SKIP_BUILD: '1'
+```
+
+Validate both workflow files: `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -no-color` → no output, exit 0.
+
+- [ ] **Step 8: Write `docs/why/docker-images.md`**
+
+Plain language, in the voice of the other `docs/why/` pages (one-sentence summary first, a React comparison, "Where" at the end naming `Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh`). Cover: an image vs a container (the built `dist/` folder vs a running `vite preview` of it); layers and why the `package.json` files are copied before the source (cache, like a lockfile-keyed `node_modules` cache in CI); the four stages and why the runtime one has no dev dependencies, no tests' tools, and no `.env`; why the server runs as `node`, not root; why the container runs `prisma migrate deploy` itself and why running it again is safe; `--init` / `init: true` and `exec`, the signal path from `docker stop` to `shutdown()` in `main.ts`, and the 143 the smoke test saw without `exec`; the `HEALTHCHECK` and what `docker ps` shows; what `image:smoke` checks and that CI runs it on every PR.
+
+- [ ] **Step 9: Full suite, the smoke test, tick, ledger, commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run image:smoke`
+Expected: protocol 84, CLI 349 + 14 skipped, server 1059, web 344, e2e 6 (all unchanged), typecheck and lint clean, `image-smoke: PASS`. (Playwright stays 19; this task doesn't touch the web app, so `npm run test:web-e2e` is optional here.)
+
+Tick this task's boxes, append `Task 5: complete` (plus any `Ruling:` lines) to the ledger, then:
+
+```bash
+git add Dockerfile .dockerignore scripts/image-smoke.sh docs/why/docker-images.md .github/workflows/ci.yml package.json package-lock.json apps/server/package.json docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "build: one Docker image for the server and the web app, built in CI
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 6: The release workflow, and the npm name claimed
 
 **Files:**
-- Create: `.github/workflows/release.yml`, `scripts/check-release-version.mjs` (+ `scripts/check-release-version.test.mjs`, run by the root `npm test`), `docs/why/releasing.md`, `docs/releasing.md` (the how-to: bump, tag, what the workflow does)
-- Modify: `apps/cli/package.json` (`repository`, `homepage`, `bugs`, `keywords`, `license`), root `package.json` test script
+- Create: `scripts/check-release-version.test.mjs`, `scripts/check-release-version.mjs`, `.github/workflows/release.yml`, `LICENSE` and the same file as `apps/cli/LICENSE`, `docs/why/releasing.md`, `docs/releasing.md`
+- Modify: `package.json` (test script), `eslint.config.mjs` (Node globals for `scripts/**/*.mjs`), `apps/cli/package.json` (`repository`, `homepage`, `bugs`, `keywords`, `license`), `.github/workflows/ci.yml` (the npm dry-run)
 
 **Interfaces:**
-- `check-release-version.mjs <tag>`: exits 0 when the tag is `v<X.Y.Z>` or `v<X.Y.Z>-rc.<N>` and `X.Y.Z` equals both `apps/cli/package.json` `version` and `CLI_VERSION` in `apps/cli/src/version.ts`; prints `rc` or `release` on stdout; otherwise exits 1 naming the mismatch.
-- `release.yml`: on `push: tags: ['v*']`; `permissions: { contents: read, packages: write, id-token: write }`; job `image` (always: build and push `ghcr.io/nikosgkikas13/nitpilot:<tag without v>`, plus `:latest` only for `release`); job `npm` (only for `release`, `needs: image`): `setup-node` 22.x with `registry-url: https://registry.npmjs.org`, `npm ci`, `npm run build -w apps/cli`, `npm publish -w apps/cli --provenance --access public` (no token: trusted publishing through OIDC). Every PR also runs `npm publish -w apps/cli --dry-run` in CI so a broken package fails early.
+- Consumes: Task 5's image (its `org.opencontainers.image.source` label links the GHCR package to the repo) and `docker/build-push-action` setup; `apps/cli/package.json` `version` and `CLI_VERSION` in `apps/cli/src/version.ts` (both `0.1.0`); `npm run build -w apps/cli` (tsup → `apps/cli/dist/index.js`).
+- Produces: `checkReleaseTag(tag: string, repoRoot: string): { ok: true, kind: 'rc' | 'release', version: string } | { ok: false, message: string }` exported from `scripts/check-release-version.mjs`; run as `node scripts/check-release-version.mjs <tag>` it prints `rc` or `release` (exit 0) or `check-release-version: <message>` on stderr (exit 1).
+- Produces: `release.yml` jobs `version` (outputs `kind`, `version`), `image` (pushes `ghcr.io/nikosgkikas13/nitpilot:<version>`, plus `:latest` only when `kind` is `release`), `npm` (only for `release`, after `image`; trusted publishing, provenance). D4 deploys the `-rc` image; D5 tags `v0.1.0`.
 
-- [ ] **Step 1: Write the failing test** for `check-release-version.mjs`: `v0.1.0` → `release`; `v0.1.0-rc.1` → `rc`; `v0.2.0` with package `0.1.0` → exit 1 "tag v0.2.0 but apps/cli/package.json says 0.1.0"; `0.1.0` (no v) → exit 1.
-- [ ] **Step 2:** Run → FAIL. **Step 3:** implement; run → PASS.
-- [ ] **Step 4:** Write `release.yml`, the dry-run CI step, `docs/why/releasing.md` (tags, a container registry, what npm provenance proves, trusted publishing as "npm trusts this one workflow file instead of a password") and `docs/releasing.md`. Validate the workflows with `npx --yes @action-validator/cli .github/workflows/release.yml` (or `actionlint` from its Docker image).
-- [ ] **Step 5: (user) Claim the npm name.** I make a folder outside the repo (`~/Desktop/PracticeProjects/.nitpilot-scratch/npm-placeholder`) with a `package.json` (`nitpilot`, `0.0.0`, description "Placeholder: the real release is coming from github.com/NikosGkikas13/nitpilot", no `bin`) and a one-line README. Click-steps for the user: `npm login` in their own terminal (browser opens, sign in to npmjs.com, approve with 2FA), then `npm publish` in that folder, then open npmjs.com/package/nitpilot and see version 0.0.0.
-- [ ] **Step 6: (user) Link the package to the workflow.** Click-steps: npmjs.com → nitpilot → Settings → "Trusted Publisher" → GitHub Actions → organization or user `NikosGkikas13`, repository `nitpilot`, workflow filename `release.yml`, environment empty → Save. Then "Publishing access" → "Require two-factor authentication and disallow tokens" → Save (from now on only the workflow can publish).
-- [ ] **Step 7: (say first) An `-rc` image.** The user pushes this branch and the tag `v0.1.0-rc.1` (I give the two commands; I don't push). Check the run on GitHub Actions: `image` green, `npm` skipped; `ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.1` listed under the repo's Packages (still private).
-- [ ] **Step 8:** Full suite; commit `ci: a tag-driven release: the image to GHCR and the CLI to npm with provenance`. Tick Steps 5–7 in a follow-up commit if they happen after the review.
+- [ ] **Step 1: Write the failing test**
+
+Create `scripts/check-release-version.test.mjs` (Node's own test runner, so the root scripts need no Vitest setup):
+
+```js
+// Tests for check-release-version.mjs, run by the root `npm test` with Node's own test runner (no Vitest needed).
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import { checkReleaseTag } from './check-release-version.mjs';
+
+/** A folder laid out like the repo, with the CLI at these two versions. */
+function repoWith(packageVersion, cliVersion = packageVersion) {
+  const root = mkdtempSync(path.join(tmpdir(), 'release-version-'));
+  mkdirSync(path.join(root, 'apps/cli/src'), { recursive: true });
+  writeFileSync(path.join(root, 'apps/cli/package.json'), JSON.stringify({ name: 'nitpilot', version: packageVersion }));
+  writeFileSync(path.join(root, 'apps/cli/src/version.ts'), `export const CLI_VERSION = '${cliVersion}';\n`);
+  return root;
+}
+
+test('v0.1.0 is a release', () => {
+  assert.deepEqual(checkReleaseTag('v0.1.0', repoWith('0.1.0')), { ok: true, kind: 'release', version: '0.1.0' });
+});
+
+test('v0.1.0-rc.1 is a release candidate', () => {
+  assert.deepEqual(checkReleaseTag('v0.1.0-rc.1', repoWith('0.1.0')), { ok: true, kind: 'rc', version: '0.1.0-rc.1' });
+});
+
+test('a tag ahead of package.json is refused, naming both', () => {
+  assert.deepEqual(checkReleaseTag('v0.2.0', repoWith('0.1.0')), {
+    ok: false,
+    message: 'tag v0.2.0 but apps/cli/package.json says 0.1.0',
+  });
+});
+
+test('a CLI_VERSION that disagrees is refused', () => {
+  assert.deepEqual(checkReleaseTag('v0.1.0', repoWith('0.1.0', '0.0.9')), {
+    ok: false,
+    message: 'tag v0.1.0 but CLI_VERSION in apps/cli/src/version.ts says 0.0.9',
+  });
+});
+
+test('a tag without the v is refused', () => {
+  const result = checkReleaseTag('0.1.0', repoWith('0.1.0'));
+  assert.equal(result.ok, false);
+  assert.match(result.message, /^tag 0\.1\.0 is not v<X\.Y\.Z> or v<X\.Y\.Z>-rc\.<N>/);
+});
+
+test('other pre-release names are refused', () => {
+  assert.equal(checkReleaseTag('v0.1.0-beta.1', repoWith('0.1.0')).ok, false);
+  assert.equal(checkReleaseTag('v0.1', repoWith('0.1.0')).ok, false);
+});
+```
+
+In the root `package.json`, the test script becomes:
+
+```json
+    "test": "npm run test --workspaces --if-present && node --test 'scripts/*.test.mjs'",
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+Run: `node --test 'scripts/*.test.mjs'`
+Expected: FAIL with `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '…/scripts/check-release-version.mjs' imported from …/scripts/check-release-version.test.mjs`.
+
+- [ ] **Step 3: Implement `scripts/check-release-version.mjs`, then see it pass**
+
+```js
+#!/usr/bin/env node
+// The release workflow's first step (docs/releasing.md): is this git tag a version we can release, and does it match
+// the CLI's version in both places it's written? Prints `rc` or `release` and exits 0; otherwise names the mismatch
+// and exits 1, so nothing gets pushed under a wrong version.
+//
+//   node scripts/check-release-version.mjs v0.1.0-rc.1
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const TAG = /^v(\d+\.\d+\.\d+)(-rc\.\d+)?$/;
+
+/**
+ * Check `tag` against the CLI's version in `repoRoot`.
+ * @returns {{ ok: true, kind: 'rc' | 'release', version: string } | { ok: false, message: string }}
+ */
+export function checkReleaseTag(tag, repoRoot) {
+  const match = TAG.exec(tag);
+  if (!match) return { ok: false, message: `tag ${tag} is not v<X.Y.Z> or v<X.Y.Z>-rc.<N>` };
+  const [, base, rc] = match;
+
+  const packageVersion = JSON.parse(readFileSync(path.join(repoRoot, 'apps/cli/package.json'), 'utf8')).version;
+  if (packageVersion !== base) return { ok: false, message: `tag ${tag} but apps/cli/package.json says ${packageVersion}` };
+
+  const versionFile = readFileSync(path.join(repoRoot, 'apps/cli/src/version.ts'), 'utf8');
+  const cliVersion = /CLI_VERSION = '([^']+)'/.exec(versionFile)?.[1];
+  if (cliVersion !== base) return { ok: false, message: `tag ${tag} but CLI_VERSION in apps/cli/src/version.ts says ${cliVersion}` };
+
+  return { ok: true, kind: rc ? 'rc' : 'release', version: tag.slice(1) };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const result = checkReleaseTag(process.argv[2] ?? '', repoRoot);
+  if (!result.ok) {
+    console.error(`check-release-version: ${result.message}`);
+    process.exit(1);
+  }
+  console.log(result.kind);
+}
+```
+
+ESLint doesn't know Node's globals in a root `.mjs` file yet (`'process' is not defined`). In `eslint.config.mjs`, the block for the web app's icon script becomes:
+
+```js
+  {
+    // Run with Node, not in the browser: the web app's icon script and the release scripts in scripts/.
+    files: ['apps/web/scripts/**/*.ts', 'scripts/**/*.mjs'],
+    languageOptions: { globals: globals.node },
+  },
+```
+
+Run: `node --test 'scripts/*.test.mjs'` → `ℹ tests 6`, `ℹ pass 6`, `ℹ fail 0`. Then:
+```
+$ node scripts/check-release-version.mjs v0.1.0-rc.1
+rc
+$ node scripts/check-release-version.mjs v0.1.0
+release
+$ node scripts/check-release-version.mjs v0.2.0; echo "exit $?"
+check-release-version: tag v0.2.0 but apps/cli/package.json says 0.1.0
+exit 1
+```
+
+- [ ] **Step 4: The workflow, the package metadata, the docs; full suite; commit**
+
+Create `.github/workflows/release.yml`:
+
+```yaml
+name: Release
+
+# A version tag releases Nitpilot (docs/releasing.md, docs/why/releasing.md):
+#   v0.1.0       → the image as :0.1.0 and :latest on GHCR, then the CLI on npm
+#   v0.1.0-rc.1  → the image as :0.1.0-rc.1 only (never :latest, never npm)
+on:
+  push:
+    tags: ['v*']
+
+# Nothing by default; each job asks for only what it needs.
+permissions: {}
+
+jobs:
+  version:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      kind: ${{ steps.check.outputs.kind }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      # Fails the whole release when the tag and the CLI's version disagree.
+      - id: check
+        run: |
+          kind=$(node scripts/check-release-version.mjs "$GITHUB_REF_NAME")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  image:
+    name: Image to GHCR
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # An rc gets only its own tag; the empty second line is skipped.
+          tags: |
+            ghcr.io/nikosgkikas13/nitpilot:${{ needs.version.outputs.version }}
+            ${{ needs.version.outputs.kind == 'release' && 'ghcr.io/nikosgkikas13/nitpilot:latest' || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  npm:
+    name: CLI to npm
+    needs: [version, image]
+    if: needs.version.outputs.kind == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted publishing: npm checks a short-lived token GitHub signs for this run, instead of a stored npm token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 comes with npm 10.
+      - run: npm install -g npm@^11.5.1
+      - run: npm ci
+      - run: npm run build -w apps/cli
+      - run: npm publish -w apps/cli --provenance --access public
+```
+
+In `.github/workflows/ci.yml`'s `test` job, right after `- run: npm run lint`:
+
+```yaml
+      # The CLI package as npm would get it: a broken package.json or a missing file fails here, not at release.
+      - run: npm run build -w apps/cli
+      - run: npm publish -w apps/cli --dry-run
+```
+
+In `apps/cli/package.json`, right after `description` (trusted publishing with provenance checks that `repository.url` is this GitHub repo):
+
+```json
+  "description": "Your own AI agent reviews your teammates' pull requests, and theirs reviews yours.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NikosGkikas13/nitpilot.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://nitpilot.dev",
+  "bugs": {
+    "url": "https://github.com/NikosGkikas13/nitpilot/issues"
+  },
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "github",
+    "ai",
+    "claude-code",
+    "cli"
+  ],
+```
+
+Add a `LICENSE` file at the root for the license the user picks at review (default MIT: the standard MIT text with `Copyright (c) 2026 Nikos Gkikas`), the same file as `apps/cli/LICENSE` (npm packs a LICENSE only from the package's own folder: checked, a root one alone leaves the package at 2 files), and `"license": "MIT"` (or the pick's SPDX id) after `keywords`.
+
+Write `docs/why/releasing.md` (a git tag as a named commit; a container registry as "npm for images"; what `:latest` and an `-rc` tag mean; trusted publishing as "npm trusts this one workflow file in this one repo instead of a password", the OIDC token GitHub signs for each run and why `id-token: write` is needed; what the provenance badge on npmjs.com proves; why the tag is checked against both version strings) and `docs/releasing.md` (the how-to: bump `apps/cli/package.json` and `CLI_VERSION` together, commit, `git tag vX.Y.Z` or `vX.Y.Z-rc.N`, push the tag, what each job does and where to look; how to re-run a failed job; that a version on npm can never be published twice).
+
+Validate: `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -no-color` → no output, exit 0. Dry-run the package:
+```bash
+npm run build -w apps/cli && npm publish -w apps/cli --dry-run
+```
+Expected: exit 0, `npm notice package: nitpilot@0.1.0`, `total files: 3` (`LICENSE`, `dist/index.js`, `package.json`), `+ nitpilot@0.1.0`, plus the harmless `npm warn publish This command requires you to be logged in … (dry-run)`.
+
+Run: `npm test && npm run typecheck && npm run lint && npm run image:smoke`
+Expected: protocol 84, CLI 349 + 14, server 1059, web 344, then the root scripts' `ℹ pass 6`; typecheck and lint clean; `image-smoke: PASS`.
+
+Tick Steps 1–4, append `Task 6: code complete` to the ledger, then:
+
+```bash
+git add scripts/check-release-version.mjs scripts/check-release-version.test.mjs .github/workflows/release.yml .github/workflows/ci.yml package.json eslint.config.mjs apps/cli/package.json LICENSE apps/cli/LICENSE docs/why/releasing.md docs/releasing.md docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "ci: a tag-driven release: the image to GHCR and the CLI to npm with provenance
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+This commit comes before Steps 5–7: the `v0.1.0-rc.1` tag in Step 7 must point at a commit that has `release.yml`.
+
+- [ ] **Step 5: (user, say first: writes to npm) Claim the npm name**
+
+npm only lets a trusted publisher be set on a package that exists. I make `~/Desktop/PracticeProjects/.nitpilot-scratch/npm-placeholder/` with this `package.json` and a one-line `README.md` ("Placeholder. Nitpilot's CLI is published from https://github.com/NikosGkikas13/nitpilot."):
+
+```json
+{
+  "name": "nitpilot",
+  "version": "0.0.0",
+  "description": "Placeholder: the real release is coming from github.com/NikosGkikas13/nitpilot",
+  "repository": { "type": "git", "url": "git+https://github.com/NikosGkikas13/nitpilot.git" }
+}
+```
+
+Then I say "this publishes to npm" and wait for go. Click-steps for the user, in a Terminal panel tab I open in that folder:
+1. Type `npm whoami` and press Return. If it prints your npm username, skip to step 4. If it says `ENEEDAUTH`, go on.
+2. Type `npm login` and press Return. It prints `Login at: https://www.npmjs.com/login?next=…` and `Press ENTER to open in the browser...`. Press Return.
+3. In the browser that opens (npmjs.com), sign in with your npm account (the one with 2FA), then approve with your authenticator app or security key. The page says you're logged in; back in the terminal it prints `Logged in on https://registry.npmjs.org/.`
+4. Type `npm publish` and press Return. npm asks for 2FA again (it either prints a link to open in the browser, or asks `This operation requires a one-time password` and waits for the 6-digit code from your authenticator). Approve it. The terminal ends with `+ nitpilot@0.0.0`.
+5. Open https://www.npmjs.com/package/nitpilot. You see **nitpilot**, **0.0.0 • Public • Published a few seconds ago**, and the placeholder README.
+
+- [ ] **Step 6: (user, say first: changes npm settings) Link the package to the workflow**
+
+Click-steps on npmjs.com, signed in with the same npm account:
+1. Open https://www.npmjs.com/package/nitpilot and click the **Settings** tab (top of the package page, next to Readme / Code / Dependents / Versions; only the owner sees it).
+2. Find the **Trusted Publisher** section and click the **GitHub Actions** button.
+3. Fill in: **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml` (just the file name, not the path), **Environment name** left empty. Click **Set up connection**. The section now shows one GitHub Actions publisher for `NikosGkikas13/nitpilot`, `release.yml`.
+4. Further down, under **Publishing access**, choose **Require two-factor authentication and disallow tokens** and click **Update Package Settings**. npm asks for 2FA once more; approve. From now on no npm token can publish `nitpilot`; only the workflow (and you, with 2FA) can.
+
+- [ ] **Step 7: (user, say first: writes to GitHub and GHCR) An `-rc` image from this branch**
+
+I check `git status` is clean and `git log -1` is the Task 6 commit, then say "this pushes the branch and a tag to GitHub, and the tag pushes an image to GHCR" and wait for go. The user runs, from the repo folder (I don't push):
+
+```bash
+git push -u origin plan-3-deploy-and-launch
+```
+```bash
+git tag v0.1.0-rc.1
+```
+```bash
+git push origin v0.1.0-rc.1
+```
+
+Click-steps, in the browser signed in to GitHub as **NikosGkikas13**:
+1. Open https://github.com/NikosGkikas13/nitpilot/actions. At the top of the list is a run called **Release**, on `v0.1.0-rc.1`. Click it.
+2. The run's page shows three jobs in a row: **Check the tag**, **Image to GHCR**, **CLI to npm**. Wait until the first two have a green tick (the image takes about 5 minutes the first time) and **CLI to npm** is grey with "This job was skipped". That skip is right: an `-rc` tag never publishes to npm.
+3. Open https://github.com/NikosGkikas13/nitpilot. In the right-hand column, under **Packages**, there is now **nitpilot**. Click it: the page shows `ghcr.io/nikosgkikas13/nitpilot`, the tag **0.1.0-rc.1** (no `latest`), and a **Private** label (the package stays private until D4).
+4. Optional, and worth it: on that repo page click **Pull requests → New pull request**, base `main`, compare `plan-3-deploy-and-launch`, **Create draft pull request**. CI's two jobs run: **typecheck + lint + tests** and **Docker image (build + smoke test)**; both should go green. That's the first time the smoke test runs on GitHub's machines.
+
+I read the **Image to GHCR** job's log (`gh run view --log`, read-only) and note the pushed tag and digest in the ledger.
+
+- [ ] **Step 8: Tick Steps 5–7**
+
+In a follow-up commit after the review: tick Steps 5–7, append `Task 6: complete` to the ledger.
+
+```bash
+git add docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "docs(plan): Task 6's npm name, trusted publisher and rc image done
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Checked against the code (D2)
+
+Checked at `c302c25` and in the scratch build; each line is where the step-level text differs from the task-level text it replaced, or a fact the task-level text got wrong.
+
+1. **`tsx` and `prisma` were dev-only.** `tsx` is a root devDependency and `prisma` an `apps/server` devDependency, so the task-level "`npm ci --omit=dev` plus `tsx` and the `prisma` CLI kept" can't be done with `npm ci` alone. Task 5 Step 3 moves both into `apps/server` `dependencies` (lockfile: flag changes only, no version changes).
+2. **The image doesn't run `npm start -w apps/server`.** That chain is npm → `sh -c` → tsx → node, and every link has to pass SIGTERM on. The `CMD` is `prisma migrate deploy && exec node --import tsx src/main.ts` from `/app/apps/server`: the same tsx loader `npm start` uses, no compile step, and `exec` makes node the process `tini` signals. Without `exec` the smoke test sees exit 143 (Task 5 Step 6 proves it). `npm start` is unchanged for development.
+3. **No `wget` in `node:22-bookworm-slim`** (no `curl` either). The `HEALTHCHECK` asks `/healthz` with node's own `fetch`. It also gets `--start-period=60s --start-interval=2s` (Docker 25+) so it reports healthy within seconds, which the smoke test now waits for.
+4. **The smoke test checks more than the task-level text listed.** It also waits for Docker's own health status, adds a CLI token straight into the throwaway database and connects a WebSocket client (run from the image itself, which has `ws`) to see the 1012 close that Review Focus 4 asks for, fails when idle memory is 384 MiB or more (instead of only reporting it), and restarts the same container (`docker start`) for the second boot, checking Prisma's `No pending migrations to apply.` The host port is random and read again after each start. `NITPILOT_SMOKE_SKIP_BUILD=1` lets CI test the image it built with the GitHub Actions cache.
+5. **CI runs the smoke test,** not only `docker build`: the `image` job builds with `docker/build-push-action` (`push: false`, `load: true`, `type=gha` cache) and then runs `scripts/image-smoke.sh`.
+6. **Prisma 7 needs no OpenSSL** in the slim image: `migrate deploy` ran without it and without a warning (a scratch build with `apt-get install openssl` was tried and dropped). `CHECKPOINT_DISABLE=1` stops the prisma CLI's update check, which printed an "Update available 7.10.0 -> 8.0.0-rc.27" box and called out to Prisma at every start.
+7. **The image is about 820 MB** (Docker Desktop's figure; `node_modules` is 354 MB, of which the prisma CLI and its engines are about 190 MB). It's what `migrate deploy` on start costs; slimming it (a separate migrate image, or the bundled CLI only) is out of scope. Idle memory was 179–243 MiB across runs, well under the hosted 384m.
+8. **`/healthz` is at `http/app.ts:58`** (the Code facts say 55); it answers without touching the database, so "healthy" means the HTTP server is up, not that Postgres is.
+9. **The image label.** `org.opencontainers.image.source` is set in the `Dockerfile` so the GHCR package is linked to the repo (shown under the repo's Packages, and its visibility can follow the repo at D4). Not in the task-level text.
+10. **The order in Task 6.** The task-level text committed in Step 8, after Step 7 pushes the `-rc` tag; the tag must point at a commit with `release.yml`, so the commit moves to the end of Step 4 and Step 8 only ticks Steps 5–7.
+11. **Trusted publishing needs npm 11.5.1 or newer,** and Node 22 ships npm 10, so the `npm` job runs `npm install -g npm@^11.5.1` before publishing. Provenance also needs `repository.url` in `apps/cli/package.json` to name this repo; Task 6 adds it.
+12. **`release.yml` has a `version` job first** (the tag check, outputs `kind` and `version`) and `permissions: {}` at the top with each job asking for only what it needs (`packages: write` only in `image`, `id-token: write` only in `npm`), instead of one workflow-wide `{ contents: read, packages: write, id-token: write }`.
+13. **The root tests run with `node --test`.** `npm test` gains `&& node --test 'scripts/*.test.mjs'` (Node's own runner; the workspaces keep Vitest). ESLint needed Node's globals for `scripts/**/*.mjs`.
+14. **There is no license yet.** The repo has no `LICENSE` and the spec never picks one, but an npm package and a public repo need one (Odyhook uses AGPL-3.0-only). Task 6 adds `LICENSE` (root, plus a copy in `apps/cli/`, since npm packs it only from the package folder) and the `license` field with the user's pick; the plan defaults to MIT.
+15. **The npm package has no README** (`npm publish --dry-run` lists only `dist/index.js` and `package.json`, plus `LICENSE` after Task 6), so npmjs.com shows an empty page for the CLI until one is there. Task 14 (D5) adds `apps/cli/README.md` (or copies the root README into the package); nothing in D2 publishes the CLI.
+16. **Validation tool.** `actionlint` from `rhysd/actionlint:1.7.7` (Docker, nothing installed) passes on both workflows; the task-level text's `@action-validator/cli` was not needed.
+17. **This Mac runs Node 24.3** (`node --test` and the dry-run were checked with it); CI and the image use 22.x, which is what the plan pins.
 
 ---
 
