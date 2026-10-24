@@ -5641,7 +5641,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-- [ ] **Step 1: Create the three files and the one comment edit**
+- [x] **Step 1: Create the three files and the one comment edit**
 
 Create `deploy/self-host/docker-compose.yml` with exactly this content:
 
@@ -5831,7 +5831,7 @@ with
 
 (Comment only. `TRUST_PROXY` still defaults to `false` and the compose file sets it to `"true"`.)
 
-- [ ] **Step 2: Validate the compose file**
+- [x] **Step 2: Validate the compose file**
 
 `docker compose config` renders the file with every `${…}` filled in and fails on a bad one. `.env.example` can't be used as-is, because its required values are empty on purpose and `${NAME:?…}` refuses them. First the failure, which is the safety working:
 
@@ -5849,7 +5849,7 @@ tmp=$(mktemp -d) && cp deploy/self-host/docker-compose.yml deploy/self-host/Cadd
 ```
 Expected: nothing on stderr, then `exit=0`. (Both runs verified on Docker 28.3.0 / Compose v2.38.1.)
 
-- [ ] **Step 3: The clean-folder run, locally, with an image built on this Mac**
+- [x] **Step 3: The clean-folder run, locally, with an image built on this Mac**
 
 This is the run to pass before anything is pushed. It uses the repo's `Dockerfile` as it is now (it contains Tasks 7 and 8, first-run mode), the three files from Step 1 copied into an empty folder (so nothing from the repo helps), and no GitHub and no GHCR: the only network use is Docker Hub for `postgres:16-alpine` and `caddy:2-alpine` (already in the local cache). The GitHub App the server needs is faked straight into the database; the real manifest round trip is Step 7's job. Docker Desktop must be running, and ports 80 and 443 free (`lsof -nP -iTCP:80 -iTCP:443 -sTCP:LISTEN` prints nothing).
 
@@ -6004,7 +6004,7 @@ Expected: containers, network and volumes removed, the two image tags untagged, 
 
 If any expected line differs, stop and tell me what you saw before going on: the point of this step is to find surprises here, on the Mac, before the live run.
 
-- [ ] **Step 4: The docs and the explainers**
+- [x] **Step 4: The docs and the explainers**
 
 Create `docs/self-hosting.md` with exactly this content (the commands in it were run as written in Step 3, except the `curl` download of the three files, `dig`, `docker compose pull`, `npm install -g nitpilot` and `nitpilot login`, which need the public repo, a real DNS record, GHCR or GitHub; Step 7 covers `pull` and `login`, Task 15's fresh-install check the rest):
 
@@ -6336,7 +6336,7 @@ with
 Run: `git diff --stat`
 Expected: the nine files of this task (the three `deploy/self-host/` files and `docs/self-hosting.md`, `docs/why/reverse-proxy-and-tls.md`, `docs/why/dns-records.md` as new; `apps/server/src/lib/env.ts`, `docs/why/trusting-a-proxy.md` and the spec as changed).
 
-- [ ] **Step 5: Whole suite, then commit the code and docs**
+- [x] **Step 5: Whole suite, then commit the code and docs**
 
 Nothing but a comment changed in code, so the counts do not move.
 
@@ -6371,7 +6371,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 Expected: a commit with nine changed files. (The message is the checkpoint's. If a later step finds a fix, it goes into a separate commit in Step 9.)
 
-- [ ] **Step 6: (user, say first: writes to GitHub and GHCR) The `v0.1.0-rc.2` image**
+- [x] **Step 6: (user, say first: writes to GitHub and GHCR) The `v0.1.0-rc.2` image**
 
 `v0.1.0-rc.1` was built before first-run mode existed, so the live run needs a new pre-release tag, on this commit. I check `git status` is clean and `git log -1` is the Step 5 commit, then say "this pushes the branch and a tag to GitHub, and the tag pushes an image to GHCR" and wait for go. The user runs, from the repo folder (I don't push), one command at a time:
 
@@ -6395,7 +6395,7 @@ Click-steps, in the browser signed in to GitHub as **NikosGkikas13**:
 
 I read the **Image to GHCR** job's log (`gh run view --log`, read-only) and note the pushed tag and digest in the ledger.
 
-- [ ] **Step 7: (live, say first) The clean-folder run with the `0.1.0-rc.2` image, through the dev tunnel**
+- [x] **Step 7: (live, say first) The clean-folder run with the `0.1.0-rc.2` image, through the dev tunnel**
 
 What this adds to Step 3: the real image from GHCR (`pull`), a real GitHub App made through the real manifest round trip, real webhooks signed with the stored secret, GitHub sign-in through the tunnel and Caddy, the CLI's WebSocket through both, and a real review posted by the test app. It writes to GitHub (creates and later deletes an app, installs it on the sandbox, opens a PR on the sandbox), so I announce each part and wait for go.
 
@@ -6502,17 +6502,25 @@ cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose exec 
 Expected: one review, `user` `NikosGkikas13`, `app` `nitpilot-selfhost-test` (the badge); three comments by `NikosGkikas13` on lines 5, 12 and 18; and in `check.sql`'s output the chat READY, one `review` job `done` for NikosGkikas13, no duplicate jobs (section 3 prints no rows), the `pull_request` `opened` and `review_requested` webhooks as `processed`, and no webhook left `received`/`retrying`/`failed`. Last, `docker compose logs --tail 80 nitpilot | grep -ci error` should be `0` or only lines I can explain (the boot-time `[recovery]` 404 is not expected here: this is a real app); I report anything else.
 
 **What this step must still prove (from the builder's local run).** I tick each one in my report, with the evidence:
-- [ ] The real image from GHCR (`0.1.0-rc.2`): `docker compose pull` worked and the server runs from it (7d).
-- [ ] The real manifest round trip, in a browser: GitHub's create page from the posted form, `/first-run/callback` with GitHub's real `code` and `state`, the conversion, the server's own exit after storing, and the page's **Restarting…** then **Your GitHub App is ready** (7e 3 to 5).
-- [ ] Sign-in does not loop through Cloudflare, Caddy and the server: the Authorize step in 7e lands on `/setup`. This needs `cloudflared` to send `X-Forwarded-Proto: https`, which the builder could not check locally. If the browser loops, I stop and report; the first thing to read is what Caddy received (add `log` to the Caddyfile's site block, or `curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1/auth/github/login -o /dev/null -w '%{redirect_url}'` from the Mac).
-- [ ] Rate limits count per visitor behind the tunnel (the setup-code limit from the Mac's browser, not shared with another visitor): after 7e, `docker compose logs caddy` shows the client address Caddy used is the visitor's, not `172.x.0.1`.
-- [ ] Real webhooks reach `https://<host>/webhooks/github` and pass the signature check with the stored secret (the `RawEvent` rows in 7e and 7g).
-- [ ] The installation on `nitpilot-sandbox` only; GitHub sign-in with the new app.
-- [ ] `NITPILOT_SERVER=<tunnel> login` and the WebSocket over the tunnel and Caddy (7f).
-- [ ] A real review posted by the test app on a real PR (7g).
+- [x] The real image from GHCR (`0.1.0-rc.2`): `docker compose pull` worked and the server runs from it (7d).
+- [x] The real manifest round trip, in a browser: GitHub's create page from the posted form, `/first-run/callback` with GitHub's real `code` and `state`, the conversion, the server's own exit after storing, and the page's **Restarting…** then **Your GitHub App is ready** (7e 3 to 5).
+- [x] Sign-in does not loop through Cloudflare, Caddy and the server: the Authorize step in 7e lands on `/setup`. This needs `cloudflared` to send `X-Forwarded-Proto: https`, which the builder could not check locally. If the browser loops, I stop and report; the first thing to read is what Caddy received (add `log` to the Caddyfile's site block, or `curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1/auth/github/login -o /dev/null -w '%{redirect_url}'` from the Mac).
+- [x] Rate limits count per visitor behind the tunnel (the setup-code limit from the Mac's browser, not shared with another visitor): after 7e, `docker compose logs caddy` shows the client address Caddy used is the visitor's, not `172.x.0.1`.
+- [x] Real webhooks reach `https://<host>/webhooks/github` and pass the signature check with the stored secret (the `RawEvent` rows in 7e and 7g).
+- [x] The installation on `nitpilot-sandbox` only; GitHub sign-in with the new app.
+- [x] `NITPILOT_SERVER=<tunnel> login` and the WebSocket over the tunnel and Caddy (7f).
+- [x] A real review posted by the test app on a real PR (7g).
 - Not provable here: Caddy's real Let's Encrypt certificate (the hosted instance's Caddy proves it in Task 12).
 
-- [ ] **Step 8: (user) Clean up**
+**Live run, 2026-10-24** (image `ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.2@sha256:0105527e4e66ba087aaa70f9e8dd7c7c957e5739cc5fc66835d44be0d1b646c1`, from `e98f5de`; sandbox PR #15). Everything above held. What differed from the step text:
+- `gh`'s token had no `read:packages`, so the first `pull` got `403 Forbidden`; the 7a fallback (`gh auth refresh -h github.com -s read:packages`, then the login again) fixed it.
+- The image is `linux/amd64` only (the release workflow builds no other platform), so `pull` on this arm64 Mac said `no matching manifest for linux/arm64/v8`. The scratch override also set `platform: linux/amd64` on `nitpilot` (Docker Desktop emulates it); the repo is unchanged. Whether to publish `linux/arm64` too is an open question.
+- The auto-mode check would not let me read the tunnel's terminal, so the user ran `cloudflared` and pasted the URL; the CLI ran from a script in the session's scratchpad instead of the `nit-sh` function, the same commands.
+- 7e: after Authorize the user landed on the web app showing its "run npx nitpilot login" step; no loop. Caddy's log showed the visitor's public address as `client_ip`, not `172.x.0.1`.
+- 7g: `performed_via_github_app.slug` is `null` on the review and on the comments in GitHub's REST API, so the badge is checked by eye on the PR page. `check.sql`'s chat phase is `addressing` (round 1, 3 open points), not READY: right for a single-player PR, where the points wait on an author who has no agent.
+- Step 8 was done by me on the user's word, except deleting the app (GitHub has no API for it): PR closed as ngkdev93-jpg through `GH_TOKEN=$(gh auth token -u ngkdev93-jpg)`, branch deleted.
+
+- [x] **Step 8: (user) Clean up**
 
 I say first, then tell the user which of these to do; the app deletion and the logout are theirs.
 
@@ -6540,7 +6548,7 @@ rm -rf ~/.nitpilot-selfhost ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhos
 ```
 Expected: no output. The image `ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.2` stays in Docker's cache and on GHCR; leave both.
 
-- [ ] **Step 9: Doc fixes from the live run, tick, ledger**
+- [x] **Step 9: Doc fixes from the live run, tick, ledger**
 
 If the live run showed a doc or compose-file problem (a wrong click label, a missing step), fix it in `docs/self-hosting.md` or the file concerned and commit it on its own: `git add <those files>` then `git commit -m "docs(hosting): <what the run taught>"` ending with the trailer line below. A code fix would need a test first; stop and ask.
 
