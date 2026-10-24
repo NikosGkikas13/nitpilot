@@ -364,7 +364,7 @@ docs/why/docker-images.md, docs/why/releasing.md, docs/releasing.md
 - Produces: an image that runs as `node` (uid 1000) in `/app/apps/server`, `EXPOSE 8787`, `ENV NODE_ENV=production PORT=8787 WEB_DIST_DIR=/app/apps/web/dist CHECKPOINT_DISABLE=1`, label `org.opencontainers.image.source=https://github.com/NikosGkikas13/nitpilot` (Task 6's GHCR push relies on it), `HEALTHCHECK` via node's `fetch` on `/healthz`, and `CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && exec node --import tsx src/main.ts"]`. Containers are started with `--init` / compose `init: true` (D3, D4).
 - Produces: `npm run image:smoke` (exit 0 = pass; `NITPILOT_SMOKE_SKIP_BUILD=1` tests an image already tagged `nitpilot:smoke`). Task 6 and every later task run it.
 
-- [ ] **Step 1: Write the smoke test first**
+- [x] **Step 1: Write the smoke test first**
 
 Create `scripts/image-smoke.sh`:
 
@@ -528,7 +528,7 @@ In the root `package.json` scripts, after `dev:tunnel`:
     "image:smoke": "bash scripts/image-smoke.sh"
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [x] **Step 2: Run it to see it fail**
 
 Run: `npm run image:smoke`
 Expected: exit 1, ending with
@@ -538,7 +538,7 @@ image-smoke: FAIL: docker build failed
 ```
 and nothing left behind: `docker ps -a --filter name=nitpilot-smoke -q` and `docker network ls --filter name=nitpilot-smoke -q` print nothing.
 
-- [ ] **Step 3: Make `prisma` and `tsx` runtime dependencies of the server**
+- [x] **Step 3: Make `prisma` and `tsx` runtime dependencies of the server**
 
 The image installs only runtime dependencies (`npm ci --omit=dev`), and the container needs both: `prisma` for `migrate deploy`, `tsx` to run `src/main.ts` (today `tsx` is a root devDependency and `prisma` a server devDependency).
 
@@ -549,7 +549,7 @@ npm install --ignore-scripts
 
 Expected: `apps/server/package.json` lists `"prisma": "^7.10.0"` and `"tsx": "^4.23.15"` under `dependencies` (alphabetical, after `pg`), and `prisma` is gone from its `devDependencies`. `git diff --stat package-lock.json` shows about 166 changed lines, and every one apart from the two moved entries is a removed `"dev": true` / `"devOptional": true` flag (`git diff package-lock.json | grep '^[-+]' | grep -v '"dev": true\|"devOptional": true'` shows only the moves). No version changes. The root `tsx` devDependency stays (the web app's icon script uses it).
 
-- [ ] **Step 4: Write `.dockerignore` and the `Dockerfile`**
+- [x] **Step 4: Write `.dockerignore` and the `Dockerfile`**
 
 `.dockerignore`:
 
@@ -631,7 +631,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=2s -
 CMD ["sh", "-c", "/app/node_modules/.bin/prisma migrate deploy && exec node --import tsx src/main.ts"]
 ```
 
-- [ ] **Step 5: Run the smoke test to see it pass**
+- [x] **Step 5: Run the smoke test to see it pass**
 
 Run: `npm run image:smoke` (the first build takes about 3 minutes; later ones reuse the `npm ci` layers).
 Expected: exit 0, with these lines among the build output:
@@ -659,7 +659,7 @@ docker run --rm nitpilot:smoke sh -c 'id; find / -name ".env*" -not -path "/proc
 ```
 Expected: `uid=1000(node) gid=1000(node) groups=1000(node)`, no `.env` file at all, and `package.json prisma prisma.config.ts src tsconfig.json`.
 
-- [ ] **Step 6: Prove the stop check can fail**
+- [x] **Step 6: Prove the stop check can fail**
 
 The smoke test must catch a signal that never reaches node. Build a copy of the image without `exec` and test it (the copy lives in the scratchpad, never in the repo):
 
@@ -670,7 +670,7 @@ NITPILOT_SMOKE_SKIP_BUILD=1 npm run image:smoke
 ```
 Expected: exit 1 with `image-smoke: FAIL: the server exited with 143 after SIGTERM, not 0 (137 means Docker had to kill it)` (the shell, not node, got the signal and died of it). Then `npm run image:smoke` again rebuilds the real image → PASS.
 
-- [ ] **Step 7: Build and smoke-test the image in CI, on Node 22.x**
+- [x] **Step 7: Build and smoke-test the image in CI, on Node 22.x**
 
 In `.github/workflows/ci.yml`, the `test` job's `setup-node`:
 
@@ -710,11 +710,11 @@ and a second job at the end of the file:
 
 Validate both workflow files: `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -no-color` → no output, exit 0.
 
-- [ ] **Step 8: Write `docs/why/docker-images.md`**
+- [x] **Step 8: Write `docs/why/docker-images.md`**
 
 Plain language, in the voice of the other `docs/why/` pages (one-sentence summary first, a React comparison, "Where" at the end naming `Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh`). Cover: an image vs a container (the built `dist/` folder vs a running `vite preview` of it); layers and why the `package.json` files are copied before the source (cache, like a lockfile-keyed `node_modules` cache in CI); the four stages and why the runtime one has no dev dependencies, no tests' tools, and no `.env`; why the server runs as `node`, not root; why the container runs `prisma migrate deploy` itself and why running it again is safe; `--init` / `init: true` and `exec`, the signal path from `docker stop` to `shutdown()` in `main.ts`, and the 143 the smoke test saw without `exec`; the `HEALTHCHECK` and what `docker ps` shows; what `image:smoke` checks and that CI runs it on every PR.
 
-- [ ] **Step 9: Full suite, the smoke test, tick, ledger, commit**
+- [x] **Step 9: Full suite, the smoke test, tick, ledger, commit**
 
 Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && npm run image:smoke`
 Expected: protocol 84, CLI 349 + 14 skipped, server 1059, web 344, e2e 6 (all unchanged), typecheck and lint clean, `image-smoke: PASS`. (Playwright stays 19; this task doesn't touch the web app, so `npm run test:web-e2e` is optional here.)

@@ -30,7 +30,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 22 LTS, the same major as the Docker image (spec §17).
+          node-version: 22.x
           cache: npm
       - run: npm ci
       # The script only exists once the server has a Prisma schema (Task 12).
@@ -69,3 +70,25 @@ jobs:
           path: apps/web/test-results/
           retention-days: 14
           if-no-files-found: ignore
+
+  image:
+    name: Docker image (build + smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Build only, never push (the release workflow pushes). The layers are cached between runs, so a change that
+      # touches no dependency reuses the `npm ci` layers.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: nitpilot:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The image starts, serves the web app, stops cleanly on SIGTERM and starts again (scripts/image-smoke.sh).
+      - run: bash scripts/image-smoke.sh
+        env:
+          NITPILOT_SMOKE_SKIP_BUILD: '1'
