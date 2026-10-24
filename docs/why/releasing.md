@@ -22,7 +22,7 @@ The old way to publish from CI was to create an npm access token and paste it in
 
 **Trusted publishing** replaces it with an introduction. On npmjs.com you tell npm: "trust the workflow file `release.yml` in the repo `NikosGkikas13/nitpilot`". Then, on each run, GitHub signs a short-lived identity token (an **OIDC** token, which is just a signed note saying "this is run #123 of release.yml in NikosGkikas13/nitpilot") and npm checks the signature and the names. React comparison: it's like a Vercel deploy hook that works only from one repo and one branch, instead of an API key you carry around.
 
-Why the workflow says `id-token: write`: by default GitHub does not hand a job the right to ask for that signed note. The `npm` job asks for it, and only that job; the other jobs get `contents: read` or `packages: write` and nothing else. (`permissions: {}` at the top of the file turns everything off first.) Trusted publishing also needs npm 11.5.1 or newer, which is why the job upgrades npm before publishing.
+Why the workflow says `id-token: write`: by default GitHub does not hand a job the right to ask for that signed note. The `npm` job asks for it, and only that job; the other jobs get `contents: read` or `packages: write` and nothing else. (`permissions: {}` at the top of the file turns everything off first.) npm wants a new connection used within two days of making it, or it throws the connection away; that is why Nitpilot sets it up on release day, right before pushing the tag, and not weeks ahead. Trusted publishing also needs npm 11.5.1 or newer, which is why the job upgrades npm before publishing.
 
 ## What the provenance badge proves
 

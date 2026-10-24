@@ -1038,7 +1038,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 This commit comes before Steps 5–7: the `v0.1.0-rc.1` tag in Step 7 must point at a commit that has `release.yml`.
 
-- [ ] **Step 5: (user, say first: writes to npm) Claim the npm name**
+- [x] **Step 5: (user, say first: writes to npm) Claim the npm name**
 
 npm only lets a trusted publisher be set on a package that exists. I make `~/Desktop/PracticeProjects/.nitpilot-scratch/npm-placeholder/` with this `package.json` and a one-line `README.md` ("Placeholder. Nitpilot's CLI is published from https://github.com/NikosGkikas13/nitpilot."):
 
@@ -1058,7 +1058,7 @@ Then I say "this publishes to npm" and wait for go. Click-steps for the user, in
 4. Type `npm publish` and press Return. npm asks for 2FA again (it either prints a link to open in the browser, or asks `This operation requires a one-time password` and waits for the 6-digit code from your authenticator). Approve it. The terminal ends with `+ nitpilot@0.0.0`.
 5. Open https://www.npmjs.com/package/nitpilot. You see **nitpilot**, **0.0.0 • Public • Published a few seconds ago**, and the placeholder README.
 
-- [ ] **Step 6: (user, say first: changes npm settings) Link the package to the workflow**
+- [x] **Step 6: (user, say first: changes npm settings) Link the package to the workflow**
 
 Click-steps on npmjs.com, signed in with the same npm account:
 1. Open https://www.npmjs.com/package/nitpilot and click the **Settings** tab (top of the package page, next to Readme / Code / Dependents / Versions; only the owner sees it).
@@ -1066,7 +1066,9 @@ Click-steps on npmjs.com, signed in with the same npm account:
 3. Fill in: **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml` (just the file name, not the path), **Environment name** left empty. Click **Set up connection**. The section now shows one GitHub Actions publisher for `NikosGkikas13/nitpilot`, `release.yml`.
 4. Further down, under **Publishing access**, choose **Require two-factor authentication and disallow tokens** and click **Update Package Settings**. npm asks for 2FA once more; approve. From now on no npm token can publish `nitpilot`; only the workflow (and you, with 2FA) can.
 
-- [ ] **Step 7: (user, say first: writes to GitHub and GHCR) An `-rc` image from this branch**
+  Note (what happened): npm's Trusted Publisher form made the connection with "Permissions: npm stage publish" and "Status: Pending validation: publish once before <48 hours later> to validate this configuration". Its fields can't be edited, an unvalidated connection expires, and `release.yml` runs plain `npm publish` whose first run is `v0.1.0` in D5 (an `-rc` never publishes to npm). So the connection was deleted and the trusted publisher moves to Task 15 as a release-day step. The Publishing access setting ("Require two-factor authentication and disallow tokens") stays done.
+
+- [x] **Step 7: (user, say first: writes to GitHub and GHCR) An `-rc` image from this branch**
 
 I check `git status` is clean and `git log -1` is the Task 6 commit, then say "this pushes the branch and a tag to GitHub, and the tag pushes an image to GHCR" and wait for go. The user runs, from the repo folder (I don't push):
 
@@ -1088,7 +1090,7 @@ Click-steps, in the browser signed in to GitHub as **NikosGkikas13**:
 
 I read the **Image to GHCR** job's log (`gh run view --log`, read-only) and note the pushed tag and digest in the ledger.
 
-- [ ] **Step 8: Tick Steps 5–7**
+- [x] **Step 8: Tick Steps 5–7**
 
 In a follow-up commit after the review: tick Steps 5–7, append `Task 6: complete` to the ledger.
 
@@ -1120,6 +1122,7 @@ Checked at `c302c25` and in the scratch build; each line is where the step-level
 15. **The npm package has no README** (`npm publish --dry-run` lists only `dist/index.js` and `package.json`, plus `LICENSE` after Task 6), so npmjs.com shows an empty page for the CLI until one is there. Task 14 (D5) adds `apps/cli/README.md` (or copies the root README into the package); nothing in D2 publishes the CLI.
 16. **Validation tool.** `actionlint` from `rhysd/actionlint:1.7.7` (Docker, nothing installed) passes on both workflows; the task-level text's `@action-validator/cli` was not needed.
 17. **This Mac runs Node 24.3** (`node --test` and the dry-run were checked with it); CI and the image use 22.x, which is what the plan pins.
+18. **npm's trusted publisher and staged publishing (found live in Task 6).** The Trusted Publisher form offers a permission, `npm publish` or `npm stage publish`, and a new connection is "Pending validation" until a publish uses it within 48 hours; its fields can't be edited and it expires otherwise. Since the first npm publish by the workflow is `v0.1.0` in D5, Task 6 deleted its connection and Task 15 Step 1 creates it on release day (with `npm publish`). npm's staged publishing also left a public stub version `0.0.0-stage` next to the placeholder `0.0.0` (`latest` is 0.0.0), and may hold `0.1.0` for approval (Staged Packages tab or `npm stage approve <stage-id>`; also in Task 15 Step 1). Publishing a package also needs 2FA for write actions switched on in the npm account (the placeholder's first publish failed with E403 until it was).
 
 ---
 
@@ -1234,7 +1237,7 @@ D4 runs Nitpilot for real next to Odyhook. Every step that touches GitHub, the r
 
 ### Task 15: v0.1.0, the fresh-install check, and the Show HN draft
 
-- [ ] **Step 1: (say first) Release.** The user pushes the branch's state to `main` (their merge) and the tag `v0.1.0` (commands given). The workflow: image `0.1.0` and `latest` on GHCR; `nitpilot@0.1.0` on npm with the provenance badge (check npmjs.com/package/nitpilot shows "Built and signed on GitHub Actions"). Deprecate the placeholder: the user runs `npm deprecate nitpilot@0.0.0 "Placeholder; use 0.1.0 or later"`.
+- [ ] **Step 1: (say first) Release.** First the trusted publisher (click-steps on npmjs.com, signed in as the package owner): open https://www.npmjs.com/package/nitpilot → **Settings** → **Trusted Publisher** → **GitHub Actions**; fill **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml`, **Environment name** empty; for **Permissions** choose `npm publish` (not `npm stage publish`); **Set up connection**, approve with 2FA. npm wants the connection used within 48 hours (it shows "Pending validation"), so push the tag right after; if it expires, delete the connection and make it again (the fields can't be edited). The user pushes the branch's state to `main` (their merge) and the tag `v0.1.0` (commands given). The workflow: image `0.1.0` and `latest` on GHCR; `nitpilot@0.1.0` on npm with the provenance badge (check npmjs.com/package/nitpilot shows "Built and signed on GitHub Actions"). If npm's staged publishing holds the version for approval, the user approves it with 2FA (npmjs.com → the package's **Staged Packages** tab, or `npm stage approve <stage-id>`). Deprecate the placeholder: the user runs `npm deprecate nitpilot@0.0.0 "Placeholder; use 0.1.0 or later"`.
 - [ ] **Step 2:** Deploy `0.1.0` on the box (`NITPILOT_VERSION=0.1.0`, `docker compose pull && docker compose up -d`) and check `/healthz`.
 - [ ] **Step 3: The fresh-install check:** in a new folder with a fresh `NITPILOT_CONFIG_DIR`, `npm install -g nitpilot` (from npm, not the repo), `nitpilot --version` = 0.1.0, `nitpilot login` against nitpilot.dev, repeat Task 13 Step 2's single-player run once. Tick spec §20's D5 line in `docs/acceptance/plan-3.md`.
 - [ ] **Step 4: The Show HN draft** in `docs/launch/show-hn.md`: a title under 80 characters starting "Show HN:", a first comment in the user's voice (what it is, why: the launch story; how: own agent, own machine, own subscription, one server process; what's honest: Claude Code only today, Gemini waiting on Google's sign-in, public repos on the hosted instance, self-host for private ones; the links). Plain, no hype words. The user posts it themselves.
