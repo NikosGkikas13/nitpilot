@@ -46,8 +46,7 @@ describe('ServerClient', () => {
     const fetch = fakeFetch(() => json({ error: { code: 'reauth', message } }, 401));
     const err = await new ServerClient(SERVER, 'nit_abc', fetch).myChats().catch((e: unknown) => e);
     expect(err).toMatchObject({ status: 401 });
-    expect((err as Error).message).toContain(message);
-    expect((err as Error).message).not.toContain('nitpilot login');
+    expect((err as Error).message).toBe(`Your GitHub sign-in expired. Sign in again at ${SERVER}/`);
   });
 
   it("passes on the server's own error message", async () => {

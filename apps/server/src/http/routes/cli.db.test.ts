@@ -167,6 +167,20 @@ describe('/api/me/chats', () => {
     expect(await res.json()).toMatchObject({ error: { code: 'reauth' } });
   });
 
+  it('answers 502 when GitHub does not answer', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const user = await makeUser();
+    await makeGithubSignIn(user.id);
+    const repo = await makeRepo();
+    await join(user, repo.id, 1);
+    const github = new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: () => json({ message: 'Server Error' }, 500) }));
+    const token = (await makeCliToken(user.id)).raw;
+    const res = await testApp({ github }).request('/api/me/chats', { headers: { authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ error: { code: 'github_unavailable' } });
+    log.mockRestore();
+  });
+
   it('asks GitHub once per repo, not once per chat', async () => {
     const user = await makeUser();
     await makeGithubSignIn(user.id);

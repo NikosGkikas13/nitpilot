@@ -85,9 +85,9 @@ export class ServerClient {
     }
     if (res.ok) return res;
     if (res.status === 401) {
-      const { code, message } = await errorBody(res);
+      const { code } = await errorBody(res);
       // The device token is fine; the person's GitHub sign-in on the web expired, and only signing in there fixes it.
-      if (code === 'reauth') throw new ServerError(401, `${message ?? res.statusText} Sign in at ${new URL('/', this.server).href}`);
+      if (code === 'reauth') throw new ServerError(401, `Your GitHub sign-in expired. Sign in again at ${new URL('/', this.server).href}`);
       throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
     }
     throw new ServerError(res.status, `${await errorMessage(res)} (HTTP ${res.status})`);

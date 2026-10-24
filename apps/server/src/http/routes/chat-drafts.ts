@@ -12,7 +12,8 @@ import { CLOSED, mayAct, ok, readableChat, type Ctx } from './chat-actions';
 
 /**
  * The Auto switch and Send / Discard on drafts (spec §10 "Chat writes", §9 "Auto" and "Drafts"). The same checks and
- * answers as the other chat writes (routes/chat-actions.ts): who you are (the browser's cookie only: a CLI token is refused), the Origin, read access, your role (`can`:
+ * answers as the other chat writes (routes/chat-actions.ts): who you are (the browser's cookie only: a CLI token is
+ * refused), the Origin, read access, your role (`can`:
  * only your own switch, only your own agent's drafts), then one engine event under the chat's lock. An event that
  * changes nothing (a second press, a draft that was sent or discarded meanwhile) is a 409 that says why
  * (docs/why/races-and-conflicts.md). docs/why/drafts-and-publish-jobs.md explains drafts and publish jobs.
