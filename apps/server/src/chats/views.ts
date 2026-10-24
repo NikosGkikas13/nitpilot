@@ -6,7 +6,7 @@ import {
 import type { Point, PrChat } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import { loadActivity, type Activity, type LiveClis } from './activity';
-import { failureKind } from './failed-flags';
+import { failureKind, failureReasonOf } from './failed-flags';
 import { permissionFacts, permissionsFor } from './permissions';
 import { githubAvatar } from './inbox';
 import { rulesFromJson } from './rules';
@@ -45,6 +45,8 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     failureKind(chatId, viewer.githubId),
     users.length > 0 ? prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: users.map((u) => u.id) } }, _max: { lastSeenAt: true } }) : [],
   ]);
+  // Why, in words, only when it was their agent that failed (a failed GitHub post has no reason to give).
+  const failureReason = failure === 'agent' ? await failureReasonOf(chatId, viewer.githubId) : null;
   const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
   const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? githubId;
   const rules = rulesFromJson(chat.repo.rulesJson);
@@ -87,6 +89,7 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
       role: yours.some((p) => p.role === 'author') ? 'author' : yours.length > 0 ? 'reviewer' : null,
       attention: (yours.find((p) => p.attention !== 'none')?.attention ?? 'none') as Attention,
       failure,
+      failureReason,
     },
     participants,
     activity: activityView(activity),

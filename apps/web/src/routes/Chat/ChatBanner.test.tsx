@@ -2,7 +2,7 @@ import type { ChatView, Permissions, WebMe } from '@nitpilot/protocol';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chatResponse, point } from '../../test/chat';
+import { authorDraft, chatResponse, point } from '../../test/chat';
 import { fakeApi, renderApp, type Answer } from '../../test/render';
 
 const leoMe: WebMe = { id: 'u2', githubId: '1002', login: 'leo', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
@@ -13,7 +13,7 @@ const none: Permissions = { note: true, resolve: [], continue: [], review: false
 function escalatedView(permissions: Partial<Permissions>): Partial<ChatView> {
   return {
     phase: 'escalated',
-    viewer: { role: 'reviewer', attention: 'decision', failure: null },
+    viewer: { role: 'reviewer', attention: 'decision', failure: null, failureReason: null },
     points: [
       point({ number: 1, status: 'escalated', escalationReason: 'category', category: 'security', severity: 'blocker', title: 'SQL built from input' }),
       point({ number: 2, status: 'escalated', escalationReason: 'disagreement', title: 'Keep the cursor opaque' }),
@@ -105,7 +105,7 @@ describe('the escalation banner (handoff §2 "Escalated")', () => {
 
 describe('the failure banners (handoff §2 "Failed")', () => {
   it('offers Retry when your agent failed, and says it will try again', async () => {
-    const fetch = serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent' }, permissions: { ...none, retry: true } }, {
+    const fetch = serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent', failureReason: null }, permissions: { ...none, retry: true } }, {
       'POST /api/chats/chat_142/retry': (): Answer => [200, { status: 'queued' }],
     });
     renderApp(PATH);
@@ -116,7 +116,7 @@ describe('the failure banners (handoff §2 "Failed")', () => {
   });
 
   it('says when the retry waits for the step before it', async () => {
-    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent' }, permissions: { ...none, retry: true } }, {
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent', failureReason: null }, permissions: { ...none, retry: true } }, {
       'POST /api/chats/chat_142/retry': (): Answer => [200, { status: 'waiting' }],
     });
     renderApp(PATH);
@@ -125,9 +125,40 @@ describe('the failure banners (handoff §2 "Failed")', () => {
   });
 
   it('sends you to reconnect GitHub, never to Retry, when a post in your name failed', async () => {
-    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'github_post' }, permissions: { ...none, retry: true } });
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'github_post', failureReason: null }, permissions: { ...none, retry: true } });
     renderApp(PATH);
     expect(await screen.findByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute('href', `/auth/github/login?next=${encodeURIComponent(PATH)}`);
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+});
+
+describe('why a job failed, and the drafts banner', () => {
+  it('says why your agent failed', async () => {
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent', failureReason: 'quota' }, permissions: { ...none, retry: true } });
+    renderApp(PATH);
+    expect(await screen.findByText('Your agent ran out of usage for now. Retry once your plan resets.')).toBeInTheDocument();
+    expect(screen.queryByText('The timeline says why.')).not.toBeInTheDocument();
+  });
+
+  it('still points at the timeline when the reason is not known', async () => {
+    serve({ viewer: { role: 'reviewer', attention: 'failed', failure: 'agent', failureReason: null }, permissions: { ...none, retry: true } });
+    renderApp(PATH);
+    expect(await screen.findByText('The timeline says why.')).toBeInTheDocument();
+  });
+
+  it('points at your drafts, and Review drafts scrolls to the first draft card', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    serve({
+      viewer: { role: 'reviewer', attention: 'drafts', failure: null, failureReason: null },
+      drafts: [authorDraft({ jobId: 'job_9', owner: 'leo', role: 'author' }), authorDraft({ jobId: 'job_10', owner: 'leo', role: 'author' })],
+      permissions: { ...none, drafts: ['job_9', 'job_10'] },
+    });
+    renderApp(PATH);
+    expect(await screen.findByText('2 drafts wait for you')).toBeInTheDocument();
+    expect(screen.getByText("Your agent's work is ready. Send it or discard it.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Review drafts' }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('draft-job_9'));
   });
 });

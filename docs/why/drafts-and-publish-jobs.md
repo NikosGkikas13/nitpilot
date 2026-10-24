@@ -57,6 +57,10 @@ Two failures mean the draft can never be sent (`engine/results.ts`, `DRAFT_OUT_O
 
 For these two, the job isn't retried. The draft is marked `discarded` with a line saying why ("The drafted fixes are out of date: the branch moved"), and the chat carries on from where it is: the next address pass runs, and with Auto still off, its result is a new draft. Any other failure follows the usual retries; one that fails for good leaves the draft waiting, so you can Send it again.
 
+## Known issue: a crash between the push and the report
+
+If the CLI crashes after it pushed a draft but before it reported that to the server, and someone then pushes on top of it, the retry sees a moved branch and the draft is marked out of date, though its commit did land. Nothing is lost: the chat carries on correctly from the new head. It only reads wrongly in the timeline, and we haven't fixed it because the window is small.
+
 ## Why Discard doesn't loop
 
 With Auto off, a naive rule would go: the points are open, so run the author's agent; it makes a draft; you discard it; the points are still open, so run the agent again; and so on, spending your daily job cap on work you said you didn't want.

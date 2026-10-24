@@ -3,7 +3,7 @@ import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
   ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
-  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
@@ -44,7 +44,7 @@ describe('web API bodies', () => {
       id: 'chat_1', repo: 'acme/shop-api', number: 142, title: 'Cursor pagination', url: 'https://github.com/acme/shop-api/pull/142',
       author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'escalated', round: 2, maxRounds: 3,
       merged: false, closed: false, trusted: true, isDraft: false,
-      viewer: { role: 'reviewer', attention: 'decision', failure: null },
+      viewer: { role: 'reviewer', attention: 'decision', failure: null, failureReason: null },
       participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, auto: false, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
       activity: { kind: 'none', who: null, why: null, offlineSince: null },
       points: [{
@@ -63,6 +63,13 @@ describe('web API bodies', () => {
     expect(() => ChatResponse.parse({ ...body, view: { ...view, phase: 'waiting' } })).toThrow();
     const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
     expect(FilesResponse.parse(files)).toEqual(files);
+  });
+
+  it("gives a failed viewer a reason only from the known list, or null", () => {
+    const chat = (failureReason: unknown) => ChatView.shape.viewer.safeParse({ role: 'author', attention: 'failed', failure: 'agent', failureReason });
+    expect(chat('quota').success).toBe(true);
+    expect(chat(null).success).toBe(true);
+    expect(chat('because').success).toBe(false);
   });
 
   it('takes a note of 1 to 4,000 characters, trimmed, and answers a change with ok', () => {

@@ -85,7 +85,7 @@ describe('Composer (handoff §2 "Composer")', () => {
     ['a merged PR', { view: { closed: true, merged: true, permissions: { note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] } } }, 'This PR was merged. The chat is read-only.'],
     ['a PR closed without merging', { view: { closed: true, merged: false, permissions: { note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] } } }, 'This PR was closed. The chat is read-only.'],
     ['an expired GitHub sign-in', { me: { githubAuth: 'needs_reauth' as const } }, 'Reconnect GitHub to send notes as yourself.'],
-    ['someone reading along', { view: { viewer: { role: null, attention: 'none' as const, failure: null }, permissions: { note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] } } }, "You're reading along. Only the author and the reviewers can message the agents."],
+    ['someone reading along', { view: { viewer: { role: null, attention: 'none' as const, failure: null, failureReason: null }, permissions: { note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] } } }, "You're reading along. Only the author and the reviewers can message the agents."],
   ])('is read-only for %s', async (_case, opts, text) => {
     serve(opts);
     renderApp(PATH);

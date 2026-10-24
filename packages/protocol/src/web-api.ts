@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MeResponse } from './api';
-import { AgentId, AgentJobType, Attention, Category, EscalationReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
+import { AgentId, AgentJobType, Attention, Category, EscalationReason, FailureReason, MessageKind, Phase, PointOrigin, PointStatus, Resolution, Role, Severity, Side } from './enums';
 import { JobResult, Snippet } from './job-result';
 
 // REST bodies the web app reads and sends (spec §10 "REST endpoints in Plan 2"). The web app parses every
@@ -330,6 +330,8 @@ export const ChatView = z.object({
     attention: Attention,
     /** Why you're flagged `failed`: your agent's job failed (Retry), or a GitHub post in your name did (Reconnect). */
     failure: z.enum(['agent', 'github_post']).nullable(),
+    /** Why your agent's job failed, to say it in words; null unless `failure` is 'agent', or when the reason isn't one this version knows. */
+    failureReason: FailureReason.nullable(),
   }),
   participants: z.array(ParticipantView),
   activity: ActivityView,

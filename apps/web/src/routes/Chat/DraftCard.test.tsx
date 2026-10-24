@@ -30,7 +30,7 @@ function serve(who: WebMe, draft: DraftView, view: Partial<ChatView> = {}, route
         view: {
           points,
           drafts: [draft],
-          viewer: { role: who.login === 'maya' ? 'author' : 'reviewer', attention: mine ? 'drafts' : 'none', failure: null },
+          viewer: { role: who.login === 'maya' ? 'author' : 'reviewer', attention: mine ? 'drafts' : 'none', failure: null, failureReason: null },
           permissions: { ...base.permissions, auto: [who.login === 'maya' ? 'author' : 'reviewer'], drafts: mine ? [draft.jobId] : [] },
           ...view,
         },
@@ -163,7 +163,7 @@ describe('DraftCard: an author draft', () => {
 
 describe('DraftCard: a reviewer draft', () => {
   it("shows leo's drafted points as point cards marked Draft, with the summary, and his buttons", async () => {
-    serve(leo, reviewerDraft(), { viewer: { role: 'reviewer', attention: 'drafts', failure: null } }, { 'POST /api/chats/chat_142/drafts/job_8/send': (): Answer => [200, { ok: true }] });
+    serve(leo, reviewerDraft(), { viewer: { role: 'reviewer', attention: 'drafts', failure: null, failureReason: null } }, { 'POST /api/chats/chat_142/drafts/job_8/send': (): Answer => [200, { ok: true }] });
     renderApp(PATH);
     const inside = within(await card('Draft: Your agent wants to raise 2 points'));
     expect(inside.getByText('Two points: the retry delay and a magic number.')).toBeInTheDocument();

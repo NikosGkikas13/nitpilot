@@ -299,7 +299,7 @@ Plus a server db test where the bundle builder fills `notes[].authorGithubId` an
 **Interfaces:**
 - Produces: `ChatView.viewer.failureReason: FailureReason | null` (null unless `attention === 'failed'` with `failure === 'agent'`). `Banner` gains `{ kind: 'drafts'; count: number }`, chosen by `chatBanner` after every failure, escalation and cap banner and before `waiting`, when the viewer has waiting drafts (`view.drafts` that are theirs). `failureText(reason: FailureReason): string` in `lib/banner.ts`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // banner.test.ts
@@ -321,13 +321,13 @@ it('points at your drafts', /* {kind:'drafts', count:2} → "2 drafts wait for y
 
 Server db test: a chat whose reviewer's newest job failed with `quota` → `viewer.failureReason === 'quota'`.
 
-- [ ] **Step 2: Run them to see them fail.** `npm test -w apps/web -- banner ChatBanner && npm run test:db -w apps/server -- views`.
+- [x] **Step 2: Run them to see them fail.** `npm test -w apps/web -- banner ChatBanner && npm run test:db -w apps/server -- views`.
 
-- [ ] **Step 3: Implement.** Copy for the sentences not listed above: one plain sentence each, no jargon, in the voice of the existing banners; the drafts banner is `tone="muted"`, title "`N` draft(s) wait for you", body "Your agent's work is ready. Send it or discard it.", button "Review drafts". Add the known issue to `docs/why/drafts-and-publish-jobs.md`: if the CLI crashes after pushing a draft but before reporting it and someone pushes on top, the retry sees a moved branch and the draft is marked out of date though its commit landed; the chat carries on correctly from the new head.
+- [x] **Step 3: Implement.** Copy for the sentences not listed above: one plain sentence each, no jargon, in the voice of the existing banners; the drafts banner is `tone="muted"`, title "`N` draft(s) wait for you", body "Your agent's work is ready. Send it or discard it.", button "Review drafts". Add the known issue to `docs/why/drafts-and-publish-jobs.md`: if the CLI crashes after pushing a draft but before reporting it and someone pushes on top, the retry sees a moved branch and the draft is marked out of date though its commit landed; the chat carries on correctly from the new head.
 
-- [ ] **Step 4: Run them to see them pass; whole suite; `npm run build -w apps/web`** and check Vite prints no chunk-size warning (if it does, make `routes/Settings` a lazy route in this task). Look at the two banners in the in-app browser, both themes, desktop and phone width.
+- [x] **Step 4: Run them to see them pass; whole suite; `npm run build -w apps/web`** and check Vite prints no chunk-size warning (if it does, make `routes/Settings` a lazy route in this task). Look at the two banners in the in-app browser, both themes, desktop and phone width.
 
-- [ ] **Step 5: Commit** — `feat(web): the failed banner says why, and waiting drafts get a banner`.
+- [x] **Step 5: Commit** — `feat(web): the failed banner says why, and waiting drafts get a banner`.
 
 ---
 

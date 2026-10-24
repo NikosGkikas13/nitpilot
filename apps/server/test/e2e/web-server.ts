@@ -229,6 +229,23 @@ control.post('/notify', async (c) => {
   const { reached } = await e2e.notifier.notify({ userIds: [user.id], kind: 'ready', chatId: 'sample-notification', ...notificationText('ready', 'octo/sandbox#1', []), url: `${e2e.url}/` });
   return c.json({ reached: reached.map(() => login), recorded: pushes.slice(before) });
 });
+/**
+ * Make someone's agent have failed in PR `number` for `reason` (a FailureReason): a failed job of theirs with that
+ * reason, and their flag set to `failed`, as a job that ran out of retries leaves things. Load the chat page after this
+ * to see the failed banner say why. Test-only: nothing is sent over the web socket.
+ */
+control.post('/fail-job', async (c) => {
+  const { login, number, reason } = (await c.req.json()) as { login: 'maya' | 'leo'; number: number; reason: string };
+  const user = e2e.users[login];
+  if (!user) return c.json({ error: `no test user "${login}"` }, 400);
+  const participant = await prisma.participant.findFirst({ where: { githubId: user.githubId, chat: { number } }, include: { chat: true } });
+  if (!participant) return c.json({ error: `${login} is not in PR #${number}` }, 400);
+  await prisma.job.create({
+    data: { chatId: participant.chatId, participantId: participant.id, userId: user.id, type: 'review', status: 'failed', failure: reason, round: participant.chat.round, headSha: participant.chat.headSha },
+  });
+  await prisma.participant.update({ where: { id: participant.id }, data: { attention: 'failed' } });
+  return c.body(null, 204);
+});
 /** Each person's running CLI, started by a test. */
 const clis = new Map<string, Awaited<ReturnType<typeof e2e.startCli>>>();
 /** Start someone's `nitpilot start` on the fake agent, with a scenario from apps/cli/src/agents/fake/scenarios. */

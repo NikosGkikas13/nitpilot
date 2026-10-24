@@ -1,4 +1,4 @@
-import type { Role } from '@nitpilot/protocol';
+import { FailureReason, type Role } from '@nitpilot/protocol';
 import type { Person } from '../engine/types';
 import { prisma } from '../lib/prisma';
 import type { Dispatch } from './dispatch';
@@ -25,6 +25,20 @@ export async function failureKind(chatId: string, githubId: string): Promise<Fai
     if ((await kindOf(p.id)) === 'agent') return 'agent';
   }
   return 'github_post';
+}
+
+/**
+ * Why the person's agent failed, for the banner: the `failure` of their newest failed job among the roles flagged
+ * `failed`. A value this version doesn't know (a newer server wrote it) is null, not an error.
+ */
+export async function failureReasonOf(chatId: string, githubId: string): Promise<FailureReason | null> {
+  const newest = await prisma.job.findFirst({
+    where: { chatId, status: 'failed', participant: { githubId, attention: 'failed' } },
+    orderBy: { createdAt: 'desc' },
+    select: { failure: true },
+  });
+  const parsed = FailureReason.safeParse(newest?.failure);
+  return parsed.success ? parsed.data : null;
 }
 
 /**

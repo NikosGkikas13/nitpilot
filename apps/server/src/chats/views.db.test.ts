@@ -49,6 +49,22 @@ describe('loadChatView (spec §10, handoff §2)', () => {
     expect((await loadChatView(chat.id, leo, clis)).permissions.retry).toBe(true);
   });
 
+  it("says why the person's newest job failed, and nothing when the failure is not their agent's or the reason is unknown", async () => {
+    const { chat, leo, leoP, clis } = await scene();
+    const failed = (failure: string | null, createdAt: string) =>
+      prisma.job.create({ data: { chatId: chat.id, participantId: leoP.id, userId: leo.id, type: 'review', status: 'failed', failure, round: 1, headSha: chat.headSha, createdAt: new Date(createdAt) } });
+    // Not flagged: no reason, whatever the jobs say.
+    await failed('auth', '2026-10-16T10:00:00Z');
+    expect((await loadChatView(chat.id, leo, clis)).viewer.failureReason).toBeNull();
+    await prisma.participant.update({ where: { id: leoP.id }, data: { attention: 'failed' } });
+    // The newest failed job wins over an older one.
+    await failed('quota', '2026-10-16T11:00:00Z');
+    expect((await loadChatView(chat.id, leo, clis)).viewer).toMatchObject({ failure: 'agent', failureReason: 'quota' });
+    // A value this version does not know is null, not a crash.
+    await failed('from_the_future', '2026-10-16T12:00:00Z');
+    expect((await loadChatView(chat.id, leo, clis)).viewer).toMatchObject({ failure: 'agent', failureReason: null });
+  });
+
   it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
     const { chat, leo, clis } = await scene();
     await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });
@@ -78,9 +94,9 @@ describe('loadChatView (spec §10, handoff §2)', () => {
 
   it("is the viewer's own: your role and why you're needed, or a reader's nothing", async () => {
     const { chat, leo, maya, clis } = await scene();
-    expect((await loadChatView(chat.id, leo, clis)).viewer).toEqual({ role: 'reviewer', attention: 'decision', failure: null });
-    expect((await loadChatView(chat.id, maya, clis)).viewer).toEqual({ role: 'author', attention: 'none', failure: null });
-    expect((await loadChatView(chat.id, await makeUser(), clis)).viewer).toEqual({ role: null, attention: 'none', failure: null });
+    expect((await loadChatView(chat.id, leo, clis)).viewer).toEqual({ role: 'reviewer', attention: 'decision', failure: null, failureReason: null });
+    expect((await loadChatView(chat.id, maya, clis)).viewer).toEqual({ role: 'author', attention: 'none', failure: null, failureReason: null });
+    expect((await loadChatView(chat.id, await makeUser(), clis)).viewer).toEqual({ role: null, attention: 'none', failure: null, failureReason: null });
   });
 
   it("shows each person's agent: online, offline since it was last seen, and working while its job runs", async () => {

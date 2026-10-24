@@ -18,7 +18,7 @@ export function chatView(over: Partial<ChatView> = {}): ChatView {
     id: 'chat_142', repo: 'acme/shop-api', number: 142, title: 'Add cursor pagination to /orders', url: 'https://github.com/acme/shop-api/pull/142',
     author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'reviewing', round: 1, maxRounds: 3,
     merged: false, closed: false, trusted: true, isDraft: false,
-    viewer: { role: 'author', attention: 'none', failure: null },
+    viewer: { role: 'author', attention: 'none', failure: null, failureReason: null },
     participants: [
       { githubId: '1001', login: 'maya', avatarUrl: 'https://avatars.githubusercontent.com/u/1001', role: 'author', isBot: false, onNitpilot: true, requested: false, auto: true, agent: { online: true, offlineSince: null, working: false } },
       { githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, auto: true, agent: { online: true, offlineSince: null, working: false } },
