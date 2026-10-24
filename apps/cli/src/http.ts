@@ -16,6 +16,14 @@ export class ServerError extends CliError {
 
 type CallOptions = { body?: unknown; auth?: boolean; signal?: AbortSignal };
 
+/**
+ * `path` on the server, keeping any path the server address has: https://host/nitpilot + /api/me is
+ * https://host/nitpilot/api/me. (`new URL('/api/me', server)` would drop the `/nitpilot`.) A query string in `path` is kept.
+ */
+export function joinServerUrl(server: string, path: string): URL {
+  return new URL(`${server.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`);
+}
+
 /** The Nitpilot server's REST API (spec §10). Every answer is checked against the protocol's schemas. */
 export class ServerClient {
   constructor(
@@ -74,7 +82,7 @@ export class ServerClient {
     }
     let res: Response;
     try {
-      res = await this.fetchImpl(new URL(path, this.server), {
+      res = await this.fetchImpl(joinServerUrl(this.server, path), {
         method,
         headers,
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
@@ -87,7 +95,7 @@ export class ServerClient {
     if (res.status === 401) {
       const { code } = await errorBody(res);
       // The device token is fine; the person's GitHub sign-in on the web expired, and only signing in there fixes it.
-      if (code === 'reauth') throw new ServerError(401, `Your GitHub sign-in expired. Sign in again at ${new URL('/', this.server).href}`);
+      if (code === 'reauth') throw new ServerError(401, `Your GitHub sign-in expired. Sign in again at ${joinServerUrl(this.server, '/').href}`);
       throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
     }
     throw new ServerError(res.status, `${await errorMessage(res)} (HTTP ${res.status})`);

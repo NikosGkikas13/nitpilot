@@ -34,7 +34,7 @@ export function jobBundle(): AgentJobBundle {
     round: 1,
     maxRounds: 3,
     apply: 'auto',
-    you: { login: 'leo', role: 'reviewer' },
+    you: { login: 'leo', githubId: '1', role: 'reviewer' },
     pr: {
       repoFullName: 'acme/shop-api',
       number: 142,

@@ -55,7 +55,7 @@ describe('jobTools', () => {
 
   it("runs an address job's checks over MCP", async () => {
     const server = await mcpServer();
-    const base = await mcpJob(prRepo(), { type: 'address', you: { login: 'maya', role: 'author' } });
+    const base = await mcpJob(prRepo(), { type: 'address', you: { login: 'maya', githubId: '7', role: 'author' } });
     const ctx = { ...base, checks: { test: [process.execPath, '-e', 'console.log("4 passed")'] } };
     const job = server.registerJob(jobTools(ctx));
     const agent = await connectAgent(job.url, job.token);

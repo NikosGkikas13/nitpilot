@@ -3,7 +3,7 @@ import { BRAND, type AgentId } from '@nitpilot/protocol';
 import { adapterFor } from '../agents/registry';
 import { configDir, ignoredSettingsIn, loadConfig, type PersonalConfig } from '../config/config';
 import { githubReposInRemoteList } from '../git/remotes';
-import { ServerClient } from '../http';
+import { joinServerUrl, ServerClient } from '../http';
 import { terminal, type Out } from '../out';
 import { runProgram, type RunProgram, type RunResult } from '../run-program';
 
@@ -90,7 +90,7 @@ async function checkAccount(client: Pick<ServerClient, 'me'>, config: PersonalCo
     const access: Check =
       me.githubAuth === 'ok'
         ? { name: 'GitHub access', status: 'ok', detail: `${BRAND.name} can post in your name` }
-        : { name: 'GitHub access', status: 'warn', detail: `expired: sign in again at ${new URL('/', config.server).href} so ${BRAND.name} can post in your name` };
+        : { name: 'GitHub access', status: 'warn', detail: `expired: sign in again at ${joinServerUrl(config.server, '/').href} so ${BRAND.name} can post in your name` };
     return [{ name: 'Account', status: 'ok', detail: `logged in as ${me.login}` }, access];
   } catch (err) {
     return [{ name: 'Account', status: 'fail', detail: (err as Error).message }];

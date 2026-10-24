@@ -257,7 +257,7 @@ git commit -am "feat(server): ready for a proxy and real traffic: forwarded addr
 **Interfaces:**
 - Produces: `AgentJobBundle.notes[i].authorGithubId: string` and `AgentJobBundle.you.githubId: string` (GitHub ids are strings in this codebase, as `Person.githubId`). `joinServerUrl(server: string, path: string): URL` in `apps/cli/src/http.ts`, used by `ServerClient` and `wsUrlFor`. Config `server` refine: `https:` always; `http:` only for `localhost`, `127.0.0.1`, `[::1]` or a `*.localhost` host, else the config error "The server address must start with https:// (http is only for a server on this computer)."
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // read.test.ts
@@ -283,13 +283,13 @@ it('takes http only for a server on this computer', () => {
 
 Plus a server db test where the bundle builder fills `notes[].authorGithubId` and `you.githubId` from the `Message.authorGithubId` and the participant.
 
-- [ ] **Step 2: Run them to see them fail** — `npm test -w apps/cli -- read http ws-client config && npm test -w packages/protocol`. Expected: FAIL.
+- [x] **Step 2: Run them to see them fail** — `npm test -w apps/cli -- read http ws-client config && npm test -w packages/protocol`. Expected: FAIL.
 
-- [ ] **Step 3: Implement.** `fromYou = note.authorGithubId === bundle.you.githubId`. `joinServerUrl` appends `path` (without its leading slash) to the server URL with exactly one slash between. The protocol change is required in both places: the CLI and the server ship together from D5 on, and no public CLI exists yet, so no protocol version bump (say so in the commit message).
+- [x] **Step 3: Implement.** `fromYou = note.authorGithubId === bundle.you.githubId`. `joinServerUrl` appends `path` (without its leading slash) to the server URL with exactly one slash between. The protocol change is required in both places: the CLI and the server ship together from D5 on, and no public CLI exists yet, so no protocol version bump (say so in the commit message).
 
-- [ ] **Step 4: Run them to see them pass, then the whole suite** (+ `npm run test:e2e`, since bundles change) → protocol ~84, CLI ~343, server ~1054, e2e 6.
+- [x] **Step 4: Run them to see them pass, then the whole suite** (+ `npm run test:e2e`, since bundles change) → protocol ~84, CLI ~343, server ~1054, e2e 6.
 
-- [ ] **Step 5: Commit** — `fix(cli): notes trusted by GitHub id; server addresses keep their path, and http only on this computer`.
+- [x] **Step 5: Commit** — `fix(cli): notes trusted by GitHub id; server addresses keep their path, and http only on this computer`.
 
 ### Task 4: Web: why a job failed, and a banner for a waiting draft
 

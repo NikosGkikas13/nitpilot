@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ServerClient } from './http';
+import { joinServerUrl, ServerClient } from './http';
 import { CLI_VERSION } from './version';
 
 type Call = { url: URL; init: RequestInit };
@@ -17,6 +17,18 @@ function fakeFetch(reply: (url: URL) => Response | Promise<Response>) {
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const SERVER = 'http://nitpilot.test';
+
+describe('joinServerUrl', () => {
+  it('keeps a path prefix on the server address', () => {
+    expect(joinServerUrl('https://h.example/nitpilot', '/api/me').href).toBe('https://h.example/nitpilot/api/me');
+    expect(joinServerUrl('https://h.example/nitpilot/', '/api/me').href).toBe('https://h.example/nitpilot/api/me');
+    expect(joinServerUrl('https://nitpilot.dev', '/api/me').href).toBe('https://nitpilot.dev/api/me');
+  });
+
+  it('keeps a query string in the path', () => {
+    expect(joinServerUrl('https://h.example/nitpilot', '/api/x?a=1').href).toBe('https://h.example/nitpilot/api/x?a=1');
+  });
+});
 
 describe('ServerClient', () => {
   it("sends the device's token and returns the checked answer", async () => {

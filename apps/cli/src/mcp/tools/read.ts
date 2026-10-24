@@ -199,8 +199,9 @@ export function getJob(ctx: McpJobContext) {
     conventions: worktree.conventions,
     // A note from the person this agent works for is that person asking: theirs to follow (spec §11). Anyone else's is
     // untrusted like the rest of the PR's text, so a fork's author can't steer the reviewer's agent with a note.
+    // Compared by GitHub id, not login: a login can be renamed, and someone else can take the old one.
     notes: bundle.notes.map((note) => {
-      const fromYou = note.author.toLowerCase() === bundle.you.login.toLowerCase(); // GitHub logins ignore case
+      const fromYou = note.authorGithubId === bundle.you.githubId;
       return { author: note.author, at: note.at, fromYou, body: fromYou ? note.body : wrapUntrusted('note', note.body) };
     }),
     points: bundle.points.map((point) => ({

@@ -12,7 +12,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function withChecks(checks: McpJobContext['checks'], env?: Record<string, string | undefined>): Promise<McpJobContext> {
   const pr = prRepo();
-  const ctx = await mcpJob(pr, { type: 'address', you: { login: 'maya', role: 'author' } });
+  const ctx = await mcpJob(pr, { type: 'address', you: { login: 'maya', githubId: '7', role: 'author' } });
   return { ...ctx, checks, worktree: { ...ctx.worktree, git: { ...ctx.worktree.git, env: env ?? pr.env } } };
 }
 
