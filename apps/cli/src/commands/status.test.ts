@@ -20,14 +20,14 @@ const chat = (over: Partial<MyChat> = {}): MyChat => ({
 });
 
 /** Run `nitpilot status` against a server that answers with this account and these chats. */
-async function run(githubAuth: 'ok' | 'needs_reauth', chats: MyChat[], token: string | null = 'nit_abc') {
+async function run(githubAuth: 'ok' | 'needs_reauth', chats: MyChat[], token: string | null = 'nit_abc', prefix = '') {
   const stub = await startStubServer({
-    'GET /api/me': { body: { login: 'maya', avatarUrl: null, githubAuth } },
-    'GET /api/me/chats': { body: { chats } },
+    [`GET ${prefix}/api/me`]: { body: { login: 'maya', avatarUrl: null, githubAuth } },
+    [`GET ${prefix}/api/me/chats`]: { body: { chats } },
   });
   onTestFinished(() => stub.close());
   const out = recordOut();
-  const env = { NITPILOT_CONFIG_DIR: tempDir(), NITPILOT_SERVER: stub.url, ...(token ? { NITPILOT_TOKEN: token } : {}) };
+  const env = { NITPILOT_CONFIG_DIR: tempDir(), NITPILOT_SERVER: stub.url + prefix, ...(token ? { NITPILOT_TOKEN: token } : {}) };
   await status({ env, out });
   return { out, stub };
 }
@@ -44,6 +44,11 @@ describe('nitpilot status', () => {
   it('warns when GitHub access needs a new sign-in', async () => {
     const { out, stub } = await run('needs_reauth', []);
     expect(out.text()).toContain(`! GitHub access expired. Sign in again at ${stub.url}/`);
+  });
+
+  it('keeps the path prefix of the server in the sign-in link', async () => {
+    const { out, stub } = await run('needs_reauth', [], 'nit_abc', '/nitpilot');
+    expect(out.text()).toContain(`Sign in again at ${stub.url}/nitpilot/`);
   });
 
   it('suggests `nitpilot retry` for a PR where your agent failed', async () => {

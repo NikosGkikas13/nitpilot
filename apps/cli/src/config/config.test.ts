@@ -82,6 +82,15 @@ describe('the server address', () => {
     expect(() => loadConfig({ env: {}, dir })).toThrow(/Invalid setting "server"/);
   });
 
+  it('takes no query or fragment, since a path is added after the address', () => {
+    for (const server of ['https://h.example/x?a=1', 'https://h.example/x#y', 'https://h.example/x?', 'https://h.example/x#']) {
+      expect(() => load({ NITPILOT_SERVER: server })).toThrow(/can't have a \?query or #fragment/);
+      const dir = tempDir();
+      writeConfig(dir, JSON.stringify({ server }));
+      expect(() => loadConfig({ env: {}, dir })).toThrow(/can't have a \?query or #fragment/);
+    }
+  });
+
   it('applies the same rule to the file', () => {
     const dir = tempDir();
     writeConfig(dir, JSON.stringify({ server: 'http://nitpilot.example' }));

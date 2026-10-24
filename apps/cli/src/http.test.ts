@@ -39,6 +39,12 @@ describe('ServerClient', () => {
     expect(init.headers).toMatchObject({ authorization: 'Bearer nit_abc', 'user-agent': `nitpilot/${CLI_VERSION}` });
   });
 
+  it('sends requests under the path prefix of the server address', async () => {
+    const fetch = fakeFetch(() => json({ login: 'maya', avatarUrl: null, githubAuth: 'ok' }));
+    await new ServerClient(`${SERVER}/nitpilot/`, 'nit_abc', fetch).me();
+    expect(fetch.calls[0]!.url.href).toBe(`${SERVER}/nitpilot/api/me`);
+  });
+
   it('posts JSON to start a login', async () => {
     const fetch = fakeFetch(() => json({ deviceCode: 'd', userCode: 'WDJB-MJHT', verifyUrl: `${SERVER}/cli/approve?code=WDJB-MJHT`, interval: 2, expiresIn: 600 }));
     await new ServerClient(SERVER, null, fetch).loginStart('laptop');
