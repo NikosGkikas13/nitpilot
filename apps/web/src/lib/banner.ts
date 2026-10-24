@@ -7,7 +7,7 @@ export type Banner =
   | { kind: 'failed_job' }
   | { kind: 'failed_post' }
   | { kind: 'cap' }
-  | { kind: 'drafts'; count: number }
+  | { kind: 'drafts'; count: number; firstJobId: string }
   | { kind: 'repo_not_linked'; repo: string }
   | { kind: 'waiting'; offlineSince: string | null }
   | { kind: 'ready_reviewer'; rounds: number; resolved: number }
@@ -32,7 +32,7 @@ export function chatBanner(view: ChatView, me: WebMe): Banner {
   }
   // Work your agent finished with Auto off waits for you: say so before "waiting", which would be about the agent.
   const drafts = myWaitingDrafts(view, me);
-  if (drafts.length > 0) return { kind: 'drafts', count: drafts.length };
+  if (drafts[0]) return { kind: 'drafts', count: drafts.length, firstJobId: drafts[0].jobId };
   if (a.kind === 'agent_waiting' && a.who === me.login) return { kind: 'waiting', offlineSince: a.offlineSince };
   if (view.phase === 'ready' && view.viewer.role !== null) {
     const rounds = view.round;
@@ -69,7 +69,7 @@ export function failureText(reason: FailureReason): string {
     case 'no_result':
       return 'Your agent finished without giving an answer.';
     case 'stale_head':
-      return 'The PR changed before your agent could start on it.';
+      return 'The PR moved on while your agent was working, so nothing was pushed.';
     case 'branch_moved':
       return 'Someone pushed to the branch while your agent was working.';
     case 'setup_failed':

@@ -6,7 +6,7 @@ import {
 import type { Point, PrChat } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import { loadActivity, type Activity, type LiveClis } from './activity';
-import { failureKind, failureReasonOf } from './failed-flags';
+import { failureOf } from './failed-flags';
 import { permissionFacts, permissionsFor } from './permissions';
 import { githubAvatar } from './inbox';
 import { rulesFromJson } from './rules';
@@ -40,13 +40,11 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
   const waitingDrafts = chat.jobs.filter((j) => j.status === 'done');
   const users = await prisma.user.findMany({ where: { githubId: { in: chat.participants.map((p) => p.githubId) } }, select: { id: true, githubId: true, avatarUrl: true } });
   const userOf = new Map(users.map((u) => [u.githubId, u]));
-  const [activity, failure, seen] = await Promise.all([
+  const [activity, failed, seen] = await Promise.all([
     loadActivity(chatId, clis, now),
-    failureKind(chatId, viewer.githubId),
+    failureOf(chatId, viewer.githubId),
     users.length > 0 ? prisma.cliToken.groupBy({ by: ['userId'], where: { userId: { in: users.map((u) => u.id) } }, _max: { lastSeenAt: true } }) : [],
   ]);
-  // Why, in words, only when it was their agent that failed (a failed GitHub post has no reason to give).
-  const failureReason = failure === 'agent' ? await failureReasonOf(chatId, viewer.githubId) : null;
   const lastSeen = (userId: string) => seen.find((s) => s.userId === userId)?._max.lastSeenAt ?? null;
   const loginOf = (githubId: string) => chat.participants.find((p) => p.githubId === githubId)?.login ?? githubId;
   const rules = rulesFromJson(chat.repo.rulesJson);
@@ -88,8 +86,9 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
     viewer: {
       role: yours.some((p) => p.role === 'author') ? 'author' : yours.length > 0 ? 'reviewer' : null,
       attention: (yours.find((p) => p.attention !== 'none')?.attention ?? 'none') as Attention,
-      failure,
-      failureReason,
+      failure: failed?.kind ?? null,
+      // Why, in words: only an agent failure has a reason to give (a failed GitHub post has none).
+      failureReason: failed?.reason ?? null,
     },
     participants,
     activity: activityView(activity),

@@ -65,6 +65,20 @@ describe('loadChatView (spec §10, handoff §2)', () => {
     expect((await loadChatView(chat.id, leo, clis)).viewer).toMatchObject({ failure: 'agent', failureReason: null });
   });
 
+  it("takes the reason from the role whose agent failed, not from another role's older-looking failure that was fixed since", async () => {
+    const { chat, leo, leoP, clis } = await scene();
+    // leo also reviews as a second role here: the author row of his own PR (a person can hold both roles).
+    const other = await makeParticipant(chat.id, leo, 'author', { attention: 'failed' });
+    await prisma.participant.update({ where: { id: leoP.id }, data: { attention: 'failed' } });
+    const job = (participantId: string, status: string, failure: string | null, createdAt: string) =>
+      prisma.job.create({ data: { chatId: chat.id, participantId, userId: leo.id, type: 'review', status, failure, round: 1, headSha: chat.headSha, createdAt: new Date(createdAt) } });
+    await job(leoP.id, 'failed', 'auth', '2026-10-16T10:00:00Z');
+    // The other role failed with quota later, but its newest job since then went fine: its flag is a GitHub post, not the agent.
+    await job(other.id, 'failed', 'quota', '2026-10-16T11:00:00Z');
+    await job(other.id, 'done', null, '2026-10-16T12:00:00Z');
+    expect((await loadChatView(chat.id, leo, clis)).viewer).toMatchObject({ failure: 'agent', failureReason: 'auth' });
+  });
+
   it('counts the rounds people granted with Continue in the limit, and keeps the team rule as it is', async () => {
     const { chat, leo, clis } = await scene();
     await prisma.prChat.update({ where: { id: chat.id }, data: { extraRounds: 1 } });

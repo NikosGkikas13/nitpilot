@@ -1,7 +1,6 @@
-import type { ChatView, PointView, WebMe } from '@nitpilot/protocol';
+import { FailureReason, type ChatView, type PointView, type WebMe } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { authorDraft, chatView, point } from '../test/chat';
-import { FailureReason } from '@nitpilot/protocol';
 import { chatBanner, escalationNote, failureText } from './banner';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
@@ -57,6 +56,7 @@ describe('failureText', () => {
   it('explains a failed job in words', () => {
     expect(failureText('quota')).toBe('Your agent ran out of usage for now. Retry once your plan resets.');
     expect(failureText('auth')).toBe("Your agent isn't signed in on that computer. Sign it in, then Retry.");
+    expect(failureText('stale_head')).toBe('The PR moved on while your agent was working, so nothing was pushed.');
     expect(failureText('timeout')).toBe('Your agent took too long and was stopped.');
     expect(failureText('branch_moved')).toBe('Someone pushed to the branch while your agent was working.');
     expect(Object.values(FailureReason.enum).every((r) => failureText(r).length > 0)).toBe(true);
@@ -66,8 +66,11 @@ describe('failureText', () => {
 describe('the drafts banner', () => {
   const mine = (jobId: string, over = {}) => authorDraft({ jobId, owner: 'maya', ...over });
   it('shows a banner for your waiting drafts', () => {
-    expect(chatBanner(view({ drafts: [mine('job_7')] }), me)).toEqual({ kind: 'drafts', count: 1 });
-    expect(chatBanner(view({ drafts: [mine('job_7'), mine('job_8')] }), me)).toEqual({ kind: 'drafts', count: 2 });
+    expect(chatBanner(view({ drafts: [mine('job_7')] }), me)).toEqual({ kind: 'drafts', count: 1, firstJobId: 'job_7' });
+    expect(chatBanner(view({ drafts: [mine('job_7'), mine('job_8')] }), me)).toEqual({ kind: 'drafts', count: 2, firstJobId: 'job_7' });
+  });
+  it("targets your own first draft even when someone else's comes before it", () => {
+    expect(chatBanner(view({ drafts: [mine('job_6', { owner: 'leo' }), mine('job_7'), mine('job_8')] }), me)).toEqual({ kind: 'drafts', count: 2, firstJobId: 'job_7' });
   });
   it("ignores someone else's drafts and ones already being sent", () => {
     expect(chatBanner(view({ drafts: [mine('job_7', { owner: 'leo' })] }), me)).toEqual({ kind: 'none' });

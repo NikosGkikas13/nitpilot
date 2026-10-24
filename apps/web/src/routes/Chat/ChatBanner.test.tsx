@@ -1,7 +1,7 @@
 import type { ChatView, Permissions, WebMe } from '@nitpilot/protocol';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { authorDraft, chatResponse, point } from '../../test/chat';
 import { fakeApi, renderApp, type Answer } from '../../test/render';
 
@@ -146,12 +146,14 @@ describe('why a job failed, and the drafts banner', () => {
     expect(await screen.findByText('The timeline says why.')).toBeInTheDocument();
   });
 
-  it('points at your drafts, and Review drafts scrolls to the first draft card', async () => {
+  it("points at your drafts, and Review drafts scrolls to your first draft card, not someone else's", async () => {
+    // jsdom has no scrollIntoView: give it one for this test and take it away again.
     const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    onTestFinished(() => void delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView);
     serve({
       viewer: { role: 'reviewer', attention: 'drafts', failure: null, failureReason: null },
-      drafts: [authorDraft({ jobId: 'job_9', owner: 'leo', role: 'author' }), authorDraft({ jobId: 'job_10', owner: 'leo', role: 'author' })],
+      drafts: [authorDraft({ jobId: 'job_8', owner: 'maya' }), authorDraft({ jobId: 'job_9', owner: 'leo', role: 'reviewer' }), authorDraft({ jobId: 'job_10', owner: 'leo', role: 'reviewer' })],
       permissions: { ...none, drafts: ['job_9', 'job_10'] },
     });
     renderApp(PATH);
