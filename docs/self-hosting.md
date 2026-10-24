@@ -91,9 +91,9 @@ docker compose pull
 docker compose up -d
 ```
 
-`pull` downloads the newest image for the tag in `NITPILOT_VERSION` (`latest` when it's empty), and `up -d` replaces only the containers whose image or settings changed. The server stops politely (connected CLIs reconnect on their own), runs any new database migrations, and starts.
+`pull` downloads the newest image for the tag in `NITPILOT_VERSION` (`latest` when it's empty; `latest` is the newest release, published from v0.1.0 on, so before that name a pre-release such as `0.1.0-rc.2` in `NITPILOT_VERSION`), and `up -d` replaces only the containers whose image or settings changed. The server stops politely (connected CLIs reconnect on their own), runs any new database migrations, and starts.
 
-To stay on one version, set `NITPILOT_VERSION=0.1.0` in `.env` and run `docker compose up -d`; to move, change it and run the same command (Compose downloads a version it doesn't have yet). Back up before upgrading: migrations only go forward, so returning to an older version after one ran is not guaranteed to work.
+A pre-release (`0.1.0-rc.2`) is never `latest`: it runs only when you name it in `NITPILOT_VERSION`. To stay on one version, set `NITPILOT_VERSION=0.1.0` in `.env` and run `docker compose up -d`; to move, change it and run the same command (Compose downloads a version it doesn't have yet). Back up before upgrading: migrations only go forward, so returning to an older version after one ran is not guaranteed to work.
 
 After editing `.env`, `docker compose up -d` recreates the containers that use it. `docker compose restart nitpilot` restarts the server with its current settings.
 
