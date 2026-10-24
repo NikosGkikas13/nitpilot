@@ -4,6 +4,8 @@
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
+# Prisma's schema engine (it runs `migrate deploy`) links against OpenSSL, and the slim image doesn't ship it.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 # Each workspace's package.json first: this layer, and the npm ci below, are reused until a dependency changes.
 FROM base AS manifests
@@ -24,6 +26,9 @@ RUN npm run db:generate -w apps/server && npm run build -w apps/web
 # source, and the container runs its migrations).
 FROM manifests AS prod-deps
 RUN npm ci --omit=dev --ignore-scripts -w apps/server -w packages/protocol
+# --ignore-scripts skipped Prisma's postinstall, the step that downloads its schema engine. Run it here, at build
+# time, so a container never downloads anything at boot (a self-hoster behind a firewall can still start it).
+RUN node node_modules/@prisma/engines/scripts/postinstall.js
 
 FROM base AS runtime
 # GHCR links the published image to this repository (its page, its README, who may push).

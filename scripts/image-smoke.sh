@@ -14,6 +14,7 @@ NET="$RUN-net"
 DB="$RUN-db"
 APP="$RUN-app"
 WS="$RUN-ws"
+OFFLINE="$RUN-offline"
 MEMORY_LIMIT_MIB=384
 
 # Test-only values for a database that lives for a minute. None of them is a secret.
@@ -23,7 +24,7 @@ SMOKE_TOKEN_HASH='74bf1f0eb2c7a3bd187e3c4af546ecf3b98d077eb1c3691865651b8c3276f7
 
 cleanup() {
   docker rm -f "$WS" "$APP" "$DB" >/dev/null 2>&1 || true
-  docker network rm "$NET" >/dev/null 2>&1 || true
+  docker network rm "$NET" "$OFFLINE" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -122,6 +123,18 @@ for _ in $(seq 1 20); do
 done
 contains "$(docker logs "$WS" 2>&1)" '^open' || fail "the CLI socket never opened: $(docker logs "$WS" 2>&1)"
 step "a CLI socket is connected"
+
+# A FRESH container (not a restart of one that already downloaded something into its own writable layer) must run its
+# migrations with no internet: Prisma's schema engine has to be in the image. `--internal` is a network with no route out.
+docker network create --internal "$OFFLINE" >/dev/null
+docker network connect "$OFFLINE" "$DB"
+OFFLINE_OUT=$(docker run --rm --network "$OFFLINE" -e DATABASE_URL="$DB_URL" -e CHECKPOINT_DISABLE=1 \
+  "$IMAGE" /app/node_modules/.bin/prisma migrate deploy 2>&1) \
+  || fail "a fresh container could not run its migrations offline: $OFFLINE_OUT"
+if contains "$OFFLINE_OUT" 'binaries.prisma.sh' || contains "$OFFLINE_OUT" 'failed to detect the libssl'; then
+  fail "a fresh container tried to download Prisma's engine: $OFFLINE_OUT"
+fi
+step "a fresh container migrates with no internet"
 
 step "image size: $(docker image ls "$IMAGE" --format '{{.Size}}')"
 MEMORY=$(docker stats --no-stream --format '{{.MemUsage}}' "$APP" | cut -d/ -f1 | tr -d ' ')

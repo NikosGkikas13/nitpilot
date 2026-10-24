@@ -35,6 +35,8 @@ The container's command first runs `prisma migrate deploy` and then starts the s
 
 Running it again is safe. Prisma records each migration it applied in the database, and a second run says "No pending migrations to apply" and does nothing. So restarting a container, or starting a new version on the old database, just works. The smoke test checks that message on its second start.
 
+Migrations also need Prisma's "schema engine", a separate program. `npm ci --ignore-scripts` skips the step that downloads it, so the `Dockerfile` runs that step itself at build time. Otherwise every new container would download it at boot, and a server behind a firewall couldn't start. The smoke test checks this too, with a fresh container on a network that has no internet.
+
 ## Stopping politely: `--init`, `exec` and SIGTERM
 
 `docker stop` sends the container a **signal** called SIGTERM, which means "please finish and exit". The server listens for it: `shutdown()` in `apps/server/src/main.ts` closes each connected CLI's socket with code 1012 ("server restarting", so the CLI reconnects on its own) and then exits with code 0.
@@ -50,7 +52,7 @@ The `HEALTHCHECK` line asks Docker to call `/healthz` every 30 seconds, from ins
 
 ## What `image:smoke` checks
 
-`npm run image:smoke` builds the image and runs it next to a throwaway Postgres, then checks that: `/healthz` answers; Docker reports it healthy; `GET /` returns the web app; the server uses under 384 MiB of memory while idle; `docker stop` ends with exit code 0 in under 10 seconds; a connected CLI socket is closed with 1012; and the same container starts again with its migrations already applied. It removes everything it made, pass or fail. CI runs it on every pull request (the `image` job in `.github/workflows/ci.yml`), so a change that breaks the image fails before it merges.
+`npm run image:smoke` builds the image and runs it next to a throwaway Postgres, then checks that: `/healthz` answers; Docker reports it healthy; `GET /` returns the web app; the server uses under 384 MiB of memory while idle; `docker stop` ends with exit code 0 in under 10 seconds; a connected CLI socket is closed with 1012; a fresh container migrates with no internet; and the same container starts again with its migrations already applied. It removes everything it made, pass or fail. CI runs it on every pull request (the `image` job in `.github/workflows/ci.yml`), so a change that breaks the image fails before it merges.
 
 ## Where
 

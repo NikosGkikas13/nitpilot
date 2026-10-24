@@ -385,6 +385,7 @@ NET="$RUN-net"
 DB="$RUN-db"
 APP="$RUN-app"
 WS="$RUN-ws"
+OFFLINE="$RUN-offline"
 MEMORY_LIMIT_MIB=384
 
 # Test-only values for a database that lives for a minute. None of them is a secret.
@@ -394,7 +395,7 @@ SMOKE_TOKEN_HASH='74bf1f0eb2c7a3bd187e3c4af546ecf3b98d077eb1c3691865651b8c3276f7
 
 cleanup() {
   docker rm -f "$WS" "$APP" "$DB" >/dev/null 2>&1 || true
-  docker network rm "$NET" >/dev/null 2>&1 || true
+  docker network rm "$NET" "$OFFLINE" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -494,6 +495,18 @@ done
 contains "$(docker logs "$WS" 2>&1)" '^open' || fail "the CLI socket never opened: $(docker logs "$WS" 2>&1)"
 step "a CLI socket is connected"
 
+# A FRESH container (not a restart of one that already downloaded something into its own writable layer) must run its
+# migrations with no internet: Prisma's schema engine has to be in the image. `--internal` is a network with no route out.
+docker network create --internal "$OFFLINE" >/dev/null
+docker network connect "$OFFLINE" "$DB"
+OFFLINE_OUT=$(docker run --rm --network "$OFFLINE" -e DATABASE_URL="$DB_URL" -e CHECKPOINT_DISABLE=1 \
+  "$IMAGE" /app/node_modules/.bin/prisma migrate deploy 2>&1) \
+  || fail "a fresh container could not run its migrations offline: $OFFLINE_OUT"
+if contains "$OFFLINE_OUT" 'binaries.prisma.sh' || contains "$OFFLINE_OUT" 'failed to detect the libssl'; then
+  fail "a fresh container tried to download Prisma's engine: $OFFLINE_OUT"
+fi
+step "a fresh container migrates with no internet"
+
 step "image size: $(docker image ls "$IMAGE" --format '{{.Size}}')"
 MEMORY=$(docker stats --no-stream --format '{{.MemUsage}}' "$APP" | cut -d/ -f1 | tr -d ' ')
 step "idle memory: $MEMORY"
@@ -583,6 +596,8 @@ docs
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
+# Prisma's schema engine (it runs `migrate deploy`) links against OpenSSL, and the slim image doesn't ship it.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 # Each workspace's package.json first: this layer, and the npm ci below, are reused until a dependency changes.
 FROM base AS manifests
@@ -603,6 +618,9 @@ RUN npm run db:generate -w apps/server && npm run build -w apps/web
 # source, and the container runs its migrations).
 FROM manifests AS prod-deps
 RUN npm ci --omit=dev --ignore-scripts -w apps/server -w packages/protocol
+# --ignore-scripts skipped Prisma's postinstall, the step that downloads its schema engine. Run it here, at build
+# time, so a container never downloads anything at boot (a self-hoster behind a firewall can still start it).
+RUN node node_modules/@prisma/engines/scripts/postinstall.js
 
 FROM base AS runtime
 # GHCR links the published image to this repository (its page, its README, who may push).
@@ -643,8 +661,9 @@ image-smoke: /healthz answers
 image-smoke: Docker reports the container healthy
 image-smoke: GET / is the web app
 image-smoke: a CLI socket is connected
-image-smoke: image size: 817MB
-image-smoke: idle memory: 189.6MiB
+image-smoke: a fresh container migrates with no internet
+image-smoke: image size: 859MB
+image-smoke: idle memory: 192.7MiB
 image-smoke: docker stop (SIGTERM)
 image-smoke: stopped with exit code 0 in 0s
 image-smoke: the CLI socket closed with 1012
@@ -652,7 +671,7 @@ image-smoke: starting the same container again (migrations already applied)
 image-smoke: /healthz answers after the restart
 image-smoke: PASS
 ```
-The size and memory vary a little (the scratch runs saw 817–827 MB and 179–243 MiB); put the two numbers in the task report. Idle memory must stay under 384 MiB (the script fails otherwise). Then check by hand:
+The size and memory vary a little (the runs saw 817–859 MB and 179–243 MiB); put the two numbers in the task report. Idle memory must stay under 384 MiB (the script fails otherwise). Then check by hand:
 
 ```bash
 docker run --rm nitpilot:smoke sh -c 'id; find / -name ".env*" -not -path "/proc/*" 2>/dev/null; ls /app/apps/server'
@@ -1084,8 +1103,8 @@ Checked at `c302c25` and in the scratch build; each line is where the step-level
 3. **No `wget` in `node:22-bookworm-slim`** (no `curl` either). The `HEALTHCHECK` asks `/healthz` with node's own `fetch`. It also gets `--start-period=60s --start-interval=2s` (Docker 25+) so it reports healthy within seconds, which the smoke test now waits for.
 4. **The smoke test checks more than the task-level text listed.** It also waits for Docker's own health status, adds a CLI token straight into the throwaway database and connects a WebSocket client (run from the image itself, which has `ws`) to see the 1012 close that Review Focus 4 asks for, fails when idle memory is 384 MiB or more (instead of only reporting it), and restarts the same container (`docker start`) for the second boot, checking Prisma's `No pending migrations to apply.` The host port is random and read again after each start. `NITPILOT_SMOKE_SKIP_BUILD=1` lets CI test the image it built with the GitHub Actions cache.
 5. **CI runs the smoke test,** not only `docker build`: the `image` job builds with `docker/build-push-action` (`push: false`, `load: true`, `type=gha` cache) and then runs `scripts/image-smoke.sh`.
-6. **Prisma 7 needs no OpenSSL** in the slim image: `migrate deploy` ran without it and without a warning (a scratch build with `apt-get install openssl` was tried and dropped). `CHECKPOINT_DISABLE=1` stops the prisma CLI's update check, which printed an "Update available 7.10.0 -> 8.0.0-rc.27" box and called out to Prisma at every start.
-7. **The image is about 820 MB** (Docker Desktop's figure; `node_modules` is 354 MB, of which the prisma CLI and its engines are about 190 MB). It's what `migrate deploy` on start costs; slimming it (a separate migrate image, or the bundled CLI only) is out of scope. Idle memory was 179–243 MiB across runs, well under the hosted 384m.
+6. **Prisma's schema engine needs OpenSSL, and has to be baked into the image.** The first scratch build missed both: `npm ci --ignore-scripts` skips `@prisma/engines`' postinstall, the step that downloads the `schema-engine` binary, so every fresh container downloaded it from binaries.prisma.sh at boot (and, with no OpenSSL, warned `failed to detect the libssl/openssl version`). The scratch run never noticed because its restart step was `docker start` of the same container, which kept the download in its writable layer. Fixed in the `Dockerfile`: the base stage installs `openssl` (Prisma then picks `debian-openssl-3.0.x`), and the prod-deps stage runs `node node_modules/@prisma/engines/scripts/postinstall.js` at build time. The smoke test now proves it: a fresh one-off container on a `--internal` network (no route to the internet) runs `prisma migrate deploy` and must not mention `binaries.prisma.sh`. `CHECKPOINT_DISABLE=1` stops the prisma CLI's update check, which printed an "Update available 7.10.0 -> 8.0.0-rc.27" box and called out to Prisma at every start.
+7. **The image is about 860 MB** (Docker Desktop's figure; `node_modules` is about 354 MB plus the baked-in schema engine, with the prisma CLI and its engines roughly 190 MB or more of that, and OpenSSL adds a little). It's what `migrate deploy` on start costs; slimming it (a separate migrate image, or the bundled CLI only) is out of scope. Idle memory was 179–243 MiB across runs, well under the hosted 384m.
 8. **`/healthz` is at `http/app.ts:58`** (the Code facts say 55); it answers without touching the database, so "healthy" means the HTTP server is up, not that Postgres is.
 9. **The image label.** `org.opencontainers.image.source` is set in the `Dockerfile` so the GHCR package is linked to the repo (shown under the repo's Packages, and its visibility can follow the repo at D4). Not in the task-level text.
 10. **The order in Task 6.** The task-level text committed in Step 8, after Step 7 pushes the `-rc` tag; the tag must point at a commit with `release.yml`, so the commit moves to the end of Step 4 and Step 8 only ticks Steps 5–7.
