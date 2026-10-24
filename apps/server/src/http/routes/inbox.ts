@@ -1,4 +1,4 @@
-import { BRAND, MarkReadRequest, type InboxResponse, type InboxRow } from '@nitpilot/protocol';
+import { BRAND, MarkReadRequest, type InboxResponse } from '@nitpilot/protocol';
 import { Hono } from 'hono';
 import type { RepoAccess, RepoAccessResult } from '../../auth/repo-access';
 import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
@@ -41,18 +41,18 @@ export function inboxRoutes(deps: { clis: LiveClis; access: RepoAccess }): Hono<
 }
 
 /**
- * Each row shows the PR's title and its newest message, so a row is only for someone who can still read
+ * Each row (the inbox's, and the CLI's chat list) shows the PR's title, so a row is only for someone who can still read
  * its repo on GitHub, checked with their own token (spec §14, §16). `RepoAccess` keeps each answer for 5
  * minutes, and each repo is asked about once however many rows it has.
  */
-async function rowsInReposYouCanRead(rows: InboxRow[], userId: string, access: RepoAccess): Promise<InboxRow[]> {
+export async function rowsInReposYouCanRead<T extends { repo: string }>(rows: T[], userId: string, access: RepoAccess): Promise<T[]> {
   const repos = [...new Set(rows.map((r) => r.repo))];
   let answers: RepoAccessResult[];
   try {
     answers = await Promise.all(repos.map((repo) => access.check(userId, repo)));
   } catch (err) {
     // GitHub is down, or rate limiting us: say so, rather than a bare 500.
-    console.error('[inbox] could not check repo access:', err);
+    console.error('[repo access] could not check repo access:', err);
     throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
   }
   if (answers.includes('reauth')) throw new HttpError('reauth', `Your GitHub sign-in expired, so ${BRAND.name} can't check which repos you can see. Sign in again.`);

@@ -5,6 +5,7 @@ import {
 } from '@nitpilot/protocol';
 import { Hono, type Context } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
+import type { RepoAccess } from '../../auth/repo-access';
 import { requireCliToken, type CliAuth } from '../../auth/cli-token';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
@@ -12,15 +13,16 @@ import { RateLimiter } from '../../lib/rate-limit';
 import { transcriptUrl } from '../../lib/urls';
 import type { MeUpdates } from '../../ws/web-wire';
 import { HttpError } from '../errors';
+import { rowsInReposYouCanRead } from './inbox';
 
 /** Each login start writes a row, so one address may start at most this many a minute (spec §14). */
 export const LOGIN_STARTS_PER_MINUTE = 10;
 
 /**
- * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats, retry and logging out. `meUpdates` tells the
+ * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats (only of repos `access` says you can read), retry and logging out. `meUpdates` tells the
  * person's open tabs when a login made a new token, so the setup checklist's "Connect your computer" ticks at once.
  */
-export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: { cli: CliAuth } }> {
+export function cliRoutes(deps: { access: RepoAccess; meUpdates?: MeUpdates }): Hono<{ Variables: { cli: CliAuth } }> {
   const app = new Hono<{ Variables: { cli: CliAuth } }>();
   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
 
@@ -62,7 +64,8 @@ export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variable
       url: transcriptUrl(p.chat.repo.fullName, p.chat.number),
       updatedAt: p.chat.updatedAt.toISOString(),
     }));
-    const body: MyChatsResponse = { chats };
+    // Each row shows the PR's title, so only repos you can still read on GitHub (the same check as the inbox).
+    const body: MyChatsResponse = { chats: await rowsInReposYouCanRead(chats, user.id, deps.access) };
     return c.json(body);
   });
 

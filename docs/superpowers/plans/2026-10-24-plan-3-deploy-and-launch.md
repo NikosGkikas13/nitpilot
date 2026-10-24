@@ -122,7 +122,7 @@ docs/why/trusting-a-proxy.md
 - Consumes: `requireUser`, `UserVariables` (`c.get('via')` = `'session' | 'cli'`), `HttpError('unauthorized', …)`, `RepoAccess.check(userId, repoFullName): Promise<'read' | 'none' | 'reauth'>`, `AppDeps.access`.
 - Produces: `requireSession` middleware in `auth/request-user.ts` (goes after `requireUser`; a CLI-token request → 401 `{ error: 'unauthorized', message: 'Sign in with GitHub first.' }`). `cli-requests.ts` uses it instead of its local `sessionOnly`. `registerCliRoutes` takes `access: RepoAccess` from deps.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `chat-drafts.db.test.ts`, a `describe('only a browser can send, discard or switch Auto')` using the existing `scene()` / `reviewDraft()` plus a CLI token for leo (`makeCliToken(leo.id)`), requests sent with `authorization: Bearer <token>` and no cookie:
 
@@ -154,20 +154,20 @@ it('answers 401 "sign in again" when the GitHub sign-in expired', async () => {
 it('asks GitHub once per repo, not once per chat', /* 3 chats in one repo → fake fetch saw 1 GET /repos/o/readable */);
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:db -w apps/server -- chat-drafts cli.db`
 Expected: the three draft tests FAIL (200 / 409 instead of 401), the first two `/api/me/chats` tests FAIL (the gone repo is listed; 200 instead of 401).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Move `sessionOnly` to `auth/request-user.ts` as the middleware `requireSession` and use it in `cli-requests.ts` and on the three routes in `chat-drafts.ts` (`requireUser, requireSession, requireSameOrigin`). In `/api/me/chats`, reuse the inbox's filter: export `rowsInReposYouCanRead` from `http/routes/inbox.ts` (move it to `chats/repo-filter.ts` if a route file importing another route file reads badly), make it generic over `{ repo: string }`, and run the mapped `MyChat[]` through it. That brings the same `reauth` 401 and `github_unavailable` 502 the inbox gives.
 
-- [ ] **Step 4: Run them to see them pass, then the whole suite**
+- [x] **Step 4: Run them to see them pass, then the whole suite**
 
 Run: `npm run test:db -w apps/server -- chat-drafts cli.db` → PASS. Then `npm test && npm run typecheck && npm run lint` → server 1043 (1037 + 6), everything else unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src

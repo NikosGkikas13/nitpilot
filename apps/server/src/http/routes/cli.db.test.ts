@@ -1,13 +1,12 @@
 import type { MyChatsResponse } from '@nitpilot/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import { makeChat, makeCliToken, makeRepo, makeUser, personOf } from '../../../test/db';
-import { fakeFetch } from '../../../test/fake-fetch';
+import { makeChat, makeCliToken, makeGithubSignIn, makeRepo, makeUser, personOf } from '../../../test/db';
+import { fakeFetch, json } from '../../../test/fake-fetch';
 import { testApp } from '../../../test/app';
 import { sessionCookieFor } from '../../../test/http';
 import { decideCliLogin, startCliLogin } from '../../auth/cli-login';
 import { Dispatcher } from '../../chats/dispatch';
 import { prisma } from '../../lib/prisma';
-import { generateToken } from '../../lib/tokens';
 import { GithubClient } from '../../platform/github/client';
 
 type LoginStart = { deviceCode: string; userCode: string; verifyUrl: string };
@@ -115,22 +114,69 @@ describe('nitpilot login', () => {
 });
 
 describe('/api/me/chats', () => {
+  /** Makes `user` a reviewer in a new open chat of `repo`. */
+  async function join(user: { id: string; githubId: string; login: string }, repoId: string, number: number) {
+    const chat = await makeChat(repoId, { number });
+    await prisma.participant.create({ data: { chatId: chat.id, githubId: user.githubId, role: 'reviewer', login: user.login, userId: user.id, attention: 'decision' } });
+    return chat;
+  }
   it("lists the open chats the CLI's user takes part in", async () => {
     const user = await makeUser();
+    await makeGithubSignIn(user.id);
     const repo = await makeRepo();
-    const chat = await makeChat(repo.id, { number: 142 });
-    await prisma.participant.create({ data: { chatId: chat.id, githubId: user.githubId, role: 'reviewer', login: user.login, userId: user.id, attention: 'decision' } });
+    const chat = await join(user, repo.id, 142);
     const closed = await makeChat(repo.id, { number: 143 });
     await prisma.prChat.update({ where: { id: closed.id }, data: { closedAt: new Date(), phase: 'closed' } });
     await prisma.participant.create({ data: { chatId: closed.id, githubId: user.githubId, role: 'reviewer', login: user.login } });
 
-    const t = generateToken();
-    await prisma.cliToken.create({ data: { userId: user.id, name: 'laptop', tokenHash: t.hash, prefix: t.prefix } });
-
-    const body = (await (await app().request('/api/me/chats', { headers: { authorization: `Bearer ${t.raw}` } })).json()) as MyChatsResponse;
+    const github = new GithubClient(fakeFetch({ [`GET /repos/${repo.fullName}`]: () => ({ id: 1 }) }));
+    const token = (await makeCliToken(user.id)).raw;
+    const res = await testApp({ github }).request('/api/me/chats', { headers: { authorization: `Bearer ${token}` } });
+    const body = (await res.json()) as MyChatsResponse;
     expect(body.chats).toEqual([
       expect.objectContaining({ id: chat.id, repo: repo.fullName, number: 142, role: 'reviewer', attention: 'decision', url: `http://localhost:8787/c/${repo.fullName}/142` }),
     ]);
+  });
+
+  it('lists only chats in repos the person can still read', async () => {
+    const user = await makeUser();
+    await makeGithubSignIn(user.id);
+    const [readable, gone] = [await makeRepo(), await makeRepo()];
+    await join(user, readable.id, 1);
+    await join(user, gone.id, 2);
+    const github = new GithubClient(
+      fakeFetch({
+        [`GET /repos/${readable.fullName}`]: () => ({ id: 1 }),
+        [`GET /repos/${gone.fullName}`]: () => json({ message: 'Not Found' }, 404),
+      }),
+    );
+    const token = (await makeCliToken(user.id)).raw;
+    const res = await testApp({ github }).request('/api/me/chats', { headers: { authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as MyChatsResponse).chats.map((c) => c.repo)).toEqual([readable.fullName]);
+  });
+
+  it('answers 401 "sign in again" when the GitHub sign-in expired', async () => {
+    const user = await makeUser();
+    await makeGithubSignIn(user.id, 'needs_reauth');
+    const repo = await makeRepo();
+    await join(user, repo.id, 1);
+    const token = (await makeCliToken(user.id)).raw;
+    const res = await testApp({ github: new GithubClient(fakeFetch({})) }).request('/api/me/chats', { headers: { authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: { code: 'reauth' } });
+  });
+
+  it('asks GitHub once per repo, not once per chat', async () => {
+    const user = await makeUser();
+    await makeGithubSignIn(user.id);
+    const repo = await makeRepo();
+    for (const number of [1, 2, 3]) await join(user, repo.id, number);
+    const fetch = fakeFetch({ [`GET /repos/${repo.fullName}`]: () => ({ id: 1 }) });
+    const token = (await makeCliToken(user.id)).raw;
+    const res = await testApp({ github: new GithubClient(fetch) }).request('/api/me/chats', { headers: { authorization: `Bearer ${token}` } });
+    expect(((await res.json()) as MyChatsResponse).chats).toHaveLength(3);
+    expect(fetch.calls.filter((call) => call.url.pathname === `/repos/${repo.fullName}`)).toHaveLength(1);
   });
 });
 

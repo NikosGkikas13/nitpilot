@@ -32,6 +32,16 @@ export const requireUser = createMiddleware<{ Variables: UserVariables }>(async 
 });
 
 /**
+ * For routes only the web app may use, even though a CLI token is also a valid sign-in: approving a CLI login,
+ * and Send / Discard / Auto on drafts (a person decides those, not their agent). A CLI-token request is answered
+ * as if no one were signed in. Goes after `requireUser`, which says how the request proved who it is.
+ */
+export const requireSession = createMiddleware<{ Variables: UserVariables }>(async (c, next) => {
+  if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
+  await next();
+});
+
+/**
  * A browser sends our cookie with any request to us, even one another site's page started. So a change made
  * with the cookie must come from our own pages (spec §14). A CLI's token isn't sent by browsers on their own,
  * so CLI requests need no such check. Goes after `requireUser`. It fails closed: only a request `requireUser`

@@ -2,7 +2,7 @@ import type { JobResult } from '@nitpilot/protocol';
 import * as samples from '@nitpilot/protocol/test-samples';
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../../../test/app';
-import { makeChat, makeGithubSignIn, makeMessage, makeRepo, makeUser, personOf } from '../../../test/db';
+import { makeChat, makeCliToken, makeGithubSignIn, makeMessage, makeRepo, makeUser, personOf } from '../../../test/db';
 import { fakeFetch, json } from '../../../test/fake-fetch';
 import { sessionCookieFor } from '../../../test/http';
 import { Dispatcher } from '../../chats/dispatch';
@@ -49,7 +49,14 @@ async function scene() {
     await dispatcher.dispatch(chat.id, { type: 'job_completed', jobId: job.id, attempt: 1, result });
     return job;
   };
-  return { chat, dispatcher, send, discard, auto, finish, users: { maya: maya!, leo: leo!, sam: sam!, zoe: zoe! } };
+  /** A request from leo's CLI: his token in `Authorization`, no cookie, as the CLI would send it. */
+  const asCli = async (method: 'POST' | 'PUT', path: string, body?: unknown) =>
+    app.request(path, {
+      method,
+      headers: { authorization: `Bearer ${(await makeCliToken(leo!.id)).raw}`, origin: ORIGIN, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  return { chat, dispatcher, send, discard, auto, asCli, finish, users: { maya: maya!, leo: leo!, sam: sam!, zoe: zoe! } };
 }
 
 /** leo's agent reviewed with Auto-review off: its point waits as his draft. */
@@ -71,6 +78,31 @@ async function fixesDraft() {
 const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
 const job = (id: string) => prisma.job.findUniqueOrThrow({ where: { id } });
 const publishJobs = (draftOfId: string) => prisma.job.findMany({ where: { draftOfId } });
+
+describe('only a browser can send, discard or switch Auto', () => {
+  const refused = async (res: Response) => {
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ error: { code: 'unauthorized', message: 'Sign in with GitHub first.' } });
+  };
+
+  it('refuses Send with a CLI token', async () => {
+    const s = await reviewDraft();
+    await refused(await s.asCli('POST', `/api/chats/${s.chat.id}/drafts/${s.review.id}/send`));
+    expect((await job(s.review.id)).applyState).toBe('draft');
+  });
+
+  it('refuses Discard with a CLI token', async () => {
+    const s = await reviewDraft();
+    await refused(await s.asCli('POST', `/api/chats/${s.chat.id}/drafts/${s.review.id}/discard`));
+    expect((await job(s.review.id)).applyState).toBe('draft');
+  });
+
+  it('refuses Auto with a CLI token', async () => {
+    const s = await reviewDraft();
+    await refused(await s.asCli('PUT', `/api/chats/${s.chat.id}/auto`, { role: 'reviewer', on: true }));
+    expect(await prisma.participant.findFirstOrThrow({ where: { chatId: s.chat.id, githubId: s.users.leo.githubId } })).toMatchObject({ auto: false });
+  });
+});
 
 describe('POST /api/chats/:id/drafts/:jobId/send', () => {
   it("sends leo's drafted review: its point enters the chat, and maya's agent is asked to fix it", async () => {
