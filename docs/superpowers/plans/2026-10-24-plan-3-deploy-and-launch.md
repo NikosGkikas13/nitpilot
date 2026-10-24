@@ -6575,7 +6575,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Why a scan, and why the whole history:** once the repo is public, anyone can `git clone` it and read every commit, including a key that was added in one commit and deleted in the next. gitleaks reads each commit's diff and matches it against a long list of secret patterns (AWS key ids, private keys, "generic API key" lookalikes). It's a spell-checker for secrets. A match in a test file is a false alarm to allowlist; a real match means rotating the secret, and that is the user's decision (see Step 1).
 
-- [ ] **Step 1: Scan the whole history, with no config**
+- [x] **Step 1: Scan the whole history, with no config**
 
 Why a mirror clone: a worktree's `.git` is a file that points at the main repo, so Docker can't see the history through it, and `.superpowers/` is NOT git-ignored here, so a report written into the repo would show up as an untracked file. Instead, clone the repo into a throwaway folder outside it (`--mirror` copies every branch, tag and remote ref; `--no-local` makes a real copy) and write the report there too.
 
@@ -6622,7 +6622,7 @@ Expected: exactly these 14 findings (13 rows; the `7348ec02` row has two), every
 
 **If there is any finding not on this list, STOP.** Tell the user the file, commit and rule only, never the value (not in chat, not in a commit message). Whether it's real, and then rotating it and rewriting history, is the user's call; the repo stays private until that is settled. Don't allowlist it to get past this step.
 
-- [ ] **Step 2: The allowlist, `.gitleaks.toml`**
+- [x] **Step 2: The allowlist, `.gitleaks.toml`**
 
 Create `.gitleaks.toml` at the repo root. Each `[[allowlists]]` block is one family of test values, matched as narrowly as gitleaks allows: only for the named rule, only in the named files, and only when the text around the value looks like the test line. `condition = "AND"` matters: gitleaks' default is OR, which would let a match on the path alone allowlist the whole file.
 
@@ -6726,7 +6726,7 @@ Expected: `no leaks found`, `exit=0`. (This scans untracked files too, such as `
 
 Note for later plans: plan text that copies a test value out of code (as plans 1a, 1b, 2 and 3 did) trips the scan in the plan file, so that plan's path has to be added to the matching allowlist's `paths` before it is committed.
 
-- [ ] **Step 3: The CI job**
+- [x] **Step 3: The CI job**
 
 Append this job to `.github/workflows/ci.yml`, after the `image` job, at the same indentation (the file already runs on every pull request and on pushes to `main`):
 
@@ -6762,7 +6762,7 @@ docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -no-color
 
 Expected: no output, exit 0.
 
-- [ ] **Step 4: Prove the CI command catches a leak**
+- [x] **Step 4: Prove the CI command catches a leak**
 
 In a throwaway clone, so nothing touches the repo. The key is built at runtime and never written into the plan or the repo (a literal fake key here would trip the scan). `.gitleaks.toml` is copied in and committed because CI sees it as part of the checkout.
 
@@ -6811,7 +6811,7 @@ Expected: still `leaks found: 1` and `exit=1`. The scan reads history, so deleti
 cd "$REPO" && rm -rf "$T/leakcheck"
 ```
 
-- [ ] **Step 5: Tick, ledger, commit; remove the scratch folder**
+- [x] **Step 5: Tick, ledger, commit; remove the scratch folder**
 
 ```bash
 rm -rf "$T" && unset T

@@ -1,0 +1,74 @@
+# gitleaks: the secret scanner CI runs on every PR and push (the `gitleaks` job in .github/workflows/ci.yml).
+# It keeps all of gitleaks' own rules and adds the allowlists below: each one is a test value that looks like a
+# secret but isn't one, matched as narrowly as gitleaks allows (the rule, the files, and the text around it).
+# A new finding means a new secret-shaped string: if it's real, remove and rotate it; if it's a test value, add an
+# allowlist here with a one-line reason. Never allowlist a whole file or rule.
+
+# The oldest gitleaks this file is tested with (the version CI pins).
+minVersion = "v8.30.1"
+
+[extend]
+useDefault = true
+
+# The image smoke test's token hash: the sha256 of a throwaway token for a database that lives for one minute.
+[[allowlists]]
+description = "image smoke test: SMOKE_TOKEN_HASH"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)scripts/image-smoke\.sh$''',
+  '''(^|/)docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^SMOKE_TOKEN_HASH=''']
+
+# A VAPID key pair made only for the env test (a private key starting with a zero byte); no server ever used it.
+[[allowlists]]
+description = "env test: the LEADING_ZERO VAPID pair"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/lib/env\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-15-plan-2-web-app\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^privateKey: ''']
+
+# A push subscription's `auth` value, copied from a browser into the tests; it only names a test endpoint.
+[[allowlists]]
+description = "push tests: a sample subscription's auth key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/http/routes/push\.db\.test\.ts$''',
+  '''(^|/)packages/protocol/src/web-api\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-15-plan-2-web-app\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^auth: ''']
+
+# The agent conformance suite's made-up MCP token (`tok-…`) for a server on 127.0.0.1 that never runs.
+[[allowlists]]
+description = "agent conformance: the fake MCP token"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/cli/src/agents/conformance/static\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^token: 'tok-''']
+
+# The sanitizer tests' samples: an AWS key id spelled from the alphabet and a truncated PEM header, which the
+# tests feed to the sanitizer to prove it redacts them.
+[[allowlists]]
+description = "sanitizer tests: fake AWS key id and private-key header"
+targetRules = ["aws-access-token", "private-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/lib/sanitize\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1a-server-core\.md$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents\.md$''',
+]
+regexTarget = "line"
+regexes = ['''^\s*\['an? (AWS key id|private key)', ''']
