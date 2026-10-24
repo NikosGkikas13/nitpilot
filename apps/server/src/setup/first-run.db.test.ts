@@ -231,6 +231,42 @@ describe('GET /first-run/callback', () => {
     expect(server.exit).not.toHaveBeenCalled();
   });
 
+  it("keeps the setup link usable when GitHub fails on its side, so a retry doesn't need a second app", async () => {
+    let calls = 0;
+    const { fetch, github } = fakeGithub(() => (++calls === 1 ? json({ message: 'Server Error' }, 500) : CONVERSION));
+    const server = firstRunServer({ github });
+    const state = await stateFrom(await askForManifest(server));
+
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(502);
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+
+    const retry = await callback(server, `code=the-code&state=${state}`);
+    expect(retry.status).toBe(302);
+    expect(retry.headers.get('location')).toBe('/first-run?done=1');
+    expect(fetch.calls).toHaveLength(2);
+    expect(await prisma.githubAppConfig.count()).toBe(1);
+  });
+
+  it('keeps the original expiry when GitHub failed: a retry after the hour is still refused', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Server Error' }, 500)).github });
+    const state = await stateFrom(await askForManifest(server));
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(502);
+    vi.advanceTimersByTime(60 * 60_000 + 1);
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+  });
+
+  it('uses the setup link up when GitHub refuses the code: a retry is refused without asking GitHub again', async () => {
+    const { fetch, github } = fakeGithub(() => json({ message: 'Not Found' }, 404));
+    const server = firstRunServer({ github });
+    const state = await stateFrom(await askForManifest(server));
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    const retry = await callback(server, `code=the-code&state=${state}`);
+    expect(retry.status).toBe(400);
+    expect((await errorOf(retry)).message).toBe('This setup link expired or was changed. Start again at /first-run.');
+    expect(fetch.calls).toHaveLength(1);
+  });
+
   it("answers 400 when GitHub doesn't know the code (it lasts an hour)", async () => {
     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Not Found' }, 404)).github });
     const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);

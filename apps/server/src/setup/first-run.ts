@@ -35,7 +35,8 @@ export type FirstRunDeps = {
 };
 
 /**
- * The `state` values handed out with a manifest, each good for one callback within the hour. In memory: a restart
+ * The `state` values handed out with a manifest, each good for one finished callback within the hour. (A callback that
+ * fails on GitHub's side isn't finished: the state stays, with its original expiry, so the owner can reload.) In memory: a restart
  * forgets them, which only means starting again at /first-run. Like the `state` of "Sign in with GitHub"
  * (docs/why/oauth-pkce.md), it proves the browser coming back started here, through this server's own form.
  */
@@ -51,11 +52,15 @@ class PendingStates {
     return state;
   }
 
-  /** Is this a state we handed out that hasn't expired? Either way it can't be used again. */
-  take(state: string): boolean {
+  /** Is this a state we handed out that hasn't expired? Doesn't use it up: that is `forget`. */
+  isUsable(state: string): boolean {
     const expiresAt = this.expiresAt.get(state);
-    this.expiresAt.delete(state);
     return expiresAt !== undefined && expiresAt > this.now();
+  }
+
+  /** Use the state up: it can't start another callback. */
+  forget(state: string): void {
+    this.expiresAt.delete(state);
   }
 
   private forgetExpired(): void {
@@ -145,9 +150,20 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
   app.get('/first-run/callback', async (c) => {
     const code = c.req.query('code');
     const state = c.req.query('state');
-    if (!code || !state || !states.take(state)) throw new HttpError('validation_error', EXPIRED_LINK);
+    if (!code || !state || !states.isUsable(state)) throw new HttpError('validation_error', EXPIRED_LINK);
 
-    const { creds, ownerLogin } = await convertManifest(deps.github, code);
+    let converted;
+    try {
+      converted = await convertManifest(deps.github, code);
+    } catch (err) {
+      // GitHub failing on its side (no answer, a 5xx, a half answer) may have created the app already. Keep the state,
+      // so reloading this page retries instead of making the owner create a second app. Any other outcome ends the link.
+      const githubFailed = err instanceof HttpError && err.code === 'github_unavailable';
+      if (!githubFailed) states.forget(state);
+      throw err;
+    }
+    states.forget(state);
+    const { creds, ownerLogin } = converted;
     try {
       await saveGithubApp(creds, ownerLogin);
     } catch (err) {

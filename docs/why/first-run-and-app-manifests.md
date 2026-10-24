@@ -34,7 +34,7 @@ The code is 8 characters from 31 letters and digits (no `0`/`O` or `1`/`I`/`L`, 
 
 ## Why `state`
 
-The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one callback. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
+The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one finished callback. If GitHub itself fails during the callback (no answer, a 5xx, a half answer), the `state` stays usable until its original expiry, so reloading retries instead of making the owner create a second app on GitHub; success, GitHub refusing the code and the 409 all use it up. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
 
 ## Why the credentials are encrypted, and why a changed key stops the server
 
