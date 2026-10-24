@@ -84,13 +84,23 @@ export class ServerClient {
       throw new ServerError(0, `Can't reach ${this.server}: ${(err as Error).message}`);
     }
     if (res.ok) return res;
-    if (res.status === 401) throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
+    if (res.status === 401) {
+      const { code, message } = await errorBody(res);
+      // The device token is fine; the person's GitHub sign-in on the web expired, and only signing in there fixes it.
+      if (code === 'reauth') throw new ServerError(401, `${message ?? res.statusText} Sign in at ${new URL('/', this.server).href}`);
+      throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
+    }
     throw new ServerError(res.status, `${await errorMessage(res)} (HTTP ${res.status})`);
   }
 }
 
 /** The message in the server's `{ error: { message } }` body, or the status text. */
 async function errorMessage(res: Response): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  return body?.error?.message ?? res.statusText;
+  return (await errorBody(res)).message ?? res.statusText;
+}
+
+/** The `{ error: { code, message } }` body of a failed answer; both are undefined when the body isn't that. */
+async function errorBody(res: Response): Promise<{ code?: string; message?: string }> {
+  const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+  return body?.error ?? {};
 }

@@ -41,6 +41,15 @@ describe('ServerClient', () => {
     await expect(new ServerClient(SERVER, 'nit_old', fetch).me()).rejects.toThrow('Run `nitpilot login`');
   });
 
+  it('says to sign in on the web, not to log in again, when the GitHub sign-in expired', async () => {
+    const message = 'Your GitHub sign-in expired, so Nitpilot cannot check which repos you can see. Sign in again.';
+    const fetch = fakeFetch(() => json({ error: { code: 'reauth', message } }, 401));
+    const err = await new ServerClient(SERVER, 'nit_abc', fetch).myChats().catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 401 });
+    expect((err as Error).message).toContain(message);
+    expect((err as Error).message).not.toContain('nitpilot login');
+  });
+
   it("passes on the server's own error message", async () => {
     const fetch = fakeFetch(() => json({ error: { code: 'conflict', message: 'Nothing of yours failed on this PR.' } }, 409));
     await expect(new ServerClient(SERVER, 'nit_abc', fetch).myChats()).rejects.toThrow('Nothing of yours failed on this PR. (HTTP 409)');
