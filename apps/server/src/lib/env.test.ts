@@ -74,6 +74,11 @@ describe('getEnv', () => {
         'set all six GitHub App variables, or none to start in first-run mode; missing: GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET',
       );
     });
+
+    it('the error also points Docker installs at docs/self-hosting.md', () => {
+      vi.stubEnv('GITHUB_CLIENT_SECRET', '');
+      expect(() => getEnv()).toThrow('docs/self-hosting.md');
+    });
   });
 
   describe('Web Push keys', () => {

@@ -114,7 +114,7 @@ export function getEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n  ');
-    throw new Error(`Invalid environment:\n  ${problems}\nSee apps/server/.env.example.`);
+    throw new Error(`Invalid environment:\n  ${problems}\nSee apps/server/.env.example, or docs/self-hosting.md for a Docker install.`);
   }
   return parsed.data;
 }
