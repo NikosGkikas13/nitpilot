@@ -27,8 +27,10 @@ RUN npm run db:generate -w apps/server && npm run build -w apps/web
 FROM manifests AS prod-deps
 RUN npm ci --omit=dev --ignore-scripts -w apps/server -w packages/protocol
 # --ignore-scripts skipped Prisma's postinstall, the step that downloads its schema engine. Run it here, at build
-# time, so a container never downloads anything at boot (a self-hoster behind a firewall can still start it).
-RUN node node_modules/@prisma/engines/scripts/postinstall.js
+# time, so a container never downloads anything at boot (a self-hoster behind a firewall can still start it). That
+# script swallows a failed download and exits 0, so the `ls` fails the build if the engine file isn't there.
+RUN node node_modules/@prisma/engines/scripts/postinstall.js \
+ && ls node_modules/@prisma/engines/schema-engine-* >/dev/null
 
 FROM base AS runtime
 # GHCR links the published image to this repository (its page, its README, who may push).

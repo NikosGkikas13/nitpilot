@@ -15,6 +15,7 @@ DB="$RUN-db"
 APP="$RUN-app"
 WS="$RUN-ws"
 OFFLINE="$RUN-offline"
+MIGRATE="$RUN-migrate"
 MEMORY_LIMIT_MIB=384
 
 # Test-only values for a database that lives for a minute. None of them is a secret.
@@ -23,7 +24,7 @@ SMOKE_TOKEN='nit_image-smoke-only-not-a-real-token'
 SMOKE_TOKEN_HASH='74bf1f0eb2c7a3bd187e3c4af546ecf3b98d077eb1c3691865651b8c3276f7eb' # sha256 of SMOKE_TOKEN
 
 cleanup() {
-  docker rm -f "$WS" "$APP" "$DB" >/dev/null 2>&1 || true
+  docker rm -f "$WS" "$APP" "$MIGRATE" "$DB" >/dev/null 2>&1 || true
   docker network rm "$NET" "$OFFLINE" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -55,10 +56,10 @@ docker run -d --name "$DB" --network "$NET" \
   -e POSTGRES_USER=nitpilot -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=nitpilot \
   postgres:16-alpine >/dev/null
 for _ in $(seq 1 60); do
-  docker exec "$DB" pg_isready -U nitpilot -d nitpilot >/dev/null 2>&1 && break
+  docker exec "$DB" pg_isready -h 127.0.0.1 -U nitpilot -d nitpilot >/dev/null 2>&1 && break
   sleep 1
 done
-docker exec "$DB" pg_isready -U nitpilot -d nitpilot >/dev/null 2>&1 || fail "Postgres never became ready"
+docker exec "$DB" pg_isready -h 127.0.0.1 -U nitpilot -d nitpilot >/dev/null 2>&1 || fail "Postgres never became ready"
 
 step "starting the server"
 # Placeholder GitHub App values: the server starts with them, and its one GitHub call at boot (asking for failed
@@ -79,7 +80,7 @@ docker run -d --init --name "$APP" --network "$NET" -p 127.0.0.1::8787 \
 base_url() { echo "http://127.0.0.1:$(docker port "$APP" 8787/tcp | head -1 | sed 's/.*://')"; }
 
 wait_healthy() {
-  BASE=$(base_url)
+  BASE=$(base_url) || fail "no published port: the server exited while starting"
   for _ in $(seq 1 90); do
     [ "$(docker inspect -f '{{.State.Running}}' "$APP")" = "true" ] || fail "the server exited while starting"
     contains "$(curl -fsS "$BASE/healthz" 2>/dev/null || true)" '"ok":true' && return 0
@@ -106,7 +107,7 @@ step "GET / is the web app"
 # migrations with no internet: Prisma's schema engine has to be in the image. `--internal` is a network with no route out.
 docker network create --internal "$OFFLINE" >/dev/null
 docker network connect "$OFFLINE" "$DB"
-OFFLINE_OUT=$(docker run --rm --network "$OFFLINE" -e DATABASE_URL="$DB_URL" -e CHECKPOINT_DISABLE=1 \
+OFFLINE_OUT=$(docker run --rm --name "$MIGRATE" --network "$OFFLINE" -e DATABASE_URL="$DB_URL" -e CHECKPOINT_DISABLE=1 \
   "$IMAGE" /app/node_modules/.bin/prisma migrate deploy 2>&1) \
   || fail "a fresh container could not run its migrations offline: $OFFLINE_OUT"
 if contains "$OFFLINE_OUT" 'binaries.prisma.sh' || contains "$OFFLINE_OUT" 'failed to detect the libssl'; then
