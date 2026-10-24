@@ -36,7 +36,7 @@ It prints the address (or nothing, if the record isn't there yet).
 - **GitHub** sends webhooks, and sends people back after sign-in and install, to URLs built from `PUBLIC_URL` (`https://<NITPILOT_DOMAIN>`), which the first-run page writes into the GitHub App. They are written once, so the domain should be the one you mean to keep.
 - **Browsers and CLIs** open `https://<domain>` and connect `wss://<domain>/ws/cli`.
 
-If your DNS provider also offers to proxy traffic (Cloudflare's orange cloud), that proxy is "another HTTPS proxy" in front of Caddy: either switch it to DNS only, or follow "Behind another HTTPS proxy" in `docs/self-hosting.md`.
+If your DNS provider also offers to proxy traffic (Cloudflare's orange cloud), that proxy is "another HTTPS proxy" in front of Caddy: either switch it to DNS only, or follow "Behind another HTTPS proxy" in `docs/self-hosting.md` (a public proxy like Cloudflare needs its own published address ranges there, not `private_ranges`).
 
 ## Where
 

@@ -130,6 +130,8 @@ TRUSTED_PROXIES=private_ranges
 
 `TRUSTED_PROXIES` lists the addresses the outer proxy connects from (`private_ranges` covers the private networks, including Docker's own; or give exact ranges like `10.0.0.0/8`). Without it, Caddy tells the server every request came in over plain http, and sign-in keeps redirecting to `https://` in a loop. `NITPILOT_DOMAIN` stays the public name people open.
 
+`private_ranges` fits a proxy on a private network (the same machine, a private load balancer). A proxy on the public internet, such as Cloudflare's proxied DNS (the orange cloud), connects from its own public addresses, so `private_ranges` doesn't match and the sign-in loop stays. List its published ranges instead, separated by spaces (`TRUSTED_PROXIES=173.245.48.0/20 103.21.244.0/22 …`; Cloudflare lists them at https://www.cloudflare.com/ips/), and firewall port 80 so only those ranges can reach it. Or switch Cloudflare to "DNS only" and keep the default setup.
+
 Make sure only that proxy can reach port 80, since Caddy now believes what it says. When the proxy runs on the same machine, bind Caddy to the loopback address with a `docker-compose.override.yml` next to the other files (Compose reads it automatically):
 
 ```yaml
