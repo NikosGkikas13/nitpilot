@@ -45,6 +45,13 @@ const EnvSchema = z.object({
     .default('')
     .transform((s) => s.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)),
   /**
+   * Hosted instance: this server sits behind our own reverse proxy (Caddy), which puts the real client address last in
+   * X-Forwarded-For. Leave it false anywhere else, or anyone could fake their address (docs/why/trusting-a-proxy.md).
+   */
+  TRUST_PROXY: z.stringbool().default(false),
+  /** Hosted instance: delete chats this many days after they closed. Empty = keep them forever. */
+  CLOSED_CHAT_RETENTION_DAYS: z.preprocess((v) => (typeof v === 'string' ? v.trim() || undefined : v), z.coerce.number().int().positive().optional()),
+  /**
    * Web Push (spec §16, docs/why/web-push.md): the server's VAPID key pair, made once with `npm run vapid:keys`, and a
    * contact for the push services (`mailto:` or `https:`). Optional, but all three or none: without them push is off
    * and every notification goes to the CLI, as in Plan 1.

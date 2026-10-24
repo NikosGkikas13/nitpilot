@@ -113,6 +113,21 @@ describe('nitpilot login', () => {
   });
 });
 
+describe('nitpilot login behind a proxy', () => {
+  it('counts login starts per client address, read from the last X-Forwarded-For entry', async () => {
+    const server = testApp({ github: new GithubClient(fakeFetch({})), trustProxy: true });
+    const startFrom = (address: string) =>
+      server.request('/api/cli/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': `6.6.6.6, ${address}` },
+        body: JSON.stringify({ deviceName: 'laptop' }),
+      });
+    for (let i = 0; i < 10; i++) expect((await startFrom('203.0.113.1')).status).toBe(200);
+    expect((await startFrom('203.0.113.1')).status).toBe(429);
+    expect((await startFrom('203.0.113.2')).status).toBe(200);
+  });
+});
+
 describe('/api/me/chats', () => {
   /** Makes `user` a reviewer in a new open chat of `repo`. */
   async function join(user: { id: string; githubId: string; login: string }, repoId: string, number: number) {

@@ -10,7 +10,7 @@ import { loadItemsAfter } from './chats/timeline';
 import { createApp } from './http/app';
 import { createDeliveryHandler } from './ingest/handle';
 import { createIngest } from './ingest/process';
-import { purgeOldRows } from './ingest/record';
+import { purgeClosedChats, purgeOldRows } from './ingest/record';
 import { recoverOnBoot } from './ingest/recovery';
 import { acquireSingletonLock } from './lib/advisory-lock';
 import { getEnv, vapidDetails } from './lib/env';
@@ -34,7 +34,11 @@ async function main(): Promise<void> {
   const env = getEnv();
 
   // One server per database (spec §7, docs/why/one-process.md).
-  const lock = await acquireSingletonLock(env.DATABASE_URL);
+  const lock = await acquireSingletonLock(env.DATABASE_URL, undefined, (err) => {
+    // The lock is gone, so another server could start against this database. Stop, and let Docker restart us.
+    console.error('[lock] lost the database connection; exiting so Docker restarts the server', err);
+    process.exit(1);
+  });
   if (!lock) {
     console.error('Another Nitpilot server is already running against this database. Refusing to start.');
     process.exit(1);
@@ -85,7 +89,11 @@ async function main(): Promise<void> {
   // The server was away, not the CLIs: running jobs get a fresh lease, so CLIs that reconnect keep them.
   await cliJobs.leases.renewAfterRestart();
   cliJobs.start();
-  const purge = setInterval(() => void purgeOldRows().catch((err) => console.error('[purge]', err)), 60 * 60_000);
+  const purge = setInterval(() => {
+    void purgeOldRows().catch((err) => console.error('[purge]', err));
+    // Hosted instance only: self-hosters keep their closed chats.
+    if (env.CLOSED_CHAT_RETENTION_DAYS) void purgeClosedChats(new Date(), env.CLOSED_CHAT_RETENTION_DAYS).catch((err) => console.error('[purge]', err));
+  }, 60 * 60_000);
   // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
   const retries = setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000);
 

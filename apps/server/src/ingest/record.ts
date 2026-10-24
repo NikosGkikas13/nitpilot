@@ -22,3 +22,13 @@ export async function purgeOldRows(now = new Date()): Promise<{ rawEvents: numbe
   const cliLoginRequests = await prisma.cliLoginRequest.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - LOGIN_KEEP_MS) } } });
   return { rawEvents: rawEvents.count, seenComments: seenComments.count, cliLoginRequests: cliLoginRequests.count };
 }
+
+/**
+ * Delete chats that were closed more than `retentionDays` ago, with their messages, jobs and tasks (they cascade).
+ * Only used on the hosted instance (CLOSED_CHAT_RETENTION_DAYS); a self-hosted one keeps its history. Returns how many chats went.
+ */
+export async function purgeClosedChats(now: Date, retentionDays: number): Promise<number> {
+  const before = new Date(now.getTime() - retentionDays * 86_400_000);
+  const { count } = await prisma.prChat.deleteMany({ where: { closedAt: { lt: before } } });
+  return count;
+}

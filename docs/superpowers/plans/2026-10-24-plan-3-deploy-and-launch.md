@@ -187,7 +187,7 @@ git commit -m "fix(server): drafts and Auto take only the browser's cookie, and 
   - `acquireSingletonLock(databaseUrl, key?, onLost?: (err: Error) => void)` — `onLost` is called once if the lock's connection errors or ends unexpectedly. `main.ts` passes `(err) => { console.error('[lock] lost the database connection; exiting so Docker restarts the server', err); process.exit(1); }`.
   - `purgeClosedChats(now: Date, retentionDays: number): Promise<number>` in `ingest/record.ts`, deleting `PrChat` rows with `closedAt < now − days` (cascade); `main.ts` calls it in the hourly purge only when `CLOSED_CHAT_RETENTION_DAYS` is set.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // client-address.test.ts
@@ -232,18 +232,18 @@ it('deletes chats closed longer ago than the retention, and keeps the rest', asy
 });
 ```
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
 
 Run: `npm run test:unit -w apps/server -- client-address env && npm run test:db -w apps/server -- cli.db installations advisory-lock record`
 Expected: FAIL (module missing, unknown keys, 429 for the second client, 100 repos, `lost` never called, `purgeClosedChats` missing).
 
-- [ ] **Step 3: Implement** as the Interfaces say. `clientAddress` moves out of `routes/cli.ts`; `registerCliRoutes` reads `trustProxy` from deps (wired from `env.TRUST_PROXY` in `createApp`). Installation sync follows `Link: rel="next"` until there is none (GitHub's pagination), with the existing `GithubClient.api` (add a `response headers` return if it doesn't expose them; one helper `apiAllPages<T>(path, pick, opts)` in `platform/github/client.ts`). The lock listens to the client's `error` and `end` events. Add both variables to `.env.example` under "Hosted instance only" with one comment line each. Write `docs/why/trusting-a-proxy.md`: what `X-Forwarded-For` is, why only the last hop is ours, why the header is ignored without a proxy, in React terms (a value you only trust from your own parent component), pointing at `lib/client-address.ts`.
+- [x] **Step 3: Implement** as the Interfaces say. `clientAddress` moves out of `routes/cli.ts`; `registerCliRoutes` reads `trustProxy` from deps (wired from `env.TRUST_PROXY` in `createApp`). Installation sync follows `Link: rel="next"` until there is none (GitHub's pagination), with the existing `GithubClient.api` (add a `response headers` return if it doesn't expose them; one helper `apiAllPages<T>(path, pick, opts)` in `platform/github/client.ts`). The lock listens to the client's `error` and `end` events. Add both variables to `.env.example` under "Hosted instance only" with one comment line each. Write `docs/why/trusting-a-proxy.md`: what `X-Forwarded-For` is, why only the last hop is ours, why the header is ignored without a proxy, in React terms (a value you only trust from your own parent component), pointing at `lib/client-address.ts`.
 
-- [ ] **Step 4: Run them to see them pass, then the whole suite**
+- [x] **Step 4: Run them to see them pass, then the whole suite**
 
 Run the Step 2 command → PASS; then `npm test && npm run typecheck && npm run lint` → server about 1053.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(server): ready for a proxy and real traffic: forwarded addresses, every installed repo, a lost lock exits, closed-chat retention"

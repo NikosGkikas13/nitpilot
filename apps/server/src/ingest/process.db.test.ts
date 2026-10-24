@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDb, uid } from '../../test/db';
+import { makeChat, makeMessage, makeRepo, resetDb, uid } from '../../test/db';
 import { startCliLogin } from '../auth/cli-login';
 import { prisma } from '../lib/prisma';
 import { createIngest, MAX_DELIVERY_ATTEMPTS, processDelivery } from './process';
-import { purgeOldRows, recordDelivery } from './record';
+import { purgeClosedChats, purgeOldRows, recordDelivery } from './record';
 
 beforeEach(resetDb);
 
@@ -103,6 +103,27 @@ describe('purgeOldRows', () => {
     await startCliLogin('new laptop');
     expect(await purgeOldRows()).toMatchObject({ cliLoginRequests: 1 });
     expect(await prisma.cliLoginRequest.count()).toBe(1);
+  });
+});
+
+describe('purgeClosedChats', () => {
+  it('deletes chats closed longer ago than the retention, and keeps the rest', async () => {
+    const now = new Date('2026-10-24T12:00:00.000Z');
+    const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000);
+    const repo = await makeRepo();
+    const old = await makeChat(repo.id);
+    const recent = await makeChat(repo.id);
+    const open = await makeChat(repo.id);
+    await prisma.prChat.update({ where: { id: old.id }, data: { closedAt: daysAgo(91) } });
+    await prisma.prChat.update({ where: { id: recent.id }, data: { closedAt: daysAgo(89) } });
+    await prisma.prChat.update({ where: { id: open.id }, data: { createdAt: daysAgo(200) } });
+    await makeMessage(old.id, null);
+    await makeMessage(recent.id, null);
+
+    expect(await purgeClosedChats(now, 90)).toBe(1);
+    expect((await prisma.prChat.findMany({ select: { id: true } })).map((c) => c.id).sort()).toEqual([recent.id, open.id].sort());
+    expect(await prisma.message.count({ where: { chatId: old.id } })).toBe(0);
+    expect(await prisma.message.count({ where: { chatId: recent.id } })).toBe(1);
   });
 });
 

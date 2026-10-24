@@ -45,11 +45,14 @@ export type AppDeps = {
   webSockets?: { closeSession(tokenHash: string): void };
   /** Tells a person's open tabs that something about them changed (ws/web-wire.ts): after settings, device and push writes, and a CLI login. */
   meUpdates?: MeUpdates;
+  /** Read the client's address from X-Forwarded-For (we're behind our own proxy). Defaults to env TRUST_PROXY. */
+  trustProxy?: boolean;
   /** The built web app (apps/web/dist). Tests pass a folder of their own. */
   webDistDir?: string;
 };
 
 export function createApp(deps: AppDeps): Hono {
+  const env = getEnv();
   const app = new Hono();
   app.onError(onError);
   app.get('/healthz', (c) => {
@@ -66,12 +69,11 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', chatRoutes(deps));
   app.route('/', chatActionRoutes(deps));
   app.route('/', chatDraftRoutes(deps));
-  app.route('/', cliRoutes(deps));
+  app.route('/', cliRoutes({ ...deps, trustProxy: deps.trustProxy ?? env.TRUST_PROXY }));
   app.route('/', cliRequestRoutes());
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));
   // Last: everything else is the web app's (spec §7).
-  const env = getEnv();
   app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: env.PUBLIC_URL }));
   app.notFound((c) => c.json(errorBody('not_found', 'no such route'), 404));
   return app;

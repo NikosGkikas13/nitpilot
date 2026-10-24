@@ -39,6 +39,19 @@ describe('getEnv', () => {
     expect(getEnv()).toMatchObject({ PUBLIC_REPOS_ONLY: true, ALLOWED_LOGINS: ['maya', 'leo'] });
   });
 
+  it('reads TRUST_PROXY and CLOSED_CHAT_RETENTION_DAYS', () => {
+    expect(getEnv().TRUST_PROXY).toBe(false);
+    expect(getEnv().CLOSED_CHAT_RETENTION_DAYS).toBeUndefined();
+    vi.stubEnv('TRUST_PROXY', 'true');
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '90');
+    expect(getEnv()).toMatchObject({ TRUST_PROXY: true, CLOSED_CHAT_RETENTION_DAYS: 90 });
+    // Left empty, as in a copied .env.example, counts as not set.
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '');
+    expect(getEnv().CLOSED_CHAT_RETENTION_DAYS).toBeUndefined();
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '0');
+    expect(() => getEnv()).toThrow(/CLOSED_CHAT_RETENTION_DAYS/);
+  });
+
   it('names every missing variable', () => {
     vi.stubEnv('GITHUB_CLIENT_ID', '');
     vi.stubEnv('PUBLIC_URL', 'not a url');

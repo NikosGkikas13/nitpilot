@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeChat, resetDb } from '../../test/db';
+import { fakeFetch, json } from '../../test/fake-fetch';
 import { prisma } from '../lib/prisma';
-import { syncFromEvent } from './installations';
+import type { AppAuth } from '../platform/github/app-auth';
+import { GithubClient } from '../platform/github/client';
+import { syncFromEvent, syncInstallationFromApi } from './installations';
 
 beforeEach(resetDb);
 afterEach(() => vi.unstubAllEnvs());
@@ -44,5 +47,23 @@ describe('syncFromEvent', () => {
     await makeChat('501');
     await syncFromEvent({ scope: 'repo', action: 'privatized', installationId: '77', repo: repo('501', 'octo/a', true) });
     expect(await prisma.prChat.count()).toBe(1);
+  });
+});
+
+describe('syncInstallationFromApi', () => {
+  it('syncs every page of an installation with more than 100 repos', async () => {
+    const ghRepo = (n: number) => ({ id: 9000 + n, full_name: `octo/r${n}`, private: false, default_branch: 'main' });
+    const page = (from: number, count: number) => Array.from({ length: count }, (_, i) => ghRepo(from + i));
+    const github = new GithubClient(fakeFetch({
+      'GET /app/installations/77': () => ({ id: 77, account: { login: 'octo' } }),
+      // GitHub's Link header holds absolute URLs.
+      'GET /installation/repositories': (req) =>
+        req.url.searchParams.get('page') === '2'
+          ? { total_count: 130, repositories: page(100, 30) }
+          : json({ total_count: 130, repositories: page(0, 100) }, 200, { link: '<https://api.github.com/installation/repositories?per_page=100&page=2>; rel="next", <https://api.github.com/installation/repositories?per_page=100&page=2>; rel="last"' }),
+    }));
+    const appAuth = { jwt: () => 'jwt', installationToken: async () => 'token' } as unknown as AppAuth;
+    await syncInstallationFromApi('77', github, appAuth);
+    expect(await prisma.repo.count({ where: { installationId: '77' } })).toBe(130);
   });
 });
