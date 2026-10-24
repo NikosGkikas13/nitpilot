@@ -681,13 +681,26 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 - **Testing with two accounts:**
   - Two clones using SSH host aliases (`github-a`, `github-b`).
   - Two CLIs with `NITPILOT_CONFIG_DIR=~/.nitpilot-a` and `~/.nitpilot-b`. A runs Claude Code; B runs Gemini CLI, or the scripted fake agent while Gemini CLI is on hold (§22).
-- **Hosted instance (Plan 3),** on the Hetzner CX23 next to Odyhook:
-  - **First, check memory.** Run `docker stats` to see real usage; Odyhook's memory limits already add up to about 4.2 GB on a 4 GB box.
-  - **One new container,** `nitpilot-server`. It must never be called `web`, `postgres` or `redis`, because those names collide on the shared Docker network. It joins Odyhook's `hooksmith_default` network as an external network.
-  - **Database:** a `nitpilot` database and role inside Odyhook's Postgres, with the backup script extended to cover it.
-  - **Caddy:** add a site block for Nitpilot's domain; Caddy passes WebSockets through on its own. Odyhook's Caddyfile is tracked in its repo, so edit it there (not on the server), or first move Caddy into its own small compose project.
-  - **Settings:** `PUBLIC_REPOS_ONLY=true`. Closed chats are kept for 90 days.
-- **Self-hosting (Plan 3):** a `docker-compose.yml` (server + Postgres + Caddy) and a setup page that creates the GitHub App through GitHub's manifest flow.
+- **One image (Plan 3).** A multi-stage `Dockerfile` at the repo root (Odyhook's pattern: `node:22` slim, non-root) builds the server and the web app into one image; the server serves the web build as in Plan 2. On start the container runs `prisma migrate deploy`, then the server. The image is published to GitHub's container registry as `ghcr.io/nikosgkikas13/nitpilot` (`:<version>` and `:latest`) by the release workflow (§20 item 4); both the hosted instance and self-hosters pull it, so nobody builds on a server. CI builds the image on every PR (without pushing) so a broken Dockerfile fails early. A pre-release tag (`v0.1.0-rc.N`) pushes only the image, under its own tag, never `:latest` and never npm; that's what D4 deploys before the first real release.
+- **Closed-chat retention (Plan 3).** `CLOSED_CHAT_RETENTION_DAYS` (optional; unset keeps closed chats forever): the hourly purge in `main.ts` also deletes chats closed (merged or not) longer ago than that, with everything that hangs off them. The hosted instance sets 90.
+- **Hosted instance (Plan 3),** at **https://nitpilot.dev** (domain bought 2026-10-24), on the Hetzner CX23 next to Odyhook (`root@157.180.91.106`, hostname `hooksmith`, Odyhook's compose project in `/opt/hooksmith`):
+  - **First, check memory.** Run `docker stats` to see real usage; Odyhook's memory limits already add up to about 4.2 GB on a 4 GB box. Nitpilot's container gets `mem_limit: 384m` (raise only if `docker stats` shows it needs it). If the box can't fit it, stop and ask; don't add infrastructure.
+  - **One new container,** `nitpilot-server`, from Nitpilot's own small compose project in `/opt/nitpilot` (file tracked in this repo as `deploy/hosted/docker-compose.yml`, secrets in `/opt/nitpilot/.env` on the server only). It must never be called `web`, `postgres` or `redis`, because those names collide on the shared Docker network. It joins Odyhook's `hooksmith_default` network as an external network.
+  - **Database:** a `nitpilot` database and role inside Odyhook's Postgres.
+  - **Backups:** Odyhook's backup script (`/usr/local/bin/odyhook-backup.sh`) and its cron entry exist only on the box, so they're left alone. Nitpilot gets its own `nitpilot-backup.sh` (tracked in `deploy/hosted/`, copied to `/usr/local/bin/`) and its own line in `/etc/cron.d/`, running after Odyhook's: `pg_dump` of the `nitpilot` database → gzip → the same R2 bucket through the rclone remote already on the box, under a `nitpilot/` prefix.
+  - **The encryption key off the box:** the production GitHub App's private key and secrets live in the database, encrypted with `ENCRYPTION_KEY`, so a dump alone can't bring the instance back. The user copies `/opt/nitpilot/.env` into their password manager once (they run the `cat` themselves; it's never shown in chat or committed), and `docs/hosting.md`'s restore steps start from it.
+  - **Caddy:** add a `nitpilot.dev` site block (`reverse_proxy nitpilot-server:8787`) and a `www.nitpilot.dev` → apex redirect; Caddy passes WebSockets through and redirects http to https on its own. Odyhook's Caddyfile is tracked in its repo (NikosGkikas13/odyhook, public), and a push to its `main` redeploys Odyhook through its GitHub Actions workflow, so the change goes in as a reviewed commit there, deployed by that workflow; nothing is edited by hand on the server.
+  - **DNS:** an `A` record for `nitpilot.dev` and for `www` pointing at the box, set at the registrar just before Caddy's block goes live (Caddy needs it to get the certificate). `.dev` is HTTPS-only in browsers.
+  - **GitHub App:** a production app named `nitpilot` (the name was free on 2026-10-24), created through the instance's own first-run page (below), so the hosted instance is the first user of the self-hosting flow. It's owned by the user's personal account, NikosGkikas13 (GitHub can transfer it to an organization later), and **public** (anyone can install it).
+  - **Settings:** `PUBLIC_REPOS_ONLY=true`, `CLOSED_CHAT_RETENTION_DAYS=90`, fresh production secrets (`ENCRYPTION_KEY`, VAPID keys with `VAPID_SUBJECT=https://nitpilot.dev`), made on the server and never printed. Sign-in is open to anyone at launch (`ALLOWED_LOGINS` empty).
+  - **Deploying a new version:** on the server, `docker compose pull && docker compose up -d` in `/opt/nitpilot` (documented in `docs/hosting.md`). Automatic deploys are out of scope for Plan 3.
+- **Self-hosting (Plan 3),** for a team that wants private repos or its own server:
+  - **What they run:** `deploy/self-host/docker-compose.yml` (the published image + Postgres + Caddy) and a `.env` with three values: the domain, a Postgres password and `ENCRYPTION_KEY`. `docker compose up -d`, then open the domain. `PUBLIC_REPOS_ONLY` is off, so private repos work.
+  - **First-run page** (`/first-run`, in the web app): a server with no GitHub App credentials starts in **first-run mode**: it serves only the web app, `/first-run`, its API and the health check; everything else answers 503 "finish setup at /first-run". To stop a stranger from claiming a fresh server, the page asks for a one-time **setup code** the server prints in its log at boot (`docker compose logs`). With the code, the person picks a personal account or an organization, an app name, and who can install it (default: only that account or organization; the hosted instance picks "anyone", the manifest's `public: true`), and the page posts GitHub's **app manifest** (name, `PUBLIC_URL`-based webhook, callback and setup URLs, the events and permissions in §15) to GitHub with a `state` value. GitHub creates the app and sends the browser back with a code, which the server exchanges (`POST /app-manifests/{code}/conversions`) for the app id, slug, private key, client id and secret and webhook secret. These go into a single-row table, encrypted with `ENCRYPTION_KEY`; the server then exits, Docker's `restart: unless-stopped` starts it again in normal mode, and the page waits for it and sends the person to install the app and sign in.
+  - **Credentials from the environment still win:** if the `GITHUB_APP_*` / `GITHUB_CLIENT_*` / `GITHUB_WEBHOOK_SECRET` variables are set (as in development with `nitpilot-dev`), the server uses them and first-run mode never happens.
+  - **The CLI** points at the team's server with `NITPILOT_SERVER` or `"server"` in its config (§13); `docs/self-hosting.md` says so.
+  - **Caddy's address** comes from `.env` (`SITE_ADDRESS`, default the domain), so the same Caddyfile can also serve plain `:80` behind something else that already does TLS.
+  - **Verified** by running the self-host compose from a clean folder on the Mac with `SITE_ADDRESS=:80` behind the dev tunnel (Cloudflare does the TLS there, so Caddy's certificate step is proven by the hosted instance's Caddy instead), creating a throwaway app through the first-run page, and doing a single-player review on the sandbox repo; then deleting that app.
 
 ## 18. Out of scope for v1
 
@@ -799,11 +812,37 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
      - A failed job shows Retry, and Retry runs it again.
      - Web Push arrives on desktop Chrome and on the user's phone (on iPhone, from the Home Screen app), and clicking it opens the chat; with push on, the CLI shows no OS notification.
      - Someone who can read the repo but isn't a participant sees the chat read-only; someone who can't gets a 404.
-4. **Plan 3: shipping.**
-   - Deploy to Hetzner (public repos only).
-   - Self-hosting with Compose and the manifest setup.
-   - Register nitpilot.dev and publish to npm.
-   - README with a demo video, and the docs.
+4. **Plan 3: shipping.** Settled in brainstorming on 2026-10-20/24.
+
+   **The launch story** the README, the demo video and the Show HN post lead with: *a developer finds Nitpilot on GitHub, runs `npm install -g nitpilot`, signs in at nitpilot.dev and installs the app on their public repos. The next time a teammate requests their review, their own agent posts the review within seconds.* That's the single-player reviewer side (§6), which works with one person on Nitpilot. Two agents working it out in the chat, with one clean summary comment, comes second: "and when your teammate is on it too…". No new feature is needed for it.
+
+   **Accounts (the user's, all ready on 2026-10-24):** nitpilot.dev (registered, DNS not yet set), an npmjs.com account with two-factor auth (the `nitpilot` name was still free), SSH to the Hetzner box as root. The production GitHub App is made in D4 through the first-run page. Anything that needs these accounts is a click-step for the user, naming the account and spelling out each click; anything that writes to GitHub, npm, DNS or the server is said before it's done.
+
+| # | Milestone |
+|---|---|
+| D1 | Before going public: the Plan 2 leftovers (`docs/superpowers/plans/2026-10-15-plan-2-rulings-and-minors.md`, "Deferred to Plan 3"): draft Send/Discard and Auto cookie-only (`sessionOnly`); RepoAccess on the CLI's `GET /api/me/chats`; "a note from you" decided by GitHub id, not login; the failure reason in the failed banner; a chat banner for a waiting draft. A publish crash with someone pushing on top stays a documented known issue, and the bundle margin is only acted on if D1–D3 grow the main bundle past Vite's warning. Plus closed-chat retention (§17) |
+| D2 | One image: the `Dockerfile`, a `/healthz` check, migrations on start, CI building the image, and a release workflow: a `v*` tag pushes the image to GHCR and publishes the CLI to npm through **trusted publishing** (no npm token anywhere), with provenance; an `-rc.N` tag pushes only the image. npm only allows a trusted publisher on a package that exists, so the user claims the name first with a one-time `0.0.0` placeholder published from their laptop (2FA), then links the package to the workflow on npmjs.com (click-steps). The Node version is pinned to 22 LTS in the image and CI (the Plan 2 Task 1 engines note) |
+| D3 | Self-hosting: first-run mode, the setup code, the manifest flow and the encrypted credentials table; `deploy/self-host/` (compose, Caddyfile, `.env.example`); `docs/self-hosting.md`; the clean-folder run on the Mac (§17). Ends with a secret scan of the whole git history, because the repo goes public at the start of D4 |
+| D4 | Hosted: the user makes the repo and its GHCR image public (the user's call, 2026-10-24: a week early costs nothing, and the server then pulls without a token); memory check, the `nitpilot` database and role, backups extended (and a restore tried into a scratch database), `deploy/hosted/`, the Odyhook Caddyfile commit, DNS, the production `nitpilot` app made through nitpilot.dev's own first-run page, `docs/hosting.md` (the runbook: deploy, logs, restart, restore). Ends with the live run below and the demo recording |
+| D5 | Launch: the README (launch story first, the demo video, install, how it works, self-hosting, a security-contact line); a docs pass (architecture, `docs/why/`, adapters); `v0.1.0` tag → the release workflow publishes `nitpilot` to npm (with provenance) and the image to GHCR; a check from a clean folder that `npm install -g nitpilot` works against nitpilot.dev; the Show HN draft (`docs/launch/show-hn.md`) for the user to post |
+
+   **Demo video:** under a minute, a PR reviewed live. Shot list (about 45 s): a teammate's PR on GitHub and "Request review" clicked → the reviewer's terminal, where `nitpilot start` takes the job within a second or two → the agent's review lands on the PR, inline comments in the reviewer's name → a glimpse of the chat on nitpilot.dev. The user records it on the real nitpilot.dev during D4's live run (QuickTime or similar) from a small, readable seeded PR in the sandbox repo; the plan gives the click-steps and what to have open. It goes in the README as an MP4 uploaded to GitHub (plays inline), with a short GIF for places that don't play video.
+
+   **Plan 3 acceptance test (live, on nitpilot.dev):**
+   - **Setup:** the production `nitpilot` app installed on the sandbox repo; the reviewer (NikosGkikas13) runs the CLI with Claude Code against `https://nitpilot.dev` (no tunnel, no `NITPILOT_SERVER`); the author (ngkdev93-jpg) is not on Nitpilot for the single-player run, and runs the CLI with the fake agent for the agent-to-agent run.
+   - **It passes when:**
+     - `http://nitpilot.dev` and `www.nitpilot.dev` both end at `https://nitpilot.dev`, with a valid certificate.
+     - Single-player reviewer: the review job starts within 5 seconds of "Request review", and the review is posted on the PR in the reviewer's name.
+     - Agent-to-agent: the chat reaches READY with exactly one `nitpilot[bot]` summary comment.
+     - Web Push arrives on desktop Chrome and on the iPhone Home Screen app, with no per-run callback URL.
+     - A webhook from a private repo is dropped (`PUBLIC_REPOS_ONLY`).
+     - `docker compose restart` in `/opt/nitpilot` mid-job loses nothing: the CLI reconnects and the job completes.
+     - The nightly backup contains the `nitpilot` database, and restoring it into a scratch database works.
+     - `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers.
+   - D5 repeats the single-player run once with the CLI installed from npm.
+   - The demo is recorded during D4's run: it starts at the PR, so it doesn't need npm or the public repo; the bot it shows is `nitpilot[bot]`.
+
+   **Not in Plan 3:** automatic deploys, error tracking (Sentry), a marketing site beyond the web app's landing page, the Gemini CLI adapter (still on hold, §22), private repos on the hosted instance (§18).
 
 ## 21. Docs
 
@@ -811,11 +850,11 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 - `docs/why/`: short, plain-language explainers for a frontend developer. Topics: webhooks, WebSockets, why one process, how jobs survive restarts, leases and fencing, git worktrees, prompt injection. Plan 2 adds: serving a single-page app from the API server, the web socket and its Origin check, chat access rules, drafts and publish jobs, Web Push and VAPID, service workers and PWAs.
 - `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
 - `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it. `docs/acceptance/plan-2.md` does the same for Plan 2.
-- `docs/self-hosting.md` (Plan 3).
+- Plan 3: `docs/self-hosting.md` (for a team running its own), `docs/hosting.md` (the runbook for nitpilot.dev), `docs/launch/show-hn.md` (the draft post), the README rewritten around the launch story (§20 item 4), and `docs/why/` explainers for Docker images and containers, a reverse proxy and TLS certificates (Caddy), DNS records, GitHub App manifests and first-run mode, releasing (tags, GHCR, npm trusted publishing and provenance), and backups and restores.
 
 ## 22. Risks and open questions
 
-- **Name squatting.** `nitpilot` was free on npm and nitpilot.dev looked unregistered on 2026-10-07. Claim both early.
+- **Name squatting.** `nitpilot` was free on npm and nitpilot.dev looked unregistered on 2026-10-07. nitpilot.dev was registered on 2026-10-24; the npm name is claimed by the first publish (D5).
 - **Agent CLI flags change quickly.** The conformance suite and the version checks in `nitpilot doctor` catch drift. If an adapter can't pass the suite for a mode, it doesn't declare that mode.
 - **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
 - **Re-requested reviews (checked in the sandbox, 2026-10).** Re-requesting a review from someone who had already reviewed fires `pull_request.review_requested` again, with that reviewer in `requested_reviewer`. So it starts a new review as a first request does. The `synchronize` and thread-reply triggers for single-player reviewers (§15) stay, for the reviewers who never get re-requested.
