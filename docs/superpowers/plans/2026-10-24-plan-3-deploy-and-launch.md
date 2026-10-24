@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: D1 and D2 at step level (D2 written 2026-10-24 against `c302c25`, see "Checked against the code (D2)"); D3–D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
+> **Status: D1, D2 and D3 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`; see each "Checked against the code" section); D4–D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
 **Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README with a demo video and a Show HN draft.
 
@@ -25,7 +25,7 @@ Plans 1 and 2's Global Constraints apply. In addition (values copied from the sp
 - **The hosted container** is named `nitpilot-server` (never `web`, `postgres` or `redis`), joins the external network `hooksmith_default`, has `mem_limit: 384m`, and lives in `/opt/nitpilot` on the box (`root@157.180.91.106`, hostname `hooksmith`). Its secrets are in `/opt/nitpilot/.env` only.
 - **Hosted settings:** `PUBLIC_URL=https://nitpilot.dev`, `PUBLIC_REPOS_ONLY=true`, `CLOSED_CHAT_RETENTION_DAYS=90`, `TRUST_PROXY=true`, `ALLOWED_LOGINS` empty, `VAPID_SUBJECT=https://nitpilot.dev`, fresh `ENCRYPTION_KEY` and VAPID keys made on the server, never printed in chat or committed.
 - **Self-hosting `.env`:** the domain (`NITPILOT_DOMAIN`), `POSTGRES_PASSWORD`, `ENCRYPTION_KEY`; optional `SITE_ADDRESS` (defaults to the domain; `:80` behind something that already does TLS). `PUBLIC_REPOS_ONLY` off.
-- **First-run mode:** the setup code is printed in the server log at boot and is required by every first-run write; the manifest's `state` is checked on the way back; credentials are stored encrypted with `ENCRYPTION_KEY` in one row; credentials from the environment win and first-run mode never happens then. Everything but the web app, `/first-run`, `/api/first-run/*`, `/first-run/callback` and `/healthz` answers 503 `{ error: 'first_run', message: 'Finish setup at /first-run.' }` in first-run mode.
+- **First-run mode:** the setup code is printed in the server log at boot and is required by every first-run write; the manifest's `state` is checked on the way back; credentials are stored encrypted with `ENCRYPTION_KEY` in one row; credentials from the environment win and first-run mode never happens then. Everything but the web app, `/first-run`, `/api/first-run/*`, `/first-run/callback` and `/healthz` answers 503 `{ error: { code: 'first_run', message: 'Finish setup at /first-run.' } }` in first-run mode (the house error shape, `http/errors.ts`).
 - **The production GitHub App** is `nitpilot`, owned by NikosGkikas13, public (anyone can install). The bot is `nitpilot[bot]`.
 - **The repo and its GHCR image go public at the start of D4** (the user's call); the git-history secret scan at the end of D3 must pass first.
 - **npm:** package `nitpilot`, published only by the release workflow through trusted publishing with provenance, after the user's one-time `0.0.0` placeholder (D2). No npm token in the repo, its secrets or chat.
@@ -1128,57 +1128,5779 @@ Checked at `c302c25` and in the scratch build; each line is where the step-level
 
 ## Milestone D3: Self-hosting
 
-D3 lets a server start with no GitHub App at all and create one itself, and packages that for a team as one Compose folder. It ends with a clean-folder run on the Mac and the git-history secret scan, so the repo can go public at the start of D4.
+D3 lets a server start with no GitHub App at all and create one itself, and packages that for a team as one Compose folder. It ends with a clean-folder run (first locally, then live with an `-rc.2` image through a tunnel) and the git-history secret scan, so the repo can go public at the start of D4.
 
-**Data model (spec §8 gets this row in Task 7):** `GithubAppConfig` — one row (`id = 'app'`): `appId`, `slug`, `clientId`, `privateKeyEnc`, `clientSecretEnc`, `webhookSecretEnc` (AES-256-GCM with `ENCRYPTION_KEY`, `lib/crypto.ts`), `ownerLogin`, `createdAt`.
+**Written at step level on 2026-10-24** against `d9fe4d8`. Every file below was built and run first in a scratch worktree (`~/Desktop/PracticeProjects/.nitpilot-scratch/d3`, its own databases `nitpilot_d3` / `nitpilot_d3_test`, no real `.env`, nothing written to GitHub): Task 7 is pinned at `refs/scratch/d3/task-7` (`b751eff`), Task 8 at `refs/scratch/d3/task-8` (`2d53716`), Task 9 at `refs/scratch/d3/task-9` (`cb8b010`), Task 10 at `refs/scratch/d3/task-10` (`78c1902`; first built on `d9fe4d8` as `4b0dce6`, the same change). The code blocks in the steps were copied from those commits by script, and every "Expected: FAIL" was seen by following the steps in a fresh worktree. Task 9's live run (Steps 6–8) and Task 8's look in the browser happen during the build. What differs from the task-level text is in "Checked against the code (D3)" at the end of the milestone.
+
+**Files at the end of D3:**
+```
+apps/server/src/setup/{setup-code,manifest,credentials,first-run,boot}.ts (+ tests)   first-run mode
+apps/server/prisma/migrations/…_github_app_config                       GithubAppConfig, one encrypted row
+apps/server/src/lib/env.ts            the six GITHUB_* optional, all or none
+apps/server/src/main.ts               load the app → runFirstRun or runNormally
+apps/server/src/http/{app,spa,errors}.ts   createFirstRunApp, readyRoutes, form-action, setup_code / first_run
+apps/server/src/{auth/onboarding,auth/user-tokens,http/routes/auth,http/routes/webhooks}.ts   read githubApp()
+apps/server/test/e2e/first-run-server.ts   the Playwright server in first-run mode
+packages/protocol/src/web-api.ts      FirstRunStatus, FirstRunManifestRequest/Response, FirstRunProblem
+apps/web/src/routes/FirstRun/, src/components/FirstRunNeeded/, src/api/first-run.ts, e2e/first-run.spec.ts
+deploy/self-host/{docker-compose.yml,Caddyfile,.env.example}
+.gitleaks.toml; .github/workflows/ci.yml (a gitleaks job)
+docs/self-hosting.md; docs/why/{first-run-and-app-manifests,reverse-proxy-and-tls,dns-records}.md
+```
+
+**Data model (spec §8 gets this row in Task 7):** `GithubAppConfig` — one row (`id = 'app'`): `appId`, `slug`, `clientId`, `privateKeyEnc`, `clientSecretEnc`, `webhookSecretEnc` (AES-256-GCM with `ENCRYPTION_KEY`, `lib/crypto.ts`), `ownerLogin`, `createdAt`, `updatedAt`.
+
+**Counts:** start (at `d9fe4d8`) protocol 84, CLI 349 + 14 skipped, server 1059, web 344, root 6, e2e 6, Playwright 19. After Task 7: protocol 88, server 1106. After Task 8: server 1107, web 373, Playwright 21. Tasks 9 and 10 change no counts.
 
 ### Task 7: First-run mode on the server
 
 **Files:**
-- Create: `apps/server/src/setup/credentials.ts`, `apps/server/src/setup/first-run.ts` (routes), `apps/server/src/setup/manifest.ts` (pure: build the manifest), `apps/server/src/setup/setup-code.ts`, their tests; a Prisma migration `…_github_app_config`; `docs/why/first-run-and-app-manifests.md`
-- Modify: `apps/server/src/lib/env.ts` (the six `GITHUB_*` become optional, all-or-none), `apps/server/src/main.ts` (load credentials → normal mode or first-run mode), `apps/server/src/http/app.ts` (a first-run app), every reader of `env.GITHUB_*` (take a `GithubAppCredentials` instead), `packages/protocol/src/web-api.ts` (first-run bodies), spec §8 and §10
+- Create: `apps/server/src/setup/setup-code.ts`, `manifest.ts`, `credentials.ts`, `first-run.ts` (routes), `boot.ts` (all in `apps/server/src/setup/`), their tests (`setup-code.test.ts`, `manifest.test.ts`, `credentials.db.test.ts`, `first-run.db.test.ts`, `boot.test.ts`); a Prisma migration `…_github_app_config`; `docs/why/first-run-and-app-manifests.md`
+- Modify: `apps/server/src/lib/env.ts` (+ `env.test.ts`: the six `GITHUB_*` become optional, all or none), `apps/server/prisma/schema.prisma`, `apps/server/src/http/errors.ts` (two codes), `apps/server/src/http/spa.ts` (+ `spa.test.ts`: `formActions`, `isServerPath` exported), `apps/server/src/http/app.ts` (+ `app.test.ts`: `createFirstRunApp`, `readyRoutes` mounted), `apps/server/src/main.ts` (load the app → normal mode or first-run mode), every reader of `env.GITHUB_*` (`auth/onboarding.ts`, `auth/user-tokens.ts`, `http/routes/auth.ts`, `http/routes/webhooks.ts`, `test/webhooks.ts`, `scripts/dev-tunnel.ts`), `apps/server/test/db.ts`, `apps/server/.env.example`, `packages/protocol/src/web-api.ts` (+ `web-api.test.ts`: the first-run bodies), `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§8 row, §10 block), `docs/why/content-security-policy.md`
 
 **Interfaces:**
-- `type GithubAppCredentials = { appId: string; slug: string; privateKey: string; clientId: string; clientSecret: string; webhookSecret: string }`.
-- `loadGithubApp(env: Env): Promise<{ source: 'env' | 'database'; creds: GithubAppCredentials } | null>` — env first (all six set), else the row (decrypted; a row that won't decrypt throws "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with."), else `null`.
-- `saveGithubApp(creds, ownerLogin): Promise<void>` — insert only; a second save throws (one app per server).
-- `buildManifest({ publicUrl, name, isPublic }): AppManifest` — `url` = publicUrl, `hook_attributes.url` = `<publicUrl>/webhooks/github`, `redirect_url` = `<publicUrl>/first-run/callback`, `callback_urls` = [`<publicUrl>/auth/github/callback`], `setup_url` = `<publicUrl>/github/setup`, `setup_on_update: true`, `public: isPublic`, `request_oauth_on_install: false`, `default_events` and `default_permissions` exactly spec §15's (pull_request, pull_request_review, pull_request_review_comment, pull_request_review_thread, issue_comment, repository; pull_requests write, contents read, issues read, metadata read). Check §15 and the dev app's settings when writing the step.
-- `SetupCode`: 8 characters from an alphabet without look-alikes, made at boot in first-run mode, printed as `[first-run] Open <PUBLIC_URL>/first-run and enter the setup code: XXXX-XXXX`; compared in constant time; 5 tries per minute per client address (`clientAddress`, Task 2).
-- Routes (first-run app only): `GET /api/first-run` → `{ mode: 'first_run', publicUrl }`; `POST /api/first-run/manifest` `{ code, owner: { kind: 'user' } | { kind: 'org', login }, name, isPublic }` → `{ action: 'https://github.com/settings/apps/new?state=…' | 'https://github.com/organizations/<login>/settings/apps/new?state=…', manifest }` (the page posts it as a form), `state` = 32 random bytes kept in memory 1 hour; `GET /first-run/callback?code&state` → checks `state`, `POST /app-manifests/{code}/conversions` (no auth), `saveGithubApp`, answers a redirect to `/first-run?done=1`, then exits the process 500 ms later (`process.exit(0)`; Docker restarts it). In normal mode `GET /api/first-run` answers `{ mode: 'ready', installUrl: 'https://github.com/apps/<slug>/installations/new' }` and the other two 404.
-- Everything else in first-run mode: 503 `{ error: 'first_run', message: 'Finish setup at /first-run.' }`; the SPA's GETs still get `index.html`.
+- Consumes: `getEnv()` and its `optionalText` helper (`lib/env.ts`); `encrypt` / `decrypt` (`lib/crypto.ts`, AES-256-GCM under `ENCRYPTION_KEY`); `prisma` and `isUniqueViolation` (`lib/prisma.ts`); `clientAddress(c, trustProxy)` (`lib/client-address.ts`, Task 2) and `RateLimiter(limit, windowMs, now?)` (`lib/rate-limit.ts`); `GithubClient` with its `webBase` and `api(method, path)` (`platform/github/client.ts`); `spaRoutes` (`http/spa.ts`); `routeUpgrades(server, hubs)` and the shutdown code in `main.ts`; `fakeFetch` and `resetDb` in the tests.
+- Produces, `setup/credentials.ts`: `type GithubAppCredentials = { appId; slug; privateKey; clientId; clientSecret; webhookSecret }` (all strings); `credentialsFromEnv(env): GithubAppCredentials | null`; `loadGithubApp(env): Promise<{ source: 'env' | 'database'; creds } | null>` (the environment first, else the stored row decrypted, else `null`; a row this `ENCRYPTION_KEY` can't read throws "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with."); `saveGithubApp(creds, ownerLogin): Promise<void>` (insert only; a second save throws `GithubAppExistsError`); `setGithubApp(creds | null)` and `githubApp(): GithubAppCredentials` (the app this process runs as; every reader of a `GITHUB_*` value uses it).
+- Produces, `setup/setup-code.ts`: `makeSetupCode(random?)` → `K7PX-3MQD`-shaped, `setupCodeMatches(typed, real)` (constant time). `setup/manifest.ts`: `buildManifest({ publicUrl, name, isPublic })` and `manifestFormAction({ webBase, owner, state })`.
+- Produces, `setup/first-run.ts`: `firstRunRoutes(deps)` (`GET /api/first-run` → `{ mode: 'first_run', publicUrl }`; `POST /api/first-run/manifest`; `GET /first-run/callback`) and `readyRoutes({ github })` (the same paths once the server has its app). `http/app.ts`: `createFirstRunApp(deps)`. `setup/boot.ts`: `startFirstRun({ env, github, exit, log? }): { app }`.
+- Produces, `packages/protocol`: `FirstRunStatus`, `FirstRunManifestRequest`, `FirstRunManifestResponse`. Task 8's page reads them.
+- Produces, `http/errors.ts`: error codes `setup_code` (403) and `first_run` (503). Every error body keeps the house shape `{ error: { code, message } }`, so Task 8's page reads `error.code`.
 
-- [ ] Steps (TDD, as D1): tests first for `loadGithubApp` (env wins; half-set env refuses naming the missing variables; row decrypts; wrong key refuses with the message above), `buildManifest` (every field above), `SetupCode` (format; wrong code 403 `{ error: 'setup_code' }`; 6th try in a minute 429), the routes (no code → 403 and nothing stored; wrong/missing `state` → 400 and nothing stored; a conversion answered by the fake GitHub → one row, encrypted columns not equal to the plain values, the exit hook called once; a second callback → 409), the 503 for `/api/me` in first-run mode, and `main.ts` choosing the mode (a small `startServer(env, deps)` seam tested with the fake). Then implement, full suite, `npm run test:e2e`, commit `feat(server): first-run mode: a fresh server creates its own GitHub App`. Write the explainer: what a GitHub App manifest is, why the setup code exists, why the server restarts itself, in React terms (a setup wizard that writes config, then reloads the app).
+**Why this exists (docs/why/first-run-and-app-manifests.md, written in Step 21):** a self-hosted server needs its own GitHub App, and making one by hand means a long form and six values copied into `.env`. With no app at all, the server instead serves only a setup page. The page has GitHub create the app from a description the server wrote (a manifest); the server stores the secrets encrypted and exits; Docker starts it again in normal mode. In React terms it is a setup wizard that writes config and then reloads the app.
+
+- [ ] **Step 1: Write the failing env tests**
+
+The six `GITHUB_*` variables become all-or-none. In `apps/server/src/lib/env.test.ts`, add this block (the diff shows where; it goes after the test that names every missing variable and before `describe('Web Push keys', …)`):
+
+```diff
+--- a/apps/server/src/lib/env.test.ts
++++ b/apps/server/src/lib/env.test.ts
+@@ -58,6 +58,24 @@ describe('getEnv', () => {
+     expect(() => getEnv()).toThrow(/GITHUB_CLIENT_ID[\s\S]*PUBLIC_URL|PUBLIC_URL[\s\S]*GITHUB_CLIENT_ID/);
+   });
+ 
++  describe('GitHub App variables', () => {
++    const SIX = ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET'];
++
++    it('are optional: with none set the server starts in first-run mode', () => {
++      // Left empty, as in a copied .env.example, counts as not set.
++      for (const name of SIX) vi.stubEnv(name, '');
++      expect(getEnv()).toMatchObject({ GITHUB_APP_ID: undefined, GITHUB_APP_PRIVATE_KEY: undefined, GITHUB_WEBHOOK_SECRET: undefined });
++    });
++
++    it('are all or none: half set refuses to start and names the missing ones', () => {
++      vi.stubEnv('GITHUB_CLIENT_SECRET', '');
++      vi.stubEnv('GITHUB_WEBHOOK_SECRET', ' ');
++      expect(() => getEnv()).toThrow(
++        'set all six GitHub App variables, or none to start in first-run mode; missing: GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET',
++      );
++    });
++  });
++
+   describe('Web Push keys', () => {
+     const keys = { VAPID_PUBLIC_KEY: pair.publicKey, VAPID_PRIVATE_KEY: pair.privateKey, VAPID_SUBJECT: 'mailto:admin@example.com' };
+     const stub = (values: Record<string, string>) => Object.entries(values).forEach(([name, value]) => vi.stubEnv(name, value));
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
+Expected: FAIL, 2 tests. "are optional: with none set the server starts in first-run mode" fails with `Invalid environment:` followed by `GITHUB_APP_ID: Too small: expected string to have >=1 characters` and the same for the other five. "are all or none" fails with `expected [Function] to throw error including 'set all six GitHub App variables, or …' but got 'Invalid environment:\n  GITHUB_CLIENT…'`. The other 13 tests pass.
+
+- [ ] **Step 3: Make the variables optional, all or none**
+
+In `apps/server/src/lib/env.ts`: the six names get a list and a helper, the schema takes them as `optionalText` (an empty value counts as not set, as in a copied `.env.example`), and a `superRefine` refuses a half-set app. A half-set app must stop the server: falling into first-run mode would hand the server to whoever opens `/first-run` first, and starting half configured would fail later in a confusing way. `{ when: () => true }` makes the check run even when another variable is also bad, so one start names every problem (zod 4 skips a `superRefine` after another issue otherwise, and the existing "names every missing variable" test needs both messages).
+
+```diff
+--- a/apps/server/src/lib/env.ts
++++ b/apps/server/src/lib/env.ts
+@@ -20,6 +20,26 @@ function isVapidKeyPair(publicKey: string, privateKey: string): boolean {
+   }
+ }
+ 
++/** The six variables a GitHub App needs, in the order .env.example lists them. */
++export const GITHUB_APP_VARIABLES = [
++  'GITHUB_APP_ID',
++  'GITHUB_APP_SLUG',
++  'GITHUB_APP_PRIVATE_KEY',
++  'GITHUB_CLIENT_ID',
++  'GITHUB_CLIENT_SECRET',
++  'GITHUB_WEBHOOK_SECRET',
++] as const;
++
++/**
++ * Which of the six are missing, when some are set and some aren't (a copy-paste slip in .env). Empty when all six or
++ * none are set. A half-set app must stop the server: falling into first-run mode would hand the server to whoever
++ * opens /first-run first, and starting half configured would fail later in a confusing way.
++ */
++function missingGithubAppVariables(env: Partial<Record<(typeof GITHUB_APP_VARIABLES)[number], string | undefined>>): string[] {
++  const missing = GITHUB_APP_VARIABLES.filter((name) => !env[name]);
++  return missing.length === GITHUB_APP_VARIABLES.length ? [] : missing;
++}
++
+ const EnvSchema = z.object({
+   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+   PORT: z.coerce.number().int().positive().default(8787),
+@@ -28,13 +48,18 @@ const EnvSchema = z.object({
+   DATABASE_URL: z.string().min(1),
+   /** base64 of 32 random bytes: `openssl rand -base64 32` */
+   ENCRYPTION_KEY: z.string().min(1),
+-  GITHUB_APP_ID: z.string().min(1),
+-  GITHUB_APP_SLUG: z.string().min(1),
++  /**
++   * The GitHub App (docs/why/github-app.md). Optional, but all six or none: with none the server starts in first-run
++   * mode and creates its own app (setup/first-run.ts, docs/why/first-run-and-app-manifests.md). Read them through
++   * `githubApp()` (setup/credentials.ts), which also knows about an app stored in the database.
++   */
++  GITHUB_APP_ID: optionalText,
++  GITHUB_APP_SLUG: optionalText,
+   /** The app's private key (PEM). `\n` escapes are allowed so it fits on one line. */
+-  GITHUB_APP_PRIVATE_KEY: z.string().min(1).transform((k) => k.replaceAll('\\n', '\n')),
+-  GITHUB_CLIENT_ID: z.string().min(1),
+-  GITHUB_CLIENT_SECRET: z.string().min(1),
+-  GITHUB_WEBHOOK_SECRET: z.string().min(1),
++  GITHUB_APP_PRIVATE_KEY: optionalText.transform((k) => k?.replaceAll('\\n', '\n')),
++  GITHUB_CLIENT_ID: optionalText,
++  GITHUB_CLIENT_SECRET: optionalText,
++  GITHUB_WEBHOOK_SECRET: optionalText,
+   /** Where the built web app is (apps/web/dist by default; see http/spa.ts). */
+   WEB_DIST_DIR: z.string().min(1).optional(),
+   /** Hosted instance: ignore private repos (spec §14.9). */
+@@ -59,7 +84,19 @@ const EnvSchema = z.object({
+   VAPID_PUBLIC_KEY: optionalText,
+   VAPID_PRIVATE_KEY: optionalText,
+   VAPID_SUBJECT: optionalText.refine((s) => s === undefined || /^(mailto|https):/.test(s), 'must start with mailto: or https:'),
+-}).refine(
++}).superRefine(
++  (env, ctx) => {
++    const missing = missingGithubAppVariables(env);
++    if (missing.length === 0) return;
++    ctx.addIssue({
++      code: 'custom',
++      path: [missing[0]!],
++      message: `set all six GitHub App variables, or none to start in first-run mode; missing: ${missing.join(', ')}`,
++    });
++  },
++  // Run even when another variable is bad too, so one start names every problem.
++  { when: () => true },
++).refine(
+   (env) => {
+     const set = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT].filter(Boolean).length;
+     return set === 0 || set === 3;
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npm run test:unit -w apps/server -- src/lib/env.test.ts`
+Expected: PASS (15 tests).
+
+Note: `npm run typecheck -w apps/server` now fails, because the six values are `string | undefined`: it lists, at least, `src/main.ts` and `scripts/dev-tunnel.ts` (and every other reader until Step 11 switches it). That is the compiler finding the readers for you; Steps 11, 18 and 19 fix them, and Step 19 ends with a clean typecheck.
+
+- [ ] **Step 5: Write the setup-code tests**
+
+Create `apps/server/src/setup/setup-code.test.ts`. The code is what keeps a stranger who finds a fresh server first from claiming it: it is printed only in the server's log (see the explainer), so only the owner can type it.
+
+```ts
+import { timingSafeEqual } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
+import { makeSetupCode, SETUP_CODE_ALPHABET, setupCodeMatches } from './setup-code';
+
+// The real timingSafeEqual, watched, so a test can see the comparison goes through it.
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return { ...actual, timingSafeEqual: vi.fn(actual.timingSafeEqual) };
+});
+
+describe('makeSetupCode', () => {
+  it('makes XXXX-XXXX from an alphabet without look-alikes', () => {
+    for (let i = 0; i < 200; i++) expect(makeSetupCode()).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    // No 0/O, 1/I/L: someone copies this from a terminal into a browser.
+    for (const lookAlike of ['0', 'O', '1', 'I', 'L']) expect(SETUP_CODE_ALPHABET).not.toContain(lookAlike);
+    expect(new Set(SETUP_CODE_ALPHABET).size).toBe(SETUP_CODE_ALPHABET.length);
+  });
+
+  it('is different every time', () => {
+    const codes = new Set(Array.from({ length: 100 }, () => makeSetupCode()));
+    expect(codes.size).toBe(100);
+  });
+
+  it('maps each random byte to one letter, skipping the bytes that would favour some letters', () => {
+    // 31 letters don't divide 256: bytes 248 to 255 would give the first 8 letters a 9th chance each, so they're skipped.
+    // Every other byte is byte % 31: 0 and 31 are both the first letter, 30 and 247 the last.
+    const queue = [248, 0, 31, 255, 30, 247, 1, 32, 252, 62, 249, 250, 251, 253, 254, 33];
+    const take = (n: number) => Buffer.from(queue.splice(0, n));
+    const a = SETUP_CODE_ALPHABET;
+    expect(a).toHaveLength(31);
+    expect(makeSetupCode(take)).toBe(`${a[0]}${a[0]}${a[30]}${a[30]}-${a[1]}${a[1]}${a[0]}${a[2]}`);
+  });
+});
+
+describe('setupCodeMatches', () => {
+  const code = 'ABCD-EF23';
+
+  it('accepts the code as printed, and as people type it', () => {
+    for (const input of ['ABCD-EF23', 'abcd-ef23', '  ABCD-EF23 ', 'ABCDEF23', 'abcd ef23', 'AB CD-EF 23']) {
+      expect(setupCodeMatches(input, code), input).toBe(true);
+    }
+  });
+
+  it('refuses anything else without throwing, whatever its length', () => {
+    for (const input of ['ABCD-EF24', 'ABCD-EF2', 'ABCD-EF233', '', '-', 'ÄBCD-EF23', 'ABCD_EF23']) {
+      expect(setupCodeMatches(input, code), input).toBe(false);
+    }
+  });
+
+  it('compares codes of the right length in constant time', () => {
+    vi.mocked(timingSafeEqual).mockClear();
+    expect(setupCodeMatches('ABCD-EF24', code)).toBe(false);
+    expect(timingSafeEqual).toHaveBeenCalledOnce();
+  });
+});
+```
+
+- [ ] **Step 6: Run it to see it fail, implement, see it pass**
+
+Run: `npm run test:unit -w apps/server -- src/setup/setup-code.test.ts`
+Expected: FAIL: `Error: Cannot find module` for `./setup-code` (no tests run).
+
+Create `apps/server/src/setup/setup-code.ts`. The alphabet is 31 characters (A–Z and 2–9 without the look-alikes 0, O, 1, I, L), not a power of two, so a plain `byte % 31` would favour the first letters; the code throws away the 8 top byte values and draws again (rejection sampling). The comparison uses `timingSafeEqual` so the time it takes doesn't reveal how many leading characters were right.
+
+```ts
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+
+/**
+ * The letters a setup code is made of: A–Z and 2–9 without the ones people mix up when they copy a code from a
+ * terminal into a browser (0 and O, 1, I and L). 31 of them.
+ */
+export const SETUP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+const CODE_LENGTH = 8;
+
+/**
+ * The biggest multiple of 31 that fits in a byte (248). A byte below it, taken `% 31`, gives every letter exactly 8
+ * chances; the 8 bytes from 248 to 255 would give the first 8 letters a 9th, so they're thrown away and a new byte is
+ * drawn (this is called rejection sampling). Without it some letters would come up more often, which makes a code
+ * slightly easier to guess.
+ */
+const FAIR_BYTES = 256 - (256 % SETUP_CODE_ALPHABET.length);
+
+/**
+ * A one-time setup code like `K7PX-3MQD`, printed in the server's log at boot in first-run mode (setup/boot.ts). Only
+ * someone who can read the log (the server's owner) can type it into /first-run, so a stranger who finds a fresh
+ * server first can't claim it. 31⁸ ≈ 850 billion codes, at 5 tries a minute per address. `random` is for tests.
+ */
+export function makeSetupCode(random: (size: number) => Buffer = randomBytes): string {
+  let code = '';
+  while (code.length < CODE_LENGTH) {
+    for (const byte of random(16)) {
+      if (byte >= FAIR_BYTES) continue;
+      code += SETUP_CODE_ALPHABET[byte % SETUP_CODE_ALPHABET.length];
+      if (code.length === CODE_LENGTH) break;
+    }
+  }
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
+/** What people type, as the code is stored: no spaces or dash, upper case. */
+function normalize(input: string): string {
+  return input.replace(/[\s-]/g, '').toUpperCase();
+}
+
+/**
+ * Does what someone typed match the code? Spaces, a dash and lower case don't matter. The letters are compared in
+ * constant time (`timingSafeEqual`), so how long a wrong answer takes says nothing about how many letters were right
+ * (docs/why/security-primitives.md). `timingSafeEqual` throws on buffers of different lengths, so those are a plain no
+ * first: the length of the code is no secret, it's printed on the page.
+ */
+export function setupCodeMatches(input: string, code: string): boolean {
+  const typed = Buffer.from(normalize(input), 'utf8');
+  const expected = Buffer.from(normalize(code), 'utf8');
+  if (typed.length !== expected.length) return false;
+  return timingSafeEqual(typed, expected);
+}
+```
+
+Run: `npm run test:unit -w apps/server -- src/setup/setup-code.test.ts`
+Expected: PASS (6 tests).
+
+- [ ] **Step 7: Write the manifest tests, see them fail, implement, see them pass**
+
+Create `apps/server/src/setup/manifest.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { buildManifest, manifestFormAction } from './manifest';
+
+describe('buildManifest', () => {
+  it("describes the app this server needs: its URLs, spec §15's events and permissions", () => {
+    expect(buildManifest({ publicUrl: 'https://nitpilot.example.com', name: 'Nitpilot (example)', isPublic: false })).toEqual({
+      name: 'Nitpilot (example)',
+      url: 'https://nitpilot.example.com',
+      description: "Your agents review each other's PRs the moment they open. You only hear about it when there's a decision to make.",
+      hook_attributes: { url: 'https://nitpilot.example.com/webhooks/github', active: true },
+      redirect_url: 'https://nitpilot.example.com/first-run/callback',
+      callback_urls: ['https://nitpilot.example.com/auth/github/callback'],
+      setup_url: 'https://nitpilot.example.com/github/setup',
+      setup_on_update: true,
+      public: false,
+      request_oauth_on_install: false,
+      default_events: ['issue_comment', 'pull_request', 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread', 'repository'],
+      default_permissions: { contents: 'read', issues: 'read', metadata: 'read', pull_requests: 'write' },
+    });
+  });
+
+  it('lets anyone install it when asked (the hosted instance), and drops a trailing slash from PUBLIC_URL', () => {
+    const manifest = buildManifest({ publicUrl: 'https://nitpilot.dev/', name: 'nitpilot', isPublic: true });
+    expect(manifest.public).toBe(true);
+    expect(manifest.url).toBe('https://nitpilot.dev');
+    expect(manifest.hook_attributes.url).toBe('https://nitpilot.dev/webhooks/github');
+    expect(manifest.redirect_url).toBe('https://nitpilot.dev/first-run/callback');
+  });
+});
+
+describe('manifestFormAction', () => {
+  it("posts to the person's own app settings, or an organization's", () => {
+    expect(manifestFormAction({ webBase: 'https://github.com', owner: { kind: 'user' }, state: 'abc_-1' })).toBe(
+      'https://github.com/settings/apps/new?state=abc_-1',
+    );
+    expect(manifestFormAction({ webBase: 'https://github.com', owner: { kind: 'org', login: 'acme-inc' }, state: 'abc_-1' })).toBe(
+      'https://github.com/organizations/acme-inc/settings/apps/new?state=abc_-1',
+    );
+  });
+
+  it('uses the web address it is given, so tests can stand in for github.com', () => {
+    expect(manifestFormAction({ webBase: 'http://127.0.0.1:9999', owner: { kind: 'user' }, state: 's' })).toBe('http://127.0.0.1:9999/settings/apps/new?state=s');
+  });
+});
+```
+
+Run: `npm run test:unit -w apps/server -- src/setup/manifest.test.ts`
+Expected: FAIL: `Error: Cannot find module './manifest'` (no tests run).
+
+Create `apps/server/src/setup/manifest.ts` (pure: no database, no network). It builds the description of the app that GitHub creates: every URL comes from `PUBLIC_URL`, and the events and permissions are spec §15's, the same as the dev app `nitpilot-dev`.
+
+```ts
+/**
+ * A GitHub App manifest: the description of an app that GitHub creates for us in one click (first-run mode, spec §17
+ * "Self-hosting"). The first-run page posts it to GitHub as a form; GitHub shows the person a "Create GitHub App" page
+ * filled in from it. Pure: no database, no network. See docs/why/first-run-and-app-manifests.md.
+ *
+ * GitHub's field names are snake_case, so these are too.
+ * https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest
+ */
+export type AppManifest = {
+  name: string;
+  url: string;
+  description: string;
+  hook_attributes: { url: string; active: boolean };
+  /** Where GitHub sends the browser back, with `?code=…&state=…`, once the app exists. */
+  redirect_url: string;
+  /** Where GitHub sends people back after "Sign in with GitHub" (auth/github-oauth.ts). */
+  callback_urls: string[];
+  /** Where GitHub sends people after they install the app (http/routes/setup.ts). */
+  setup_url: string;
+  setup_on_update: boolean;
+  public: boolean;
+  request_oauth_on_install: boolean;
+  default_events: string[];
+  default_permissions: Record<string, 'read' | 'write'>;
+};
+
+/** Spec §1's pitch, which GitHub shows on the app's page. */
+const DESCRIPTION = "Your agents review each other's PRs the moment they open. You only hear about it when there's a decision to make.";
+
+/**
+ * The webhooks the server subscribes to (spec §15), the same list as the dev app `nitpilot-dev`. `installation` and
+ * `installation_repositories` aren't listed: GitHub sends those to every app on its own.
+ */
+const EVENTS = ['issue_comment', 'pull_request', 'pull_request_review', 'pull_request_review_comment', 'pull_request_review_thread', 'repository'];
+
+/** What the app may do on an installed repo (spec §15): write only pull requests (the summary comment, reviews). */
+const PERMISSIONS = { contents: 'read', issues: 'read', metadata: 'read', pull_requests: 'write' } as const;
+
+/**
+ * The manifest for this server's app. Every URL in it is built from PUBLIC_URL, so the app GitHub creates sends its
+ * webhooks, sign-ins and installs to this server. `isPublic`: false lets only the account or organization that owns
+ * the app install it (a team's own server); true lets anyone (the hosted instance).
+ */
+export function buildManifest(opts: { publicUrl: string; name: string; isPublic: boolean }): AppManifest {
+  const base = opts.publicUrl.replace(/\/+$/, '');
+  return {
+    name: opts.name,
+    url: base,
+    description: DESCRIPTION,
+    hook_attributes: { url: `${base}/webhooks/github`, active: true },
+    redirect_url: `${base}/first-run/callback`,
+    callback_urls: [`${base}/auth/github/callback`],
+    setup_url: `${base}/github/setup`,
+    // Also send people to setup_url when they change which repos the app can see, so the repo list updates at once.
+    setup_on_update: true,
+    public: opts.isPublic,
+    // Signing in is its own step (the web app's "Sign in"); installing shouldn't also ask for it.
+    request_oauth_on_install: false,
+    default_events: [...EVENTS],
+    default_permissions: { ...PERMISSIONS },
+  };
+}
+
+/** Whose app it becomes: the person's own account, or an organization they administer. */
+export type ManifestOwner = { kind: 'user' } | { kind: 'org'; login: string };
+
+/**
+ * Where the first-run page posts the manifest. `state` comes back unchanged on the redirect, which is how the callback
+ * knows the round trip started here (setup/first-run.ts). `webBase` is `GithubClient.webBase`, so tests can point it
+ * at a stand-in for github.com.
+ */
+export function manifestFormAction(opts: { webBase: string; owner: ManifestOwner; state: string }): string {
+  const path = opts.owner.kind === 'org' ? `/organizations/${encodeURIComponent(opts.owner.login)}/settings/apps/new` : '/settings/apps/new';
+  return `${opts.webBase}${path}?state=${encodeURIComponent(opts.state)}`;
+}
+```
+
+Run: `npm run test:unit -w apps/server -- src/setup/manifest.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 8: Write the credentials tests, and let the test database empty the new table**
+
+Create `apps/server/src/setup/credentials.db.test.ts`. It covers: the environment wins over a stored row; nothing set and no row gives `null`; a stored row decrypts; the wrong `ENCRYPTION_KEY` refuses with the message the Interfaces give; the encrypted columns differ from the plain values; a second save is refused and the first row stays.
+
+```ts
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getEnv } from '../lib/env';
+import { prisma } from '../lib/prisma';
+import { githubApp, GithubAppExistsError, loadGithubApp, saveGithubApp, setGithubApp, type GithubAppCredentials } from './credentials';
+
+const STORED: GithubAppCredentials = {
+  appId: '777',
+  slug: 'nitpilot-selfhost',
+  privateKey: '-----BEGIN RSA PRIVATE KEY-----\nstored\n-----END RSA PRIVATE KEY-----\n',
+  clientId: 'Iv23.stored',
+  clientSecret: 'stored-client-secret',
+  webhookSecret: 'stored-webhook-secret',
+};
+
+/** The app TEST_ENV describes (test/test-env.ts). */
+const FROM_ENV: GithubAppCredentials = {
+  appId: '12345',
+  slug: 'nitpilot-dev',
+  privateKey: 'tests-that-need-a-key-generate-one',
+  clientId: 'Iv1.test',
+  clientSecret: 'test-client-secret',
+  webhookSecret: 'test-webhook-secret',
+};
+
+/** No GitHub App in the environment, as on a fresh self-hosted server. */
+function clearGithubEnv() {
+  for (const name of ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET']) {
+    vi.stubEnv(name, '');
+  }
+}
+
+beforeEach(async () => {
+  await prisma.githubAppConfig.deleteMany();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  setGithubApp(null);
+});
+
+describe('saveGithubApp', () => {
+  it('stores one row, with the private key and both secrets encrypted', async () => {
+    await saveGithubApp(STORED, 'maya');
+    const row = await prisma.githubAppConfig.findUniqueOrThrow({ where: { id: 'app' } });
+    expect(row).toMatchObject({ appId: '777', slug: 'nitpilot-selfhost', clientId: 'Iv23.stored', ownerLogin: 'maya' });
+    expect(row.privateKeyEnc).not.toContain('stored');
+    expect(row.clientSecretEnc).not.toBe(STORED.clientSecret);
+    expect(row.webhookSecretEnc).not.toBe(STORED.webhookSecret);
+  });
+
+  it('refuses a second app: one per server, and the first is never overwritten', async () => {
+    await saveGithubApp(STORED, 'maya');
+    await expect(saveGithubApp({ ...STORED, appId: '888' }, 'mallory')).rejects.toThrow(GithubAppExistsError);
+    expect(await prisma.githubAppConfig.findMany()).toEqual([expect.objectContaining({ appId: '777', ownerLogin: 'maya' })]);
+  });
+});
+
+describe('loadGithubApp', () => {
+  it('takes the app from the environment when all six variables are set, even with one stored', async () => {
+    await saveGithubApp(STORED, 'maya');
+    expect(await loadGithubApp(getEnv())).toEqual({ source: 'env', creds: FROM_ENV });
+  });
+
+  it('reads the stored app when the environment has none', async () => {
+    clearGithubEnv();
+    await saveGithubApp(STORED, 'maya');
+    expect(await loadGithubApp(getEnv())).toEqual({ source: 'database', creds: STORED });
+  });
+
+  it("refuses a stored app that this ENCRYPTION_KEY can't read, and leaves it as it was", async () => {
+    clearGithubEnv();
+    await saveGithubApp(STORED, 'maya');
+    const before = await prisma.githubAppConfig.findUniqueOrThrow({ where: { id: 'app' } });
+
+    vi.stubEnv('ENCRYPTION_KEY', Buffer.alloc(32, 9).toString('base64'));
+    await expect(loadGithubApp(getEnv())).rejects.toThrow(
+      "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with.",
+    );
+    expect(await prisma.githubAppConfig.findUniqueOrThrow({ where: { id: 'app' } })).toEqual(before);
+  });
+
+  it('finds nothing on a fresh server: first-run mode', async () => {
+    clearGithubEnv();
+    expect(await loadGithubApp(getEnv())).toBeNull();
+  });
+});
+
+describe('githubApp', () => {
+  it('answers with the app the server started with', () => {
+    setGithubApp(STORED);
+    expect(githubApp()).toEqual(STORED);
+  });
+
+  it('falls back to the environment (tests and scripts that never boot the server)', () => {
+    expect(githubApp()).toEqual(FROM_ENV);
+  });
+
+  it('throws in first-run mode, when there is no app at all', () => {
+    clearGithubEnv();
+    expect(() => githubApp()).toThrow('No GitHub App yet: this server is in first-run mode.');
+  });
+});
+```
+
+`resetDb` (which empties every table between tests) must know the new table. In `apps/server/test/db.ts`:
+
+```diff
+--- a/apps/server/test/db.ts
++++ b/apps/server/test/db.ts
+@@ -112,6 +112,6 @@ export async function resetDb(): Promise<void> {
+   const [{ name }] = await prisma.$queryRaw<{ name: string }[]>`SELECT current_database() AS name`;
+   assertTestDatabase(name!);
+   await prisma.$executeRawUnsafe(
+-    'TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "Message", "Point", "Job", "Participant", "PrChat", "Repo", "Installation", "CliLoginRequest", "CliToken", "WebSession", "GithubAuth", "User" CASCADE',
++    'TRUNCATE "Task", "RawEvent", "SeenComment", "GithubWrite", "Message", "Point", "Job", "Participant", "PrChat", "Repo", "Installation", "CliLoginRequest", "CliToken", "WebSession", "GithubAuth", "User", "GithubAppConfig" CASCADE',
+   );
+ }
+```
+
+Run: `npm run test:db -w apps/server -- src/setup/credentials`
+Expected: FAIL: `Error: Cannot find module './credentials'` (no tests run).
+
+- [ ] **Step 9: The `GithubAppConfig` model and its migration**
+
+One row (`id` is always `app`) holds the app a server made for itself. A fixed id plus an insert-only save means two callbacks racing can't both win. In `apps/server/prisma/schema.prisma`, add at the end of the file:
+
+```diff
+--- a/apps/server/prisma/schema.prisma
++++ b/apps/server/prisma/schema.prisma
+@@ -394,3 +394,21 @@ model PushSubscription {
+ 
+   @@index([userId])
+ }
++
++/// The GitHub App this server created for itself in first-run mode (spec §17 "Self-hosting", setup/first-run.ts).
++/// At most one row (`id` is always "app"), written once and never overwritten. The private key and both secrets are
++/// encrypted with ENCRYPTION_KEY (AES-256-GCM, lib/crypto.ts); the rest is what GitHub shows on the app's page anyway.
++/// GITHUB_* variables in the environment win over this row (setup/credentials.ts).
++model GithubAppConfig {
++  id               String   @id @default("app")
++  appId            String
++  slug             String
++  clientId         String
++  privateKeyEnc    String
++  clientSecretEnc  String
++  webhookSecretEnc String
++  /// The account or organization that owns the app on GitHub.
++  ownerLogin       String
++  createdAt        DateTime @default(now())
++  updatedAt        DateTime @updatedAt
++}
+```
+
+Now create the migration. Run from `apps/server` (the dev database must be up: `docker start nitpilot-postgres-1`):
+
+```bash
+cd apps/server && npx prisma migrate dev --name github_app_config
+```
+
+(`npm run db:migrate -w apps/server -- --name github_app_config` runs the same thing.) Expected: it prints `Applying migration` followed by `…_github_app_config` and `Your database is now in sync with your schema.` Prisma names the folder from the current time, so yours will be `apps/server/prisma/migrations/<your timestamp>_github_app_config/` (the reference build's was `20261024132205_github_app_config`); the timestamp differs, the SQL must not. Check that `migration.sql` in that folder is exactly:
+
+```sql
+-- CreateTable
+CREATE TABLE "GithubAppConfig" (
+    "id" TEXT NOT NULL DEFAULT 'app',
+    "appId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "clientId" TEXT NOT NULL,
+    "privateKeyEnc" TEXT NOT NULL,
+    "clientSecretEnc" TEXT NOT NULL,
+    "webhookSecretEnc" TEXT NOT NULL,
+    "ownerLogin" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GithubAppConfig_pkey" PRIMARY KEY ("id")
+);
+```
+
+`prisma migrate dev` did not regenerate the Prisma client in the reference build, so do it explicitly:
+
+```bash
+npm run db:generate -w apps/server
+```
+
+Expected: `Generated Prisma Client (7.10.0) to ./src/generated/prisma`. (The test database is migrated by the test run itself, `test/global-setup.ts`.)
+
+- [ ] **Step 10: Implement `setup/credentials.ts`, and `githubApp()`**
+
+`credentialsFromEnv` turns the six variables into one value. `loadGithubApp` is the boot-time question "which app am I?": the environment first (development, or anyone who made their app by hand), else the stored row, else `null`, which means first-run mode. A row that won't decrypt must stop the server and must never fall into first-run mode, because the app still exists on GitHub and only the old key can bring it back. `saveGithubApp` encrypts the three secrets and inserts. `setGithubApp` / `githubApp()` are a process-wide holder in the style of `getEnv()` (see the deviations list): `main.ts` sets the app once at boot and every reader asks for it, and tests and scripts, which never boot the server, get the environment's app.
+
+```ts
+import type { GithubAppConfig } from '../generated/prisma/client';
+import { decrypt, encrypt } from '../lib/crypto';
+import { getEnv, type Env } from '../lib/env';
+import { isUniqueViolation, prisma } from '../lib/prisma';
+
+/**
+ * Everything the server needs to be a GitHub App (docs/why/github-app.md): who it is (`appId`, `slug`), how it proves
+ * it (`privateKey`), how people sign in through it (`clientId`, `clientSecret`) and how it checks webhooks
+ * (`webhookSecret`). It comes from the GITHUB_* variables, or from the app first-run mode created and stored
+ * (docs/why/first-run-and-app-manifests.md).
+ */
+export type GithubAppCredentials = {
+  appId: string;
+  slug: string;
+  privateKey: string;
+  clientId: string;
+  clientSecret: string;
+  webhookSecret: string;
+};
+
+/** The one row's id: a server has at most one app. */
+const APP_ROW_ID = 'app';
+
+/** A second app for a server that already has one (two first-run callbacks at once, or a replayed one). */
+export class GithubAppExistsError extends Error {
+  constructor() {
+    super('This server already has a GitHub App.');
+    this.name = 'GithubAppExistsError';
+  }
+}
+
+/** The app in the environment, or null when its six variables aren't set (getEnv already refused a half-set app). */
+export function credentialsFromEnv(env: Env): GithubAppCredentials | null {
+  const { GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET } = env;
+  if (!GITHUB_APP_ID || !GITHUB_APP_SLUG || !GITHUB_APP_PRIVATE_KEY || !GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !GITHUB_WEBHOOK_SECRET) return null;
+  return {
+    appId: GITHUB_APP_ID,
+    slug: GITHUB_APP_SLUG,
+    privateKey: GITHUB_APP_PRIVATE_KEY,
+    clientId: GITHUB_CLIENT_ID,
+    clientSecret: GITHUB_CLIENT_SECRET,
+    webhookSecret: GITHUB_WEBHOOK_SECRET,
+  };
+}
+
+/**
+ * The stored app, decrypted. AES-GCM refuses to decrypt with any other key than the one that encrypted (lib/crypto.ts),
+ * so a changed ENCRYPTION_KEY lands here. The server must not start then, and above all must not fall into first-run
+ * mode and replace the row: the app still exists on GitHub, and only the old key can bring it back.
+ */
+function decryptRow(row: GithubAppConfig): GithubAppCredentials {
+  try {
+    return {
+      appId: row.appId,
+      slug: row.slug,
+      clientId: row.clientId,
+      privateKey: decrypt(row.privateKeyEnc),
+      clientSecret: decrypt(row.clientSecretEnc),
+      webhookSecret: decrypt(row.webhookSecretEnc),
+    };
+  } catch {
+    throw new Error("The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with.");
+  }
+}
+
+/**
+ * Which GitHub App this server is, at boot (main.ts): the environment's when its six variables are set (development
+ * with `nitpilot-dev`, or anyone who made their app by hand), else the one first-run mode stored, else null, which
+ * means first-run mode.
+ */
+export async function loadGithubApp(env: Env): Promise<{ source: 'env' | 'database'; creds: GithubAppCredentials } | null> {
+  const fromEnv = credentialsFromEnv(env);
+  if (fromEnv) return { source: 'env', creds: fromEnv };
+  const row = await prisma.githubAppConfig.findUnique({ where: { id: APP_ROW_ID } });
+  if (!row) return null;
+  return { source: 'database', creds: decryptRow(row) };
+}
+
+/**
+ * Store the app first-run mode just created. Insert only: the row's fixed id makes a second save a unique-constraint
+ * error, so two callbacks racing can't both win and an existing app is never overwritten.
+ */
+export async function saveGithubApp(creds: GithubAppCredentials, ownerLogin: string): Promise<void> {
+  try {
+    await prisma.githubAppConfig.create({
+      data: {
+        id: APP_ROW_ID,
+        appId: creds.appId,
+        slug: creds.slug,
+        clientId: creds.clientId,
+        privateKeyEnc: encrypt(creds.privateKey),
+        clientSecretEnc: encrypt(creds.clientSecret),
+        webhookSecretEnc: encrypt(creds.webhookSecret),
+        ownerLogin,
+      },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new GithubAppExistsError();
+    throw err;
+  }
+}
+
+// The app this process runs as, set once at boot. Like getEnv(), any file can ask for it without it being passed down
+// through every function between main.ts and the one GitHub call that needs a secret.
+let current: GithubAppCredentials | null = null;
+
+/** Called once by main.ts with what loadGithubApp found. Tests pass null to forget it again. */
+export function setGithubApp(creds: GithubAppCredentials | null): void {
+  current = creds;
+}
+
+/**
+ * The app this server runs as: what main.ts set at boot, else the environment's (tests and scripts, which never boot
+ * the server). Throws in first-run mode; nothing that needs the app runs then (http/app.ts answers 503 first).
+ */
+export function githubApp(): GithubAppCredentials {
+  if (current) return current;
+  const fromEnv = credentialsFromEnv(getEnv());
+  if (fromEnv) return fromEnv;
+  throw new Error('No GitHub App yet: this server is in first-run mode.');
+}
+```
+
+Run: `npm run test:db -w apps/server -- src/setup/credentials`
+Expected: PASS (9 tests).
+
+- [ ] **Step 11: Switch every reader of a `GITHUB_*` value to `githubApp()`**
+
+Nothing new to test here: the existing suites already cover each reader (their environment has all six values, so `githubApp()` answers from it). Four source files read `env.GITHUB_*`, plus the test helper: the onboarding facts (the app slug), the token refresh (client id and secret), the sign-in routes (client id and secret), the webhook route (the secret) and the helper that signs webhooks in tests. `main.ts` and `scripts/dev-tunnel.ts` come in Steps 18 and 19. Apply each change:
+
+```diff
+--- a/apps/server/src/auth/onboarding.ts
++++ b/apps/server/src/auth/onboarding.ts
+@@ -3,6 +3,7 @@ import { getEnv } from '../lib/env';
+ import { prisma } from '../lib/prisma';
+ import { TtlCache } from '../lib/ttl-cache';
+ import type { PlatformReads } from '../platform/types';
++import { githubApp } from '../setup/credentials';
+ 
+ /** How long GitHub's "yes, the app is installed" is kept per person. A "no" is never kept. */
+ export const INSTALLED_TTL_MS = 5 * 60_000;
+@@ -42,7 +43,7 @@ export class OnboardingFacts {
+       orderBy: { createdAt: 'desc' },
+       select: { name: true, repos: true, agentId: true },
+     });
+-    const about = { deviceName: tokens[0]?.name ?? null, appSlug: env.GITHUB_APP_SLUG, publicReposOnly: env.PUBLIC_REPOS_ONLY };
++    const about = { deviceName: tokens[0]?.name ?? null, appSlug: githubApp().slug, publicReposOnly: env.PUBLIC_REPOS_ONLY };
+     if (user.onboardedAt) return { steps: ALL_DONE, done: true, ...about };
+ 
+     const steps: Onboarding['steps'] = {
+```
+
+```diff
+--- a/apps/server/src/auth/user-tokens.ts
++++ b/apps/server/src/auth/user-tokens.ts
+@@ -1,8 +1,8 @@
+ import type { GithubAuth } from '../generated/prisma/client';
+ import { decrypt, encrypt } from '../lib/crypto';
+-import { getEnv } from '../lib/env';
+ import { prisma } from '../lib/prisma';
+ import { GithubError, type GithubClient } from '../platform/github/client';
++import { githubApp } from '../setup/credentials';
+ import { refreshTokens, type OAuthTokens } from './github-oauth';
+ 
+ /** The user must sign in with GitHub again before Nitpilot can act as them. */
+@@ -57,10 +57,10 @@ async function refreshOnce(auth: GithubAuth, github: GithubClient, now: Date): P
+     throw new NeedsReauthError(auth.userId);
+   }
+ 
+-  const env = getEnv();
++  const app = githubApp();
+   let tokens: OAuthTokens;
+   try {
+-    tokens = await refreshTokens(github, { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET, refreshToken: decrypt(auth.refreshTokenEnc) }, now);
++    tokens = await refreshTokens(github, { clientId: app.clientId, clientSecret: app.clientSecret, refreshToken: decrypt(auth.refreshTokenEnc) }, now);
+   } catch (err) {
+     // GitHub answered and said no (e.g. bad_refresh_token): only a new sign-in fixes that.
+     if (err instanceof GithubError && err.status < 500) {
+```
+
+```diff
+--- a/apps/server/src/http/routes/auth.ts
++++ b/apps/server/src/http/routes/auth.ts
+@@ -10,6 +10,7 @@ import { isAllowedOrigin } from '../../lib/csrf';
+ import { decrypt, encrypt } from '../../lib/crypto';
+ import { getEnv } from '../../lib/env';
+ import { randomSecret } from '../../lib/tokens';
++import { githubApp } from '../../setup/credentials';
+ import type { AppDeps } from '../app';
+ import { HttpError } from '../errors';
+ 
+@@ -63,7 +64,7 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
+     return c.redirect(
+       authorizeUrl({
+         webBase: deps.github.webBase,
+-        clientId: env.GITHUB_CLIENT_ID,
++        clientId: githubApp().clientId,
+         redirectUri: `${env.PUBLIC_URL}/auth/github/callback`,
+         state,
+         codeChallenge: pkceChallenge(verifier),
+@@ -80,9 +81,10 @@ export function authRoutes(deps: Pick<AppDeps, 'github' | 'dispatch' | 'webSocke
+       throw new HttpError('validation_error', 'This sign-in link expired or was changed. Please sign in again.');
+     }
+ 
++    const app = githubApp();
+     const tokens = await exchangeCode(deps.github, {
+-      clientId: env.GITHUB_CLIENT_ID,
+-      clientSecret: env.GITHUB_CLIENT_SECRET,
++      clientId: app.clientId,
++      clientSecret: app.clientSecret,
+       code,
+       redirectUri: `${env.PUBLIC_URL}/auth/github/callback`,
+       codeVerifier: saved.verifier,
+```
+
+```diff
+--- a/apps/server/src/http/routes/webhooks.ts
++++ b/apps/server/src/http/routes/webhooks.ts
+@@ -1,9 +1,9 @@
+ import { Hono } from 'hono';
+ import { bodyLimit } from 'hono/body-limit';
+-import { getEnv } from '../../lib/env';
+ import { verifyGithubSignature } from '../../lib/hmac';
+ import type { Ingest } from '../../ingest/process';
+ import { recordDelivery } from '../../ingest/record';
++import { githubApp } from '../../setup/credentials';
+ import { errorBody, HttpError } from '../errors';
+ 
+ const MAX_BODY_BYTES = 1024 * 1024;
+@@ -20,7 +20,7 @@ export function webhookRoutes(deps: { ingest: Ingest }): Hono {
+     bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json(errorBody('payload_too_large', 'webhook body over 1 MB'), 413) }),
+     async (c) => {
+       const raw = await c.req.text();
+-      if (!verifyGithubSignature(raw, c.req.header('x-hub-signature-256'), getEnv().GITHUB_WEBHOOK_SECRET)) {
++      if (!verifyGithubSignature(raw, c.req.header('x-hub-signature-256'), githubApp().webhookSecret)) {
+         throw new HttpError('unauthorized', 'bad webhook signature');
+       }
+       const deliveryId = c.req.header('x-github-delivery');
+```
+
+```diff
+--- a/apps/server/test/webhooks.ts
++++ b/apps/server/test/webhooks.ts
+@@ -1,6 +1,6 @@
+ import type { Hono } from 'hono';
+-import { getEnv } from '../src/lib/env';
+ import { signGithubBody } from '../src/lib/hmac';
++import { githubApp } from '../src/setup/credentials';
+ 
+ let n = 0;
+ 
+@@ -14,7 +14,7 @@ export async function sendWebhook(app: Hono, event: string, payload: unknown, op
+       'content-type': 'application/json',
+       'x-github-event': event,
+       'x-github-delivery': opts.deliveryId ?? `delivery-${Date.now()}-${n}`,
+-      'x-hub-signature-256': signGithubBody(body, opts.secret ?? getEnv().GITHUB_WEBHOOK_SECRET),
++      'x-hub-signature-256': signGithubBody(body, opts.secret ?? githubApp().webhookSecret),
+     },
+     body,
+   });
+```
+
+Run: `npm test -w apps/server -- src/auth src/http/routes test/`
+Expected: PASS (25 files, 350 tests).
+
+- [ ] **Step 12: Write the protocol schemas' tests, see them fail, implement, see them pass**
+
+The first-run page (Task 8) and the server share three request/response shapes, so they live in `packages/protocol`. In `packages/protocol/src/web-api.test.ts`, change the import and add the new `describe` at the end of the file:
+
+```diff
+--- a/packages/protocol/src/web-api.test.ts
++++ b/packages/protocol/src/web-api.test.ts
+@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
+ import { MeResponse } from './api';
+ import { jobResult, settings } from './test-samples';
+ import {
+-  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
++  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, FirstRunManifestRequest, FirstRunManifestResponse,
++  FirstRunStatus, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+   Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, ChatView, type DeviceView, type InboxRow,
+ } from './web-api';
+ 
+@@ -165,3 +166,34 @@ describe('web API bodies', () => {
+     expect(CliRequestDecision.safeParse({ decision: 'maybe' }).success).toBe(false);
+   });
+ });
++
++describe('first-run bodies', () => {
++  it('knows both modes of GET /api/first-run', () => {
++    expect(FirstRunStatus.parse({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' })).toEqual({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' });
++    expect(FirstRunStatus.parse({ mode: 'ready', installUrl: 'https://github.com/apps/nitpilot/installations/new' }).mode).toBe('ready');
++    expect(FirstRunStatus.safeParse({ mode: 'ready', publicUrl: 'https://nitpilot.example.com' }).success).toBe(false);
++  });
++
++  it('takes a manifest request for a personal account or an organization', () => {
++    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, name: 'Nitpilot (example)', isPublic: false };
++    expect(FirstRunManifestRequest.parse(request)).toEqual(request);
++    const forOrg = { ...request, owner: { kind: 'org', login: 'acme-inc' } };
++    expect(FirstRunManifestRequest.parse(forOrg)).toEqual(forOrg);
++  });
++
++  it("refuses an app name GitHub would refuse (1 to 34 characters), and a login that isn't GitHub's shape", () => {
++    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, isPublic: false };
++    expect(FirstRunManifestRequest.parse({ ...request, name: '  Nitpilot  ' }).name).toBe('Nitpilot');
++    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'x'.repeat(34) }).success).toBe(true);
++    for (const name of ['', '   ', 'x'.repeat(35)]) expect(FirstRunManifestRequest.safeParse({ ...request, name }).success).toBe(false);
++    for (const login of ['', '-acme', 'acme-', 'ac--me', 'acme/inc', 'x'.repeat(40)]) {
++      expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org', login } }).success, login).toBe(false);
++    }
++    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org' } }).success).toBe(false);
++  });
++
++  it('round-trips the answer the page posts as a form', () => {
++    const answer = { action: 'https://github.com/settings/apps/new?state=abc', manifest: { name: 'Nitpilot', public: false } };
++    expect(FirstRunManifestResponse.parse(answer)).toEqual(answer);
++  });
++});
+```
+
+Run: `npm test -w packages/protocol -- web-api`
+Expected: FAIL, 4 tests, each with `TypeError: Cannot read properties of undefined (reading 'parse')`; the other 27 pass.
+
+In `packages/protocol/src/web-api.ts`, add at the end of the file:
+
+```diff
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -384,3 +384,39 @@ export type PrFile = z.infer<typeof PrFile>;
+ /** The PR's changed files, at most 300; `truncated` when it has more. `adds` and `dels` add up the files listed. */
+ export const FilesResponse = z.object({ files: z.array(PrFile), adds: z.number().int(), dels: z.number().int(), truncated: z.boolean() });
+ export type FilesResponse = z.infer<typeof FilesResponse>;
++
++// ── First-run mode (Plan 3, spec §17 "Self-hosting"): a server with no GitHub App creates one on /first-run ──
++
++/**
++ * `GET /api/first-run`. `first_run`: the server has no GitHub App yet and the page shows the setup form. `ready`: it
++ * has one (from the environment or made here), and `installUrl` is where people install it on their repos. The page
++ * polls this after GitHub sends it back, while the server restarts.
++ */
++export const FirstRunStatus = z.discriminatedUnion('mode', [
++  z.object({ mode: z.literal('first_run'), publicUrl: z.string() }),
++  z.object({ mode: z.literal('ready'), installUrl: z.string() }),
++]);
++export type FirstRunStatus = z.infer<typeof FirstRunStatus>;
++
++/** A GitHub login: letters, digits and single dashes between them, at most 39 characters. */
++const GithubLogin = z.string().regex(/^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/, "isn't a GitHub login");
++
++/**
++ * `POST /api/first-run/manifest`. `code`: the setup code from the server's log. `owner`: the person's own account, or
++ * an organization they administer. `name`: the app's name on GitHub (GitHub allows 34 characters). `isPublic`: may
++ * anyone install the app, or only its owner.
++ */
++export const FirstRunManifestRequest = z.object({
++  code: z.string(),
++  owner: z.discriminatedUnion('kind', [z.object({ kind: z.literal('user') }), z.object({ kind: z.literal('org'), login: GithubLogin })]),
++  name: z.string().trim().min(1).max(34),
++  isPublic: z.boolean(),
++});
++export type FirstRunManifestRequest = z.infer<typeof FirstRunManifestRequest>;
++
++/**
++ * Its answer: the page posts `manifest` (as JSON, in a hidden field named `manifest`) to `action` in a real form.
++ * GitHub requires a form post from the browser, not a fetch.
++ */
++export const FirstRunManifestResponse = z.object({ action: z.string(), manifest: z.record(z.string(), z.unknown()) });
++export type FirstRunManifestResponse = z.infer<typeof FirstRunManifestResponse>;
+```
+
+Run: `npm test -w packages/protocol`
+Expected: PASS (88 tests, 4 more than before).
+
+- [ ] **Step 13: The Content-Security-Policy's `form-action`, and the two error codes**
+
+GitHub accepts a manifest only as a real form post from the person's browser, so in first-run mode (and only then) the page's policy must let a form post to GitHub. First the tests, in `apps/server/src/http/spa.test.ts`:
+
+```diff
+--- a/apps/server/src/http/spa.test.ts
++++ b/apps/server/src/http/spa.test.ts
+@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
+ import path from 'node:path';
+ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+ import { testApp } from '../../test/app';
+-import { BUILD_HINT, contentSecurityPolicy } from './spa';
++import { BUILD_HINT, contentSecurityPolicy, spaRoutes } from './spa';
+ 
+ // A pretend build: dist/ with an index, a hashed asset and a service worker, and a secret next to it.
+ let outer: string;
+@@ -114,4 +114,15 @@ describe('the Content-Security-Policy', () => {
+   it('allows a plain ws:// socket for the http dev address', () => {
+     expect(contentSecurityPolicy('http://localhost:5173')).toContain("connect-src 'self' ws://localhost:5173;");
+   });
++
++  it('lets forms post to the other origins it is given, and nowhere else (first-run mode posts to GitHub)', () => {
++    const csp = contentSecurityPolicy('https://nitpilot.dev', { formActions: ['https://github.com'] });
++    expect(csp).toContain("; form-action 'self' https://github.com;");
++    expect(csp.match(/form-action/g)).toHaveLength(1);
++  });
++
++  it('is sent with those origins by the web app routes that were given them', async () => {
++    const res = await spaRoutes({ distDir: dist, publicUrl: 'https://nitpilot.dev', formActions: ['https://github.com'] }).request('/first-run');
++    expect(res.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com;");
++  });
+ });
+```
+
+Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
+Expected: FAIL, 2 tests: `AssertionError: expected 'default-src \'self\'; connect-src \'s…' to contain '; form-action \'self\' https://github…'` and the same with `form-action \'self\' https://github.c…`; the other 12 pass.
+
+Then `apps/server/src/http/spa.ts` (`contentSecurityPolicy` takes `formActions`, `spaRoutes` passes them on, and `isServerPath` is exported because the first-run app needs the same list of server paths):
+
+```diff
+--- a/apps/server/src/http/spa.ts
++++ b/apps/server/src/http/spa.ts
+@@ -32,9 +32,11 @@ export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/w
+  * written in HTML or set as an attribute, and <style> elements. React's `style={{…}}` goes through the DOM's
+  * style object, which the policy doesn't restrict; it's kept so a library that writes style attributes or
+  * <style> tags still works. Scripts stay strict: a script can do far more harm than a style.
++ * `formActions`: other origins a form on the page may post to. Only first-run mode passes one, GitHub's, because its
++ * page posts the app manifest there as a form (setup/first-run.ts); everywhere else forms post only to this server.
+  * See docs/why/content-security-policy.md.
+  */
+-export function contentSecurityPolicy(publicUrl: string): string {
++export function contentSecurityPolicy(publicUrl: string, opts: { formActions?: string[] } = {}): string {
+   const url = new URL(publicUrl);
+   const socket = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
+   return [
+@@ -44,12 +46,12 @@ export function contentSecurityPolicy(publicUrl: string): string {
+     "style-src 'self' 'unsafe-inline'",
+     "font-src 'self'",
+     "base-uri 'self'",
+-    "form-action 'self'",
++    ["form-action 'self'", ...(opts.formActions ?? [])].join(' '),
+     "frame-ancestors 'none'",
+   ].join('; ');
+ }
+ 
+-function isServerPath(pathname: string): boolean {
++export function isServerPath(pathname: string): boolean {
+   return SERVER_PATHS.has(pathname) || SERVER_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+ }
+ 
+@@ -75,10 +77,10 @@ async function fileIn(root: string, pathname: string): Promise<string | null> {
+  * the server's own paths, so a link like /c/octo/sandbox/42 opens the app, which then shows that chat.
+  * Mounted after every other route. See docs/why/serving-a-spa.md.
+  */
+-export function spaRoutes(opts: { distDir: string; publicUrl: string }): Hono {
++export function spaRoutes(opts: { distDir: string; publicUrl: string; formActions?: string[] }): Hono {
+   const app = new Hono();
+   const root = path.resolve(opts.distDir);
+-  const csp = contentSecurityPolicy(opts.publicUrl);
++  const csp = contentSecurityPolicy(opts.publicUrl, { formActions: opts.formActions });
+ 
+   app.get('*', async (c, next) => {
+     if (isServerPath(c.req.path)) return next();
+```
+
+And `apps/server/src/http/errors.ts` gets the two codes first-run mode answers with (no test of its own: Step 14's tests assert both through the routes):
+
+```diff
+--- a/apps/server/src/http/errors.ts
++++ b/apps/server/src/http/errors.ts
+@@ -8,24 +8,30 @@ export type ErrorCode =
+   /** Signed in to Nitpilot, but the GitHub sign-in expired: only signing in again helps (spec §16). */
+   | 'reauth'
+   | 'forbidden'
++  /** First-run mode: the setup code typed on /first-run isn't the one in the server's log (setup/first-run.ts). */
++  | 'setup_code'
+   | 'not_found'
+   | 'validation_error'
+   | 'conflict'
+   | 'payload_too_large'
+   | 'rate_limited'
+   | 'github_unavailable'
++  /** First-run mode: the server has no GitHub App yet, so only /first-run works (http/app.ts createFirstRunApp). */
++  | 'first_run'
+   | 'server_error';
+ 
+ const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
+   unauthorized: 401,
+   reauth: 401,
+   forbidden: 403,
++  setup_code: 403,
+   not_found: 404,
+   validation_error: 400,
+   conflict: 409,
+   payload_too_large: 413,
+   rate_limited: 429,
+   github_unavailable: 502,
++  first_run: 503,
+   server_error: 500,
+ };
+ 
+```
+
+Run: `npm run test:unit -w apps/server -- src/http/spa.test.ts`
+Expected: PASS (14 tests).
+
+- [ ] **Step 14: Write the first-run tests (routes and app), see them fail**
+
+Two files. `first-run.db.test.ts` is the main one (18 tests): the routes, through a real first-run app and a fake GitHub. The review-focus cases are all here: no code gives 403 and nothing stored; 5 tries a minute per address, the 6th refused even with the right code; a wrong, missing, used or expired `state` gives 400 and stores nothing and asks GitHub nothing; a conversion answered by the fake GitHub gives one row with encrypted columns that differ from the plain values, and the exit hook called once, 500 ms later; a second callback gives 409. The last two tests are for normal mode (`readyRoutes`).
+
+```ts
+import type { FirstRunManifestResponse } from '@nitpilot/protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testApp } from '../../test/app';
+import { fakeFetch, json, type FakeRequest } from '../../test/fake-fetch';
+import { createFirstRunApp } from '../http/app';
+import { prisma } from '../lib/prisma';
+import { GithubClient } from '../platform/github/client';
+import { loadGithubApp } from './credentials';
+import { getEnv } from '../lib/env';
+
+const SETUP_CODE = 'K7PX-3MQD';
+const PUBLIC_URL = 'http://localhost:8787';
+
+/** What GitHub answers `POST /app-manifests/{code}/conversions` with (the fields we read, plus a few we don't). */
+const CONVERSION = {
+  id: 424242,
+  slug: 'nitpilot-example',
+  node_id: 'A_kwDO',
+  name: 'Nitpilot (example)',
+  owner: { login: 'maya', id: 1001, type: 'User' },
+  client_id: 'Iv23.example',
+  client_secret: 'example-client-secret',
+  webhook_secret: 'example-webhook-secret',
+  pem: '-----BEGIN RSA PRIVATE KEY-----\nexample\n-----END RSA PRIVATE KEY-----\n',
+  html_url: 'https://github.com/apps/nitpilot-example',
+};
+
+/** A fake GitHub whose manifest conversion answers with `answer` (CONVERSION by default). */
+function fakeGithub(answer: (req: FakeRequest) => unknown = () => CONVERSION) {
+  const fetch = fakeFetch({ 'POST /app-manifests/the-code/conversions': answer });
+  return { fetch, github: new GithubClient(fetch) };
+}
+
+/** A server in first-run mode, as boot.ts starts one. */
+function firstRunServer(over: { github?: GithubClient; trustProxy?: boolean } = {}) {
+  const exit = vi.fn();
+  const app = createFirstRunApp({
+    github: over.github ?? fakeGithub().github,
+    publicUrl: PUBLIC_URL,
+    setupCode: SETUP_CODE,
+    trustProxy: over.trustProxy ?? false,
+    exit,
+    webDistDir: '/nonexistent/nitpilot-web-dist',
+  });
+  return { app, exit };
+}
+
+type Server = ReturnType<typeof firstRunServer>;
+
+const REQUEST = { code: SETUP_CODE, owner: { kind: 'user' }, name: 'Nitpilot (example)', isPublic: false };
+
+function askForManifest(server: Server, body: unknown = REQUEST, headers: Record<string, string> = {}) {
+  return server.app.request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+}
+
+/** The `state` GitHub would send back: the one in the form's action. */
+async function stateFrom(res: Response): Promise<string> {
+  const { action } = (await res.json()) as FirstRunManifestResponse;
+  return new URL(action).searchParams.get('state')!;
+}
+
+function callback(server: Server, query: string) {
+  return server.app.request(`/first-run/callback?${query}`);
+}
+
+const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
+
+beforeEach(async () => {
+  await prisma.githubAppConfig.deleteMany();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('GET /api/first-run in first-run mode', () => {
+  it('says the server is waiting for setup, and where people reach it', async () => {
+    const res = await firstRunServer().app.request('/api/first-run');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ mode: 'first_run', publicUrl: PUBLIC_URL });
+  });
+});
+
+describe('POST /api/first-run/manifest', () => {
+  it('answers with the manifest and where to post it, for the setup code from the log', async () => {
+    const res = await askForManifest(firstRunServer());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as FirstRunManifestResponse;
+    expect(body.action).toMatch(/^https:\/\/github\.com\/settings\/apps\/new\?state=[A-Za-z0-9_-]{43}$/);
+    expect(body.manifest).toMatchObject({ name: 'Nitpilot (example)', public: false, redirect_url: `${PUBLIC_URL}/first-run/callback` });
+  });
+
+  it("posts to the organization's app settings when the app is for an organization", async () => {
+    const res = await askForManifest(firstRunServer(), { ...REQUEST, owner: { kind: 'org', login: 'acme-inc' }, isPublic: true });
+    const body = (await res.json()) as FirstRunManifestResponse;
+    expect(body.action).toMatch(/^https:\/\/github\.com\/organizations\/acme-inc\/settings\/apps\/new\?state=/);
+    expect(body.manifest).toMatchObject({ public: true });
+  });
+
+  it('takes the code as people type it', async () => {
+    expect((await askForManifest(firstRunServer(), { ...REQUEST, code: ' k7px3mqd ' })).status).toBe(200);
+  });
+
+  it('refuses a wrong or missing code with 403, the same way each time, and starts no setup', async () => {
+    const server = firstRunServer();
+    for (const body of [{ ...REQUEST, code: 'K7PX-3MQE' }, { ...REQUEST, code: undefined }, 'not json at all']) {
+      const res = await askForManifest(server, body);
+      expect(res.status).toBe(403);
+      expect(await errorOf(res)).toEqual({ code: 'setup_code', message: "That code doesn't match the one in the server's log." });
+    }
+    // No state was handed out, so no callback can succeed.
+    expect((await callback(server, 'code=the-code&state=anything')).status).toBe(400);
+  });
+
+  it('checks the rest of the request once the code is right', async () => {
+    const res = await askForManifest(firstRunServer(), { ...REQUEST, name: '' });
+    expect(res.status).toBe(400);
+    expect((await errorOf(res)).code).toBe('validation_error');
+  });
+
+  it('slows guessing down: the 6th try from one address in a minute is refused, even with the right code', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const server = firstRunServer();
+    for (let i = 0; i < 5; i++) expect((await askForManifest(server, { ...REQUEST, code: 'WRONG-0000' })).status).toBe(403);
+    const sixth = await askForManifest(server);
+    expect(sixth.status).toBe(429);
+    expect((await errorOf(sixth)).code).toBe('rate_limited');
+
+    vi.advanceTimersByTime(60_001);
+    expect((await askForManifest(server)).status).toBe(200);
+  });
+
+  it('counts each address on its own behind the proxy', async () => {
+    const server = firstRunServer({ trustProxy: true });
+    for (let i = 0; i < 6; i++) await askForManifest(server, { ...REQUEST, code: 'WRONG-0000' }, { 'x-forwarded-for': '203.0.113.9' });
+    expect((await askForManifest(server, REQUEST, { 'x-forwarded-for': '203.0.113.9' })).status).toBe(429);
+    expect((await askForManifest(server, REQUEST, { 'x-forwarded-for': '198.51.100.7' })).status).toBe(200);
+  });
+});
+
+describe('GET /first-run/callback', () => {
+  it('trades the code for the new app, stores it encrypted, sends the browser on and exits the process once, a moment later', async () => {
+    const { fetch, github } = fakeGithub();
+    const server = firstRunServer({ github });
+    const state = await stateFrom(await askForManifest(server));
+
+    const started = Date.now();
+    const res = await callback(server, `code=the-code&state=${state}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/first-run?done=1');
+
+    // GitHub was asked without a token: the code itself is the proof.
+    expect(fetch.calls).toHaveLength(1);
+    expect(fetch.calls[0]!.headers.get('authorization')).toBeNull();
+
+    const rows = await prisma.githubAppConfig.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ appId: '424242', slug: 'nitpilot-example', clientId: 'Iv23.example', ownerLogin: 'maya' });
+    expect(rows[0]!.privateKeyEnc).not.toContain('example');
+    expect(rows[0]!.clientSecretEnc).not.toBe(CONVERSION.client_secret);
+    expect(rows[0]!.webhookSecretEnc).not.toBe(CONVERSION.webhook_secret);
+
+    // The browser gets its redirect before the server goes away.
+    expect(server.exit).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(server.exit).toHaveBeenCalledOnce(), { timeout: 2_000, interval: 20 });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(490);
+  });
+
+  it('stores what the next boot reads back', async () => {
+    const server = firstRunServer();
+    await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+    for (const name of ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET']) vi.stubEnv(name, '');
+    try {
+      expect(await loadGithubApp(getEnv())).toEqual({
+        source: 'database',
+        creds: { appId: '424242', slug: 'nitpilot-example', clientId: 'Iv23.example', clientSecret: 'example-client-secret', webhookSecret: 'example-webhook-secret', privateKey: CONVERSION.pem },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('refuses a missing, unknown or reused state, stores nothing and asks GitHub nothing', async () => {
+    const { fetch, github } = fakeGithub();
+    const server = firstRunServer({ github });
+    const state = await stateFrom(await askForManifest(server));
+    await prisma.githubAppConfig.deleteMany();
+
+    for (const query of ['code=the-code', `code=the-code&state=${state}x`, `state=${state}`]) {
+      const res = await callback(server, query);
+      expect(res.status, query).toBe(400);
+      expect(await errorOf(res)).toEqual({ code: 'validation_error', message: 'This setup link expired or was changed. Start again at /first-run.' });
+    }
+    expect(fetch.calls).toHaveLength(0);
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+
+    // A state works once.
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(302);
+    await prisma.githubAppConfig.deleteMany();
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+  });
+
+  it('refuses a state older than an hour', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const server = firstRunServer();
+    const state = await stateFrom(await askForManifest(server));
+    vi.advanceTimersByTime(60 * 60_000 + 1);
+    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+  });
+
+  it('refuses a second app with 409 and keeps the first (two tabs, one finished)', async () => {
+    const server = firstRunServer();
+    const first = await stateFrom(await askForManifest(server));
+    const second = await stateFrom(await askForManifest(server));
+    expect((await callback(server, `code=the-code&state=${first}`)).status).toBe(302);
+
+    const res = await callback(server, `code=the-code&state=${second}`);
+    expect(res.status).toBe(409);
+    expect((await errorOf(res)).code).toBe('conflict');
+    expect(await prisma.githubAppConfig.count()).toBe(1);
+  });
+
+  it('answers 502 and stores nothing when GitHub fails', async () => {
+    const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Server Error' }, 500)).github });
+    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+    expect(res.status).toBe(502);
+    expect((await errorOf(res)).code).toBe('github_unavailable');
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+    expect(server.exit).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 when GitHub doesn't know the code (it lasts an hour)", async () => {
+    const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Not Found' }, 404)).github });
+    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+    expect(res.status).toBe(400);
+    expect((await errorOf(res)).message).toBe("GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+  });
+
+  it('never stores an app with a secret missing', async () => {
+    for (const missing of ['pem', 'webhook_secret', 'client_secret'] as const) {
+      const server = firstRunServer({ github: fakeGithub(() => ({ ...CONVERSION, [missing]: null })).github });
+      const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+      expect(res.status, missing).toBe(502);
+      expect(await prisma.githubAppConfig.count()).toBe(0);
+    }
+  });
+});
+
+describe('the first-run routes once the server has its app', () => {
+  it('say the server is ready, and where to install the app', async () => {
+    const res = await testApp().request('/api/first-run');
+    expect(res.status).toBe(200);
+    // TEST_ENV's app is nitpilot-dev.
+    expect(await res.json()).toEqual({ mode: 'ready', installUrl: 'https://github.com/apps/nitpilot-dev/installations/new' });
+  });
+
+  it('refuse to make another app with a JSON 404, not the web app', async () => {
+    const app = testApp();
+    const manifest = await app.request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST) });
+    const back = await app.request('/first-run/callback?code=the-code&state=s');
+    for (const res of [manifest, back]) {
+      expect(res.status).toBe(404);
+      expect((await errorOf(res)).code).toBe('not_found');
+    }
+    expect(await prisma.githubAppConfig.count()).toBe(0);
+  });
+});
+```
+
+`app.test.ts` gets four tests for `createFirstRunApp`: every other server path, any method, answers 503; `/healthz` still answers; the web app's pages are served with `form-action` allowing GitHub; a normal server's pages keep `form-action 'self'`. In `apps/server/src/http/app.test.ts`:
+
+```diff
+--- a/apps/server/src/http/app.test.ts
++++ b/apps/server/src/http/app.test.ts
+@@ -1,8 +1,12 @@
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import path from 'node:path';
+ import { Hono } from 'hono';
+-import { describe, expect, it } from 'vitest';
++import { afterAll, describe, expect, it, vi } from 'vitest';
+ import { z } from 'zod';
+ import { fakeFetch } from '../../test/fake-fetch';
+ import { GithubClient } from '../platform/github/client';
++import { createFirstRunApp } from './app';
+ import { HttpError, onError } from './errors';
+ import { testApp } from '../../test/app';
+ 
+@@ -14,6 +18,59 @@ describe('createApp', () => {
+   });
+ });
+ 
++describe('createFirstRunApp', () => {
++  // A pretend web app build, for the page itself.
++  const dist = mkdtempSync(path.join(tmpdir(), 'nitpilot-first-run-'));
++  mkdirSync(dist, { recursive: true });
++  writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>app</title>');
++  afterAll(() => rmSync(dist, { recursive: true, force: true }));
++
++  const app = createFirstRunApp({
++    github: new GithubClient(fakeFetch({})),
++    publicUrl: 'http://localhost:8787',
++    setupCode: 'K7PX-3MQD',
++    trustProxy: false,
++    exit: vi.fn(),
++    webDistDir: dist,
++  });
++
++  it('answers every other server path, whatever the method, with 503 "finish setup"', async () => {
++    const requests: [string, string][] = [
++      ['GET', '/api/me'],
++      ['POST', '/webhooks/github'],
++      ['GET', '/auth/github/login'],
++      ['GET', '/github/setup?installation_id=1'],
++      ['DELETE', '/api/cli/token'],
++      ['GET', '/ws/cli'],
++    ];
++    for (const [method, url] of requests) {
++      const res = await app.request(url, { method });
++      expect(res.status, `${method} ${url}`).toBe(503);
++      expect(await res.json()).toEqual({ error: { code: 'first_run', message: 'Finish setup at /first-run.' } });
++    }
++  });
++
++  it('still answers the health check', async () => {
++    const res = await app.request('/healthz');
++    expect(res.status).toBe(200);
++    expect(await res.json()).toMatchObject({ ok: true });
++  });
++
++  it("serves the web app's pages, whose forms may post to GitHub", async () => {
++    for (const page of ['/first-run', '/', '/inbox']) {
++      const res = await app.request(page);
++      expect(res.status, page).toBe(200);
++      expect(await res.text()).toContain('<title>app</title>');
++      expect(res.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com;");
++    }
++  });
++
++  it('keeps the normal server\'s forms to itself', async () => {
++    const res = await testApp({ webDistDir: dist }).request('/inbox');
++    expect(res.headers.get('content-security-policy')).toContain("form-action 'self';");
++  });
++});
++
+ describe('onError', () => {
+   const app = new Hono();
+   app.onError(onError);
+```
+
+Run: `npm run test:db -w apps/server -- src/setup/first-run && npm run test:unit -w apps/server -- src/http/app.test.ts`
+Expected: FAIL. In `first-run.db.test.ts` all 18 tests fail: 16 with `TypeError: createFirstRunApp is not a function`, plus the two normal-mode ones with `AssertionError: expected 404 to be 200` (for `GET /api/first-run`) and `expected 503 to be 404` (the callback fell through to the web app's "not built" 503). `app.test.ts` fails as a whole file with `TypeError: createFirstRunApp is not a function`.
+
+- [ ] **Step 15: Implement `setup/first-run.ts`**
+
+The routes. Read the top comment first: it is the whole flow in four lines. The setup code is checked before the body is validated, so without it the route answers nothing but "no"; the attempts are counted before the code is looked at, so a wrong guess and a right one cost the same try. `state` is 32 random bytes kept in memory for an hour and good for one callback (like the `state` of "Sign in with GitHub", docs/why/oauth-pkce.md). The callback trades GitHub's code for the app (no token: the code is the proof), stores it, answers a redirect, and asks the process to exit 500 ms later so the browser gets its redirect first.
+
+```ts
+import { randomBytes } from 'node:crypto';
+import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunStatus } from '@nitpilot/protocol';
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { errorBody, HttpError } from '../http/errors';
+import { clientAddress } from '../lib/client-address';
+import { RateLimiter } from '../lib/rate-limit';
+import { GithubError, type GithubClient } from '../platform/github/client';
+import { githubApp, GithubAppExistsError, saveGithubApp, type GithubAppCredentials } from './credentials';
+import { buildManifest, manifestFormAction } from './manifest';
+import { setupCodeMatches } from './setup-code';
+
+/** Tries at the setup code per client address per minute: enough for typos, far too few to guess 31⁸ codes. */
+const CODE_TRIES_PER_MINUTE = 5;
+
+/** How long a manifest's `state` is good for: GitHub's code in the callback lasts an hour too. */
+const STATE_TTL_MS = 60 * 60_000;
+
+/** How long the server waits after answering the callback before it exits, so the browser gets its redirect first. */
+export const EXIT_DELAY_MS = 500;
+
+const EXPIRED_LINK = 'This setup link expired or was changed. Start again at /first-run.';
+
+export type FirstRunDeps = {
+  github: GithubClient;
+  publicUrl: string;
+  /** The code printed in the server's log at boot (setup/boot.ts). */
+  setupCode: string;
+  /** Read the client's address from X-Forwarded-For, for the rate limit (docs/why/trusting-a-proxy.md). */
+  trustProxy: boolean;
+  /** Stops the server once the app is stored; Docker starts it again, in normal mode (setup/boot.ts). */
+  exit: () => void;
+  /** The clock, for tests. */
+  now?: () => number;
+};
+
+/**
+ * The `state` values handed out with a manifest, each good for one callback within the hour. In memory: a restart
+ * forgets them, which only means starting again at /first-run. Like the `state` of "Sign in with GitHub"
+ * (docs/why/oauth-pkce.md), it proves the browser coming back started here, through this server's own form.
+ */
+class PendingStates {
+  private readonly expiresAt = new Map<string, number>();
+
+  constructor(private readonly now: () => number) {}
+
+  issue(): string {
+    this.forgetExpired();
+    const state = randomBytes(32).toString('base64url');
+    this.expiresAt.set(state, this.now() + STATE_TTL_MS);
+    return state;
+  }
+
+  /** Is this a state we handed out that hasn't expired? Either way it can't be used again. */
+  take(state: string): boolean {
+    const expiresAt = this.expiresAt.get(state);
+    this.expiresAt.delete(state);
+    return expiresAt !== undefined && expiresAt > this.now();
+  }
+
+  private forgetExpired(): void {
+    const now = this.now();
+    for (const [state, expiresAt] of this.expiresAt) if (expiresAt <= now) this.expiresAt.delete(state);
+  }
+}
+
+/**
+ * GitHub's answer to `POST /app-manifests/{code}/conversions`: the new app and its secrets. Every field we store must
+ * be there; GitHub leaving one out is a failed setup, never an app stored with a blank secret.
+ */
+const Conversion = z.object({
+  id: z.number(),
+  slug: z.string().min(1),
+  client_id: z.string().min(1),
+  client_secret: z.string().min(1),
+  webhook_secret: z.string().min(1),
+  pem: z.string().min(1),
+  owner: z.object({ login: z.string().min(1) }),
+});
+
+/**
+ * Trade the code GitHub sent back for the app it just created. No token: the code is the proof, it works once, and only
+ * for an hour. A GitHub that doesn't answer is a 502; one that refuses the code (expired, used) is a 400.
+ */
+async function convertManifest(github: GithubClient, code: string): Promise<{ creds: GithubAppCredentials; ownerLogin: string }> {
+  let data: unknown;
+  try {
+    ({ data } = await github.api('POST', `/app-manifests/${encodeURIComponent(code)}/conversions`));
+  } catch (err) {
+    if (err instanceof GithubError && err.status >= 400 && err.status < 500) {
+      throw new HttpError('validation_error', "GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
+    }
+    console.error('[first-run] GitHub manifest conversion failed:', err);
+    throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
+  }
+  const parsed = Conversion.safeParse(data);
+  if (!parsed.success) {
+    console.error('[first-run] GitHub answered the manifest conversion without', parsed.error.issues.map((i) => i.path.join('.')).join(', '));
+    throw new HttpError('github_unavailable', "GitHub's answer was missing part of the new app. Start again at /first-run.");
+  }
+  const app = parsed.data;
+  return {
+    creds: { appId: String(app.id), slug: app.slug, privateKey: app.pem, clientId: app.client_id, clientSecret: app.client_secret, webhookSecret: app.webhook_secret },
+    ownerLogin: app.owner.login,
+  };
+}
+
+/**
+ * First-run mode's routes (spec §17 "Self-hosting", docs/why/first-run-and-app-manifests.md):
+ * 1. `GET /api/first-run`: the page asks which mode the server is in.
+ * 2. `POST /api/first-run/manifest`: with the setup code, the page gets a manifest and where to post it.
+ * 3. The browser posts it to GitHub; GitHub creates the app and sends the browser to `GET /first-run/callback`.
+ * 4. The callback trades GitHub's code for the app's credentials, stores them encrypted, and the server restarts.
+ */
+export function firstRunRoutes(deps: FirstRunDeps): Hono {
+  const now = deps.now ?? (() => Date.now());
+  const codeTries = new RateLimiter(CODE_TRIES_PER_MINUTE, 60_000, now);
+  const states = new PendingStates(now);
+  let exiting = false;
+  const app = new Hono();
+
+  app.get('/api/first-run', (c) => {
+    const body: FirstRunStatus = { mode: 'first_run', publicUrl: deps.publicUrl };
+    return c.json(body);
+  });
+
+  app.post('/api/first-run/manifest', async (c) => {
+    // Counted before the code is looked at, so a wrong guess and a right one cost the same try.
+    if (!codeTries.allow(clientAddress(c, deps.trustProxy))) throw new HttpError('rate_limited', 'Too many tries from here. Wait a minute and try again.');
+    // The code first, before anything about the body is checked: without it, nothing here answers more than "no".
+    const body: unknown = await c.req.json().catch(() => null);
+    const code = (body as { code?: unknown } | null)?.code;
+    if (typeof code !== 'string' || !setupCodeMatches(code, deps.setupCode)) {
+      throw new HttpError('setup_code', "That code doesn't match the one in the server's log.");
+    }
+
+    const request = FirstRunManifestRequest.parse(body);
+    const answer: FirstRunManifestResponse = {
+      action: manifestFormAction({ webBase: deps.github.webBase, owner: request.owner, state: states.issue() }),
+      manifest: buildManifest({ publicUrl: deps.publicUrl, name: request.name, isPublic: request.isPublic }),
+    };
+    return c.json(answer);
+  });
+
+  app.get('/first-run/callback', async (c) => {
+    const code = c.req.query('code');
+    const state = c.req.query('state');
+    if (!code || !state || !states.take(state)) throw new HttpError('validation_error', EXPIRED_LINK);
+
+    const { creds, ownerLogin } = await convertManifest(deps.github, code);
+    try {
+      await saveGithubApp(creds, ownerLogin);
+    } catch (err) {
+      if (err instanceof GithubAppExistsError) throw new HttpError('conflict', "This server already has a GitHub App. The one GitHub just made isn't used: delete it in your GitHub settings.");
+      throw err;
+    }
+
+    console.log(`[first-run] created the GitHub App ${creds.slug} for ${ownerLogin}; restarting in normal mode`);
+    // Only one app can be stored, so this runs once; the flag keeps it so even if that rule ever changed.
+    if (!exiting) {
+      exiting = true;
+      setTimeout(deps.exit, EXIT_DELAY_MS);
+    }
+    return c.redirect('/first-run?done=1');
+  });
+
+  return app;
+}
+
+/**
+ * The same three routes once the server has its app (http/app.ts createApp). The page, polling while the server
+ * restarts, learns it's ready and where to install the app. The other two are a JSON 404 rather than the web app's
+ * page: there is nothing left to set up, and a server with an app never makes a second one.
+ */
+export function readyRoutes(deps: { github: GithubClient }): Hono {
+  const app = new Hono();
+
+  app.get('/api/first-run', (c) => {
+    const body: FirstRunStatus = { mode: 'ready', installUrl: `${deps.github.webBase}/apps/${githubApp().slug}/installations/new` };
+    return c.json(body);
+  });
+
+  const alreadySetUp = errorBody('not_found', 'This server already has its GitHub App.');
+  app.post('/api/first-run/manifest', (c) => c.json(alreadySetUp, 404));
+  app.get('/first-run/callback', (c) => c.json(alreadySetUp, 404));
+
+  return app;
+}
+```
+
+Run: `npm run test:db -w apps/server -- src/setup/first-run`
+Expected: still FAIL, the same 18 (the routes exist, but nothing builds an app around them yet).
+
+- [ ] **Step 16: `createFirstRunApp`, and `readyRoutes` in the normal app**
+
+In `apps/server/src/http/app.ts`: the health answer becomes a small `health` function shared by both apps; `createApp` mounts `readyRoutes` (so `GET /api/first-run` says `ready` once the server has its app); and `createFirstRunApp` is the first-run server: the health check, the first-run routes, a 503 `first_run` for every other server path whatever the method, and the web app's pages with `form-action` allowing `deps.github.webBase`.
+
+```diff
+--- a/apps/server/src/http/app.ts
++++ b/apps/server/src/http/app.ts
+@@ -1,5 +1,5 @@
+ import type { HealthResponse } from '@nitpilot/protocol';
+-import { Hono } from 'hono';
++import { Hono, type Context } from 'hono';
+ import type { RepoAccess } from '../auth/repo-access';
+ import type { LiveClis } from '../chats/activity';
+ import type { Dispatch } from '../chats/dispatch';
+@@ -8,6 +8,7 @@ import { getEnv } from '../lib/env';
+ import type { AppAuth } from '../platform/github/app-auth';
+ import type { GithubClient } from '../platform/github/client';
+ import type { PlatformReads } from '../platform/types';
++import { firstRunRoutes, readyRoutes, type FirstRunDeps } from '../setup/first-run';
+ import type { MeUpdates } from '../ws/web-wire';
+ import { SERVER_VERSION } from '../version';
+ import { errorBody, onError } from './errors';
+@@ -25,7 +26,7 @@ import { pushRoutes } from './routes/push';
+ import { settingsRoutes, type SettingsSender } from './routes/settings';
+ import { setupRoutes } from './routes/setup';
+ import { webhookRoutes } from './routes/webhooks';
+-import { DEFAULT_WEB_DIST, spaRoutes } from './spa';
++import { DEFAULT_WEB_DIST, isServerPath, spaRoutes } from './spa';
+ 
+ /** What the HTTP layer needs from outside. Tests pass fakes. Later tasks add fields. */
+ export type AppDeps = {
+@@ -51,14 +52,18 @@ export type AppDeps = {
+   webDistDir?: string;
+ };
+ 
++/** `GET /healthz`: Docker's HEALTHCHECK and uptime checks ask it, in both modes. */
++function health(c: Context): Response {
++  const body: HealthResponse = { ok: true, version: SERVER_VERSION };
++  return c.json(body);
++}
++
+ export function createApp(deps: AppDeps): Hono {
+   const env = getEnv();
+   const app = new Hono();
+   app.onError(onError);
+-  app.get('/healthz', (c) => {
+-    const body: HealthResponse = { ok: true, version: SERVER_VERSION };
+-    return c.json(body);
+-  });
++  app.get('/healthz', health);
++  app.route('/', readyRoutes(deps));
+   app.route('/', authRoutes(deps));
+   app.route('/', meRoutes(deps));
+   app.route('/', settingsRoutes(deps));
+@@ -78,3 +83,24 @@ export function createApp(deps: AppDeps): Hono {
+   app.notFound((c) => c.json(errorBody('not_found', 'no such route'), 404));
+   return app;
+ }
++
++/**
++ * The server in first-run mode (setup/boot.ts): it has no GitHub App yet, so it serves only what creating one needs,
++ * the health check, the first-run routes and the web app (whose /first-run page does the asking). Every other server
++ * path, whatever the method, is a 503 that says where to go: no sign-in, webhook or API call can work without an app.
++ * Forms on the page may post to GitHub: the manifest goes there as a form (http/spa.ts contentSecurityPolicy).
++ */
++export function createFirstRunApp(deps: FirstRunDeps & { webDistDir?: string }): Hono {
++  const env = getEnv();
++  const app = new Hono();
++  app.onError(onError);
++  app.get('/healthz', health);
++  app.route('/', firstRunRoutes(deps));
++  app.all('*', async (c, next) => {
++    if (!isServerPath(c.req.path)) return next();
++    return c.json(errorBody('first_run', 'Finish setup at /first-run.'), 503);
++  });
++  app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: deps.publicUrl, formActions: [deps.github.webBase] }));
++  app.notFound((c) => c.json(errorBody('not_found', 'no such route'), 404));
++  return app;
++}
+```
+
+Run: `npm run test:db -w apps/server -- src/setup/first-run && npm run test:unit -w apps/server -- src/http/app.test.ts`
+Expected: PASS (18 tests in `first-run.db.test.ts`; 8 in `app.test.ts`).
+
+- [ ] **Step 17: The boot seam: write `boot.test.ts`, see it fail, implement `boot.ts`**
+
+`startFirstRun` is the small piece `main.ts` calls in first-run mode: it makes a setup code, prints where to go and the code (so only someone who can read the server's log, `docker compose logs nitpilot`, can create the app), and returns the first-run app. Create `apps/server/src/setup/boot.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from 'vitest';
+import { fakeFetch } from '../../test/fake-fetch';
+import { getEnv } from '../lib/env';
+import { GithubClient } from '../platform/github/client';
+import { startFirstRun } from './boot';
+
+function start() {
+  const lines: string[] = [];
+  const exit = vi.fn();
+  const { app } = startFirstRun({ env: getEnv(), github: new GithubClient(fakeFetch({})), exit, log: (line) => lines.push(line) });
+  return { app, lines, exit };
+}
+
+describe('startFirstRun', () => {
+  it('prints where to go and a fresh setup code in the log', () => {
+    const { lines } = start();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\[first-run\] Open http:\/\/localhost:8787\/first-run and enter the setup code: [A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(start().lines[0]).not.toBe(lines[0]);
+  });
+
+  it('serves the first-run app, which takes the code it printed', async () => {
+    const { app, lines } = start();
+    const code = lines[0]!.split(': ')[1];
+    const res = await app.request('/api/first-run/manifest', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code, owner: { kind: 'user' }, name: 'Nitpilot', isPublic: false }),
+    });
+    expect(res.status).toBe(200);
+    expect((await app.request('/api/me')).status).toBe(503);
+  });
+});
+```
+
+Run: `npm run test:unit -w apps/server -- src/setup/boot.test.ts`
+Expected: FAIL: `Error: Cannot find module './boot'` (no tests run).
+
+Create `apps/server/src/setup/boot.ts`:
+
+```ts
+import type { Hono } from 'hono';
+import { createFirstRunApp } from '../http/app';
+import type { Env } from '../lib/env';
+import type { GithubClient } from '../platform/github/client';
+import { makeSetupCode } from './setup-code';
+
+/**
+ * Get a server with no GitHub App ready for its first run (main.ts serves the app this returns): make a setup code and
+ * print it, so only someone who can read the server's log (`docker compose logs nitpilot`) can create the app.
+ * `exit` runs once the app is stored. See docs/why/first-run-and-app-manifests.md.
+ */
+export function startFirstRun(opts: { env: Env; github: GithubClient; exit: () => void; log?: (line: string) => void }): { app: Hono } {
+  const log = opts.log ?? console.log;
+  const publicUrl = opts.env.PUBLIC_URL.replace(/\/+$/, '');
+  const setupCode = makeSetupCode();
+  log(`[first-run] Open ${publicUrl}/first-run and enter the setup code: ${setupCode}`);
+  const app = createFirstRunApp({ github: opts.github, publicUrl, setupCode, trustProxy: opts.env.TRUST_PROXY, exit: opts.exit });
+  return { app };
+}
+```
+
+Run: `npm run test:unit -w apps/server -- src/setup/boot.test.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 18: `main.ts` picks the mode**
+
+No unit test: `main()` starts a real server, so this is checked by the live run in Step 20 (and, from Task 5, the image smoke test starts the server with all six variables set, which is the normal-mode branch). `main` now asks `loadGithubApp` which app it is. With none it runs first-run mode: no task runner, hubs or recovery (none can work without an app), WebSocket upgrades get a 404 (`routeUpgrades(server, {})`), and on SIGINT/SIGTERM or after the app is stored it closes the server, releases the lock and exits 0 (nothing went wrong; Docker's `restart: unless-stopped` starts it again). With an app, everything that was `main` becomes `runNormally`, which builds `AppAuth` from the credentials it is handed.
+
+```diff
+--- a/apps/server/src/main.ts
++++ b/apps/server/src/main.ts
+@@ -12,11 +12,13 @@ import { createDeliveryHandler } from './ingest/handle';
+ import { createIngest } from './ingest/process';
+ import { purgeClosedChats, purgeOldRows } from './ingest/record';
+ import { recoverOnBoot } from './ingest/recovery';
+-import { acquireSingletonLock } from './lib/advisory-lock';
+-import { getEnv, vapidDetails } from './lib/env';
++import { acquireSingletonLock, type SingletonLock } from './lib/advisory-lock';
++import { getEnv, vapidDetails, type Env } from './lib/env';
+ import { AppAuth } from './platform/github/app-auth';
+ import { GithubClient } from './platform/github/client';
+ import { GithubPlatform } from './platform/github/platform';
++import { startFirstRun } from './setup/boot';
++import { loadGithubApp, setGithubApp, type GithubAppCredentials } from './setup/credentials';
+ import { CliNotifier } from './tasks/cli-notifier';
+ import { reportFailedWrite } from './tasks/handlers/failed-writes';
+ import { createTaskHandlers } from './tasks/handlers/index';
+@@ -44,9 +46,46 @@ async function main(): Promise<void> {
+     process.exit(1);
+   }
+ 
++  // Which GitHub App this server is: the GITHUB_* variables, else the one first-run mode stored, else none yet.
++  // A stored app this ENCRYPTION_KEY can't read throws here, and the server refuses to start (setup/credentials.ts).
++  const loaded = await loadGithubApp(env);
++  if (!loaded) return runFirstRun(env, lock);
++  setGithubApp(loaded.creds);
++  console.log(`[boot] GitHub App ${loaded.creds.slug}, from the ${loaded.source === 'env' ? 'GITHUB_* variables' : 'database'}`);
++  await runNormally(env, lock, loaded.creds);
++}
++
++/**
++ * First-run mode (spec §17 "Self-hosting", docs/why/first-run-and-app-manifests.md): no GitHub App yet, so serve only
++ * the page that creates one. No task runner, hubs or recovery: none of them can work without an app. Once the app is
++ * stored the process exits with 0, and Docker (`restart: unless-stopped`) starts it again, in normal mode this time.
++ */
++function runFirstRun(env: Env, lock: SingletonLock): void {
++  // After the app is stored, and on SIGTERM. Exit code 0 either way: nothing went wrong. (`server` is made just below,
++  // long before either can happen.)
++  const exit = async () => {
++    server.close();
++    try {
++      await lock.release();
++    } finally {
++      process.exit(0);
++    }
++  };
++  const { app } = startFirstRun({ env, github: new GithubClient(), exit: () => void exit() });
++  const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
++    console.log(`Nitpilot server listening on http://localhost:${info.port}, in first-run mode`);
++  }) as Server;
++  // No hub yet: every WebSocket upgrade gets a 404.
++  routeUpgrades(server, {});
++  process.on('SIGINT', exit);
++  process.on('SIGTERM', exit);
++}
++
++/** The server with its GitHub App: webhooks in, jobs out to the CLIs, the web app. */
++async function runNormally(env: Env, lock: SingletonLock, creds: GithubAppCredentials): Promise<void> {
+   // The outside world.
+   const github = new GithubClient();
+-  const appAuth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
++  const appAuth = new AppAuth(github, creds.appId, creds.privateKey);
+   const platform = new GithubPlatform(github, appAuth, (userId) => getUserToken(userId, github));
+   // CLIs connect over a WebSocket and get their jobs and notifications through it (spec §10, docs/why/websockets.md).
+   const hub = new CliHub();
+```
+
+- [ ] **Step 19: `.env.example` and the dev tunnel**
+
+`.env.example` says the six are all or none. The reference build also emptied `GITHUB_APP_SLUG=nitpilot-dev`: with only the slug filled, a copied file would now refuse to start as half set. `scripts/dev-tunnel.ts` read the six variables straight from `getEnv()`; it now builds the credentials with `credentialsFromEnv` and exits with a message if the dev app isn't in `.env`.
+
+```diff
+--- a/apps/server/.env.example
++++ b/apps/server/.env.example
+@@ -4,12 +4,15 @@ PORT=8787
+ # Where people reach Nitpilot. In development that's Vite (npm run dev -w apps/web), which passes the
+ # server's paths on to port 8787 (docs/why/serving-a-spa.md); with the dev tunnel it's the tunnel URL.
+ PUBLIC_URL=http://localhost:5173
+-# openssl rand -base64 32
++# openssl rand -base64 32. Keep a copy: it also encrypts a GitHub App made in first-run mode, which no other key can read.
+ ENCRYPTION_KEY=
+ 
+-# From your dev GitHub App "nitpilot-dev" (Settings → Developer settings → GitHub Apps)
++# The GitHub App: all six, or none. From your dev GitHub App "nitpilot-dev" (Settings → Developer settings →
++# GitHub Apps; its slug is nitpilot-dev). Leave all six empty and the server starts in first-run mode instead: it
++# prints a setup code in its log and creates its own app at PUBLIC_URL/first-run (docs/why/first-run-and-app-manifests.md).
++# Set here, they win over an app first-run mode stored.
+ GITHUB_APP_ID=
+-GITHUB_APP_SLUG=nitpilot-dev
++GITHUB_APP_SLUG=
+ # The app's private key; paste it on one line with \n for the line breaks
+ GITHUB_APP_PRIVATE_KEY=
+ GITHUB_CLIENT_ID=
+```
+
+```diff
+--- a/apps/server/scripts/dev-tunnel.ts
++++ b/apps/server/scripts/dev-tunnel.ts
+@@ -3,14 +3,25 @@ import { spawn } from 'node:child_process';
+ import { getEnv } from '../src/lib/env';
+ import { AppAuth } from '../src/platform/github/app-auth';
+ import { GithubClient } from '../src/platform/github/client';
++import { credentialsFromEnv, type GithubAppCredentials } from '../src/setup/credentials';
+ 
+ // Expose the local server through a free Cloudflare quick tunnel (no account needed) and point the
+ // GitHub App's webhook URL at it (spec §17). Requests arrive byte for byte, so the HMAC check runs
+ // exactly as in production. Needs `cloudflared` (macOS: brew install cloudflared).
+ 
+ const env = getEnv();
++
++/** The dev app's six GITHUB_* variables, from .env: the tunnel repoints that app's webhook. */
++function devApp(): GithubAppCredentials {
++  const app = credentialsFromEnv(env);
++  if (app) return app;
++  console.error('dev:tunnel needs the dev GitHub App in apps/server/.env (the six GITHUB_* variables).');
++  process.exit(1);
++}
++
++const app = devApp();
+ const github = new GithubClient();
+-const auth = new AppAuth(github, env.GITHUB_APP_ID, env.GITHUB_APP_PRIVATE_KEY);
++const auth = new AppAuth(github, app.appId, app.privateKey);
+ const tunnel = spawn('cloudflared', ['tunnel', '--url', `http://localhost:${env.PORT}`], { stdio: ['ignore', 'pipe', 'pipe'] });
+ 
+ let pointed = false;
+@@ -20,8 +31,8 @@ async function onOutput(chunk: Buffer): Promise<void> {
+   if (!match || pointed) return;
+   pointed = true;
+   const url = `${match[0]}/webhooks/github`;
+-  await github.api('PATCH', '/app/hook/config', { token: auth.jwt(), body: { url, content_type: 'json', secret: env.GITHUB_WEBHOOK_SECRET } });
+-  console.log(`\n✓ ${env.GITHUB_APP_SLUG} now sends webhooks to ${url}\n  Leave this running. Ctrl-C stops the tunnel.\n`);
++  await github.api('PATCH', '/app/hook/config', { token: auth.jwt(), body: { url, content_type: 'json', secret: app.webhookSecret } });
++  console.log(`\n✓ ${app.slug} now sends webhooks to ${url}\n  Leave this running. Ctrl-C stops the tunnel.\n`);
+ }
+ 
+ tunnel.stdout.on('data', (c: Buffer) => void onOutput(c).catch((err) => console.error(err)));
+```
+
+Run: `npm run typecheck -w apps/server`
+Expected: no errors (the failures Step 4 predicted are gone).
+
+- [ ] **Step 20: Try it for real (no GitHub involved)**
+
+Start the server with the six `GITHUB_*` values emptied on the command line (real environment variables win over `.env`, and empty counts as not set), on a spare port, from the repo root:
+
+```bash
+GITHUB_APP_ID= GITHUB_APP_SLUG= GITHUB_APP_PRIVATE_KEY= GITHUB_CLIENT_ID= GITHUB_CLIENT_SECRET= GITHUB_WEBHOOK_SECRET= PORT=8899 PUBLIC_URL=http://localhost:8899 npm start -w apps/server
+```
+
+Expected in its log: `[first-run] Open http://localhost:8899/first-run and enter the setup code: XXXX-XXXX` (a different code each start) and `Nitpilot server listening on http://localhost:8899, in first-run mode`. In a second terminal:
+
+```bash
+curl -s localhost:8899/api/first-run; echo; curl -s localhost:8899/api/me; echo; curl -s localhost:8899/healthz; echo
+```
+
+Expected:
+```
+{"mode":"first_run","publicUrl":"http://localhost:8899"}
+{"error":{"code":"first_run","message":"Finish setup at /first-run."}}
+{"ok":true,"version":"0.1.0"}
+```
+
+Stop the server with Ctrl-C in the first terminal: it exits cleanly (code 0). (Reaching GitHub's "Create GitHub App" page needs Task 8's page; the callback is covered by the tests above.)
+
+- [ ] **Step 21: The explainer, the spec and the policy table**
+
+`docs/why/first-run-and-app-manifests.md` (new; the setup wizard comparison, what a manifest is, the setup code, why the server restarts itself):
+
+```markdown
+# First-run mode and GitHub App manifests (a server that sets itself up)
+
+**In one sentence:** a self-hosted server that starts with no GitHub App serves only a setup page; the page has GitHub create the app from a description the server wrote (a **manifest**), the server stores the app's secrets encrypted, exits, and Docker starts it again, now as a normal Nitpilot.
+
+## The React comparison
+
+Think of a setup wizard in a React app: on first load there's no config, so the router shows only `<SetupWizard />`; every other route redirects to it. The wizard collects a few answers, writes the config somewhere durable, and calls `window.location.reload()`. After the reload the app finds its config and renders normally, and the wizard is never shown again.
+
+First-run mode is that wizard, for the server. "No config" is "no GitHub App credentials"; "writes the config" is one encrypted row in the `GithubAppConfig` table; "reload" is the process exiting and Docker restarting it.
+
+## Why a server needs a GitHub App at all
+
+Nitpilot is a GitHub App (docs/why/github-app.md): that's how it receives webhooks, posts the summary comment, and lets people sign in with GitHub. An app has six credentials (an id, a slug, a private key, an OAuth client id and secret, a webhook secret), and they all point at **one** server's URLs. So every self-hosted server needs its own app. Making one by hand means filling in a long GitHub form and copying six values into `.env` without a typo. First-run mode does it in two clicks.
+
+## What a manifest is
+
+A **GitHub App manifest** is a JSON description of an app: its name, its home page, where to send webhooks, where to send people after signing in and after installing, which events it wants and which permissions it needs. `setup/manifest.ts` builds it from `PUBLIC_URL`, so every URL in it points at this server, with spec §15's events and permissions (the same as the dev app `nitpilot-dev`).
+
+GitHub accepts a manifest only as a real form post from the person's browser (not a `fetch` from our server): the person must be signed in to GitHub and must click "Create GitHub App" themselves. That's why the page builds a `<form method="post" action="https://github.com/settings/apps/new?state=…">` with the manifest in a hidden field, and why, in first-run mode only, the page's Content-Security-Policy lets forms post to GitHub (docs/why/content-security-policy.md).
+
+## The round trip
+
+1. The server starts, finds no app (`loadGithubApp` in `setup/credentials.ts` returns null) and prints a line like `[first-run] Open https://nitpilot.example.com/first-run and enter the setup code: K7PX-3MQD`.
+2. The owner opens `/first-run`, types the code, picks their account or an organization, a name, and who may install the app. The page sends that to `POST /api/first-run/manifest` and gets back the manifest and where to post it, with a fresh `state`.
+3. The browser posts the form to GitHub. GitHub shows its "Create GitHub App" page, filled in. The owner clicks Create.
+4. GitHub sends the browser to `GET /first-run/callback?code=…&state=…`. The server checks the `state`, then trades the `code` for the new app's credentials (`POST /app-manifests/{code}/conversions`, no token needed: the code itself is the proof, it works once and lasts an hour).
+5. The server stores them, redirects the browser to `/first-run?done=1`, and half a second later exits. Docker starts it again; this time `loadGithubApp` finds the row, and the server runs normally. The page, polling `GET /api/first-run`, sees `ready` and offers "Install the app".
+
+## Why the setup code exists, and why it's slowed down
+
+A fresh server is reachable by anyone who finds its address, maybe before its owner gets there. Without a check, a stranger could open `/first-run` first and make the server use **their** app: they'd receive its webhooks and own its secrets. The setup code closes that: it's printed only in the server's log, which only the owner can read (`docker compose logs nitpilot`). Every first-run write needs it.
+
+The code is 8 characters from 31 letters and digits (no `0`/`O` or `1`/`I`/`L`, which people mistype), about 850 billion possibilities (`setup/setup-code.ts`). Each address gets 5 tries a minute; the 6th is refused with 429 even when it's right (`RateLimiter` in `lib/rate-limit.ts`, the address from `lib/client-address.ts`). At that rate guessing would take longer than anyone has. A wrong code always gets the same 403, compared in constant time, so the answer gives nothing away.
+
+## Why `state`
+
+The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one callback. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
+
+## Why the credentials are encrypted, and why a changed key stops the server
+
+The private key and the two secrets are stored with AES-256-GCM under `ENCRYPTION_KEY` (`lib/crypto.ts`), like people's GitHub tokens. A database dump or backup alone then can't be used to act as the app.
+
+GCM refuses to decrypt with any other key than the one that encrypted. If `ENCRYPTION_KEY` changes (a new `.env` without the old value), the stored app can't be read. The server then **refuses to start** with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with." It never falls back into first-run mode: the app still exists on GitHub with every installation, and making a second one would strand them. Putting the old key back fixes it. That's why `.env.example` says to keep a copy of the key.
+
+There is only ever one row (`id = 'app'`), and it's insert-only: a second callback (two tabs, say) gets 409 and the first app stays.
+
+## Why the server exits instead of switching modes in place
+
+Normal mode builds a lot at boot from the app's credentials: the task runner, the WebSocket hubs, recovery of work left from the last run (`runNormally` in `main.ts`). Switching a running process from "nothing" to "all of that" would be a second, rarely used way to start, and a source of half-started bugs. Exiting with code 0 and letting Docker's `restart: unless-stopped` start a fresh process means there's exactly one way into normal mode: boot, find the app, start. The 500 ms wait lets the browser receive its redirect first.
+
+## The environment still wins
+
+If the six `GITHUB_*` variables are set (development with `nitpilot-dev`, or anyone who made their app by hand), the server uses them and first-run mode never happens, even if a stored app exists. They're all six or none: setting only some (a copy-paste slip) stops the server with a message naming the missing ones, rather than starting half configured or, worse, in first-run mode (`lib/env.ts`).
+
+## Where
+
+- `apps/server/src/setup/credentials.ts`: `loadGithubApp`, `saveGithubApp`, and `githubApp()`, which every reader of the app's credentials calls.
+- `apps/server/src/setup/manifest.ts`: `buildManifest`, `manifestFormAction`.
+- `apps/server/src/setup/setup-code.ts`: `makeSetupCode`, `setupCodeMatches`.
+- `apps/server/src/setup/first-run.ts`: the three routes (`firstRunRoutes`), and `readyRoutes` for a server that has its app.
+- `apps/server/src/setup/boot.ts`: `startFirstRun`, which prints the code. `apps/server/src/main.ts` picks the mode.
+- `apps/server/src/http/app.ts`: `createFirstRunApp`, the 503 for everything else.
+- `apps/server/prisma/schema.prisma`: the `GithubAppConfig` model.
+```
+
+Spec §8 gets the `GithubAppConfig` row, and §10 the "First-run mode" block (the shapes as built: errors in the house `{ error: { code, message } }` shape):
+
+```diff
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -169,6 +169,7 @@ Prisma 7 conventions are copied from Odyhook: `cuid()` ids, `createdAt`/`updated
+ | `GithubWrite` | Everything Nitpilot wrote to GitHub | chatId, kind `summary\|review\|review_comment\|reply`, githubId (unique per kind) | Used to edit those writes and to ignore our own events |
+ | `PushSubscription` (Plan 2) | A Web Push endpoint (one browser or device) | userId, endpoint (unique), p256dh, auth, label, failCount | `label` names the browser for the Settings page ("Chrome on macOS"). A push service answering 404 or 410 means the subscription is gone: the row is deleted. Other answers from the push service add to `failCount` (a send that got no answer at all, such as a timeout or a network error, doesn't: that is usually the server's own side), a success sets it back to 0, and the fifth failed answer in a row deletes the row. One row per endpoint: subscribing again with the same endpoint updates it, and moves it to whoever is signed in |
+ | `ChatRead` (Plan 2) | How far a person has read a chat | userId + chatId (unique), lastReadSeq | The inbox's unread count is the number of timeline items after `lastReadSeq` that someone else wrote |
++| `GithubAppConfig` (Plan 3) | The GitHub App a self-hosted server created for itself in first-run mode (§17) | id (always `app`), appId, slug, clientId, privateKeyEnc, clientSecretEnc, webhookSecretEnc, ownerLogin | At most one row, insert-only: a second one is refused, never overwritten. The private key and both secrets are encrypted with AES-256-GCM under `ENCRYPTION_KEY`; a row that key can't decrypt stops the server at boot instead of starting first-run mode again. The `GITHUB_*` variables, when set, win over it |
+ 
+ - **Severity:** `blocker | major | minor | nit`.
+ - **Category:** `security | bug | performance | design | tests | style | docs | other`.
+@@ -307,6 +308,13 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ - Onboarding: `GET /api/onboarding` answers `{steps: {appInstalled, cliConnected, repoLinked, agentStarted}, done, deviceName, appSlug, publicReposOnly}`, session cookie only (a CLI token is a 401). It's a read of its own, not part of `/api/me`, because "app installed" asks GitHub (`GET /user/installations` with the person's own token) and `/api/me` is the app's first request. `cliConnected`: an unrevoked CLI token; `repoLinked` / `agentStarted`: an unrevoked token whose last hello reported a linked repo / an agent with a mode; `deviceName`: the newest unrevoked token's name. GitHub's yes is kept 5 minutes per person, a no isn't kept, and a GitHub failure counts as no (logged, never failing the read). The first read where all four hold sets `User.onboardedAt`; from then on every step reads true without asking GitHub.
+ - CLI approval, for the web app's approve screen: `GET /api/cli/requests/:userCode` and `POST /api/cli/requests/:userCode {decision: approve|deny}`. They replace Plan 1's server-rendered form; the page stays at `/cli/approve?code=`, so the CLI's link is unchanged. Both answer `{userCode, deviceName, requestedAt, expiresAt, status: pending|approved|denied|expired}`: a pending login past `expiresAt` reads `expired`, one the CLI already collected (`consumed`) reads `approved`. The code is matched trimmed and upper-cased; an unknown code is a 404. Both take the session cookie only (a CLI token is a 401), and the POST has the Origin check. A POST on a login that is no longer pending (decided already, or expired) changes nothing and answers 200 with how it stands, so a double click or a stale tab just shows the result. The page counts down to `expiresAt` and shows Expired at zero without asking the server; signed out, it sends you through `/auth/github/login?next=` first.
+ 
++**First-run mode (Plan 3, §17 "Self-hosting")**, a server with no GitHub App in the environment or the database:
++- `GET /api/first-run` answers `{mode: 'first_run', publicUrl}`.
++- `POST /api/first-run/manifest {code, owner: {kind: 'user'} | {kind: 'org', login}, name, isPublic}` answers `{action, manifest}`: the manifest (§15's events and permissions, every URL built from `PUBLIC_URL`) and where the page posts it as a form (`https://github.com/settings/apps/new?state=…`, or `/organizations/<login>/settings/apps/new?state=…`). `state` is 32 random bytes, kept in memory for an hour and good for one callback. Each client address gets 5 tries a minute (the 6th is a 429 `rate_limited`, counted before the code is looked at); a wrong or missing setup code is a 403 `setup_code`, before the rest of the body is checked; `name` is 1 to 34 characters.
++- `GET /first-run/callback?code&state` (GitHub sends the browser here): a missing, unknown, expired or used `state` is a 400 and nothing is stored. Then `POST /app-manifests/{code}/conversions` (no token); GitHub refusing the code is a 400, GitHub failing or leaving out a secret is a 502 `github_unavailable`. The app is stored encrypted (§8 `GithubAppConfig`); one already there is a 409. Then a redirect to `/first-run?done=1`, and the process exits with 0 half a second later; Docker starts it again in normal mode.
++- Everything else under the server's paths (`/api/*`, `/auth/*`, `/github/*`, `/webhooks/*`, `/ws/*`, any method) answers 503 `{error: {code: 'first_run', message: 'Finish setup at /first-run.'}}`; `/healthz` still answers, and the web app's pages are still served, with `form-action` also allowing GitHub. WebSocket upgrades get a 404.
++- With an app, `GET /api/first-run` answers `{mode: 'ready', installUrl: 'https://github.com/apps/<slug>/installations/new'}`, and the other two are a JSON 404.
++
+ **REST endpoints in Plan 1**
+ - Webhooks: `POST /webhooks/github`
+ - GitHub sign-in: `GET /auth/github/login`, `GET /auth/github/callback` (PKCE S256), `POST /auth/logout`. A sign-in that came in on another address than `PUBLIC_URL` (another host, or plain http as the proxy's `X-Forwarded-Proto` reports it) is first redirected to `PUBLIC_URL`'s `/auth/github/login`, keeping `next`: GitHub always returns to `PUBLIC_URL`, so the OAuth cookie must be set there.
+```
+
+And `docs/why/content-security-policy.md`'s `form-action` row names the one exception:
+
+```diff
+--- a/docs/why/content-security-policy.md
++++ b/docs/why/content-security-policy.md
+@@ -18,7 +18,7 @@ Nitpilot shows text written by AI agents and by other people: point titles, repl
+ | `style-src 'self' 'unsafe-inline'` | Our own CSS files, plus `style="…"` attributes written in HTML or set as an attribute, and `<style>` elements. | Kept so a library that writes style attributes or `<style>` tags still works. React's own `style={{ … }}` goes through the DOM's style object, which the policy doesn't restrict. |
+ | `font-src 'self'` | Fonts from our own files only. | No `data:` fonts (see the Vite example below). |
+ | `base-uri 'self'` | A page can't change what relative URLs resolve against with a `<base>` tag. | Closes a trick for redirecting our own relative links. |
+-| `form-action 'self'` | Forms post only to us. | A form injected into the page can't send data elsewhere. |
++| `form-action 'self'` | Forms post only to us. In first-run mode, also to GitHub (`https://github.com`). | A form injected into the page can't send data elsewhere. The one exception is first-run mode, whose page posts the app manifest to GitHub as a real form (`createFirstRunApp` in `http/app.ts`, docs/why/first-run-and-app-manifests.md); a server with its app never allows it. |
+ | `frame-ancestors 'none'` | No other site may show our pages in a frame. | Clickjacking: another site could load one of our pages in an invisible frame and trick you into clicking a button on it, such as "Approve" on the CLI approval page. |
+ 
+ ## Why styles may be inline but scripts may not
+```
+
+- [ ] **Step 22: Full suite, tick, ledger, commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e`
+Expected: protocol 88, CLI 349 + 14 skipped, server 1106 (47 more than before: env 2, setup-code 6, manifest 4, credentials 9, spa 2, first-run routes 18, first-run app 4, boot 2), web 344, root 6, e2e 6, typecheck and lint clean.
+
+Tick this task's boxes, append `Task 7: complete` (plus any `Ruling:` lines) to the ledger, then:
+
+```bash
+git add apps/server/.env.example apps/server/prisma/schema.prisma apps/server/prisma/migrations apps/server/scripts/dev-tunnel.ts apps/server/src/auth/onboarding.ts apps/server/src/auth/user-tokens.ts apps/server/src/http/app.ts apps/server/src/http/app.test.ts apps/server/src/http/errors.ts apps/server/src/http/routes/auth.ts apps/server/src/http/routes/webhooks.ts apps/server/src/http/spa.ts apps/server/src/http/spa.test.ts apps/server/src/lib/env.ts apps/server/src/lib/env.test.ts apps/server/src/main.ts apps/server/src/setup apps/server/test/db.ts apps/server/test/webhooks.ts packages/protocol/src/web-api.ts packages/protocol/src/web-api.test.ts docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/why/first-run-and-app-manifests.md docs/why/content-security-policy.md docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "feat(server): first-run mode: a fresh server creates its own GitHub App
+
+With no GITHUB_* variables and no stored app, the server starts in first-run
+mode: it prints a setup code, serves /first-run's API (manifest, callback),
+stores the new app encrypted in GithubAppConfig and exits for Docker to
+restart it in normal mode. Everything else answers 503 first_run. The six
+GITHUB_* variables are now all-or-none and still win; every reader goes
+through githubApp().
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 8: The first-run page
 
 **Files:**
-- Create: `apps/web/src/routes/FirstRun/{FirstRun.tsx,FirstRun.module.css,FirstRun.test.tsx}`, `apps/web/src/api/first-run.ts`, `apps/web/e2e/first-run.spec.ts`
-- Modify: `apps/web/src/app.tsx` (route `/first-run`; when `/api/me` answers 503 `first_run`, every route shows a link to `/first-run`), `apps/server/test/e2e/web-server.ts` (a first-run control: start the harness without credentials)
+- Create: `apps/web/src/routes/FirstRun/{FirstRun.tsx,FirstRun.module.css,FirstRun.test.tsx}`, `apps/web/src/api/first-run.ts`, `apps/web/src/components/FirstRunNeeded/{FirstRunNeeded.tsx,FirstRunNeeded.module.css}`, `apps/web/e2e/first-run.spec.ts`, `apps/server/test/e2e/first-run-server.ts`
+- Modify: `apps/server/src/setup/first-run.ts` (+ `first-run.db.test.ts`), `apps/server/package.json`, `packages/protocol/src/web-api.ts`, `apps/web/src/api/client.ts` (+ test), `apps/web/src/lib/browser.ts`, `apps/web/src/app.tsx`, `apps/web/src/routes/Home/Home.tsx` (+ test), `apps/web/src/routes/Approve/Approve.tsx` (+ test), `apps/web/e2e/ports.ts`, `apps/web/playwright.config.ts`, spec §10, `docs/why/first-run-and-app-manifests.md`, `docs/why/end-to-end-test.md`
 
-**Interfaces:** consumes Task 7's three routes and bodies. The page, in the handoff's visual system (tokens, Wordmark, one card, no new design): (1) setup code field ("Find it in the server's log: `docker compose logs nitpilot`"); (2) "Create the app on" personal account / organization (login field); app name (default `Nitpilot (<host>)`); "Who can install it" only this account or organization (default) / anyone; (3) "Create GitHub App" submits a real `<form method="post" action={action}>` with a hidden `manifest` field (GitHub requires a form post, not fetch); (4) `?done=1`: "Restarting the server…" polling `/api/first-run` every 2 s until `mode: 'ready'`, then "Install the app on your repos" (the `installUrl`) and "Sign in" buttons. A 403 `setup_code` keeps the form and shows "That code doesn't match the one in the server's log."
+**Interfaces:**
+- Consumes: Task 7's routes: `GET /api/first-run` → `FirstRunStatus` (`{ mode: 'first_run', publicUrl }` or `{ mode: 'ready', installUrl }`), `POST /api/first-run/manifest` → `FirstRunManifestResponse` (`{ action, manifest }`; 403 `setup_code`, 429 `rate_limited`, 400 `validation_error` with `details.issues`), `GET /first-run/callback`, and the 503 `{ error: { code: 'first_run', message } }` every other API answers. Also `createFirstRunApp`'s CSP (`form-action` also allows GitHub's origin) and `readyRoutes`.
+- Produces (server): `GET /first-run/callback` no longer answers JSON errors. Every failure is a `302` to `/first-run?error=<problem>`, nothing stored, the process kept running. `expired`: the `state` is missing, unknown, used or over an hour old, or GitHub refused the code (4xx). `github`: GitHub didn't answer (5xx, network) or left a secret out. `exists`: the server already has its app (two tabs, or a browser GitHub sends back after the restart). Unexpected errors (the database is down) stay a JSON 500.
+- Produces (protocol): `FirstRunProblem = z.enum(['expired', 'github', 'exists'])`.
+- Produces (web): `ApiError.details`, `isFirstRunMode(error)` (503 with code `first_run`), `retryUnlessClientError` doesn't retry that 503, `browser.submit(form)`, `useFirstRunStatus()`, `useRestartedServer()` (polls every `RESTART_POLL_MS` = 2 s), `useManifest()`, `<FirstRunNeeded message />` (what `Home` and `Approve` show instead of the app or GitHub sign-in while `/api/me` answers 503 `first_run`), and the lazy route `/first-run`, a page of its own like device approval (no Home, no inbox, no `/api/me`).
+- Produces (e2e): a second Playwright server in first-run mode (`first-run-server.ts`, web port 4321, control and stand-in-GitHub port 4322, its own database `<test database>_first_run_test`), started next to the shared one.
 
-- [ ] Steps: component tests first (each state above, the wrong-code message, the form's action and hidden manifest), then a Playwright test against the harness in first-run mode (code → the form posts to the stubbed GitHub URL; `?done=1` → waits, then shows Install). Implement; full suite + `npm run test:web-e2e`; `npm run build -w apps/web` with no chunk warning; in-app browser look at both themes and phone width; commit `feat(web): the first-run page`.
+**Why a form post and not `fetch`:** GitHub's "create an app from a manifest" page takes a normal browser form post (the page it lands on asks the person to review and confirm). A `fetch` would get the page's HTML back into JavaScript, where the person can't see it. So the page builds a `<form method="post" action=…>` with one hidden `manifest` field and submits it, which makes the browser itself navigate to GitHub. The server's content security policy has a `form-action` rule (which origins a form may post to) that first-run mode widens by exactly GitHub's origin. The callback is the other half: GitHub sends the browser to `/first-run/callback?code&state` as a page load, so a JSON error there would be a blank tab with `{"error":…}` in it. That is why its failures become redirects back to the page, which can say what happened (docs/why/first-run-and-app-manifests.md, updated in Step 18).
+
+**Order:** the server's change first (the page needs to know the three `?error=` values), then the api client, the small "first run needed" screen, the page itself, the Playwright server and spec, the docs, and the checks.
+
+- [ ] **Step 1: The callback's failures become redirects: tests first**
+
+Replace `apps/server/src/setup/first-run.db.test.ts`'s expectations. The change to the file (an `expectBackOnThePage` helper; each test that expected a JSON 400, 409 or 502 on the callback now expects a 302 to `/first-run?error=…`; the "ready server" test now has two parts):
+
+```diff
+--- a/apps/server/src/setup/first-run.db.test.ts
++++ b/apps/server/src/setup/first-run.db.test.ts
+@@ -1,4 +1,4 @@
+-import type { FirstRunManifestResponse } from '@nitpilot/protocol';
++import type { FirstRunManifestResponse, FirstRunProblem } from '@nitpilot/protocol';
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import { testApp } from '../../test/app';
+ import { fakeFetch, json, type FakeRequest } from '../../test/fake-fetch';
+@@ -65,6 +65,12 @@ function callback(server: Server, query: string) {
+ 
+ const errorOf = async (res: Response) => ((await res.json()) as { error: { code: string; message: string } }).error;
+ 
++/** The callback is a browser navigation, so a failure sends the browser back to the page, which says what happened. */
++function expectBackOnThePage(res: Response, problem: FirstRunProblem, why = '') {
++  expect(res.status, why).toBe(302);
++  expect(res.headers.get('location'), why).toBe(`/first-run?error=${problem}`);
++}
++
+ beforeEach(async () => {
+   await prisma.githubAppConfig.deleteMany();
+ });
+@@ -109,7 +115,7 @@ describe('POST /api/first-run/manifest', () => {
+       expect(await errorOf(res)).toEqual({ code: 'setup_code', message: "That code doesn't match the one in the server's log." });
+     }
+     // No state was handed out, so no callback can succeed.
+-    expect((await callback(server, 'code=the-code&state=anything')).status).toBe(400);
++    expectBackOnThePage(await callback(server, 'code=the-code&state=anything'), 'expired');
+   });
+ 
+   it('checks the rest of the request once the code is right', async () => {
+@@ -180,71 +186,64 @@ describe('GET /first-run/callback', () => {
+     }
+   });
+ 
+-  it('refuses a missing, unknown or reused state, stores nothing and asks GitHub nothing', async () => {
++  it('sends a missing, unknown or reused state back to the page as expired, stores nothing and asks GitHub nothing', async () => {
+     const { fetch, github } = fakeGithub();
+     const server = firstRunServer({ github });
+     const state = await stateFrom(await askForManifest(server));
+-    await prisma.githubAppConfig.deleteMany();
+ 
+     for (const query of ['code=the-code', `code=the-code&state=${state}x`, `state=${state}`]) {
+-      const res = await callback(server, query);
+-      expect(res.status, query).toBe(400);
+-      expect(await errorOf(res)).toEqual({ code: 'validation_error', message: 'This setup link expired or was changed. Start again at /first-run.' });
++      expectBackOnThePage(await callback(server, query), 'expired', query);
+     }
+     expect(fetch.calls).toHaveLength(0);
+     expect(await prisma.githubAppConfig.count()).toBe(0);
+ 
+     // A state works once.
+-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(302);
++    expect((await callback(server, `code=the-code&state=${state}`)).headers.get('location')).toBe('/first-run?done=1');
+     await prisma.githubAppConfig.deleteMany();
+-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
++    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
+     expect(await prisma.githubAppConfig.count()).toBe(0);
+   });
+ 
+-  it('refuses a state older than an hour', async () => {
++  it('sends a state older than an hour back to the page as expired', async () => {
+     vi.useFakeTimers({ toFake: ['Date'] });
+     const server = firstRunServer();
+     const state = await stateFrom(await askForManifest(server));
+     vi.advanceTimersByTime(60 * 60_000 + 1);
+-    expect((await callback(server, `code=the-code&state=${state}`)).status).toBe(400);
++    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
+     expect(await prisma.githubAppConfig.count()).toBe(0);
+   });
+ 
+-  it('refuses a second app with 409 and keeps the first (two tabs, one finished)', async () => {
++  it('keeps the first app when a second comes back (two tabs, one finished), and says the new one is extra', async () => {
+     const server = firstRunServer();
+     const first = await stateFrom(await askForManifest(server));
+     const second = await stateFrom(await askForManifest(server));
+-    expect((await callback(server, `code=the-code&state=${first}`)).status).toBe(302);
++    expect((await callback(server, `code=the-code&state=${first}`)).headers.get('location')).toBe('/first-run?done=1');
+ 
+-    const res = await callback(server, `code=the-code&state=${second}`);
+-    expect(res.status).toBe(409);
+-    expect((await errorOf(res)).code).toBe('conflict');
+-    expect(await prisma.githubAppConfig.count()).toBe(1);
++    expectBackOnThePage(await callback(server, `code=the-code&state=${second}`), 'exists');
++    expect(await prisma.githubAppConfig.findMany()).toHaveLength(1);
+   });
+ 
+-  it('answers 502 and stores nothing when GitHub fails', async () => {
++  it('sends the browser back with a GitHub problem, stores nothing and keeps running when GitHub fails', async () => {
+     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Server Error' }, 500)).github });
+-    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+-    expect(res.status).toBe(502);
+-    expect((await errorOf(res)).code).toBe('github_unavailable');
++    expectBackOnThePage(await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`), 'github');
+     expect(await prisma.githubAppConfig.count()).toBe(0);
++    await new Promise((resolve) => setTimeout(resolve, 600));
+     expect(server.exit).not.toHaveBeenCalled();
+   });
+ 
+-  it("answers 400 when GitHub doesn't know the code (it lasts an hour)", async () => {
++  it("sends the browser back as expired when GitHub doesn't take the code (it lasts an hour)", async () => {
+     const server = firstRunServer({ github: fakeGithub(() => json({ message: 'Not Found' }, 404)).github });
+-    const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+-    expect(res.status).toBe(400);
+-    expect((await errorOf(res)).message).toBe("GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
++    expectBackOnThePage(await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`), 'expired');
+     expect(await prisma.githubAppConfig.count()).toBe(0);
++    expect(server.exit).not.toHaveBeenCalled();
+   });
+ 
+   it('never stores an app with a secret missing', async () => {
+     for (const missing of ['pem', 'webhook_secret', 'client_secret'] as const) {
+       const server = firstRunServer({ github: fakeGithub(() => ({ ...CONVERSION, [missing]: null })).github });
+-      const res = await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`);
+-      expect(res.status, missing).toBe(502);
++      expectBackOnThePage(await callback(server, `code=the-code&state=${await stateFrom(await askForManifest(server))}`), 'github', missing);
+       expect(await prisma.githubAppConfig.count()).toBe(0);
++      expect(server.exit).not.toHaveBeenCalled();
+     }
+   });
+ });
+@@ -258,13 +257,14 @@ describe('the first-run routes once the server has its app', () => {
+   });
+ 
+   it('refuse to make another app with a JSON 404, not the web app', async () => {
+-    const app = testApp();
+-    const manifest = await app.request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST) });
+-    const back = await app.request('/first-run/callback?code=the-code&state=s');
+-    for (const res of [manifest, back]) {
+-      expect(res.status).toBe(404);
+-      expect((await errorOf(res)).code).toBe('not_found');
+-    }
++    const res = await testApp().request('/api/first-run/manifest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(REQUEST) });
++    expect(res.status).toBe(404);
++    expect((await errorOf(res)).code).toBe('not_found');
++    expect(await prisma.githubAppConfig.count()).toBe(0);
++  });
++
++  it('send a browser GitHub returns late (a second tab, after the restart) to the page, which says the new app is extra', async () => {
++    expectBackOnThePage(await testApp().request('/first-run/callback?code=the-code&state=s'), 'exists');
+     expect(await prisma.githubAppConfig.count()).toBe(0);
+   });
+ });
+```
+
+- [ ] **Step 2: Run the tests and watch them fail**
+
+Run: `npm run test:db -w apps/server -- src/setup/first-run.db.test.ts`
+Expected: FAIL, 8 failed | 11 passed (19), each with `AssertionError: expected 400 to be 302` (also `expected 409 to be 302`, `expected 502 to be 302`, and for a ready server's callback `expected 404 to be 302`). The callback still answers the JSON errors.
+
+- [ ] **Step 3: The protocol knows the three problems**
+
+In `packages/protocol/src/web-api.ts`, after `FirstRunManifestResponse` (the end of the file), add:
+
+```diff
+--- a/packages/protocol/src/web-api.ts
++++ b/packages/protocol/src/web-api.ts
+@@ -420,3 +420,12 @@ export type FirstRunManifestRequest = z.infer<typeof FirstRunManifestRequest>;
+  */
+ export const FirstRunManifestResponse = z.object({ action: z.string(), manifest: z.record(z.string(), z.unknown()) });
+ export type FirstRunManifestResponse = z.infer<typeof FirstRunManifestResponse>;
++
++/**
++ * Why `GET /first-run/callback` sent the browser back to `/first-run?error=…` instead of finishing. `expired`: the
++ * setup link is unknown, used, over an hour old, or GitHub refused its code. `github`: GitHub didn't answer, or its
++ * answer was missing part of the new app. `exists`: this server already has its app, so the one GitHub just made is
++ * extra. Nothing was stored in any of them.
++ */
++export const FirstRunProblem = z.enum(['expired', 'github', 'exists']);
++export type FirstRunProblem = z.infer<typeof FirstRunProblem>;
+```
+
+- [ ] **Step 4: The callback redirects instead of throwing**
+
+`convertManifest` now returns a result (`{ ok: true, … }` or `{ ok: false, problem }`) instead of throwing `HttpError`s, so the route can turn any problem into a redirect; the callback redirects, and the ready server's callback redirects to `exists`. In `apps/server/src/setup/first-run.ts`:
+
+```diff
+--- a/apps/server/src/setup/first-run.ts
++++ b/apps/server/src/setup/first-run.ts
+@@ -1,5 +1,5 @@
+ import { randomBytes } from 'node:crypto';
+-import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunStatus } from '@nitpilot/protocol';
++import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunProblem, type FirstRunStatus } from '@nitpilot/protocol';
+ import { Hono } from 'hono';
+ import { z } from 'zod';
+ import { errorBody, HttpError } from '../http/errors';
+@@ -19,8 +19,6 @@ const STATE_TTL_MS = 60 * 60_000;
+ /** How long the server waits after answering the callback before it exits, so the browser gets its redirect first. */
+ export const EXIT_DELAY_MS = 500;
+ 
+-const EXPIRED_LINK = 'This setup link expired or was changed. Start again at /first-run.';
+-
+ export type FirstRunDeps = {
+   github: GithubClient;
+   publicUrl: string;
+@@ -78,39 +76,48 @@ const Conversion = z.object({
+   owner: z.object({ login: z.string().min(1) }),
+ });
+ 
++type ConversionResult = { ok: true; creds: GithubAppCredentials; ownerLogin: string } | { ok: false; problem: FirstRunProblem };
++
+ /**
+  * Trade the code GitHub sent back for the app it just created. No token: the code is the proof, it works once, and only
+- * for an hour. A GitHub that doesn't answer is a 502; one that refuses the code (expired, used) is a 400.
++ * for an hour. GitHub refusing the code (expired, used) is `expired`; GitHub not answering, or answering without every
++ * secret, is `github`.
+  */
+-async function convertManifest(github: GithubClient, code: string): Promise<{ creds: GithubAppCredentials; ownerLogin: string }> {
++async function convertManifest(github: GithubClient, code: string): Promise<ConversionResult> {
+   let data: unknown;
+   try {
+     ({ data } = await github.api('POST', `/app-manifests/${encodeURIComponent(code)}/conversions`));
+   } catch (err) {
+-    if (err instanceof GithubError && err.status >= 400 && err.status < 500) {
+-      throw new HttpError('validation_error', "GitHub didn't accept this setup link; it lasts an hour. Start again at /first-run.");
+-    }
++    if (err instanceof GithubError && err.status >= 400 && err.status < 500) return { ok: false, problem: 'expired' };
+     console.error('[first-run] GitHub manifest conversion failed:', err);
+-    throw new HttpError('github_unavailable', "GitHub didn't answer. Try again in a minute.");
++    return { ok: false, problem: 'github' };
+   }
+   const parsed = Conversion.safeParse(data);
+   if (!parsed.success) {
+     console.error('[first-run] GitHub answered the manifest conversion without', parsed.error.issues.map((i) => i.path.join('.')).join(', '));
+-    throw new HttpError('github_unavailable', "GitHub's answer was missing part of the new app. Start again at /first-run.");
++    return { ok: false, problem: 'github' };
+   }
+   const app = parsed.data;
+   return {
++    ok: true,
+     creds: { appId: String(app.id), slug: app.slug, privateKey: app.pem, clientId: app.client_id, clientSecret: app.client_secret, webhookSecret: app.webhook_secret },
+     ownerLogin: app.owner.login,
+   };
+ }
+ 
++/**
++ * The callback is a browser navigation (GitHub sends the person here), so a failure goes back to the page, which says
++ * what happened and offers to start again, rather than a JSON error in an empty tab.
++ */
++const backToThePage = (problem: FirstRunProblem) => `/first-run?error=${problem}`;
++
+ /**
+  * First-run mode's routes (spec §17 "Self-hosting", docs/why/first-run-and-app-manifests.md):
+  * 1. `GET /api/first-run`: the page asks which mode the server is in.
+  * 2. `POST /api/first-run/manifest`: with the setup code, the page gets a manifest and where to post it.
+  * 3. The browser posts it to GitHub; GitHub creates the app and sends the browser to `GET /first-run/callback`.
+  * 4. The callback trades GitHub's code for the app's credentials, stores them encrypted, and the server restarts.
++ *    If anything goes wrong there, nothing is stored and the browser goes back to /first-run?error=….
+  */
+ export function firstRunRoutes(deps: FirstRunDeps): Hono {
+   const now = deps.now ?? (() => Date.now());
+@@ -145,13 +152,16 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
+   app.get('/first-run/callback', async (c) => {
+     const code = c.req.query('code');
+     const state = c.req.query('state');
+-    if (!code || !state || !states.take(state)) throw new HttpError('validation_error', EXPIRED_LINK);
++    if (!code || !state || !states.take(state)) return c.redirect(backToThePage('expired'));
+ 
+-    const { creds, ownerLogin } = await convertManifest(deps.github, code);
++    const conversion = await convertManifest(deps.github, code);
++    if (!conversion.ok) return c.redirect(backToThePage(conversion.problem));
++    const { creds, ownerLogin } = conversion;
+     try {
+       await saveGithubApp(creds, ownerLogin);
+     } catch (err) {
+-      if (err instanceof GithubAppExistsError) throw new HttpError('conflict', "This server already has a GitHub App. The one GitHub just made isn't used: delete it in your GitHub settings.");
++      // Two tabs, one finished first: its app stays, and the page asks the person to delete the one GitHub just made.
++      if (err instanceof GithubAppExistsError) return c.redirect(backToThePage('exists'));
+       throw err;
+     }
+ 
+@@ -169,8 +179,9 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
+ 
+ /**
+  * The same three routes once the server has its app (http/app.ts createApp). The page, polling while the server
+- * restarts, learns it's ready and where to install the app. The other two are a JSON 404 rather than the web app's
+- * page: there is nothing left to set up, and a server with an app never makes a second one.
++ * restarts, learns it's ready and where to install the app. Asking for a manifest is a JSON 404 rather than the web
++ * app's page: there is nothing left to set up, and a server with an app never makes a second one. A browser GitHub
++ * sends back now (a second tab, finished after the restart) goes to the page, which says the new app is extra.
+  */
+ export function readyRoutes(deps: { github: GithubClient }): Hono {
+   const app = new Hono();
+@@ -182,7 +193,7 @@ export function readyRoutes(deps: { github: GithubClient }): Hono {
+ 
+   const alreadySetUp = errorBody('not_found', 'This server already has its GitHub App.');
+   app.post('/api/first-run/manifest', (c) => c.json(alreadySetUp, 404));
+-  app.get('/first-run/callback', (c) => c.json(alreadySetUp, 404));
++  app.get('/first-run/callback', (c) => c.redirect(backToThePage('exists')));
+ 
+   return app;
+ }
+```
+
+A note on which failures are which: GitHub answering 4xx to the conversion means it doesn't take the code (used, or older than an hour) and is `expired`; a 5xx, no answer, or an answer without every secret is `github`. Both are logged only when it's GitHub's fault (`console.error`). An error nobody expected (the database is down while saving) is still thrown, so it's a JSON 500 in the log, not a friendly message that hides it.
+
+Run: `npm run test:db -w apps/server -- src/setup/first-run.db.test.ts`
+Expected: PASS (19 tests)
+
+Run: `npm run typecheck -w apps/server`
+Expected: no output (clean). (`HttpError` is still used by the other routes in the file.)
+
+- [ ] **Step 5: The api client keeps an error's `details` and doesn't retry a first-run 503: tests first**
+
+The page maps a server `400` to a field using `details.issues`, so `ApiError` has to carry `details`. And TanStack Query retries 5xx twice; a server in first-run mode answers 503 until someone sets it up, so retrying only makes the notice wait about 3 seconds. In `apps/web/src/api/client.test.ts`:
+
+```diff
+--- a/apps/web/src/api/client.test.ts
++++ b/apps/web/src/api/client.test.ts
+@@ -23,6 +23,12 @@ describe('api', () => {
+     expect(err).toMatchObject({ status: 409, code: 'conflict', message: 'Someone already resolved P1.' });
+   });
+ 
++  it("keeps the error's details, such as which fields a 400 refused", async () => {
++    const issues = [{ path: ['owner', 'login'], message: "isn't a GitHub login" }];
++    vi.stubGlobal('fetch', answer(400, { error: { code: 'validation_error', message: 'request validation failed', details: { issues } } }));
++    await expect(api.send('POST', '/api/x', {})).rejects.toMatchObject({ status: 400, code: 'validation_error', details: { issues } });
++  });
++
+   it('refuses a body with the wrong shape instead of passing it on', async () => {
+     vi.stubGlobal('fetch', answer(200, { nom: 'maya' }));
+     await expect(api.get('/api/thing', Thing)).rejects.toMatchObject({ code: 'bad_response' });
+@@ -48,4 +54,8 @@ describe('retryUnlessClientError', () => {
+     expect(retryUnlessClientError(2, new ApiError(503, 'server_error', ''))).toBe(false);
+     expect(retryUnlessClientError(0, new ApiError(404, 'not_found', ''))).toBe(false);
+   });
++
++  it("doesn't retry a server in first-run mode: its 503 lasts until someone sets it up", () => {
++    expect(retryUnlessClientError(0, new ApiError(503, 'first_run', 'Finish setup at /first-run.'))).toBe(false);
++  });
+ });
+```
+
+Run: `npm test -w apps/web -- src/api/client.test.ts`
+Expected: FAIL, 2 failed | 6 passed (8): `AssertionError: expected ApiError: request validation failed { …(2) } to match object { status: 400, …(2) }` (no `details` on the error) and `AssertionError: expected true to be false // Object.is equality`.
+
+- [ ] **Step 6: `ApiError.details` and `isFirstRunMode`**
+
+In `apps/web/src/api/client.ts`:
+
+```diff
+--- a/apps/web/src/api/client.ts
++++ b/apps/web/src/api/client.ts
+@@ -1,11 +1,15 @@
+ import { z } from 'zod';
+ 
+-/** Every failed request, in one shape: the HTTP status (0 = no answer), the server's error code, and a message to show. */
++/**
++ * Every failed request, in one shape: the HTTP status (0 = no answer), the server's error code, a message to show, and
++ * the server's `details` when it sent some (a 400's `issues`: which fields it refused).
++ */
+ export class ApiError extends Error {
+   constructor(
+     readonly status: number,
+     readonly code: string,
+     message: string,
++    readonly details?: Record<string, unknown>,
+   ) {
+     super(message);
+     this.name = 'ApiError';
+@@ -13,7 +17,7 @@ export class ApiError extends Error {
+ }
+ 
+ /** How the server answers an error (apps/server/src/http/errors.ts). */
+-const ErrorBody = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
++const ErrorBody = z.object({ error: z.object({ code: z.string(), message: z.string(), details: z.record(z.string(), z.unknown()).optional() }) });
+ 
+ async function request<T>(method: string, path: string, schema: z.ZodType<T> | null, body?: unknown): Promise<T> {
+   let res: Response;
+@@ -31,7 +35,7 @@ async function request<T>(method: string, path: string, schema: z.ZodType<T> | n
+ 
+   if (!res.ok) {
+     const error = ErrorBody.safeParse(await res.json().catch(() => null));
+-    if (error.success) throw new ApiError(res.status, error.data.error.code, error.data.error.message);
++    if (error.success) throw new ApiError(res.status, error.data.error.code, error.data.error.message, error.data.error.details);
+     throw new ApiError(res.status, 'server_error', `Nitpilot answered ${res.status}. Try again in a moment.`);
+   }
+   if (schema === null || res.status === 204) return undefined as T;
+@@ -47,8 +51,17 @@ export const api = {
+   send: <T = void>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, schema: z.ZodType<T> | null = null) => request<T>(method, path, schema, body),
+ };
+ 
+-/** A 4xx won't change by asking again; a network failure or a 5xx might. Used as TanStack Query's `retry`. */
++/**
++ * A 4xx won't change by asking again; a network failure or a 5xx might. A server in first-run mode answers 503 until
++ * someone sets it up, so that one isn't retried either. Used as TanStack Query's `retry`.
++ */
+ export function retryUnlessClientError(failureCount: number, error: unknown): boolean {
+   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
++  if (isFirstRunMode(error)) return false;
+   return failureCount < 2;
+ }
++
++/** The server has no GitHub App yet (first-run mode): every API answers 503 `first_run` until /first-run is done. */
++export function isFirstRunMode(error: unknown): error is ApiError {
++  return error instanceof ApiError && error.status === 503 && error.code === 'first_run';
++}
+```
+
+Run: `npm test -w apps/web -- src/api/client.test.ts`
+Expected: PASS (8 tests)
+
+- [ ] **Step 7: Every other page links to the setup page while the server is in first-run mode: tests first**
+
+`Home` (which decides between the landing page and the app) and the device-approval page both ask `/api/me` first. While the server has no GitHub App, that answers 503 `first_run`. Instead of an error with a "Try again" button (or, on the approve page, a redirect to GitHub sign-in that can't work yet), they show "This server isn't set up yet" and a link. The Home test also checks the request count: the 503 is asked once, not three times.
+
+In `apps/web/src/routes/Home/Home.test.tsx`:
+
+```diff
+--- a/apps/web/src/routes/Home/Home.test.tsx
++++ b/apps/web/src/routes/Home/Home.test.tsx
+@@ -61,4 +61,19 @@ describe('Home', () => {
+     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+     expect(await screen.findByRole('region', { name: 'Inbox' })).toBeInTheDocument();
+   });
++
++  describe('a server that is not set up yet (first-run mode)', () => {
++    const firstRun = (): Answer => [503, { error: { code: 'first_run', message: 'Finish setup at /first-run.' } }];
++
++    for (const path of ['/', '/settings', '/c/octo/sandbox/7']) {
++      it(`shows a link to the setup page instead of ${path}, without retrying`, async () => {
++        const fetch = fakeApi({ 'GET /api/me': firstRun });
++        renderApp(path);
++        expect(await screen.findByRole('heading', { level: 1, name: "This server isn't set up yet" })).toBeInTheDocument();
++        expect(screen.getByText('Finish setup at /first-run.')).toBeInTheDocument();
++        expect(screen.getByRole('link', { name: 'Open the setup page' })).toHaveAttribute('href', '/first-run');
++        expect(fetch).toHaveBeenCalledTimes(1);
++      });
++    }
++  });
+ });
+```
+
+In `apps/web/src/routes/Approve/Approve.test.tsx` (the same, at the end of the file):
+
+```diff
+--- a/apps/web/src/routes/Approve/Approve.test.tsx
++++ b/apps/web/src/routes/Approve/Approve.test.tsx
+@@ -221,3 +221,15 @@ describe('Approve: signed out', () => {
+     expect(sent(fetch, API)).toEqual([]);
+   });
+ });
++
++describe('Approve on a server that is not set up yet (first-run mode)', () => {
++  it('shows a link to the setup page instead of sending you to GitHub sign-in', async () => {
++    const goTo = vi.spyOn(browser, 'goTo').mockImplementation(() => {});
++    serveApprove({ me: (): Answer => [503, { error: { code: 'first_run', message: 'Finish setup at /first-run.' } }] });
++    renderApp(PATH);
++    expect(await screen.findByRole('heading', { level: 1, name: "This server isn't set up yet" })).toBeInTheDocument();
++    expect(screen.getByRole('link', { name: 'Open the setup page' })).toHaveAttribute('href', '/first-run');
++    expect(goTo).not.toHaveBeenCalled();
++  });
++});
++
+```
+
+Run: `npm test -w apps/web -- src/routes/Home/Home.test.tsx src/routes/Approve/Approve.test.tsx`
+Expected: FAIL, 4 failed | 23 passed (27): `TestingLibraryElementError: Unable to find role="heading" and name "This server isn't set up yet"` (three in Home, one in Approve).
+
+- [ ] **Step 8: The `FirstRunNeeded` screen, used by Home and Approve**
+
+It reuses the device-approval page's frame (wordmark top left, one centered card) and the app's tokens, so it needs no new design. Create `apps/web/src/components/FirstRunNeeded/FirstRunNeeded.tsx`:
+
+```tsx
+import { Link } from 'react-router';
+import { Wordmark } from '../Wordmark/Wordmark';
+import styles from './FirstRunNeeded.module.css';
+
+/**
+ * What every page shows while the server is in first-run mode (it has no GitHub App yet, so `/api/me` answers 503
+ * `first_run`): the server's message and the way to the setup page. See docs/why/first-run-and-app-manifests.md.
+ */
+export function FirstRunNeeded({ message }: { message: string }) {
+  return (
+    <div className={styles.page}>
+      <header className={styles.topBar}>
+        <Wordmark />
+      </header>
+      <main className={styles.main}>
+        <section className={styles.card} aria-labelledby="first-run-needed-title">
+          <h1 id="first-run-needed-title" className={styles.title}>
+            This server isn't set up yet
+          </h1>
+          <p className={styles.body}>{message}</p>
+          <Link to="/first-run" className={styles.button}>
+            Open the setup page
+          </Link>
+        </section>
+      </main>
+    </div>
+  );
+}
+```
+
+Create `apps/web/src/components/FirstRunNeeded/FirstRunNeeded.module.css`:
+
+```css
+/* The device-approval page's frame (routes/Approve): the wordmark top left, one centered card. */
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  padding: 0 4px 8px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 28px;
+  border: 1px solid var(--b1);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 759px) {
+  .page {
+    padding: 14px 16px 16px;
+  }
+
+  .card {
+    padding: 32px 22px;
+  }
+}
+```
+
+In `apps/web/src/routes/Home/Home.tsx` (the new check goes before the generic error):
+
+```diff
+--- a/apps/web/src/routes/Home/Home.tsx
++++ b/apps/web/src/routes/Home/Home.tsx
+@@ -1,11 +1,16 @@
++import { isFirstRunMode } from '../../api/client';
+ import { ErrorState } from '../../components/ErrorState/ErrorState';
++import { FirstRunNeeded } from '../../components/FirstRunNeeded/FirstRunNeeded';
+ import { Wordmark } from '../../components/Wordmark/Wordmark';
+ import { useMe } from '../../api/me';
+ import { Landing } from '../Landing/Landing';
+ import { SignedIn } from '../Shell/Shell';
+ import styles from './Home.module.css';
+ 
+-/** Every page starts here: the landing page when signed out, the app (the pages under routes/Shell/Shell.tsx `SignedIn`) when signed in. */
++/**
++ * Every page starts here: the landing page when signed out, the app (the pages under routes/Shell/Shell.tsx `SignedIn`)
++ * when signed in, and only a link to /first-run while the server has no GitHub App yet.
++ */
+ export function Home() {
+   const me = useMe();
+   if (me.isPending) {
+@@ -16,6 +21,7 @@ export function Home() {
+       </div>
+     );
+   }
++  if (me.isError && isFirstRunMode(me.error)) return <FirstRunNeeded message={me.error.message} />;
+   if (me.isError) return <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+   if (me.data === null) return <Landing />;
+   return <SignedIn me={me.data} />;
+```
+
+In `apps/web/src/routes/Approve/Approve.tsx` (before anything else is chosen, so the redirect to GitHub sign-in in the effect above it never matters on this server):
+
+```diff
+--- a/apps/web/src/routes/Approve/Approve.tsx
++++ b/apps/web/src/routes/Approve/Approve.tsx
+@@ -2,9 +2,10 @@ import { BRAND, type CliRequestView } from '@nitpilot/protocol';
+ import { useEffect, useRef, useState, type ReactNode } from 'react';
+ import { useLocation, useSearchParams } from 'react-router';
+ import { useCliRequest, useDecideCliRequest } from '../../api/cli-requests';
+-import { ApiError } from '../../api/client';
++import { ApiError, isFirstRunMode } from '../../api/client';
+ import { useMe } from '../../api/me';
+ import { ErrorState } from '../../components/ErrorState/ErrorState';
++import { FirstRunNeeded } from '../../components/FirstRunNeeded/FirstRunNeeded';
+ import { Wordmark } from '../../components/Wordmark/Wordmark';
+ import { browser } from '../../lib/browser';
+ import { itemTime, useNow } from '../../lib/time';
+@@ -29,6 +30,9 @@ export function Approve() {
+     if (signedOut) browser.goTo(`/auth/github/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+   }, [signedOut, location.pathname, location.search]);
+ 
++  // A server with no GitHub App yet can't sign anyone in: the setup page comes first.
++  if (me.isError && isFirstRunMode(me.error)) return <FirstRunNeeded message={me.error.message} />;
++
+   let content: ReactNode;
+   if (me.isError) content = <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;
+   else if (me.isPending || signedOut) content = <Loading />;
+```
+
+Run: `npm test -w apps/web -- src/routes/Home/Home.test.tsx src/routes/Approve/Approve.test.tsx`
+Expected: PASS (27 tests)
+
+- [ ] **Step 9: The page's tests, first**
+
+Create `apps/web/src/routes/FirstRun/FirstRun.test.tsx`. It covers each state: loading; the form with its defaults (`Nitpilot (<host>)`, trimmed to GitHub's 34 characters); the manifest request and the real form post (the test replaces `browser.submit` and reads the form it was given: `method`, `action`, one hidden `manifest` field); an organization app installable by anyone; keyboard order; Back from GitHub (the browser's back-forward cache shows the page as it was, with the button still "Opening GitHub…", so a `pageshow` event with `persisted` resets it); a wrong code (kept on the field, field focused, everything else kept), too many tries, the fields checked before asking, a server `400` mapped to its field, an unreachable server; a server that already has its app; `?done=1` (polling every 2 s through the downtime, a failed fetch and a proxy's 502 meaning "keep waiting", then Install and Sign in; "Taking a while?" after a minute); and each `?error=` with "Start again".
+
+```tsx
+import type { FirstRunManifestResponse, FirstRunStatus } from '@nitpilot/protocol';
+import { act, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { browser } from '../../lib/browser';
+import { fakeApi, renderApp, type Answer } from '../../test/render';
+import { sent } from '../../test/settings';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const SETUP_CODE = 'K7PX-3MQD';
+const FIRST_RUN: FirstRunStatus = { mode: 'first_run', publicUrl: 'https://nitpilot.example.com' };
+const READY: FirstRunStatus = { mode: 'ready', installUrl: 'https://github.com/apps/nitpilot-example/installations/new' };
+const MANIFEST: FirstRunManifestResponse = {
+  action: 'https://github.com/settings/apps/new?state=abc123',
+  manifest: { name: 'Nitpilot (nitpilot.example.com)', redirect_url: 'https://nitpilot.example.com/first-run/callback' },
+};
+
+type Route = () => Answer | Promise<Answer>;
+
+/** A server in first-run mode: `status` for `GET /api/first-run`, `manifest` for the form's request. */
+function serveFirstRun(opts: { status?: Route; manifest?: Route } = {}) {
+  return fakeApi({
+    'GET /api/first-run': opts.status ?? ((): Answer => [200, FIRST_RUN]),
+    'POST /api/first-run/manifest': opts.manifest ?? ((): Answer => [200, MANIFEST]),
+  });
+}
+
+/** Stands in for the browser posting the form to GitHub; answers the forms it was given. */
+function catchFormPosts() {
+  const posted: HTMLFormElement[] = [];
+  vi.spyOn(browser, 'submit').mockImplementation((form) => void posted.push(form));
+  return posted;
+}
+
+const codeField = () => screen.getByRole('textbox', { name: 'Setup code' });
+const nameField = () => screen.getByRole('textbox', { name: 'App name' });
+const createButton = () => screen.getByRole('button', { name: 'Create GitHub App' });
+
+async function fillCode(code = SETUP_CODE) {
+  await userEvent.type(await screen.findByRole('textbox', { name: 'Setup code' }), code);
+}
+
+const setupCodeWrong = (): Answer => [403, { error: { code: 'setup_code', message: "That code doesn't match the one in the server's log." } }];
+
+describe('FirstRun: the form', () => {
+  it('says it is loading until the server says which mode it is in', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    renderApp('/first-run');
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+  });
+
+  it('asks for the setup code, the owner, a name and who can install it, with the defaults filled in', async () => {
+    serveFirstRun();
+    renderApp('/first-run');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeInTheDocument();
+
+    expect(codeField()).toHaveValue('');
+    expect(codeField()).toHaveAccessibleDescription("Find it in the server's log: docker compose logs nitpilot");
+
+    const owner = screen.getByRole('radiogroup', { name: 'Create the app on' });
+    expect(within(owner).getByRole('radio', { name: 'Your personal account' })).toBeChecked();
+    expect(within(owner).getByRole('radio', { name: 'An organization' })).not.toBeChecked();
+    expect(screen.queryByRole('textbox', { name: 'Organization' })).not.toBeInTheDocument();
+
+    expect(nameField()).toHaveValue('Nitpilot (nitpilot.example.com)');
+    expect(nameField()).toHaveAttribute('maxlength', '34');
+
+    const who = screen.getByRole('radiogroup', { name: 'Who can install it' });
+    expect(within(who).getByRole('radio', { name: 'Only this account or organization' })).toBeChecked();
+    expect(within(who).getByRole('radio', { name: 'Anyone on GitHub' })).not.toBeChecked();
+
+    expect(createButton()).toBeEnabled();
+  });
+
+  it("trims the default name to GitHub's 34 characters, keeping the closing bracket", async () => {
+    serveFirstRun({ status: (): Answer => [200, { mode: 'first_run', publicUrl: 'https://reviews.engineering.example-company.com' }] });
+    renderApp('/first-run');
+    await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' });
+    expect(nameField()).toHaveValue('Nitpilot (reviews.engineering.exa)');
+    expect((nameField() as HTMLInputElement).value).toHaveLength(34);
+  });
+
+  it("asks for the manifest, then posts it to GitHub in a real form (GitHub doesn't take a fetch)", async () => {
+    const posted = catchFormPosts();
+    const fetch = serveFirstRun();
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(createButton());
+
+    expect(sent(fetch, '/api/first-run/manifest')).toEqual([
+      `POST ${JSON.stringify({ code: SETUP_CODE, owner: { kind: 'user' }, name: 'Nitpilot (nitpilot.example.com)', isPublic: false })}`,
+    ]);
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    const form = posted[0]!;
+    expect(form.method).toBe('post');
+    expect(form.action).toBe(MANIFEST.action);
+    const fields = [...form.elements] as HTMLInputElement[];
+    expect(fields.map((field) => [field.type, field.name, field.value])).toEqual([['hidden', 'manifest', JSON.stringify(MANIFEST.manifest)]]);
+    // While the browser leaves for GitHub, the button says so and can't be pressed twice.
+    expect(screen.getByRole('button', { name: 'Opening GitHub…' })).toBeDisabled();
+  });
+
+  it('makes the app for an organization, installable by anyone, under the name typed', async () => {
+    catchFormPosts();
+    const fetch = serveFirstRun();
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(screen.getByRole('radio', { name: 'An organization' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Organization' }), 'acme-inc');
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'Acme reviews');
+    await userEvent.click(screen.getByRole('radio', { name: 'Anyone on GitHub' }));
+    await userEvent.click(createButton());
+
+    expect(sent(fetch, '/api/first-run/manifest')).toEqual([
+      `POST ${JSON.stringify({ code: SETUP_CODE, owner: { kind: 'org', login: 'acme-inc' }, name: 'Acme reviews', isPublic: true })}`,
+    ]);
+  });
+
+  it('can be filled in and sent with the keyboard alone, in reading order', async () => {
+    const posted = catchFormPosts();
+    serveFirstRun();
+    renderApp('/first-run');
+    await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' });
+    await userEvent.tab();
+    expect(codeField()).toHaveFocus();
+    await userEvent.keyboard(SETUP_CODE);
+    await userEvent.tab();
+    expect(screen.getByRole('radio', { name: 'Your personal account' })).toHaveFocus();
+    await userEvent.tab();
+    expect(nameField()).toHaveFocus();
+    await userEvent.tab();
+    expect(screen.getByRole('radio', { name: 'Only this account or organization' })).toHaveFocus();
+    await userEvent.tab();
+    expect(createButton()).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+  });
+
+  it('comes back usable when the browser returns from GitHub with Back', async () => {
+    catchFormPosts();
+    serveFirstRun();
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(createButton());
+    expect(await screen.findByRole('button', { name: 'Opening GitHub…' })).toBeDisabled();
+
+    // The browser shows the page from its back-forward cache, as it was when it left.
+    act(() => void window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+    expect(await screen.findByRole('button', { name: 'Create GitHub App' })).toBeEnabled();
+    expect(codeField()).toHaveValue(SETUP_CODE);
+  });
+});
+
+describe('FirstRun: what the form refuses', () => {
+  it('a wrong code keeps everything typed and says so on the code field, which gets the focus', async () => {
+    const posted = catchFormPosts();
+    serveFirstRun({ manifest: setupCodeWrong });
+    renderApp('/first-run');
+    await fillCode('K7PX-3MQE');
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), 'My reviews');
+    await userEvent.click(createButton());
+
+    const field = codeField();
+    expect(await screen.findByText("That code doesn't match the one in the server's log.")).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(expect.stringContaining("That code doesn't match the one in the server's log."));
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue('K7PX-3MQE');
+    expect(nameField()).toHaveValue('My reviews');
+    expect(createButton()).toBeEnabled();
+    expect(posted).toEqual([]);
+  });
+
+  it('fixing the code clears the message', async () => {
+    serveFirstRun({ manifest: setupCodeWrong });
+    renderApp('/first-run');
+    await fillCode('WRONG');
+    await userEvent.click(createButton());
+    expect(await screen.findByText("That code doesn't match the one in the server's log.")).toBeInTheDocument();
+    await userEvent.type(codeField(), 'X');
+    expect(screen.queryByText("That code doesn't match the one in the server's log.")).not.toBeInTheDocument();
+    expect(codeField()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('too many tries says to wait a minute', async () => {
+    serveFirstRun({ manifest: (): Answer => [429, { error: { code: 'rate_limited', message: 'Too many tries from here. Wait a minute and try again.' } }] });
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(createButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many tries. Wait a minute and try again.');
+    expect(codeField()).toHaveValue(SETUP_CODE);
+  });
+
+  it('checks the fields before asking the server, and names the one to fix', async () => {
+    const fetch = serveFirstRun();
+    renderApp('/first-run');
+    await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' });
+    await userEvent.click(createButton());
+    expect(codeField()).toHaveAttribute('aria-invalid', 'true');
+    expect(codeField()).toHaveAccessibleDescription(expect.stringContaining("Enter the setup code from the server's log."));
+    expect(codeField()).toHaveFocus();
+
+    await userEvent.type(codeField(), SETUP_CODE);
+    await userEvent.click(screen.getByRole('radio', { name: 'An organization' }));
+    await userEvent.clear(nameField());
+    await userEvent.click(createButton());
+    const org = screen.getByRole('textbox', { name: 'Organization' });
+    expect(org).toHaveAttribute('aria-invalid', 'true');
+    expect(org).toHaveAccessibleDescription("Enter the organization's GitHub login, like acme-inc.");
+    expect(org).toHaveFocus();
+    expect(nameField()).toHaveAttribute('aria-invalid', 'true');
+    expect(nameField()).toHaveAccessibleDescription(expect.stringContaining('Give the app a name.'));
+
+    await userEvent.type(org, 'not a login!');
+    await userEvent.click(createButton());
+    expect(org).toHaveAccessibleDescription("Enter the organization's GitHub login, like acme-inc.");
+    expect(sent(fetch, '/api/first-run/manifest')).toEqual([]);
+  });
+
+  it("names the field when the server refuses one the page didn't catch", async () => {
+    serveFirstRun({
+      manifest: (): Answer => [400, { error: { code: 'validation_error', message: 'request validation failed', details: { issues: [{ path: ['name'], message: 'Too big' }] } } }],
+    });
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(createButton());
+    await vi.waitFor(() => expect(nameField()).toHaveAttribute('aria-invalid', 'true'));
+    expect(nameField()).toHaveAccessibleDescription(expect.stringContaining('Up to 34 characters.'));
+  });
+
+  it("shows the server's message for anything else, and keeps the form", async () => {
+    serveFirstRun({ manifest: () => Promise.reject(new TypeError('Failed to fetch')) });
+    renderApp('/first-run');
+    await fillCode();
+    await userEvent.click(createButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach Nitpilot. Check your connection and try again.");
+    expect(codeField()).toHaveValue(SETUP_CODE);
+  });
+});
+
+describe('FirstRun: a server that already has its app', () => {
+  it('says so, with Install and Sign in', async () => {
+    const fetch = serveFirstRun({ status: (): Answer => [200, READY] });
+    renderApp('/first-run');
+    expect(await screen.findByRole('heading', { level: 1, name: 'This server is set up' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Install the app' })).toHaveAttribute('href', READY.installUrl);
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth/github/login');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(sent(fetch, '/api/first-run')).toEqual(['GET ']);
+  });
+
+  it("offers Try again when the server can't be read", async () => {
+    let reads = 0;
+    serveFirstRun({ status: (): Answer => (++reads <= 3 ? [500, {}] : [200, FIRST_RUN]) });
+    renderApp('/first-run');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nitpilot answered 500. Try again in a moment.');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeInTheDocument();
+  });
+});
+
+describe('FirstRun: back from GitHub (?done=1)', () => {
+  it('waits while the server restarts, asking every 2 seconds and through its downtime, then offers Install and Sign in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const answers: Route[] = [
+      // Not restarted yet, then down, then answering something that isn't the API (a proxy's error page), then ready.
+      (): Answer => [200, FIRST_RUN],
+      () => Promise.reject(new TypeError('Failed to fetch')),
+      (): Answer => [502, 'Bad Gateway'],
+      (): Answer => [200, READY],
+    ];
+    const fetch = serveFirstRun({ status: () => answers.shift()!() });
+    renderApp('/first-run?done=1');
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Restarting the server…');
+    expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+    for (const reads of [2, 3]) {
+      await act(() => vi.advanceTimersByTimeAsync(2_000));
+      expect(sent(fetch, '/api/first-run')).toHaveLength(reads);
+      expect(screen.getByRole('status')).toHaveTextContent('Restarting the server…');
+    }
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Your GitHub App is ready' })).toBeInTheDocument();
+    // The same live region says it, so a screen reader hears the change.
+    expect(screen.getByRole('status')).toHaveTextContent('Your GitHub App is ready');
+    expect(screen.getByRole('link', { name: 'Install the app on your repos' })).toHaveAttribute('href', READY.installUrl);
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth/github/login');
+
+    // Ready means done: no more asking.
+    await act(() => vi.advanceTimersByTimeAsync(6_000));
+    expect(sent(fetch, '/api/first-run')).toHaveLength(4);
+  });
+
+  it('after a minute, says where to look if the server still has not come back', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    serveFirstRun({ status: () => Promise.reject(new TypeError('Failed to fetch')) });
+    renderApp('/first-run?done=1');
+    expect(await screen.findByRole('status')).toHaveTextContent('Restarting the server…');
+    expect(screen.queryByText(/Taking a while\?/)).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    expect(screen.getByText(/Taking a while\? Check that the server restarted:/)).toHaveTextContent('docker compose ps');
+  });
+});
+
+describe('FirstRun: back from GitHub with a problem (?error=)', () => {
+  const DELETE_HINT = 'GitHub → Settings → Developer settings → GitHub Apps';
+
+  it.each([
+    ['expired', 'This setup link expired', 'Nothing was saved.'],
+    ['github', "GitHub didn't finish the setup", 'Nothing was saved.'],
+    ['exists', 'This server already has its GitHub App', "The app GitHub just made isn't used."],
+    ['something-else', 'This setup link expired', 'Nothing was saved.'],
+  ])('%s: says what happened and where to delete the app GitHub made', async (problem, title, body) => {
+    serveFirstRun();
+    renderApp(`/first-run?error=${problem}`);
+    const heading = await screen.findByRole('heading', { level: 1, name: title });
+    const card = heading.closest('section')!;
+    expect(card).toHaveTextContent(body);
+    expect(card).toHaveTextContent(DELETE_HINT);
+  });
+
+  it('Start again goes back to the form, without the problem in the address', async () => {
+    serveFirstRun();
+    renderApp('/first-run?error=github');
+    await userEvent.click(await screen.findByRole('button', { name: 'Start again' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "GitHub didn't finish the setup" })).not.toBeInTheDocument();
+  });
+});
+
+describe('FirstRun is a page of its own', () => {
+  it("doesn't ask who is signed in: a server in first-run mode has nobody", async () => {
+    const fetch = serveFirstRun();
+    renderApp('/first-run');
+    await screen.findByRole('heading', { level: 1, name: 'Set up Nitpilot' });
+    expect(sent(fetch, '/api/me')).toEqual([]);
+  });
+});
+```
+
+Run: `npm test -w apps/web -- src/routes/FirstRun`
+Expected: FAIL, 22 failed | 1 passed (23): `TestingLibraryElementError: Unable to find role="heading" and name "Set up Nitpilot"`, and for the form posts `Error: The property "submit" is not defined on the object.` (the one that passes is "says it is loading", which only sees Home's own loading text until the page exists).
+
+- [ ] **Step 10: `browser.submit` and the page's api hooks**
+
+`browser.submit` is the same trick as `browser.goTo` (it exists so a test can replace it: jsdom can't follow a form post). In `apps/web/src/lib/browser.ts`:
+
+```diff
+--- a/apps/web/src/lib/browser.ts
++++ b/apps/web/src/lib/browser.ts
+@@ -1,9 +1,14 @@
+ /**
+- * Leaving the web app for a page the server answers (GitHub sign-in). One object, so a test can replace `goTo` with
+- * `vi.spyOn(browser, 'goTo')`: jsdom won't let a test replace `window.location.assign` itself.
++ * Leaving the web app for a page the server answers (GitHub sign-in), or for GitHub itself (the first-run page's form).
++ * One object, so a test can replace these with `vi.spyOn(browser, 'goTo')`: jsdom won't let a test replace
++ * `window.location.assign` itself, and it can't follow a form post.
+  */
+ export const browser = {
+   goTo(url: string): void {
+     window.location.assign(url);
+   },
++  /** Post a form the page built: a real navigation to its `action`, as if its submit button were pressed. */
++  submit(form: HTMLFormElement): void {
++    form.submit();
++  },
+ };
+```
+
+Create `apps/web/src/api/first-run.ts`. `useRestartedServer` turns every failed read into `null` on purpose: while the container restarts, nothing answers, and then a proxy such as Caddy answers with its own error page. All of those only mean "not yet", so none of them may show as an error.
+
+```ts
+import { FirstRunManifestResponse, FirstRunStatus, type FirstRunManifestRequest } from '@nitpilot/protocol';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { api } from './client';
+
+/** How often the page asks again while the server restarts after GitHub made its app. */
+export const RESTART_POLL_MS = 2_000;
+
+/** Which mode the server is in (`GET /api/first-run`): waiting to be set up, or ready with its app. */
+export function useFirstRunStatus() {
+  return useQuery({ queryKey: ['first-run'], queryFn: () => api.get('/api/first-run', FirstRunStatus) });
+}
+
+/**
+ * The same question, every 2 seconds, while the server restarts into normal mode (spec §10 "First-run mode"). Until
+ * the restart it still answers `first_run`; during it, nothing answers, or a proxy answers with its own error page.
+ * All of those just mean "not yet", so a failed read is `null` rather than an error. It stops once the server is ready.
+ */
+export function useRestartedServer() {
+  return useQuery({
+    queryKey: ['first-run', 'restart'],
+    queryFn: () => api.get('/api/first-run', FirstRunStatus).catch(() => null),
+    refetchInterval: (query) => (query.state.data?.mode === 'ready' ? false : RESTART_POLL_MS),
+  });
+}
+
+/** Trade the setup code and the person's choices for the manifest, and where the page posts it (GitHub). */
+export function useManifest() {
+  return useMutation({
+    mutationFn: (request: FirstRunManifestRequest) => api.send('POST', '/api/first-run/manifest', request, FirstRunManifestResponse),
+  });
+}
+```
+
+- [ ] **Step 11: The page**
+
+Create `apps/web/src/routes/FirstRun/FirstRun.tsx`. Its parts: `FirstRun` (the frame, and which of `Problem`, `Restarting` or `Start` to show from `?error=` / `?done=1`), `Start` (asks the server which mode it is in), the form (validates with the same `FirstRunManifestRequest` zod schema the server uses before sending anything, so a bad login is named on its field before a request is made), `Restarting` (polls, and says where to look after a minute), and `Problem` (an unknown `?error=` value shows the `expired` copy, the safest one: start again).
+
+```tsx
+import { BRAND, FirstRunManifestRequest, FirstRunProblem, type FirstRunManifestResponse } from '@nitpilot/protocol';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type Ref } from 'react';
+import { useSearchParams } from 'react-router';
+import { z } from 'zod';
+import { ApiError } from '../../api/client';
+import { RESTART_POLL_MS, useFirstRunStatus, useManifest, useRestartedServer } from '../../api/first-run';
+import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { browser } from '../../lib/browser';
+import { useNow } from '../../lib/time';
+import styles from './FirstRun.module.css';
+
+const SIGN_IN = '/auth/github/login';
+/** The longest name GitHub gives an app. */
+const NAME_MAX = 34;
+/** After this long without the server coming back, the page says where to look. */
+const SLOW_RESTART_MS = 60_000;
+const GITHUB_APPS_SETTINGS = 'GitHub → Settings → Developer settings → GitHub Apps';
+
+/**
+ * `/first-run` (spec §10 "First-run mode", docs/why/first-run-and-app-manifests.md): a self-hosted server with no
+ * GitHub App yet has GitHub create one. The person types the setup code from the server's log and a few choices; the
+ * page posts the server's manifest to GitHub in a real form; GitHub sends them back to `?done=1` while the server
+ * restarts, or to `?error=…` if something went wrong. A page of its own, like device approval: nobody can be signed
+ * in yet.
+ */
+export function FirstRun() {
+  const [params, setParams] = useSearchParams();
+  const problem = params.get('error');
+
+  let content: ReactNode;
+  if (problem !== null) content = <Problem problem={problem} onStartAgain={() => setParams({})} />;
+  else if (params.get('done') === '1') content = <Restarting />;
+  else content = <Start />;
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.topBar}>
+        <Wordmark />
+      </header>
+      <main className={styles.main}>{content}</main>
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <p className={styles.loading} role="status" aria-busy="true">
+      Loading…
+    </p>
+  );
+}
+
+/** Asks the server which mode it's in: the form if it needs setting up, Install and Sign in if it already has its app. */
+function Start() {
+  const status = useFirstRunStatus();
+  if (status.isPending) return <Loading />;
+  if (status.isError) return <ErrorState message={status.error.message} onRetry={() => void status.refetch()} />;
+  if (status.data.mode === 'ready') {
+    return (
+      <section className={`${styles.card} ${styles.centered}`} aria-labelledby="first-run-title">
+        <span className={styles.icon} data-kind="ready" aria-hidden="true">
+          ✓
+        </span>
+        <h1 id="first-run-title" className={styles.outcomeTitle}>
+          This server is set up
+        </h1>
+        <p className={styles.body}>It has its GitHub App. Install it on your repos, or sign in.</p>
+        <InstallAndSignIn installUrl={status.data.installUrl} installLabel="Install the app" />
+      </section>
+    );
+  }
+  return <SetupForm publicUrl={status.data.publicUrl} />;
+}
+
+type Field = 'code' | 'org' | 'name';
+type FieldErrors = Partial<Record<Field, string>>;
+/** The fields in the order they're on the page: focus goes to the first one with a problem. */
+const FIELD_ORDER: Field[] = ['code', 'org', 'name'];
+
+const MESSAGES = {
+  noCode: "Enter the setup code from the server's log.",
+  wrongCode: "That code doesn't match the one in the server's log.",
+  orgLogin: "Enter the organization's GitHub login, like acme-inc.",
+  noName: 'Give the app a name.',
+  nameTooLong: `Up to ${NAME_MAX} characters.`,
+  tooManyTries: 'Too many tries. Wait a minute and try again.',
+};
+
+/** The form: the setup code, whose app it is, its name, who can install it. "Create GitHub App" then leaves for GitHub. */
+function SetupForm({ publicUrl }: { publicUrl: string }) {
+  const [code, setCode] = useState('');
+  const [ownerKind, setOwnerKind] = useState<'user' | 'org'>('user');
+  const [org, setOrg] = useState('');
+  const [name, setName] = useState(() => defaultAppName(publicUrl));
+  const [isPublic, setIsPublic] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const manifest = useManifest();
+  const codeInput = useRef<HTMLInputElement>(null);
+  const orgInput = useRef<HTMLInputElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const id = useId();
+  const ids = { code: `${id}-code`, org: `${id}-org`, name: `${id}-name`, owner: `${id}-owner`, who: `${id}-who` };
+
+  // Back from GitHub with the browser's Back button, the page can come back exactly as it left, "Opening GitHub…"
+  // included. Make the form usable again, keeping what was typed.
+  const { reset } = manifest;
+  useEffect(() => {
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) reset();
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, [reset]);
+
+  function showFieldErrors(next: FieldErrors) {
+    setErrors(next);
+    const first = FIELD_ORDER.find((field) => next[field]);
+    const inputs = { code: codeInput, org: orgInput, name: nameInput };
+    if (first) inputs[first].current?.focus();
+  }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    // The same schema the server checks with, so the page names the field to fix before asking.
+    const parsed = FirstRunManifestRequest.safeParse({ code, owner: ownerKind === 'org' ? { kind: 'org', login: org.trim() } : { kind: 'user' }, name, isPublic });
+    const problems: FieldErrors = parsed.success ? {} : fieldErrorsFrom(parsed.error.issues, name);
+    if (code.trim() === '') problems.code = MESSAGES.noCode;
+    if (!parsed.success || problems.code) return showFieldErrors(problems);
+
+    setErrors({});
+    manifest.mutate(parsed.data, {
+      onError: (err) => {
+        if (err instanceof ApiError && err.code === 'setup_code') return showFieldErrors({ code: MESSAGES.wrongCode });
+        if (err instanceof ApiError && err.code === 'rate_limited') return setFormError(MESSAGES.tooManyTries);
+        const named = err instanceof ApiError && err.code === 'validation_error' ? fieldErrorsFrom(issuesIn(err), name) : {};
+        if (Object.keys(named).length > 0) return showFieldErrors(named);
+        setFormError(err.message);
+      },
+    });
+  }
+
+  /** Typing in a field clears its message. */
+  function edit(field: Field, set: (value: string) => void) {
+    return (value: string) => {
+      set(value);
+      setErrors((current) => ({ ...current, [field]: undefined }));
+    };
+  }
+
+  const leaving = manifest.isPending || manifest.isSuccess;
+  return (
+    <section className={styles.card} aria-labelledby="first-run-title">
+      <span className={styles.eyebrow}>First run</span>
+      <div className={styles.intro}>
+        <h1 id="first-run-title" className={styles.title}>
+          Set up {BRAND.name}
+        </h1>
+        <p className={styles.body}>This server needs a GitHub App of its own. Fill this in, and GitHub creates it after one more click.</p>
+      </div>
+
+      <form className={styles.form} onSubmit={onSubmit} noValidate>
+        <TextField
+          id={ids.code}
+          ref={codeInput}
+          label="Setup code"
+          value={code}
+          onChange={edit('code', setCode)}
+          error={errors.code}
+          hint={
+            <>
+              Find it in the server's log: <code className={styles.inlineCode}>docker compose logs {BRAND.cli}</code>
+            </>
+          }
+          mono
+        />
+
+        <fieldset className={styles.choices} role="radiogroup" aria-labelledby={ids.owner}>
+          <legend id={ids.owner} className={styles.label}>
+            Create the app on
+          </legend>
+          <Choice name="owner" label="Your personal account" checked={ownerKind === 'user'} onChoose={() => setOwnerKind('user')} />
+          <Choice name="owner" label="An organization" checked={ownerKind === 'org'} onChoose={() => setOwnerKind('org')} />
+        </fieldset>
+        {ownerKind === 'org' && <TextField id={ids.org} ref={orgInput} label="Organization" value={org} onChange={edit('org', setOrg)} error={errors.org} />}
+
+        <TextField
+          id={ids.name}
+          ref={nameInput}
+          label="App name"
+          value={name}
+          onChange={edit('name', setName)}
+          error={errors.name}
+          maxLength={NAME_MAX}
+          hint="GitHub shows this name, and no two apps on GitHub can share one."
+        />
+
+        <fieldset className={styles.choices} role="radiogroup" aria-labelledby={ids.who}>
+          <legend id={ids.who} className={styles.label}>
+            Who can install it
+          </legend>
+          <Choice name="who" label="Only this account or organization" checked={!isPublic} onChoose={() => setIsPublic(false)} />
+          <Choice name="who" label="Anyone on GitHub" checked={isPublic} onChoose={() => setIsPublic(true)} />
+        </fieldset>
+
+        {formError && (
+          <p className={styles.formError} role="alert">
+            {formError}
+          </p>
+        )}
+        <button type="submit" className={styles.primary} disabled={leaving} aria-busy={leaving}>
+          {leaving ? 'Opening GitHub…' : 'Create GitHub App'}
+        </button>
+      </form>
+      {/* Outside the form above: a form can't hold another. */}
+      {manifest.data && <PostToGithub answer={manifest.data} />}
+    </section>
+  );
+}
+
+/** A labelled text input with its hint and its error, both read out with it (`aria-describedby`). */
+function TextField({ ref, ...props }: {
+  id: string;
+  ref: Ref<HTMLInputElement>;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  hint?: ReactNode;
+  maxLength?: number;
+  mono?: boolean;
+}) {
+  const hintId = `${props.id}-hint`;
+  const errorId = `${props.id}-error`;
+  const describedBy = [props.hint ? hintId : null, props.error ? errorId : null].filter(Boolean).join(' ');
+  return (
+    <div className={styles.field}>
+      <label htmlFor={props.id} className={styles.label}>
+        {props.label}
+      </label>
+      <input
+        id={props.id}
+        ref={ref}
+        className={props.mono ? `${styles.input} ${styles.mono}` : styles.input}
+        type="text"
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+        maxLength={props.maxLength}
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={props.error ? true : undefined}
+        aria-describedby={describedBy || undefined}
+      />
+      {props.hint && (
+        <p id={hintId} className={styles.hint}>
+          {props.hint}
+        </p>
+      )}
+      {props.error && (
+        <p id={errorId} className={styles.fieldError}>
+          {props.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Choice(props: { name: string; label: string; checked: boolean; onChoose: () => void }) {
+  return (
+    <label className={styles.choice}>
+      <input type="radio" name={props.name} checked={props.checked} onChange={props.onChoose} />
+      {props.label}
+    </label>
+  );
+}
+
+/**
+ * The manifest, posted to GitHub the only way GitHub takes it: a form the browser submits, which leaves this page.
+ * Submitted once, as soon as it's on the page (a ref keeps React's development double-run from posting twice).
+ */
+function PostToGithub({ answer }: { answer: FirstRunManifestResponse }) {
+  const form = useRef<HTMLFormElement>(null);
+  const posted = useRef(false);
+  useEffect(() => {
+    if (posted.current || !form.current) return;
+    posted.current = true;
+    browser.submit(form.current);
+  }, []);
+  return (
+    <form ref={form} method="post" action={answer.action} hidden>
+      <input type="hidden" name="manifest" value={JSON.stringify(answer.manifest)} />
+    </form>
+  );
+}
+
+/**
+ * Back from GitHub: the server saved the app and is restarting. Ask every 2 seconds until it answers `ready`. The
+ * title and its line sit in a polite live region, so a screen reader hears "ready" when it comes.
+ */
+function Restarting() {
+  const server = useRestartedServer();
+  const [startedAt] = useState(() => Date.now());
+  const now = useNow(RESTART_POLL_MS);
+  const ready = server.data?.mode === 'ready' ? server.data : null;
+  const slow = !ready && now.getTime() - startedAt >= SLOW_RESTART_MS;
+
+  return (
+    <section className={`${styles.card} ${styles.centered}`} aria-labelledby="first-run-title">
+      <div className={styles.status} role="status">
+        {ready ? (
+          <span className={styles.icon} data-kind="ready" aria-hidden="true">
+            ✓
+          </span>
+        ) : (
+          <span className={styles.spinner} aria-hidden="true" />
+        )}
+        <h1 id="first-run-title" className={styles.outcomeTitle}>
+          {ready ? 'Your GitHub App is ready' : 'Restarting the server…'}
+        </h1>
+        <p className={styles.body}>
+          {ready ? 'Install it on the repos you want reviewed, then sign in.' : "GitHub made the app and the server saved it. It's restarting to use it, which takes a few seconds."}
+        </p>
+      </div>
+      {slow && (
+        <p className={styles.fine}>
+          Taking a while? Check that the server restarted: <code className={styles.inlineCode}>docker compose ps</code>, and its log:{' '}
+          <code className={styles.inlineCode}>docker compose logs {BRAND.cli}</code>.
+        </p>
+      )}
+      {ready && <InstallAndSignIn installUrl={ready.installUrl} installLabel="Install the app on your repos" />}
+    </section>
+  );
+}
+
+function InstallAndSignIn({ installUrl, installLabel }: { installUrl: string; installLabel: string }) {
+  return (
+    <div className={styles.buttons}>
+      <a className={styles.primary} href={installUrl}>
+        {installLabel}
+      </a>
+      <a className={styles.secondary} href={SIGN_IN}>
+        Sign in
+      </a>
+    </div>
+  );
+}
+
+const PROBLEMS: Record<FirstRunProblem, { title: string; body: string; hint: string }> = {
+  expired: {
+    title: 'This setup link expired',
+    body: "Nothing was saved. GitHub's link back works once, within the hour, and only until the server restarts.",
+    hint: `If GitHub made an app anyway, delete it in ${GITHUB_APPS_SETTINGS}, then start again.`,
+  },
+  github: {
+    title: "GitHub didn't finish the setup",
+    body: "GitHub didn't answer, or its answer was missing part of the new app. Nothing was saved.",
+    hint: `If GitHub made an app anyway, delete it in ${GITHUB_APPS_SETTINGS}, then try again in a minute.`,
+  },
+  exists: {
+    title: 'This server already has its GitHub App',
+    body: "The app GitHub just made isn't used.",
+    hint: `Delete it in ${GITHUB_APPS_SETTINGS}.`,
+  },
+};
+
+/** GitHub sent the person back, but the server couldn't finish (`/first-run?error=…`, setup/first-run.ts). */
+function Problem({ problem, onStartAgain }: { problem: string; onStartAgain: () => void }) {
+  const known = FirstRunProblem.safeParse(problem);
+  const { title, body, hint } = PROBLEMS[known.success ? known.data : 'expired'];
+  return (
+    <section className={`${styles.card} ${styles.centered}`} aria-labelledby="first-run-title">
+      <span className={styles.icon} data-kind="problem" aria-hidden="true">
+        !
+      </span>
+      <h1 id="first-run-title" className={styles.outcomeTitle}>
+        {title}
+      </h1>
+      <p className={styles.body}>{body}</p>
+      <p className={styles.fine}>{hint}</p>
+      <button type="button" className={styles.secondary} onClick={onStartAgain}>
+        Start again
+      </button>
+    </section>
+  );
+}
+
+/** "Nitpilot (nitpilot.example.com)", with the host cut short to fit GitHub's 34 characters. */
+function defaultAppName(publicUrl: string): string {
+  const host = URL.canParse(publicUrl) ? new URL(publicUrl).host : '';
+  if (host === '') return BRAND.name;
+  const prefix = `${BRAND.name} (`;
+  return `${prefix}${host.slice(0, NAME_MAX - prefix.length - 1)})`;
+}
+
+/** Which field each problem is about, from the schema's issues (the page's own check, or a 400's `details.issues`). */
+function fieldErrorsFrom(issues: readonly { path: readonly PropertyKey[] }[], name: string): FieldErrors {
+  const errors: FieldErrors = {};
+  for (const { path } of issues) {
+    if (path[0] === 'code') errors.code = MESSAGES.noCode;
+    if (path[0] === 'owner') errors.org = MESSAGES.orgLogin;
+    if (path[0] === 'name') errors.name = name.trim() === '' ? MESSAGES.noName : MESSAGES.nameTooLong;
+  }
+  return errors;
+}
+
+const Issues = z.object({ issues: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])) })) });
+
+/** The issues a 400 sent along (http/errors.ts puts zod's in `details.issues`), or none. */
+function issuesIn(err: ApiError) {
+  const parsed = Issues.safeParse(err.details);
+  return parsed.success ? parsed.data.issues : [];
+}
+```
+
+- [ ] **Step 12: The page's styles**
+
+Create `apps/web/src/routes/FirstRun/FirstRun.module.css` (Approve's frame and card, the app's tokens, and `--acc-tint` for the selected radio row; `white-space: nowrap` on the inline command so `docker compose logs nitpilot` doesn't break in the middle on a phone):
+
+```css
+/* The first-run page. No screen in the handoff: it reuses device approval's frame (routes/Approve: the wordmark top
+   left, one centered 440px card with a 24px radius) and the handoff's tokens for fields and buttons. */
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  padding: 0 4px 8px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.loading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+  border: 1px solid var(--b1);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Restarting, ready and the problems: a 56px glyph, the title, a line or two, the buttons. */
+.centered {
+  align-items: center;
+  gap: 14px;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  text-align: center;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.outcomeTitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.body {
+  margin: 0;
+  max-width: 24em;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.fine {
+  margin: 0;
+  max-width: 26em;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg3);
+  text-wrap: pretty;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.icon[data-kind='ready'] {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.icon[data-kind='problem'] {
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+}
+
+/* The setup checklist's waiting spinner, at the glyph's size. Reduced motion stops it (styles/global.css). */
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 3px solid var(--b1);
+  border-top-color: var(--acc);
+  border-radius: var(--radius-pill);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg1);
+}
+
+.input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  font-size: 15px;
+}
+
+.input:focus {
+  border-color: var(--acc);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg3);
+}
+
+.inlineCode {
+  padding: 1px 5px;
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  background: var(--code);
+  font-size: 0.95em;
+  color: var(--fg1);
+  /* A command wraps to its own line as a whole rather than breaking inside. */
+  white-space: nowrap;
+}
+
+.fieldError,
+.formError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--red-fg);
+}
+
+.formError {
+  padding: 10px 12px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-control);
+  background: var(--red-tint);
+}
+
+.choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choices .label {
+  margin-bottom: 2px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--hover);
+}
+
+.choice:has(input:checked) {
+  border-color: var(--acc-line);
+  background: var(--acc-tint);
+}
+
+.choice input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--acc);
+}
+
+/* Install, then Sign in: stacked, so the longer label stays on one line in a 440px card. */
+.buttons {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.primary,
+.secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.secondary {
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+.secondary:hover {
+  background: var(--hover);
+}
+
+.primary:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* Start again: one button, not stretched across the card. */
+.centered > .secondary {
+  flex: none;
+}
+
+/* Phone: the 16px side gutters every screen keeps, and a little less padding inside the card. */
+@media (max-width: 759px) {
+  .page {
+    padding: 14px 16px 16px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .centered {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+}
+```
+
+- [ ] **Step 13: The lazy route**
+
+`/first-run` is opened once per server, so it is its own chunk, like device approval and Setup (the main chunk stays under Vite's 500 kB warning: Step 19). It sits next to `cli/approve`, outside `Home`: nobody can be signed in on a server with no app. In `apps/web/src/app.tsx`:
+
+```diff
+--- a/apps/web/src/app.tsx
++++ b/apps/web/src/app.tsx
+@@ -9,12 +9,13 @@ import { EmptyPane } from './routes/Shell/Pane';
+ import { InboxLayout } from './routes/Shell/Shell';
+ 
+ /**
+- * Device approval and the setup checklist are pages most people open once (from `nitpilot login`, and after their first
+- * sign-in), so each is a file of its own that the browser fetches only when that page opens (and the rest of the app
+- * stays under Vite's 500 kB chunk warning).
++ * Device approval, the setup checklist and the first-run page are pages most people open once (from `nitpilot login`,
++ * after their first sign-in, and once per self-hosted server), so each is a file of its own that the browser fetches
++ * only when that page opens (and the rest of the app stays under Vite's 500 kB chunk warning).
+  */
+ const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
+ const Setup = lazy(() => import('./routes/Setup/Setup').then((module) => ({ default: module.Setup })));
++const FirstRun = lazy(() => import('./routes/FirstRun/FirstRun').then((module) => ({ default: module.FirstRun })));
+ 
+ /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
+ export function makeQueryClient(queries: { retryDelay?: number } = {}): QueryClient {
+@@ -35,9 +36,10 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
+ }
+ 
+ /**
+- * Every page. Home decides between the landing page (signed out) and the app. Signed in, the chat pages open beside
+- * the inbox (routes/Shell/Shell.tsx `InboxLayout`); Settings and the setup checklist are pages of their own. Device
+- * approval (`/cli/approve`, the link `nitpilot login` opens) stands outside Home: no landing page, no inbox, no socket.
++ * Every page. Home decides between the landing page (signed out) and the app, or only a link to /first-run while the
++ * server has no GitHub App. Signed in, the chat pages open beside the inbox (routes/Shell/Shell.tsx `InboxLayout`);
++ * Settings and the setup checklist are pages of their own. Device approval (`/cli/approve`, the link `nitpilot login`
++ * opens) and the first-run page stand outside Home: no landing page, no inbox, no socket.
+  */
+ export function AppRoutes() {
+   return (
+@@ -66,6 +68,14 @@ export function AppRoutes() {
+           </Suspense>
+         }
+       />
++      <Route
++        path="first-run"
++        element={
++          <Suspense fallback={null}>
++            <FirstRun />
++          </Suspense>
++        }
++      />
+     </Routes>
+   );
+ }
+```
+
+Run: `npm test -w apps/web -- src/routes/FirstRun`
+Expected: PASS (23 tests)
+
+Run: `npm test -w apps/web`
+Expected: PASS (373 tests)
+
+- [ ] **Step 14: A second Playwright server, in first-run mode**
+
+The shared Playwright server (`web-server.ts`) always has a GitHub App, so it can never be in first-run mode. Rather than add a "no credentials" switch to it (and risk the other 19 specs), the first-run spec gets a server of its own: port 4321 for the app, port 4322 for the tests' control API, which is also the stand-in for github.com (the page posts its manifest form there; it records the post and sends the browser straight back to the callback, as GitHub does after "Create GitHub App"). GitHub's API half (trading the code for the app) is a fake fetch. Its own database keeps its stored app away from the shared server's tables.
+
+A real server exits after storing its app and Docker starts it again. Here `exit` takes the server "down" (every request answers 502 plain text, as Caddy does while the container restarts), and the test's `POST /restart` brings it up in ready mode, reading the app it stored (`loadGithubApp` then `setGithubApp`, as `main.ts` does at boot). The test decides when, so "Restarting the server…" is always seen, and the down phase exercises "a failed fetch means keep waiting".
+
+In `apps/web/e2e/ports.ts`:
+
+```diff
+--- a/apps/web/e2e/ports.ts
++++ b/apps/web/e2e/ports.ts
+@@ -4,3 +4,10 @@ export const WEB_PORT = 4319;
+ export const CONTROL_PORT = 4320;
+ export const BASE_URL = `http://127.0.0.1:${WEB_PORT}`;
+ export const CONTROL_URL = `http://127.0.0.1:${CONTROL_PORT}`;
++
++// The second server, in first-run mode (apps/server/test/e2e/first-run-server.ts), for first-run.spec.ts: the app on
++// one port, and on the other the tests' control API, which is also the stand-in for github.com.
++export const FIRST_RUN_WEB_PORT = 4321;
++export const FIRST_RUN_CONTROL_PORT = 4322;
++export const FIRST_RUN_BASE_URL = `http://127.0.0.1:${FIRST_RUN_WEB_PORT}`;
++export const FIRST_RUN_CONTROL_URL = `http://127.0.0.1:${FIRST_RUN_CONTROL_PORT}`;
+```
+
+Create `apps/server/test/e2e/first-run-server.ts`:
+
+```ts
+/**
+ * The server apps/web/e2e/first-run.spec.ts talks to: a server in first-run mode (no GitHub App in the environment or
+ * its database), on a fixed port, serving the built web app. It runs next to web-server.ts (the normal-mode server
+ * every other spec uses), with its own database, so neither disturbs the other.
+ *
+ * Its second port, on 127.0.0.1 only, is both the tests' control API and a stand-in for github.com: the first-run page
+ * posts its manifest form there, and the stand-in records it and sends the browser straight back to the callback, as
+ * GitHub does after "Create GitHub App". GitHub's API half (trading the code for the app) is a fake fetch.
+ *
+ * A real server exits after storing the app and Docker starts it again in normal mode. Here `exit` takes the server
+ * "down" (every request answers 502, as Caddy does while the container restarts) until the test calls /restart, which
+ * brings it back in ready mode, reading the app it stored. The test decides when, so "Restarting…" is always seen.
+ *
+ * Run by hand: E2E_FIRST_RUN_WEB_PORT=4321 E2E_FIRST_RUN_CONTROL_PORT=4322 npm run e2e:first-run-server -w apps/server
+ */
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { serve } from '@hono/node-server';
+import { Hono, type Context } from 'hono';
+import setupTestDatabase from '../global-setup';
+import { testDatabaseUrl } from '../test-database';
+import { TEST_ENV } from '../test-env';
+
+const webPort = Number(process.env.E2E_FIRST_RUN_WEB_PORT);
+const controlPort = Number(process.env.E2E_FIRST_RUN_CONTROL_PORT);
+if (!webPort || !controlPort) throw new Error('Set E2E_FIRST_RUN_WEB_PORT and E2E_FIRST_RUN_CONTROL_PORT (apps/web/playwright.config.ts does).');
+
+/** The code the server would print in its log; the spec types it. */
+const SETUP_CODE = 'E2EF-RSTR';
+const publicUrl = `http://127.0.0.1:${webPort}`;
+/** Where "github.com" is for this server: the control port. */
+const githubWeb = `http://127.0.0.1:${controlPort}`;
+
+// A database of its own (nitpilot_test → nitpilot_first_run_test), created and migrated like the test one, so this
+// server's stored app never meets web-server.ts's tables.
+const firstRunUrl = testDatabaseUrl(process.env.DATABASE_URL!).replace(/_test(\?|$)/, '_first_run_test$1');
+process.env.DATABASE_URL = firstRunUrl;
+await setupTestDatabase();
+// No GitHub App in the environment: blank, all six, is "not set" (lib/env.ts), which is what makes it first-run mode.
+const noApp = { GITHUB_APP_ID: '', GITHUB_APP_SLUG: '', GITHUB_APP_PRIVATE_KEY: '', GITHUB_CLIENT_ID: '', GITHUB_CLIENT_SECRET: '', GITHUB_WEBHOOK_SECRET: '' };
+Object.assign(process.env, TEST_ENV, noApp, { PUBLIC_URL: publicUrl, DATABASE_URL: firstRunUrl });
+
+// Only now load the server's modules: the database client reads DATABASE_URL when it's first imported.
+const { createFirstRunApp } = await import('../../src/http/app');
+const { spaRoutes } = await import('../../src/http/spa');
+const { getEnv } = await import('../../src/lib/env');
+const { prisma } = await import('../../src/lib/prisma');
+const { GithubClient } = await import('../../src/platform/github/client');
+const { loadGithubApp, setGithubApp } = await import('../../src/setup/credentials');
+const { readyRoutes } = await import('../../src/setup/first-run');
+const { fakeFetch } = await import('../fake-fetch');
+
+const webDistDir = fileURLToPath(new URL('../../../web/dist', import.meta.url));
+
+/** The code the stand-in GitHub sends back, and what GitHub's API answers for it: the new app and its secrets. */
+const GITHUB_CODE = 'e2e-manifest-code';
+const NEW_APP_SLUG = 'nitpilot-e2e';
+const github = new GithubClient(
+  fakeFetch({
+    [`POST /app-manifests/${GITHUB_CODE}/conversions`]: () => ({
+      id: 777,
+      slug: NEW_APP_SLUG,
+      client_id: 'Iv23.e2e',
+      client_secret: 'e2e-client-secret',
+      webhook_secret: 'e2e-webhook-secret',
+      pem: '-----BEGIN RSA PRIVATE KEY-----\ne2e\n-----END RSA PRIVATE KEY-----\n',
+      owner: { login: 'maya' },
+    }),
+  }),
+  'https://api.github.com',
+  githubWeb,
+);
+
+type Handler = (req: Request) => Response | Promise<Response>;
+
+/** Fresh first-run mode: nothing stored, no pending state, no tries counted. */
+function firstRunMode(): Handler {
+  return createFirstRunApp({ github, publicUrl, setupCode: SETUP_CODE, trustProxy: false, exit: goDown, webDistDir }).fetch;
+}
+
+/** While the container restarts, the proxy in front of it answers for it. */
+const down: Handler = () => new Response('Bad Gateway', { status: 502, headers: { 'content-type': 'text/plain' } });
+
+/**
+ * Normal mode, as far as the first-run page can tell: the server read its stored app at boot (as main.ts does) and
+ * answers `ready` with where to install it. The rest of normal mode isn't needed here (web-server.ts is that).
+ */
+async function readyMode(): Promise<Handler> {
+  const found = await loadGithubApp(getEnv());
+  if (!found) throw new Error('restart: no GitHub App was stored');
+  setGithubApp(found.creds);
+  const app = new Hono();
+  app.route('/', readyRoutes({ github }));
+  app.route('/', spaRoutes({ distDir: webDistDir, publicUrl }));
+  return app.fetch;
+}
+
+let current: Handler = firstRunMode();
+function goDown(): void {
+  current = down;
+}
+
+await prisma.githubAppConfig.deleteMany();
+serve({ fetch: (req) => current(req), port: webPort, hostname: '127.0.0.1' });
+
+/** What the stand-in GitHub received last: where the form was posted, and the manifest in it. */
+let lastPost: { path: string; state: string | null; manifest: unknown } | null = null;
+
+const control = new Hono();
+/**
+ * GitHub's "Create GitHub App" page, for a person's account or an organization. GitHub would show the app filled in
+ * from the manifest; the stand-in records it and goes straight to the end: back to the manifest's `redirect_url`
+ * with a code and the same `state`.
+ */
+const createApp = async (c: Context) => {
+  const form = await c.req.parseBody();
+  const manifest = JSON.parse(String(form.manifest)) as { redirect_url: string };
+  const state = c.req.query('state') ?? null;
+  lastPost = { path: c.req.path, state, manifest };
+  return c.redirect(`${manifest.redirect_url}?code=${GITHUB_CODE}&state=${encodeURIComponent(state ?? '')}`);
+};
+control.post('/settings/apps/new', createApp);
+control.post('/organizations/:org/settings/apps/new', createApp);
+/** Answers what the stand-in GitHub was last sent. */
+control.get('/last-post', (c) => c.json(lastPost));
+/** The restart Docker does: back up, in normal mode, with the app the callback stored. */
+control.post('/restart', async (c) => {
+  current = await readyMode();
+  return c.body(null, 204);
+});
+/** Back to a fresh server in first-run mode: what each test starts from. */
+control.post('/reset', async (c) => {
+  await prisma.githubAppConfig.deleteMany();
+  setGithubApp(null);
+  lastPost = null;
+  current = firstRunMode();
+  return c.body(null, 204);
+});
+// 127.0.0.1 only: nothing outside this machine can reach the stand-in or the control API.
+serve({ fetch: control.fetch, port: controlPort, hostname: '127.0.0.1' });
+
+console.log(`[first-run-e2e] first-run mode on ${publicUrl}, stand-in GitHub and control API on ${githubWeb}`);
+
+const stop = async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+};
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+```
+
+In `apps/server/package.json`, next to `e2e:web-server`:
+
+```diff
+--- a/apps/server/package.json
++++ b/apps/server/package.json
+@@ -14,6 +14,7 @@
+     "test:db": "vitest run --project db",
+     "test:e2e": "vitest run --project e2e",
+     "e2e:web-server": "tsx test/e2e/web-server.ts",
++    "e2e:first-run-server": "tsx test/e2e/first-run-server.ts",
+     "dev": "tsx watch src/main.ts",
+     "start": "tsx src/main.ts",
+     "dev:tunnel": "tsx scripts/dev-tunnel.ts",
+```
+
+In `apps/web/playwright.config.ts` (`webServer` becomes an array; both servers start before the first test):
+
+```diff
+--- a/apps/web/playwright.config.ts
++++ b/apps/web/playwright.config.ts
+@@ -1,5 +1,5 @@
+ import { defineConfig, devices } from '@playwright/test';
+-import { BASE_URL, CONTROL_PORT, WEB_PORT } from './e2e/ports';
++import { BASE_URL, CONTROL_PORT, FIRST_RUN_BASE_URL, FIRST_RUN_CONTROL_PORT, FIRST_RUN_WEB_PORT, WEB_PORT } from './e2e/ports';
+ 
+ export default defineConfig({
+   testDir: './e2e',
+@@ -15,13 +15,24 @@ export default defineConfig({
+     trace: 'retain-on-failure',
+   },
+   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+-  // The server for these tests: apps/server/test/e2e/web-server.ts.
+-  webServer: {
+-    command: 'npm run e2e:web-server -w apps/server',
+-    cwd: '../..',
+-    url: `${BASE_URL}/healthz`,
+-    env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
+-    reuseExistingServer: !process.env.CI,
+-    timeout: 60_000,
+-  },
++  // The servers for these tests: apps/server/test/e2e/web-server.ts for every spec, and first-run-server.ts (a server
++  // with no GitHub App yet) for first-run.spec.ts, which points its baseURL there. They start side by side.
++  webServer: [
++    {
++      command: 'npm run e2e:web-server -w apps/server',
++      cwd: '../..',
++      url: `${BASE_URL}/healthz`,
++      env: { E2E_WEB_PORT: String(WEB_PORT), E2E_CONTROL_PORT: String(CONTROL_PORT) },
++      reuseExistingServer: !process.env.CI,
++      timeout: 60_000,
++    },
++    {
++      command: 'npm run e2e:first-run-server -w apps/server',
++      cwd: '../..',
++      url: `${FIRST_RUN_BASE_URL}/healthz`,
++      env: { E2E_FIRST_RUN_WEB_PORT: String(FIRST_RUN_WEB_PORT), E2E_FIRST_RUN_CONTROL_PORT: String(FIRST_RUN_CONTROL_PORT) },
++      reuseExistingServer: !process.env.CI,
++      timeout: 60_000,
++    },
++  ],
+ });
+```
+
+- [ ] **Step 15: The Playwright spec**
+
+Two tests: every other page sends you to the setup page (and from the link, the form is there); and the whole path: a wrong code is said on the field and what was typed stays, the right code posts the manifest to the stand-in GitHub (checked: the post went to `/settings/apps/new`, `state` is 43 URL-safe characters, the manifest has the name, `public: false`, the redirect URL and the webhook URL), the browser lands on `?done=1` with "Restarting the server…", the test restarts the server, and the page shows "Your GitHub App is ready" with Install and Sign in. Each test starts from `POST /reset` (a fresh first-run server), and `pageProblems` fails a test that logged a console error or a blocked request, which is what would catch the browser refusing the form post.
+
+Create `apps/web/e2e/first-run.spec.ts`:
+
+```ts
+import { expect, test } from '@playwright/test';
+import { pageProblems } from './control';
+import { FIRST_RUN_BASE_URL, FIRST_RUN_CONTROL_URL } from './ports';
+
+// A server with no GitHub App yet (apps/server/test/e2e/first-run-server.ts, spec §10 "First-run mode"), not the
+// server the other specs share. Its control port is also the stand-in for github.com.
+test.use({ baseURL: FIRST_RUN_BASE_URL });
+
+const SETUP_CODE = 'E2EF-RSTR';
+
+async function control(path: string, method = 'POST'): Promise<Response> {
+  const res = await fetch(`${FIRST_RUN_CONTROL_URL}${path}`, { method });
+  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text()}`);
+  return res;
+}
+
+test.beforeEach(async () => {
+  await control('/reset');
+});
+
+test('every other page sends you to the setup page', async ({ page }) => {
+  const problems = pageProblems(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1, name: "This server isn't set up yet" })).toBeVisible();
+  await expect(page.getByText('Finish setup at /first-run.')).toBeVisible();
+  await page.getByRole('link', { name: 'Open the setup page' }).click();
+  await expect(page).toHaveURL(`${FIRST_RUN_BASE_URL}/first-run`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Set up Nitpilot' })).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
+test('the setup code, the form post to GitHub, the restart, then Install and Sign in', async ({ page }) => {
+  const problems = pageProblems(page);
+  await page.goto('/first-run');
+  const code = page.getByRole('textbox', { name: 'Setup code' });
+  await expect(page.getByRole('textbox', { name: 'App name' })).toHaveValue('Nitpilot (127.0.0.1:4321)');
+
+  // A wrong code: said on the field, and what was typed stays.
+  await code.fill('E2EF-WRNG');
+  await page.getByRole('button', { name: 'Create GitHub App' }).click();
+  await expect(page.getByText("That code doesn't match the one in the server's log.")).toBeVisible();
+  await expect(code).toHaveAttribute('aria-invalid', 'true');
+  await expect(code).toHaveValue('E2EF-WRNG');
+
+  // The right one: the browser posts the manifest to "GitHub", which sends it back to the callback, then to ?done=1.
+  await code.fill(SETUP_CODE);
+  await page.getByRole('button', { name: 'Create GitHub App' }).click();
+  await expect(page).toHaveURL(`${FIRST_RUN_BASE_URL}/first-run?done=1`);
+  await expect(page.getByRole('status')).toHaveText(/Restarting the server…/);
+
+  const posted = (await (await control('/last-post', 'GET')).json()) as { path: string; state: string; manifest: Record<string, unknown> };
+  expect(posted.path).toBe('/settings/apps/new');
+  expect(posted.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(posted.manifest).toMatchObject({
+    name: 'Nitpilot (127.0.0.1:4321)',
+    public: false,
+    redirect_url: `${FIRST_RUN_BASE_URL}/first-run/callback`,
+    hook_attributes: { url: `${FIRST_RUN_BASE_URL}/webhooks/github`, active: true },
+  });
+
+  // Docker starts the server again; the page, asking every 2 seconds, sees it ready.
+  await control('/restart');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your GitHub App is ready' })).toBeVisible({ timeout: 6_000 });
+  await expect(page.getByRole('link', { name: 'Install the app on your repos' })).toHaveAttribute('href', `${FIRST_RUN_CONTROL_URL}/apps/nitpilot-e2e/installations/new`);
+  await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth/github/login');
+
+  // Nothing was blocked on the way, including the form post to another origin (the CSP's form-action allows it).
+  expect(problems).toEqual([]);
+});
+```
+
+Run: `npm run build -w apps/web && (cd apps/web && CI=1 npx playwright test first-run)`
+Expected: PASS (2 passed). (`CI=1` makes Playwright start its own servers instead of reusing one from an earlier run.)
+
+- [ ] **Step 16: Prove the spec can fail**
+
+The spec was written after the page it tests, so it never failed on its own. Break the one thing it exists to guard, the content security policy that lets the page post a form to GitHub. In `apps/server/src/http/app.ts` (line 103), temporarily change `formActions: [deps.github.webBase]` to `formActions: []`.
+
+Run: `(cd apps/web && CI=1 npx playwright test first-run)`
+Expected: FAIL, 1 failed | 1 passed. The second test: `Error: expect(page).toHaveURL(expected) failed`, `Expected: "http://127.0.0.1:4321/first-run?done=1"`, `Received: "http://127.0.0.1:4321/first-run"` (the browser refused the post to the stand-in GitHub).
+
+Then put it back: `git checkout apps/server/src/http/app.ts`, and run the same command again.
+Expected: PASS (2 passed).
+
+- [ ] **Step 17: The spec (§10)**
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, in the "First-run mode" block: the callback bullet, the "With an app" bullet, and a new bullet for the page:
+
+```diff
+--- a/docs/superpowers/specs/2026-10-07-nitpilot-design.md
++++ b/docs/superpowers/specs/2026-10-07-nitpilot-design.md
+@@ -311,9 +311,10 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
+ **First-run mode (Plan 3, §17 "Self-hosting")**, a server with no GitHub App in the environment or the database:
+ - `GET /api/first-run` answers `{mode: 'first_run', publicUrl}`.
+ - `POST /api/first-run/manifest {code, owner: {kind: 'user'} | {kind: 'org', login}, name, isPublic}` answers `{action, manifest}`: the manifest (§15's events and permissions, every URL built from `PUBLIC_URL`) and where the page posts it as a form (`https://github.com/settings/apps/new?state=…`, or `/organizations/<login>/settings/apps/new?state=…`). `state` is 32 random bytes, kept in memory for an hour and good for one callback. Each client address gets 5 tries a minute (the 6th is a 429 `rate_limited`, counted before the code is looked at); a wrong or missing setup code is a 403 `setup_code`, before the rest of the body is checked; `name` is 1 to 34 characters.
+-- `GET /first-run/callback?code&state` (GitHub sends the browser here): a missing, unknown, expired or used `state` is a 400 and nothing is stored. Then `POST /app-manifests/{code}/conversions` (no token); GitHub refusing the code is a 400, GitHub failing or leaving out a secret is a 502 `github_unavailable`. The app is stored encrypted (§8 `GithubAppConfig`); one already there is a 409. Then a redirect to `/first-run?done=1`, and the process exits with 0 half a second later; Docker starts it again in normal mode.
++- `GET /first-run/callback?code&state` (GitHub sends the browser here). It's a browser navigation, so every failure is a 302 back to the page, `/first-run?error=<problem>`, with nothing stored and the process kept running: a missing, unknown, expired or used `state` is `expired`. Then `POST /app-manifests/{code}/conversions` (no token); GitHub refusing the code is `expired` too, GitHub failing or leaving out a secret is `github`. The app is stored encrypted (§8 `GithubAppConfig`); one already there is `exists` (the page asks the person to delete the extra app GitHub just made). On success, a redirect to `/first-run?done=1`, and the process exits with 0 half a second later; Docker starts it again in normal mode.
+ - Everything else under the server's paths (`/api/*`, `/auth/*`, `/github/*`, `/webhooks/*`, `/ws/*`, any method) answers 503 `{error: {code: 'first_run', message: 'Finish setup at /first-run.'}}`; `/healthz` still answers, and the web app's pages are still served, with `form-action` also allowing GitHub. WebSocket upgrades get a 404.
+-- With an app, `GET /api/first-run` answers `{mode: 'ready', installUrl: 'https://github.com/apps/<slug>/installations/new'}`, and the other two are a JSON 404.
++- With an app, `GET /api/first-run` answers `{mode: 'ready', installUrl: 'https://github.com/apps/<slug>/installations/new'}`, the manifest route is a JSON 404, and the callback redirects to `/first-run?error=exists`.
++- The page `/first-run` (web app, `routes/FirstRun`): in first-run mode the form (setup code, the account or organization, the app's name, who can install it), then a real form post of the manifest to GitHub; on `?done=1` it polls `GET /api/first-run` every 2 s while the server restarts, then offers Install and Sign in; on `?error=` it says what went wrong and offers to start again. Every other page, while `/api/me` answers 503 `first_run`, shows only a link to `/first-run`.
+ 
+ **REST endpoints in Plan 1**
+ - Webhooks: `POST /webhooks/github`
+```
+
+- [ ] **Step 18: The explainers**
+
+In `docs/why/first-run-and-app-manifests.md` (the `state` paragraph, the one-row paragraph, and the file list):
+
+```diff
+--- a/docs/why/first-run-and-app-manifests.md
++++ b/docs/why/first-run-and-app-manifests.md
+@@ -34,7 +34,7 @@ The code is 8 characters from 31 letters and digits (no `0`/`O` or `1`/`I`/`L`,
+ 
+ ## Why `state`
+ 
+-The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one callback. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
++The callback is a plain URL that anyone can open. `state` is 32 random bytes the server handed out with the manifest, kept in memory for an hour, and good for one callback. A callback with a missing, wrong, expired or already used `state` is refused and nothing is stored. Because the callback is a page load in the person's browser, not a `fetch`, "refused" is a redirect back to `/first-run?error=expired`, where the page says what happened and offers "Start again" (a JSON error would be a blank tab with `{"error":…}` in it). GitHub failing is `?error=github`. So the only way to reach step 5 is to have started at step 2, with the setup code. It's the same idea as the `state` in "Sign in with GitHub" (docs/why/oauth-pkce.md).
+ 
+ ## Why the credentials are encrypted, and why a changed key stops the server
+ 
+@@ -42,7 +42,7 @@ The private key and the two secrets are stored with AES-256-GCM under `ENCRYPTIO
+ 
+ GCM refuses to decrypt with any other key than the one that encrypted. If `ENCRYPTION_KEY` changes (a new `.env` without the old value), the stored app can't be read. The server then **refuses to start** with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with." It never falls back into first-run mode: the app still exists on GitHub with every installation, and making a second one would strand them. Putting the old key back fixes it. That's why `.env.example` says to keep a copy of the key.
+ 
+-There is only ever one row (`id = 'app'`), and it's insert-only: a second callback (two tabs, say) gets 409 and the first app stays.
++There is only ever one row (`id = 'app'`), and it's insert-only: a second callback (two tabs, say) stores nothing, the first app stays, and the browser lands on `/first-run?error=exists`, which asks the person to delete the extra app GitHub just made.
+ 
+ ## Why the server exits instead of switching modes in place
+ 
+@@ -58,6 +58,7 @@ If the six `GITHUB_*` variables are set (development with `nitpilot-dev`, or any
+ - `apps/server/src/setup/manifest.ts`: `buildManifest`, `manifestFormAction`.
+ - `apps/server/src/setup/setup-code.ts`: `makeSetupCode`, `setupCodeMatches`.
+ - `apps/server/src/setup/first-run.ts`: the three routes (`firstRunRoutes`), and `readyRoutes` for a server that has its app.
++- `apps/web/src/routes/FirstRun/FirstRun.tsx`: the page (the form, the form post to GitHub, "Restarting the server…", the `?error=` messages); `apps/web/src/routes/Home/Home.tsx` shows a link to it on every other page while `/api/me` answers 503 `first_run`.
+ - `apps/server/src/setup/boot.ts`: `startFirstRun`, which prints the code. `apps/server/src/main.ts` picks the mode.
+ - `apps/server/src/http/app.ts`: `createFirstRunApp`, the 503 for everything else.
+ - `apps/server/prisma/schema.prisma`: the `GithubAppConfig` model.
+```
+
+In `docs/why/end-to-end-test.md` (the second server, and the port note):
+
+```diff
+--- a/docs/why/end-to-end-test.md
++++ b/docs/why/end-to-end-test.md
+@@ -22,13 +22,15 @@ It takes a few seconds and starts many programs, so `npm test` leaves it out. CI
+ 
+ Plan 2 adds a second end-to-end suite: Playwright drives a real Chromium against the same setup (`apps/server/test/e2e/web-server.ts` serves the built web app, plus a small control API the tests use to sign people in, open PRs and start CLIs). Its specs (`apps/web/e2e/*.spec.ts`) cover the four flows of spec §19 (the inbox opens, a chat updates live while agents work, Resolve on an escalation, Send on a draft), plus the read-only view and the not-found page for someone who can't see the repo, and the landing, PWA, Settings, Setup and device-approval pages. Each test resets the chats and opens its own PR, so any one spec file passes on its own.
+ 
++One spec talks to a second server: `first-run.spec.ts` needs a server with no GitHub App yet (first-run mode, docs/why/first-run-and-app-manifests.md), which the shared one can never be. `apps/server/test/e2e/first-run-server.ts` starts one beside it, on port 4321 with its own database, and its control port (4322, on 127.0.0.1 only) also plays github.com: the page's manifest form is posted there, and it sends the browser straight back to the callback. Instead of exiting after the callback, it answers 502 like a proxy whose server is restarting, until the test calls `/restart`.
++
+ - **One worker.** All tests share one server and one database, so they run one at a time; two at once would reset each other's chats.
+ - **No sleeps.** A test never waits a fixed time ("wait 2 seconds"): it waits for something it can see (`await expect(page.getByText('Ready for your approval')).toBeVisible()`), which Playwright keeps retrying until it shows or times out. A fixed wait is either too short on a slow CI machine (a flaky failure) or wasted time on a fast one.
+ - **No retries.** A test that fails is a finding: it gets fixed at its cause, not run again until it passes. A stray `test.only` fails CI (`forbidOnly`).
+ - **The browser cache.** CI keeps Playwright's Chromium in `~/.cache/ms-playwright` between runs, keyed on the Playwright version, so most runs skip the ~150 MB download and only install the system libraries Chromium needs.
+ - **The trace upload.** A failed test keeps a trace (every action, network request, console line and a DOM snapshot at each step). CI uploads `apps/web/test-results/` as the `playwright-traces` artifact; open one with `npx playwright show-trace trace.zip` to watch what the browser saw, like Redux DevTools' time travel, for a whole test.
+ 
+-Locally: `npm run test:web-e2e` (it builds the web app first). If a server from an earlier run is still on port 4319, Playwright reuses it, except on CI.
++Locally: `npm run test:web-e2e` (it builds the web app first). If a server from an earlier run is still on port 4319 (or 4321), Playwright reuses it, except on CI.
+ 
+ ## The React analogy
+ 
+```
+
+- [ ] **Step 19: The bundle check**
+
+Vite warns when a chunk is over 500 kB, and the main chunk sat at 497.79 kB before this task (carry-forward: "the main bundle's margin").
+
+Run: `npm run build -w apps/web`
+Expected: no `Some chunks are larger than 500 kB` warning. `dist/assets/index-*.js` 499.08 kB (gzip 152.32 kB), plus the page's own chunk `FirstRun-*.js` about 10.3 kB and `FirstRun-*.css` 4.15 kB. The page and its form are in the lazy chunk; the main chunk grew by about 1.3 kB only for `FirstRunNeeded`, `isFirstRunMode`, `ApiError.details` and the route.
+
+That leaves about 0.9 kB of margin: the next task that adds anything to the main chunk will trip the warning. If the warning shows up here, or in a later task: make `Settings` a lazy route as `Approve` and `Setup` already are. In `apps/web/src/app.tsx`, remove `import { Settings } from './routes/Settings/Settings';`, add `const Settings = lazy(() => import('./routes/Settings/Settings').then((module) => ({ default: module.Settings })));` next to the other three, and wrap the element: `<Route path="settings" element={<Suspense fallback={null}><Settings /></Suspense>} />`. Settings' tests render the whole app, so they keep passing; run them and the build again.
+
+- [ ] **Step 20: Look at it in the in-app browser (the controller does this; the implementer reports and stops)**
+
+Build the web app, start a first-run server by hand on spare ports, and open it:
+
+```bash
+npm run build -w apps/web
+E2E_FIRST_RUN_WEB_PORT=4331 E2E_FIRST_RUN_CONTROL_PORT=4332 npm run e2e:first-run-server -w apps/server
+```
+
+Setup code: `E2EF-RSTR`. Open `http://127.0.0.1:4331/first-run`. Check, in the light and the dark theme, at desktop width and at 375 px:
+1. `/` shows "This server isn't set up yet" with its link; the link goes to the form.
+2. The form: light and dark; with "An organization" picked (the Organization field appears) and a validation error showing; a wrong-code error after "Create GitHub App" (the field keeps the typed text and has the focus); nothing wraps awkwardly (the inline `docker compose logs nitpilot` stays on one line on the phone).
+3. After a right code, the browser goes to the stand-in GitHub (port 4332) and back to "Restarting the server…" (a phone-width look); `curl -X POST http://127.0.0.1:4332/restart` moves it to "Your GitHub App is ready" with Install the app on your repos and Sign in stacked, not side by side.
+4. `/first-run?error=exists` and `?error=github` (phone, dark): the message, the "delete the app GitHub made" hint with the path through GitHub's settings, and "Start again".
+5. After the restart, `/first-run` shows "This server is set up".
+
+Stop the server by its PID when done. Fix anything that looks off in the CSS and re-run Step 13's tests; add a line to the Task's report for each fix.
+
+- [ ] **Step 21: Full suite, tick, ledger, commit**
+
+Run: `npm test && npm run typecheck && npm run lint && npm run test:e2e && CI=1 npm run test:web-e2e`
+Expected: protocol 88, CLI 349 + 14 skipped, server 1107, web 373, root 6, e2e 6, Playwright 21, typecheck and lint clean. (Server +1: the old "refuse another app with a JSON 404" test became two tests. Web +29: FirstRun 23, Home 3, client 2, Approve 1. Playwright +2: the two first-run specs.)
+
+Tick this task's boxes, append `Task 8: complete` (plus any `Ruling:` lines) to the ledger, then:
+
+```bash
+git add apps/server/src/setup/first-run.ts apps/server/src/setup/first-run.db.test.ts apps/server/package.json apps/server/test/e2e/first-run-server.ts packages/protocol/src/web-api.ts apps/web/src/api/client.ts apps/web/src/api/client.test.ts apps/web/src/api/first-run.ts apps/web/src/lib/browser.ts apps/web/src/app.tsx apps/web/src/components/FirstRunNeeded apps/web/src/routes/FirstRun apps/web/src/routes/Home/Home.tsx apps/web/src/routes/Home/Home.test.tsx apps/web/src/routes/Approve/Approve.tsx apps/web/src/routes/Approve/Approve.test.tsx apps/web/e2e/first-run.spec.ts apps/web/e2e/ports.ts apps/web/playwright.config.ts docs/superpowers/specs/2026-10-07-nitpilot-design.md docs/why/first-run-and-app-manifests.md docs/why/end-to-end-test.md docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "feat(web): the first-run page
+
+/first-run, a lazy page of its own: the setup form (code, owner, name,
+who can install), a real form post of the manifest to GitHub, \"Restarting
+the server…\" polling every 2 s on ?done=1, then Install and Sign in, and a
+message plus Start again for each ?error=. While /api/me answers 503
+first_run, Home and the approve page show only a link to /first-run.
+
+The callback's failures now redirect to /first-run?error=expired|github|
+exists instead of JSON 400/409/502 (a ready server's callback too).
+Playwright gets a second server in first-run mode with a stand-in GitHub.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 9: `deploy/self-host/`, the docs, and the clean-folder run
 
+**What this task is.** Self-hosting for a team: a folder with three files (`docker-compose.yml`, `Caddyfile`, `.env.example`) that starts the published image, Postgres and Caddy; the docs that walk a stranger through it; two explainers. There is no code to unit-test here (the one code edit is a comment), so the proof is two runs: first **locally from a clean folder with an image built on this Mac** (Step 3, no GitHub, no GHCR), then **live from a clean folder with the real `0.1.0-rc.2` image from GHCR through the dev tunnel** (Step 7, a real GitHub App made through the first-run page, a real review). Step 3 comes first and must pass before anything is pushed.
+
+**Why Compose, Caddy and Postgres in three containers (the React-dev version).** Compose is a `package.json` for running several programs together: one file lists them, `docker compose up -d` starts them all, each can reach the others by its service name (`postgres`, `nitpilot`) like an import path that only works inside this project. Caddy is the front door that does HTTPS; see [docs/why/reverse-proxy-and-tls.md](../../why/reverse-proxy-and-tls.md) (written in Step 4). The names `.env` and `${VAR:?message}` work like environment variables in Vite: one file of settings, and a message that stops the build when a required one is empty.
+
 **Files:**
 - Create: `deploy/self-host/docker-compose.yml`, `deploy/self-host/Caddyfile`, `deploy/self-host/.env.example`, `docs/self-hosting.md`, `docs/why/reverse-proxy-and-tls.md`, `docs/why/dns-records.md`
+- Modify: `apps/server/src/lib/env.ts` (the `TRUST_PROXY` doc comment only, no behaviour change), `docs/why/trusting-a-proxy.md`, `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§17 Self-hosting, two bullets), this plan (ticks and ledger)
 
 **Interfaces:**
-- Compose: `nitpilot` (image `ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION:-latest}`, `init: true`, `restart: unless-stopped`, `env_file: .env`, `DATABASE_URL` built from `POSTGRES_PASSWORD`, `PUBLIC_URL=https://${NITPILOT_DOMAIN}`, `TRUST_PROXY=true`, depends on a healthy Postgres), `postgres` (16-alpine, volume, healthcheck; no published port), `caddy` (2-alpine, ports 80 and 443, `SITE_ADDRESS=${SITE_ADDRESS:-${NITPILOT_DOMAIN}}`, volumes for data/config). Caddyfile: `{$SITE_ADDRESS} { reverse_proxy nitpilot:8787 }`.
-- `.env.example`: `NITPILOT_DOMAIN`, `POSTGRES_PASSWORD` (`openssl rand -hex 24`), `ENCRYPTION_KEY` (`openssl rand -base64 32`), optional `SITE_ADDRESS`, `NITPILOT_VERSION`, the VAPID trio (`docker compose run --rm nitpilot npm run vapid:keys -w apps/server`), `CLOSED_CHAT_RETENTION_DAYS`, `ALLOWED_LOGINS`; each with one comment line.
-- `docs/self-hosting.md`: what you need (a server with Docker, a domain, a GitHub account or org), the five steps (DNS, `.env`, `docker compose up -d`, `/first-run` with the code from `docker compose logs nitpilot`, install the app + `nitpilot login` with `NITPILOT_SERVER=https://<domain>`), upgrading (`docker compose pull && docker compose up -d`), backups (a `pg_dump` one-liner and why the `.env` must be kept too), private repos work, and the CLI's `"server"` setting.
+- Consumes: the image from Task 5 (`ghcr.io/nikosgkikas13/nitpilot:<NITPILOT_VERSION>`; `CMD` runs `prisma migrate deploy` then the server from `/app/apps/server`; the `HEALTHCHECK` asks `/healthz`), the release workflow from Task 6 (a `v0.1.0-rc.2` tag pushes `:0.1.0-rc.2` only), first-run mode and the setup code from Task 7, the `/first-run` page from Task 8, `TRUST_PROXY` and `clientAddress` from Task 2 (the last `X-Forwarded-For` entry is the visitor).
+- Produces: the `deploy/self-host/` folder that the docs, the live run and (copied by hand) the hosted instance's compose in Task 11 build on; `docs/self-hosting.md` (README links to it in Task 14); the `TRUSTED_PROXIES` knob (empty by default) that Step 7 uses behind the dev tunnel.
+- Environment variables the compose file reads (all from `.env`): required `NITPILOT_DOMAIN`, `POSTGRES_PASSWORD`, `ENCRYPTION_KEY`; optional `SITE_ADDRESS`, `TRUSTED_PROXIES`, `NITPILOT_VERSION`. The whole `.env` is also handed to the server (`env_file`), so the server's own optional settings (VAPID trio, `ALLOWED_LOGINS`, `CLOSED_CHAT_RETENTION_DAYS`, `GITHUB_*`) work by adding a line.
 
-- [ ] **Step 1:** `docker compose -f deploy/self-host/docker-compose.yml --env-file deploy/self-host/.env.example config` prints a valid config (no missing-variable warnings).
-- [ ] **Step 2: The clean-folder run (live; say first).** First the user pushes the branch and a new pre-release tag (`v0.1.0-rc.2`, commands given), because `rc.1` predates first-run mode; the run uses that image. I copy `deploy/self-host/` to `~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost`, fill `.env` (domain = the dev tunnel's host, `SITE_ADDRESS=:80`, fresh secrets, `NITPILOT_VERSION=0.1.0-rc.2`; the image is private until D4, so the user runs `gh auth token | docker login ghcr.io -u NikosGkikas13 --password-stdin` in their own terminal first), start the tunnel to Caddy's port 80 and `docker compose up -d`. Click-steps for the user, in the browser signed in as NikosGkikas13: open the tunnel URL → the first-run page → paste the setup code I read from the log → "Create the app on" personal account, name `Nitpilot selfhost test`, only this account → Create → GitHub's "Create GitHub App" page → Create → back on the page, "Restarting…" then Install → install on `nitpilot-sandbox` only → sign in. Then `NITPILOT_SERVER=<tunnel URL> nitpilot login` with a fresh config dir, `repos add` in the sandbox clone, `start` with the fake agent; ngkdev93-jpg opens a small PR and requests NikosGkikas13's review (click-steps); the review appears on the PR from the test app.
-- [ ] **Step 3: (user) Clean up:** delete the `Nitpilot selfhost test` app (github.com → Settings → Developer settings → GitHub Apps → it → Advanced → Delete), `docker compose down -v` in the scratch folder, stop the tunnel.
-- [ ] **Step 4:** Write the docs and explainers from what the run showed (with any surprise fixed in code first, TDD); commit `feat(deploy): self-hosting with Compose, verified from a clean folder`.
+---
+
+- [ ] **Step 1: Create the three files and the one comment edit**
+
+Create `deploy/self-host/docker-compose.yml` with exactly this content:
+
+```yaml
+# Nitpilot on your own server: the published image, Postgres and Caddy (spec §17 "Self-hosting", docs/self-hosting.md).
+#
+#   cp .env.example .env     then fill in the three required values
+#   docker compose up -d
+#   docker compose logs nitpilot     the setup code for https://<your domain>/first-run
+#
+# Only Caddy is reachable from outside (ports 80 and 443). Nitpilot and Postgres talk on the private network Compose
+# makes for this folder, where each service's name is its address (`postgres`, `nitpilot`), like an import path that
+# only works inside this project (docs/why/reverse-proxy-and-tls.md).
+
+services:
+  nitpilot:
+    image: ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION:-latest}
+    # A tiny init process in front of node, so `docker compose stop` / `up -d` (SIGTERM) reaches the server and it shuts
+    # down cleanly, telling each CLI "server restarting" (docs/why/docker-images.md).
+    init: true
+    # Also how first-run mode finishes: after storing the new GitHub App the server exits with 0 and Docker starts it
+    # again, in normal mode (docs/why/first-run-and-app-manifests.md). Only `docker compose stop` / `down` keep it down.
+    restart: unless-stopped
+    # The whole .env goes in, not a hand-picked list, so every optional setting (VAPID keys, ALLOWED_LOGINS, GITHUB_*
+    # for an app made by hand, ...) works by adding a line to .env, with no edit here. The extras it also carries
+    # (POSTGRES_PASSWORD, NITPILOT_DOMAIN, ...) are harmless: the server ignores names it doesn't know, and the password
+    # is in DATABASE_URL anyway. Postgres and Caddy get only what they need, below, never ENCRYPTION_KEY.
+    env_file: .env
+    # These win over .env (Compose's `environment` beats `env_file`): they're built from .env's values, not typed twice.
+    # `${NAME:?message}` stops `docker compose up` (and `config`) with the message when NAME is empty or missing.
+    environment:
+      DATABASE_URL: postgresql://nitpilot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}@postgres:5432/nitpilot
+      PUBLIC_URL: https://${NITPILOT_DOMAIN:?set NITPILOT_DOMAIN in .env (e.g. nitpilot.example.com)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env (openssl rand -base64 32)}
+      # Every request reaches the server through Caddy, so the visitor's address is in X-Forwarded-For
+      # (docs/why/trusting-a-proxy.md). Safe here because nothing but Caddy can reach the server: it has no port.
+      TRUST_PROXY: "true"
+    depends_on:
+      postgres:
+        # Wait for the healthcheck below, not just for the container to exist: the server runs its migrations at start.
+        condition: service_healthy
+    # No `ports:`: the server (8787) is reached only through Caddy. The image's own HEALTHCHECK (/healthz) applies.
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nitpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}
+      POSTGRES_DB: nitpilot
+    volumes:
+      # The database lives in a named volume, so it survives `docker compose down` and new images. `down -v` deletes it.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1 asks over TCP. On its very first start Postgres runs a temporary server on its local socket only
+      # (to create the database), then restarts; asking the socket would say "ready" too early.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "nitpilot", "-d", "nitpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No `ports:`: only the server reaches the database.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      # 80 and 443 must be open to the internet: Let's Encrypt checks the domain on them before giving Caddy a
+      # certificate (docs/why/reverse-proxy-and-tls.md). 443/udp is HTTP/3.
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # What the Caddyfile serves: your domain (Caddy gets and renews its HTTPS certificate), or `:80` for plain HTTP
+      # behind something else that already does HTTPS.
+      SITE_ADDRESS: ${SITE_ADDRESS:-${NITPILOT_DOMAIN}}
+      # Behind that other proxy only: its addresses, so Caddy believes the X-Forwarded-* headers it sends. Empty: nobody.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy's certificates and keys. Keep them across restarts, or Caddy asks Let's Encrypt again each time and can
+      # hit its rate limit.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nitpilot
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+```
+
+Why these choices, in short (the comments in the file say the rest):
+
+- `${NAME:?message}` stops `docker compose up` and `config` with the message when `NAME` is empty. `ENCRYPTION_KEY` is also listed under `environment:` (it is already in `.env`, which `env_file` hands over) only so that a missing key fails at `docker compose up`, not later inside the container.
+- `environment:` beats `env_file:`, so `DATABASE_URL` and `PUBLIC_URL` are built from `.env`'s three values and can't disagree with them.
+- Only `caddy` has `ports:`. The server and Postgres are reachable only on Compose's private network.
+- There is no top-level `name:`: the project is named after the folder. A fixed `name: nitpilot` would collide with this repo's own dev compose project (also `nitpilot`) on this Mac, and `docker compose down -v` in one could remove the other's volume.
+
+Create `deploy/self-host/Caddyfile` with exactly this content:
+
+```caddyfile
+# Caddy: the front door (docs/why/reverse-proxy-and-tls.md). It answers on ports 80 and 443, does HTTPS, and passes
+# every request on to the Nitpilot server. Both {$NAME} values come from .env, through docker-compose.yml.
+{
+	servers {
+		# Only when SITE_ADDRESS=:80 behind another proxy that does HTTPS (TRUSTED_PROXIES in .env): believe the
+		# X-Forwarded-For and X-Forwarded-Proto that proxy sends. Empty (the default) believes nobody, and Caddy writes
+		# both headers itself from the connection it sees.
+		trusted_proxies static {$TRUSTED_PROXIES}
+		# Read X-Forwarded-For from the right, skipping the trusted proxies: the first address left is the visitor's.
+		trusted_proxies_strict
+	}
+}
+
+# SITE_ADDRESS is your domain (nitpilot.example.com): Caddy gets an HTTPS certificate for it from Let's Encrypt, renews
+# it, and redirects http:// to https://. Or `:80`, which means "any name, port 80, plain HTTP": for when something in
+# front already does HTTPS.
+{$SITE_ADDRESS} {
+	# WebSockets (/ws/cli, /ws/web) go through as they are, and Caddy sends the server X-Forwarded-For (who connected),
+	# X-Forwarded-Proto (http or https) and the original Host: all by default, nothing to configure.
+	reverse_proxy nitpilot:8787 {
+		# The visitor alone, as the last entry the server reads (docs/why/trusting-a-proxy.md). Directly on the internet
+		# that's what Caddy sends anyway; behind a trusted proxy Caddy would otherwise add that proxy's address last,
+		# and every visitor would share its rate limit.
+		header_up X-Forwarded-For {client_ip}
+	}
+}
+```
+
+The `servers { trusted_proxies … }` block and `header_up` are not in the task-level text. Without them, `SITE_ADDRESS=:80` behind another HTTPS proxy (the dev tunnel in Step 7, or any load balancer) sends sign-in into a redirect loop: Caddy overwrites `X-Forwarded-Proto` with `http`, and the server's sign-in route (`cameInElsewhere` in `http/routes/auth.ts`) redirects every http sign-in to `PUBLIC_URL`. Caddy also adds the outer proxy's address as the last `X-Forwarded-For` entry, which the server reads as the visitor, so every visitor would share one rate-limit bucket. Empty `TRUSTED_PROXIES` (the default) means Caddy trusts nobody, which is exactly what it did before. See [docs/why/trusting-a-proxy.md](../../why/trusting-a-proxy.md).
+
+Create `deploy/self-host/.env.example` with exactly this content:
+
+```bash
+# Copy to .env next to docker-compose.yml and fill in the first three (docs/self-hosting.md). Keep .env private and
+# keep a copy of it somewhere safe (a password manager): a database backup is useless without ENCRYPTION_KEY.
+
+# Required: the domain people open, without https:// (its DNS A record must point at this server first).
+NITPILOT_DOMAIN=
+# Required: the database password. Make one with: openssl rand -hex 24
+POSTGRES_PASSWORD=
+# Required: encrypts GitHub tokens and the GitHub App's secrets. Make one with: openssl rand -base64 32 (never change it).
+ENCRYPTION_KEY=
+
+# Optional: what Caddy serves. Empty = NITPILOT_DOMAIN with automatic HTTPS; :80 = plain HTTP behind another HTTPS proxy.
+SITE_ADDRESS=
+# Optional, with SITE_ADDRESS=:80 only: that proxy's addresses (e.g. private_ranges), so Caddy believes its forwarded headers.
+TRUSTED_PROXIES=
+# Optional: the image version to run (e.g. 0.1.0). Empty = latest.
+NITPILOT_VERSION=
+
+# Optional, all three or none (push notifications in the browser). Keys: docker compose run --rm --no-deps nitpilot node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+# A contact for the push services: https://<your domain> or mailto:you@example.com
+VAPID_SUBJECT=
+
+# Optional: delete chats this many days after their PR closed. Empty = keep them forever.
+CLOSED_CHAT_RETENTION_DAYS=
+# Optional: comma-separated GitHub logins allowed to sign in. Empty = anyone can (each sees only repos they can read).
+ALLOWED_LOGINS=
+
+# No GITHUB_* here: the first-run page creates the GitHub App and the server stores it. If you made an app by hand,
+# set all six GITHUB_* variables from apps/server/.env.example instead; they win over a stored app.
+```
+
+In `apps/server/src/lib/env.ts`, the `TRUST_PROXY` doc comment now also names the self-host compose. Replace
+
+```ts
+  /**
+   * Hosted instance: this server sits behind our own reverse proxy (Caddy), which puts the real client address last in
+   * X-Forwarded-For. Leave it false anywhere else, or anyone could fake their address (docs/why/trusting-a-proxy.md).
+   */
+  
+```
+
+with
+
+```ts
+  /**
+   * Behind our own reverse proxy (Caddy: the hosted instance and deploy/self-host), which puts the real client address
+   * last in X-Forwarded-For. Leave it false anywhere else, or anyone could fake their address (docs/why/trusting-a-proxy.md).
+   */
+  
+```
+
+(Comment only. `TRUST_PROXY` still defaults to `false` and the compose file sets it to `"true"`.)
+
+- [ ] **Step 2: Validate the compose file**
+
+`docker compose config` renders the file with every `${…}` filled in and fails on a bad one. `.env.example` can't be used as-is, because its required values are empty on purpose and `${NAME:?…}` refuses them. First the failure, which is the safety working:
+
+Run: from the repo root,
+```bash
+tmp=$(mktemp -d) && cp deploy/self-host/docker-compose.yml deploy/self-host/Caddyfile "$tmp" && cp deploy/self-host/.env.example "$tmp/.env" && docker compose --project-directory "$tmp" config --quiet; echo "exit=$?"; rm -rf "$tmp"
+```
+Expected: it prints one line starting `error while interpolating services.` and ending `required variable POSTGRES_PASSWORD is missing a value: set POSTGRES_PASSWORD in .env (openssl rand -hex 24)`, then `exit=1`. (Compose reports only the first missing variable; I saw it name `services.nitpilot.environment.DATABASE_URL`, the builder saw `services.postgres.environment.POSTGRES_PASSWORD`. Either is right.)
+
+The copy goes to a temp folder because the compose file's `env_file: .env` needs a real `.env` next to it, and the repo's `deploy/self-host/` must stay free of one. Now the same with the three required values filled in:
+
+Run:
+```bash
+tmp=$(mktemp -d) && cp deploy/self-host/docker-compose.yml deploy/self-host/Caddyfile "$tmp" && sed -e 's/^NITPILOT_DOMAIN=$/NITPILOT_DOMAIN=nitpilot.example.com/' -e 's/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=example/' -e 's/^ENCRYPTION_KEY=$/ENCRYPTION_KEY=example/' deploy/self-host/.env.example > "$tmp/.env" && docker compose --project-directory "$tmp" config --quiet; echo "exit=$?"; rm -rf "$tmp"
+```
+Expected: nothing on stderr, then `exit=0`. (Both runs verified on Docker 28.3.0 / Compose v2.38.1.)
+
+- [ ] **Step 3: The clean-folder run, locally, with an image built on this Mac**
+
+This is the run to pass before anything is pushed. It uses the repo's `Dockerfile` as it is now (it contains Tasks 7 and 8, first-run mode), the three files from Step 1 copied into an empty folder (so nothing from the repo helps), and no GitHub and no GHCR: the only network use is Docker Hub for `postgres:16-alpine` and `caddy:2-alpine` (already in the local cache). The GitHub App the server needs is faked straight into the database; the real manifest round trip is Step 7's job. Docker Desktop must be running, and ports 80 and 443 free (`lsof -nP -iTCP:80 -iTCP:443 -sTCP:LISTEN` prints nothing).
+
+**3a. Build the image and make the clean folder.** The tag `d3-scratch` is local only; `NITPILOT_VERSION` will point at it, so Compose finds it without pulling.
+
+Run: `cd ~/Desktop/PracticeProjects/nitpilot && docker build -t ghcr.io/nikosgkikas13/nitpilot:d3-scratch .`
+Expected: ends with `naming to ghcr.io/nikosgkikas13/nitpilot:d3-scratch` (about a minute, longer the very first time).
+
+Run:
+```bash
+mkdir ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cp ~/Desktop/PracticeProjects/nitpilot/deploy/self-host/{docker-compose.yml,Caddyfile,.env.example} . && ls -A
+```
+Expected: `.env.example  Caddyfile  docker-compose.yml`. (If `mkdir` says the folder exists, it is left from an earlier run: in it run `docker compose down -v`, then delete the folder, then try again.)
+
+Fill `.env`. `sed -i ''` is macOS's spelling; the `$(…)` parts make fresh secrets that are never printed:
+
+Run:
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cp .env.example .env && sed -i '' -e "s|^NITPILOT_DOMAIN=\$|NITPILOT_DOMAIN=localhost|" -e "s|^POSTGRES_PASSWORD=\$|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" -e "s|^ENCRYPTION_KEY=\$|ENCRYPTION_KEY=$(openssl rand -base64 32)|" -e "s|^SITE_ADDRESS=\$|SITE_ADDRESS=:80|" -e "s|^NITPILOT_VERSION=\$|NITPILOT_VERSION=d3-scratch|" .env && grep -c '=.' .env
+```
+Expected: a number above 5 (a sanity check that the file isn't empty; it was `11` in my run).
+
+**3b. Start it, first-run mode.**
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose up -d`
+Expected: three volumes and a network created, then `Container selfhost-postgres-1  Healthy`, `selfhost-nitpilot-1  Started`, `selfhost-caddy-1  Started` (about 6 seconds). The project name `selfhost` is the folder's name.
+
+Run: `docker compose ps --format '{{.Service}} {{.Status}} {{.Ports}}'` (after about 10 seconds)
+Expected: `postgres Up … (healthy) 5432/tcp`, `nitpilot Up … (healthy) 8787/tcp`, `caddy Up … 0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp, …443/udp`. Only Caddy publishes anything to the Mac; `5432/tcp` and `8787/tcp` on the other two are the container's own ports, not published.
+
+Run: `docker compose logs nitpilot`
+Expected: 13 migrations applied and `All migrations have been successfully applied.`, then `[first-run] Open https://localhost/first-run and enter the setup code: XXXX-XXXX` and `Nitpilot server listening on http://localhost:8787, in first-run mode`.
+
+**3c. What first-run mode answers through Caddy.** (Plain http on port 80 is enough here: `SITE_ADDRESS=:80`.)
+
+Run: `curl -s localhost/healthz; echo; curl -s -o /dev/null -w '%{http_code}\n' localhost/first-run; curl -s -w ' %{http_code}\n' localhost/api/me; curl -s localhost/api/first-run; echo`
+Expected, in order: `{"ok":true,"version":"0.1.0"}`; `200`; `{"error":{"code":"first_run","message":"Finish setup at /first-run."}} 503`; `{"mode":"first_run","publicUrl":"https://localhost"}`.
+
+Run: `CODE=$(docker compose logs nitpilot | grep "setup code" | tail -1 | sed 's/.*: //') && curl -s -X POST localhost/api/first-run/manifest -H 'content-type: application/json' -d "{\"code\":\"$CODE\",\"owner\":{\"kind\":\"user\"},\"name\":\"Nitpilot test\",\"isPublic\":false}" | head -c 400; echo`
+Expected: starts `{"action":"https://github.com/settings/apps/new?state=` and goes on into the manifest: `"url":"https://localhost"`, the hook `https://localhost/webhooks/github`, `redirect_url` `https://localhost/first-run/callback`. This is the form the page would post to GitHub; nothing is sent to GitHub here.
+
+**3d. The setup code is rate-limited per visitor, not per Caddy.** Wrong code, seven times in a row from this Mac. The `X-Forwarded-For` header is forged on purpose; Caddy (which trusts nobody, `TRUSTED_PROXIES` empty) must ignore it, so every try counts against the same address:
+
+Run: `for i in 1 2 3 4 5 6 7; do curl -s -o /dev/null -w '%{http_code} ' -X POST localhost/api/first-run/manifest -H 'content-type: application/json' -H "X-Forwarded-For: 9.9.9.$i" -d '{"code":"AAAA-AAAA","owner":{"kind":"user"},"name":"x","isPublic":false}'; done; echo`
+Expected: `403 403 403 403 429 429 429` (the valid request in 3c was the first of five tries in that minute; if you run 3d a minute later, it is `403 403 403 403 403 429 429`). The 429s while the forged header changes each time prove the server counts the address Caddy saw, not the one the visitor claimed. Wait a minute before going on, or the 429s carry over.
+
+**3e. A stored app is picked up after the server's own exit.** Normally the first-run page stores the app and the server exits so that Docker restarts it. Do the same without GitHub: store a made-up app with the server's own function (it encrypts with this run's `ENCRYPTION_KEY`), then stop the server the way the callback does. `--input-type=module` is needed for the top-level `await`.
+
+Run:
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose exec -T nitpilot node --import tsx --input-type=module -e "
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { saveGithubApp } from './src/setup/credentials.ts';
+const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs1', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+await saveGithubApp({ appId: '999999999', slug: 'nitpilot-selfhost-fake', privateKey, clientId: 'Iv1.fakeclientid', clientSecret: randomBytes(20).toString('hex'), webhookSecret: randomBytes(20).toString('hex') }, 'selfhost-test');
+console.log('stored');
+process.exit(0);
+"
+```
+Expected: `stored`.
+
+Run: `docker compose exec -T postgres psql -U nitpilot -d nitpilot -c 'select id, slug, length("privateKeyEnc") from "GithubAppConfig"'`
+Expected: one row, `app | nitpilot-selfhost-fake | 2272` (a long encrypted string, not a PEM: the key is never stored readable).
+
+Run: `docker compose exec -T nitpilot sh -c 'kill -TERM 1'; sleep 12; docker inspect -f 'restarts={{.RestartCount}} running={{.State.Running}} lastExit={{.State.ExitCode}}' selfhost-nitpilot-1`
+Expected: `restarts=1 running=true lastExit=0`. Process 1 is `tini` (the compose file's `init: true`); it passes SIGTERM to node, whose handler stops cleanly and exits 0, and `restart: unless-stopped` starts it again, as it will after the first-run callback.
+
+Run: `docker compose logs --tail 40 nitpilot | grep "boot\] GitHub App\|No pending\|listening"`
+Expected: `No pending migrations to apply.`, `[boot] GitHub App nitpilot-selfhost-fake, from the database`, `Nitpilot server listening on http://localhost:8787`. (A `[recovery] could not ask GitHub for failed deliveries … 404 … "Integration not found"` block above them is right too: the made-up app signed a real token for its one boot-time call to api.github.com, and GitHub answered that the app does not exist. The server logs it and carries on.)
+
+Run: `curl -s localhost/api/first-run; echo; curl -s -w ' %{http_code}\n' localhost/api/me; curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' 'localhost/first-run/callback?code=x&state=y'`
+Expected: `{"mode":"ready","installUrl":"https://github.com/apps/nitpilot-selfhost-fake/installations/new"}`; `{"error":{"code":"unauthorized","message":"Sign in with GitHub first."}} 401` (normal mode now, no more 503); `302 http://localhost/first-run?error=exists` (this server already has its app).
+
+**3f. Behind another HTTPS proxy: the loopback override and `TRUSTED_PROXIES`.** This is how Step 7 will run. Docker Desktop on a Mac shows a container the clients of a port published on `0.0.0.0` as one public-looking address (`140.82.121.6` in the builder's run), not a private one, so `TRUSTED_PROXIES=private_ranges` would not match. A port published only on `127.0.0.1` shows its clients as the network's gateway (`172.x.0.1`, a private address), which does match. So an override file binds Caddy to the loopback address; Compose reads `docker-compose.override.yml` by itself. (This also keeps the Mac's Caddy off the network, which is right when something on the same machine is the only way in.)
+
+Run:
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && printf 'services:\n  caddy:\n    ports: !override\n      - "127.0.0.1:80:80"\n' > docker-compose.override.yml && sed -i '' -e 's|^TRUSTED_PROXIES=$|TRUSTED_PROXIES=private_ranges|' .env && docker compose up -d && sleep 4 && docker compose ps --format '{{.Service}} {{.Ports}}'
+```
+Expected: only `caddy` is recreated; the ports line says `caddy 127.0.0.1:80->80/tcp` (443 is no longer published; `SITE_ADDRESS=:80` doesn't use it).
+
+The loop the Caddyfile fix prevents: pretend to be the outer HTTPS proxy by sending `X-Forwarded-Proto: https` and a visitor address.
+
+Run: `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-For: 203.0.113.10' localhost/auth/github/login`
+Expected: `302 https://github.com/login/oauth/authorize?client_id=Iv1.fakeclientid&redirect_uri=https%3A%2F%2Flocalhost%2Fauth%2Fgithub%2Fcallback&…` (sent on to GitHub, not back to `https://localhost/auth/github/login`, which would be the loop).
+
+Rate limits are keyed on the visitor named in `X-Forwarded-For`, one bucket per address. `POST /api/cli/login` allows 10 a minute, and an empty body (`400`) counts:
+
+Run: `for i in $(seq 1 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H 'X-Forwarded-Proto: https' -H 'X-Forwarded-For: 203.0.113.10' localhost/api/cli/login; done; echo; curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'X-Forwarded-For: 203.0.113.11' localhost/api/cli/login`
+Expected: `400 400 400 400 400 400 400 400 400 400 429 ` and then `400` (a second visitor has their own bucket).
+
+**3g. VAPID keys from the image.** The task-level text had `docker compose run --rm nitpilot npm run vapid:keys -w apps/server`. That fails in the image (`npm error No workspaces found: --workspace=apps/server`: the image has no root workspace and no `apps/server/scripts/`). The `web-push` package is in the image, so ask it directly (this is the command already in `.env.example` and `docs/self-hosting.md`):
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose run --rm --no-deps nitpilot node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)" > vapid.txt; wc -l < vapid.txt`
+Expected: `2`. Then put them in `.env` (the two empty lines are replaced, never printed) and restart:
+
+Run:
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && sed -i '' -e '/^VAPID_PUBLIC_KEY=$/d' -e '/^VAPID_PRIVATE_KEY=$/d' -e 's|^VAPID_SUBJECT=$|VAPID_SUBJECT=https://localhost|' .env && cat vapid.txt >> .env && rm vapid.txt && docker compose up -d && sleep 8 && docker compose ps --format '{{.Service}} {{.Status}}'
+```
+Expected: `nitpilot Up … (healthy)` (the server checks the key pair at boot and refuses a bad one).
+
+**3h. Two ways it must refuse to start.**
+
+Half-set `GITHUB_*`:
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && printf 'GITHUB_APP_ID=123456\nGITHUB_APP_SLUG=my-nitpilot\n' >> .env && docker compose up -d && sleep 6 && docker compose ps --format '{{.Service}} {{.Status}}' | grep nitpilot; docker compose logs --tail 20 nitpilot | grep -A2 "Error: Invalid"`
+Expected: `nitpilot Restarting (1) …` (or `Up Less than a second` between two restarts), and the log: `Error: Invalid environment:` / `GITHUB_APP_PRIVATE_KEY: set all six GitHub App variables, or none to start in first-run mode; missing: GITHUB_APP_PRIVATE_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET` / `See apps/server/.env.example.` (that last line points a self-hoster at a file they don't have; it comes from `getEnv` and is left alone, see the deviations).
+
+Run (removes the two lines, then breaks the encryption key on purpose):
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && sed -i '' -e '/^GITHUB_APP_ID=/d' -e '/^GITHUB_APP_SLUG=/d' .env && grep '^ENCRYPTION_KEY=' .env > key-backup.txt && sed -i '' "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env && docker compose up -d && sleep 6 && docker compose logs --tail 20 nitpilot | grep "Error: The stored" | tail -1
+```
+Expected: `Error: The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with.` and the container restarting in a loop (`docker compose ps` shows `Restarting`). The server will not start a new first run on top of a stored app it can't read.
+
+Put the right key back:
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && K=$(cat key-backup.txt) && sed -i '' "s|^ENCRYPTION_KEY=.*|$K|" .env && rm key-backup.txt && docker compose up -d && sleep 8 && docker compose ps --format '{{.Service}} {{.Status}}' | grep nitpilot`
+Expected: `nitpilot Up … (healthy)`.
+
+**3i. Backup, and restore into a fresh volume.**
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose exec -T postgres pg_dump -U nitpilot -d nitpilot | gzip > nitpilot-$(date +%F).sql.gz && ls -l nitpilot-*.sql.gz`
+Expected: one file of about 7.8 KB.
+
+Run: `docker compose down -v`
+Expected: containers, the network and the three volumes `selfhost_postgres_data`, `selfhost_caddy_data`, `selfhost_caddy_config` removed (this is what a lost server looks like).
+
+Run: `docker compose up -d --wait postgres && gunzip -c nitpilot-$(date +%F).sql.gz | docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot; echo "exit=$?"`
+Expected: `Container selfhost-postgres-1  Healthy`, a one-row table headed `set_config` (harmless), `exit=0`.
+
+Run: `docker compose up -d && sleep 8 && docker compose logs nitpilot | grep "No pending\|\[boot\] GitHub App"; curl -s localhost/api/first-run; echo`
+Expected: `No pending migrations to apply.`, `[boot] GitHub App nitpilot-selfhost-fake, from the database`, and `{"mode":"ready","installUrl":"https://github.com/apps/nitpilot-selfhost-fake/installations/new"}`: the restored database brought the app back, with the same key from `.env`.
+
+**3j. Upgrading, and a new setup code.** `docker compose pull` can't run here (the tag is local-only; Step 7 runs it for real), but the half of upgrading that matters is "a new image tag recreates only the server":
+
+Run: `docker tag ghcr.io/nikosgkikas13/nitpilot:d3-scratch ghcr.io/nikosgkikas13/nitpilot:d3-scratch-b && sed -i '' 's|^NITPILOT_VERSION=.*|NITPILOT_VERSION=d3-scratch-b|' .env && docker compose up -d && sleep 8 && docker compose logs --tail 5 nitpilot | grep "No pending"`
+Expected: only `Container selfhost-nitpilot-1  Recreate` / `Started` in the output (Postgres and Caddy untouched), then `No pending migrations to apply.`.
+
+Run: `docker compose exec -T postgres psql -U nitpilot -d nitpilot -c 'delete from "GithubAppConfig"' && docker compose restart nitpilot && sleep 6 && docker compose logs nitpilot | grep "setup code" | tail -1`
+Expected: `DELETE 1`, then a line ending `enter the setup code: XXXX-XXXX` that is different from any earlier one (each boot in first-run mode prints a new code; `logs` keeps the old lines across a restart, which is why the docs say `| tail -1`).
+
+**3k. Caddy's own HTTPS with no override (the self-hoster's default).** Back to a plain `.env` with `SITE_ADDRESS` empty, which means `NITPILOT_DOMAIN` (here `localhost`, for which Caddy makes a certificate from its own local authority; Let's Encrypt is never involved on a Mac, the hosted instance in Task 12 proves that part):
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && rm docker-compose.override.yml && sed -i '' -e 's|^SITE_ADDRESS=.*|SITE_ADDRESS=|' -e 's|^TRUSTED_PROXIES=.*|TRUSTED_PROXIES=|' .env && docker compose up -d && sleep 6 && docker compose logs caddy | grep -c "certificate obtained successfully"; curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost/healthz; curl -sk -w ' %{http_code} %{http_version}\n' https://localhost/healthz`
+Expected: `1` (or more), `308 https://localhost/healthz`, `{"ok":true,"version":"0.1.0"} 200 2`.
+
+**3l. Clean up.** The scratch folder keeps its three files and is reused by nothing; everything Docker made is removed:
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose down -v && docker rmi ghcr.io/nikosgkikas13/nitpilot:d3-scratch-b ghcr.io/nikosgkikas13/nitpilot:d3-scratch && rm -f .env nitpilot-*.sql.gz docker-compose.override.yml && docker ps -a --format '{{.Names}}' | grep selfhost; docker volume ls -q | grep selfhost; echo clean`
+Expected: containers, network and volumes removed, the two image tags untagged, and only `clean` printed after (no `selfhost` container or volume left). The `caddy:2-alpine` and `postgres:16-alpine` images stay in the local cache.
+
+If any expected line differs, stop and tell me what you saw before going on: the point of this step is to find surprises here, on the Mac, before the live run.
+
+- [ ] **Step 4: The docs and the explainers**
+
+Create `docs/self-hosting.md` with exactly this content (the commands in it were run as written in Step 3, except the `curl` download of the three files, `dig`, `docker compose pull`, `npm install -g nitpilot` and `nitpilot login`, which need the public repo, a real DNS record, GHCR or GitHub; Step 7 covers `pull` and `login`, Task 15's fresh-install check the rest):
+
+````markdown
+# Self-hosting Nitpilot
+
+Run your own Nitpilot server: for private repos, or to keep everything on your own machine. It's one folder with three files (`deploy/self-host/` in this repo): the published image, Postgres and Caddy, started with Docker Compose. The server creates its own GitHub App the first time you open it. Why it's built this way: spec §17 "Self-hosting", [why/first-run-and-app-manifests.md](why/first-run-and-app-manifests.md), [why/reverse-proxy-and-tls.md](why/reverse-proxy-and-tls.md).
+
+## What you need
+
+- **A server with Docker** (Docker Engine with the Compose plugin: `docker compose version` prints a version). 1 GB of memory is plenty; Nitpilot is one Node process and Postgres.
+- **A domain or subdomain** for it, e.g. `nitpilot.example.com`, whose DNS you can edit.
+- **Ports 80 and 443 open** to the internet on that server (Caddy needs both to get its HTTPS certificate). Nothing else needs to be open.
+- **A GitHub account or organization** to own the GitHub App (for an organization you must be one of its owners).
+
+Private repos work: `PUBLIC_REPOS_ONLY` is off unless you set it, so the app can be installed on any repo you choose.
+
+## Set it up
+
+### 1. Point the domain at the server
+
+At your DNS provider, add an **A record**: name `nitpilot` (or whatever subdomain you picked), value your server's public IPv4 address. Add an **AAAA** record too if the server has IPv6. Check it from your own computer before going on; it must print the server's address:
+
+```bash
+dig +short nitpilot.example.com
+```
+
+Caddy asks Let's Encrypt for a certificate as soon as it starts, and Let's Encrypt checks the domain by connecting to it, so the record has to be right first ([why/dns-records.md](why/dns-records.md)).
+
+### 2. Get the folder and fill in `.env`
+
+On the server:
+
+```bash
+mkdir nitpilot && cd nitpilot
+for f in docker-compose.yml Caddyfile .env.example; do curl -fsSLO "https://raw.githubusercontent.com/NikosGkikas13/nitpilot/main/deploy/self-host/$f"; done
+cp .env.example .env
+```
+
+Every `docker compose` command below runs in this folder.
+
+Open `.env` and fill in the three required values:
+
+- `NITPILOT_DOMAIN=nitpilot.example.com` (no `https://`)
+- `POSTGRES_PASSWORD=` the output of `openssl rand -hex 24`
+- `ENCRYPTION_KEY=` the output of `openssl rand -base64 32`
+
+`ENCRYPTION_KEY` encrypts people's GitHub tokens and the GitHub App's private key and secrets in the database. **Save a copy of `.env` somewhere safe now** (a password manager): a backup of the database can't be used without this key, and a server whose key changed refuses to start.
+
+The rest of `.env.example` is optional, one comment line each: web push keys, `ALLOWED_LOGINS`, `CLOSED_CHAT_RETENTION_DAYS`, `NITPILOT_VERSION`. Web push keys are made with the image itself:
+
+```bash
+docker compose run --rm --no-deps nitpilot node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"
+```
+
+Paste both lines into `.env`, and set `VAPID_SUBJECT=https://nitpilot.example.com`. Run it once: a new key pair means everyone has to turn push on again.
+
+### 3. Start it
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+After a few seconds `docker compose ps` shows `postgres` and `nitpilot` as `(healthy)` and `caddy` as `Up`. On its first start the server creates its tables (`docker compose logs nitpilot` shows `Applying migration …` and `All migrations have been successfully applied.`), and Caddy gets its certificate (`docker compose logs caddy` shows `certificate obtained successfully`).
+
+### 4. Create the GitHub App on the first-run page
+
+The server has no GitHub App yet, so it starts in **first-run mode** and prints a one-time setup code. Find it:
+
+```bash
+docker compose logs nitpilot | grep "setup code" | tail -1
+```
+
+It prints `[first-run] Open https://nitpilot.example.com/first-run and enter the setup code: XXXX-XXXX`. Only someone who can read the server's log has the code, so nobody else can claim the server before you.
+
+Open `https://nitpilot.example.com/first-run`, enter the code, choose your personal account or an organization, a name for the app, and who may install it (keep "only this account" unless you want strangers to install your server's app), then **Create GitHub App**. GitHub shows its own "Create GitHub App" page, already filled in: click **Create GitHub App** there. GitHub sends you back; the page says "Restarting the server…" while the server stores the app (encrypted with `ENCRYPTION_KEY`) and Docker starts it again in normal mode.
+
+### 5. Install the app, sign in, and connect your CLI
+
+When the page offers **Install the app on your repos**, click it, choose the repos Nitpilot should work on (private ones too), and install. Then **Sign in** with GitHub.
+
+Everyone who uses this server points their CLI at it (`npm install -g nitpilot` first):
+
+```bash
+NITPILOT_SERVER=https://nitpilot.example.com nitpilot login
+```
+
+`login` saves the address as `"server"` in the CLI's config file (`~/.config/nitpilot/config.json`), so later commands (`nitpilot repos add`, `nitpilot start`) use it without the variable. You can also write `"server": "https://nitpilot.example.com"` in that file yourself.
+
+## Upgrading
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+`pull` downloads the newest image for the tag in `NITPILOT_VERSION` (`latest` when it's empty), and `up -d` replaces only the containers whose image or settings changed. The server stops politely (connected CLIs reconnect on their own), runs any new database migrations, and starts.
+
+To stay on one version, set `NITPILOT_VERSION=0.1.0` in `.env` and run `docker compose up -d`; to move, change it and run the same command (Compose downloads a version it doesn't have yet). Back up before upgrading: migrations only go forward, so returning to an older version after one ran is not guaranteed to work.
+
+After editing `.env`, `docker compose up -d` recreates the containers that use it. `docker compose restart nitpilot` restarts the server with its current settings.
+
+## Backups
+
+The database holds everything: chats, settings, the GitHub App. Dump it to a file:
+
+```bash
+docker compose exec -T postgres pg_dump -U nitpilot -d nitpilot | gzip > nitpilot-$(date +%F).sql.gz
+```
+
+Copy the file off the server, and run it every day (from cron, for example). **Keep `.env` too**, in a separate safe place: the GitHub App's private key and secrets, and people's GitHub tokens, are stored encrypted with its `ENCRYPTION_KEY`, so a dump without the key can't bring the server back.
+
+## Restoring
+
+On a new server (or after losing the database), with the same `.env` (same `ENCRYPTION_KEY`) and the dump file in the folder:
+
+```bash
+docker compose up -d --wait postgres
+gunzip -c nitpilot-2026-10-24.sql.gz | docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot
+docker compose up -d
+```
+
+The server finds its GitHub App in the restored database and starts in normal mode (`docker compose logs nitpilot` shows `[boot] GitHub App <your app>, from the database`). If the domain moved to a new IP, update the DNS record first. Restoring over an existing database needs it empty first: `docker compose down -v` deletes it (and Caddy's certificates) for good, so only do that when the dump is safe.
+
+## Behind another HTTPS proxy
+
+If something in front of this server already does HTTPS (a load balancer, Cloudflare Tunnel, another Caddy or nginx), let Caddy serve plain HTTP on port 80 and trust that proxy's headers. In `.env`:
+
+```
+SITE_ADDRESS=:80
+TRUSTED_PROXIES=private_ranges
+```
+
+`TRUSTED_PROXIES` lists the addresses the outer proxy connects from (`private_ranges` covers the private networks, including Docker's own; or give exact ranges like `10.0.0.0/8`). Without it, Caddy tells the server every request came in over plain http, and sign-in keeps redirecting to `https://` in a loop. `NITPILOT_DOMAIN` stays the public name people open.
+
+Make sure only that proxy can reach port 80, since Caddy now believes what it says. When the proxy runs on the same machine, bind Caddy to the loopback address with a `docker-compose.override.yml` next to the other files (Compose reads it automatically):
+
+```yaml
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:80:80"
+```
+
+## Troubleshooting
+
+Start with `docker compose ps` and `docker compose logs nitpilot` (or `logs caddy`).
+
+- **Lost the setup code, or it says it doesn't match:** use the last one printed (`docker compose logs nitpilot | grep "setup code" | tail -1`). `docker compose restart nitpilot` prints a new one; the old one stops working. Five tries a minute per address; after that the page asks you to wait.
+- **`nitpilot` keeps restarting with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with."** `ENCRYPTION_KEY` in `.env` isn't the one the app was stored with. Put the old value back from your saved copy and run `docker compose up -d`. The server never starts a new first run over the stored app.
+- **`nitpilot` keeps restarting with "set all six GitHub App variables, or none to start in first-run mode; missing: …"** Some `GITHUB_*` lines are in `.env` and some are empty. Remove them all (to use the app first-run mode made) or fill in all six (for an app you made by hand; they win over a stored app).
+- **No certificate / the browser can't connect:** `docker compose logs caddy`. Usually the DNS record doesn't point at this server yet (`dig +short` it) or ports 80 and 443 are blocked by a firewall.
+- **Sign-in loops back to the same page behind another proxy:** set `TRUSTED_PROXIES` (above).
+````
+
+Create `docs/why/reverse-proxy-and-tls.md` with exactly this content:
+
+````markdown
+# Reverse proxy and TLS (Caddy, the front door)
+
+**In one sentence:** Caddy is the only thing on a self-hosted server that the internet talks to: it does HTTPS (getting and renewing the certificate by itself) and hands every request on to the Nitpilot server, which never faces the internet directly.
+
+## The React comparison
+
+You already use a reverse proxy in development. In `apps/web/vite.config.ts`, Vite's `server.proxy` sends `/api`, `/auth` and `/ws` on to the server on port 8787 ([serving-a-spa.md](serving-a-spa.md)). The browser only ever talks to Vite on 5173; Vite talks to the server for it.
+
+Caddy is the same idea in production: the browser talks to Caddy on ports 80 and 443, and Caddy talks to `nitpilot:8787` on the private network Docker Compose makes for the folder. The one line that does it, in `deploy/self-host/Caddyfile`:
+
+```
+reverse_proxy nitpilot:8787
+```
+
+"Reverse" because it stands in front of a server (a normal "forward" proxy stands in front of browsers, like a company's web filter).
+
+## Why not let the server answer the internet itself
+
+- **HTTPS.** Browsers need it (the `.dev` domains are HTTPS-only, and a session cookie marked `Secure` is only sent over it). The Nitpilot server speaks plain HTTP. Caddy adds the encryption on the way in and out, so the server's code never deals with certificates.
+- **One door.** Only Caddy publishes ports. The server and Postgres have none in `docker-compose.yml`, so the only way in is through Caddy.
+
+## TLS and certificates, briefly
+
+HTTPS is HTTP inside **TLS**, an encrypted connection. To start one, the server shows a **certificate**: a signed statement "this key belongs to `nitpilot.example.com`", signed by a certificate authority browsers already trust. Without a valid certificate the browser shows a full-page warning.
+
+**Let's Encrypt** is a free certificate authority run by a non-profit, built to be used by programs, not people. Before it signs, it checks that you really control the domain: it connects to the domain on port 80 (or 443) and asks for a one-time answer that only the requester knows. Caddy does all of this on its own the first time it starts with a domain as its address, and renews the certificate before it expires (every few months). It also redirects `http://` to `https://` (the clean-folder run saw a `308` to `https://localhost/healthz`).
+
+That's why the order matters when you set up:
+
+1. **The DNS record first** ([dns-records.md](dns-records.md)): Let's Encrypt looks the domain up, and must land on this server.
+2. **Ports 80 and 443 open**: that's where it knocks.
+3. **Then `docker compose up -d`.** Started too early, Caddy fails, waits and tries again, and repeated failures can hit Let's Encrypt's rate limits.
+
+Caddy keeps its certificates in the `caddy_data` volume, so a restart or a new image reuses them instead of asking again.
+
+## What Caddy tells the server about the visitor
+
+The server's socket is connected to Caddy, not to the visitor. So Caddy adds headers to every request it passes on, without any configuration:
+
+- `X-Forwarded-For`: the visitor's address. The server uses it for rate limits (five setup-code tries a minute, ten `nitpilot login` starts a minute, per address), and only because `TRUST_PROXY=true` says a proxy is really there ([trusting-a-proxy.md](trusting-a-proxy.md)). Caddy ignores an `X-Forwarded-For` the visitor sent and writes the address it saw, so nobody can pretend to be someone else.
+- `X-Forwarded-Proto`: `https` or `http`, how the visitor came in. Sign-in checks it: a sign-in started over plain `http` is sent to the `https` address first, because GitHub always returns people to `PUBLIC_URL`.
+- The original `Host`.
+
+WebSockets (`/ws/cli` for CLIs, `/ws/web` for the web app) go through too: Caddy sees the "upgrade to a WebSocket" request and keeps the connection open in both directions.
+
+## `:80` behind another proxy
+
+Sometimes something in front already does HTTPS: a cloud load balancer, a Cloudflare Tunnel, the dev tunnel this project uses for live runs. Then Caddy shouldn't get a certificate (it can't: the visitors never reach it directly). `SITE_ADDRESS=:80` makes Caddy's address "any name, port 80, plain HTTP".
+
+Now the request has two proxies in front of the server, and Caddy's defaults get in the way: it sees the outer proxy as "the visitor", so it writes `X-Forwarded-Proto: http` (the outer proxy connected over plain HTTP) and that proxy's address in `X-Forwarded-For`. The clean-folder run showed what that does: with `PUBLIC_URL=https://…`, every sign-in looked like it came in over `http`, and the server redirected to the `https` address, which arrived as `http` again: a loop.
+
+`TRUSTED_PROXIES` in `.env` fixes it. It goes into the Caddyfile's `trusted_proxies`: requests from those addresses keep the `X-Forwarded-*` headers they bring, so `https` reaches the server. And `header_up X-Forwarded-For {client_ip}` sends the server one address, the real visitor (Caddy reads the incoming header from the right, skipping trusted proxies), not "visitor, outer proxy", whose last entry the server would read as everyone's address. Left empty (directly on the internet) neither changes anything: nobody is trusted, and `{client_ip}` is the connection's own address, which is what Caddy sends anyway.
+
+Trusting a proxy means believing what it says, so only it may reach Caddy's port 80. On the same machine, bind Caddy to `127.0.0.1` (docs/self-hosting.md shows the override file). On a Mac, Docker Desktop also shows a `0.0.0.0`-bound port's clients to containers with an outside address, so the loopback binding is what makes `private_ranges` match there.
+
+## Where
+
+- `deploy/self-host/Caddyfile`: the site address, `reverse_proxy`, `trusted_proxies`, `header_up`.
+- `deploy/self-host/docker-compose.yml`: the `caddy` service (ports, `SITE_ADDRESS`, `TRUSTED_PROXIES`, the certificate volumes) and `TRUST_PROXY=true` for the server.
+- `apps/server/src/lib/client-address.ts`: reads `X-Forwarded-For`. `apps/server/src/http/routes/auth.ts` (`cameInElsewhere`): reads `X-Forwarded-Proto`.
+- `docs/self-hosting.md`: the setup, "Behind another HTTPS proxy", troubleshooting.
+````
+
+Create `docs/why/dns-records.md` with exactly this content:
+
+````markdown
+# DNS records (how a name finds the server)
+
+**In one sentence:** a DNS record is a public entry saying "the name `nitpilot.example.com` means the server at `203.0.113.10`", and a self-hosted Nitpilot needs one before it starts, because browsers, GitHub and Let's Encrypt all find the server by its name.
+
+## The React comparison
+
+An import map in the browser, or `paths` in a `tsconfig.json`: a table that turns a friendly name (`@app/api`) into where the thing really is (`./src/api/index.ts`). Your code only uses the name; change the table and every import follows.
+
+DNS is that table for the whole internet. People and programs use the name; the record says which IP address it means. Move the server to a new machine and you change one record, not every link.
+
+## The records you'll meet
+
+- **A**: name → IPv4 address (`nitpilot.example.com` → `203.0.113.10`). The one a self-hosted server needs.
+- **AAAA**: name → IPv6 address. Add it as well if your server has IPv6; otherwise leave it out (a wrong AAAA record breaks visitors who prefer IPv6).
+- **CNAME**: name → another name (`www.example.com` → `example.com`), "look that one up instead". Handy for aliases; it can't sit on the bare domain itself.
+
+You add them at whoever runs the domain's DNS (usually where you bought it). The name field is usually just the part before your domain: `nitpilot` for `nitpilot.example.com`, or `@` for the bare domain.
+
+## TTL and "propagation"
+
+Every record has a **TTL** (time to live, in seconds): how long other computers may cache the answer before asking again. Like a `staleTime` in React Query: after a change, anyone holding an old answer keeps using it until it expires.
+
+So a new record usually works within minutes, but a **changed** one can take up to the old TTL to reach everyone. That delay is what people call "propagation". Before moving a server, lower the TTL (to 300, say) a day ahead.
+
+Check what the world sees from your own computer:
+
+```bash
+dig +short nitpilot.example.com
+```
+
+It prints the address (or nothing, if the record isn't there yet).
+
+## Why Nitpilot needs it right first
+
+- **Let's Encrypt** looks the name up and connects to that address to check you control it, before Caddy can have a certificate ([reverse-proxy-and-tls.md](reverse-proxy-and-tls.md)). A missing or wrong record means no HTTPS.
+- **GitHub** sends webhooks, and sends people back after sign-in and install, to URLs built from `PUBLIC_URL` (`https://<NITPILOT_DOMAIN>`), which the first-run page writes into the GitHub App. They are written once, so the domain should be the one you mean to keep.
+- **Browsers and CLIs** open `https://<domain>` and connect `wss://<domain>/ws/cli`.
+
+If your DNS provider also offers to proxy traffic (Cloudflare's orange cloud), that proxy is "another HTTPS proxy" in front of Caddy: either switch it to DNS only, or follow "Behind another HTTPS proxy" in `docs/self-hosting.md`.
+
+## Where
+
+- `deploy/self-host/.env.example`: `NITPILOT_DOMAIN`, which becomes `PUBLIC_URL` and Caddy's address in `deploy/self-host/docker-compose.yml`.
+- `docs/self-hosting.md`, step 1.
+- The hosted instance's records for `nitpilot.dev` and `www`: spec §17 "Hosted instance".
+````
+
+In `docs/why/trusting-a-proxy.md`, three edits. First, in the section "Why it is ignored without a proxy", replace the paragraph
+
+```markdown
+If there is no proxy (a self-hoster running the server directly, or `npm run dev`), nobody adds a true entry, so every `X-Forwarded-For` is the visitor's own claim. Trusting it would let anyone choose their own address. So the server only reads the header when `TRUST_PROXY=true` is set, which the hosted setup does and nothing else should.
+```
+
+with
+
+```markdown
+If there is no proxy (a self-hoster running the server directly, or `npm run dev`), nobody adds a true entry, so every `X-Forwarded-For` is the visitor's own claim. Trusting it would let anyone choose their own address. So the server only reads the header when `TRUST_PROXY=true` is set. The two Compose setups set it (the hosted instance, and `deploy/self-host/docker-compose.yml`, where Caddy is the only way in); a server run any other way should leave it off.
+```
+
+Second, insert this new section between that section and "## Where":
+
+```markdown
+## Two proxies
+
+When Caddy itself sits behind another HTTPS proxy (`SITE_ADDRESS=:80`), the last entry would be that outer proxy, the same for everyone. The self-host Caddyfile then trusts the outer proxy (`TRUSTED_PROXIES`) and sends the server only the real visitor's address, so the server's "last entry" rule still holds ([reverse-proxy-and-tls.md](reverse-proxy-and-tls.md)).
+```
+
+Third, in "## Where", replace the paragraph
+
+```markdown
+`apps/server/src/lib/client-address.ts` (`clientAddress(c, trustProxy)`), used by the login rate limit in `http/routes/cli.ts`. The flag is `TRUST_PROXY` in `lib/env.ts`.
+```
+
+with
+
+```markdown
+`apps/server/src/lib/client-address.ts` (`clientAddress(c, trustProxy)`), used by the login rate limit in `http/routes/cli.ts` and the setup-code limit in `setup/first-run.ts`. The flag is `TRUST_PROXY` in `lib/env.ts`, set in `deploy/self-host/docker-compose.yml`; the headers come from `deploy/self-host/Caddyfile`.
+```
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, §17 "Self-hosting" (the code differs from the spec, so the spec changes in the same commit). Replace the bullet
+
+```markdown
+  - **Caddy's address** comes from `.env` (`SITE_ADDRESS`, default the domain), so the same Caddyfile can also serve plain `:80` behind something else that already does TLS.
+```
+
+with
+
+```markdown
+  - **Caddy's address** comes from `.env` (`SITE_ADDRESS`, default the domain), so the same Caddyfile can also serve plain `:80` behind something else that already does TLS. Then `TRUSTED_PROXIES` (empty by default) names that proxy's addresses, so Caddy keeps the `X-Forwarded-Proto: https` it sends (without it, sign-in redirects to `https://` in a loop) and passes the server only the real visitor's address in `X-Forwarded-For` (`header_up X-Forwarded-For {client_ip}`), which keeps the server's `TRUST_PROXY` rule (the last entry) right. The server and Postgres publish no ports.
+```
+
+and replace the bullet
+
+```markdown
+  - **Verified** by running the self-host compose from a clean folder on the Mac with `SITE_ADDRESS=:80` behind the dev tunnel (Cloudflare does the TLS there, so Caddy's certificate step is proven by the hosted instance's Caddy instead), creating a throwaway app through the first-run page, and doing a single-player review on the sandbox repo; then deleting that app.
+```
+
+with
+
+```markdown
+  - **Verified** by running the self-host compose from a clean folder on the Mac with `SITE_ADDRESS=:80` and `TRUSTED_PROXIES=private_ranges` (Caddy bound to `127.0.0.1:80` by an override file in that folder) behind the dev tunnel (Cloudflare does the TLS there, so Caddy's certificate step is proven by the hosted instance's Caddy instead), creating a throwaway app through the first-run page, and doing a single-player review on the sandbox repo; then deleting that app.
+```
+
+Run: `git diff --stat`
+Expected: the nine files of this task (the three `deploy/self-host/` files and `docs/self-hosting.md`, `docs/why/reverse-proxy-and-tls.md`, `docs/why/dns-records.md` as new; `apps/server/src/lib/env.ts`, `docs/why/trusting-a-proxy.md` and the spec as changed).
+
+- [ ] **Step 5: Whole suite, then commit the code and docs**
+
+Nothing but a comment changed in code, so the counts do not move.
+
+Run: `npm test && npm run typecheck && npm run lint`
+Expected: PASS: protocol 88, CLI 349 + 14 skipped, server 1107, web 373; typecheck and lint clean. (`npm run test:e2e` 6 is untouched; run it if you want the extra proof.)
+
+Run (not yet the plan file: the ticks come in Step 9, after the live run):
+```bash
+git add deploy/self-host/docker-compose.yml deploy/self-host/Caddyfile deploy/self-host/.env.example docs/self-hosting.md docs/why/reverse-proxy-and-tls.md docs/why/dns-records.md docs/why/trusting-a-proxy.md docs/superpowers/specs/2026-10-07-nitpilot-design.md apps/server/src/lib/env.ts
+```
+```bash
+git commit -m "feat(deploy): self-hosting with Compose, verified from a clean folder
+
+deploy/self-host/ (docker-compose.yml, Caddyfile, .env.example): the published
+image, Postgres 16 and Caddy 2. Only Caddy publishes ports; required values fail
+\`docker compose up\`/\`config\` loudly; the server gets TRUST_PROXY=true. For a
+Caddy on \`:80\` behind another HTTPS proxy, TRUSTED_PROXIES makes Caddy keep that
+proxy's X-Forwarded-Proto (without it sign-in loops to https://) and
+\`header_up X-Forwarded-For {client_ip}\` hands the server the real visitor.
+
+docs/self-hosting.md (setup, upgrading, backups, restoring, behind another
+proxy, troubleshooting) and the explainers docs/why/reverse-proxy-and-tls.md and
+docs/why/dns-records.md; trusting-a-proxy.md and spec §17 updated.
+
+Verified locally from a clean folder with a locally built image: first-run mode
+through Caddy, the setup code's rate limit per visitor, a stored app picked up
+after the server's own exit and Docker's restart, VAPID keys from the image,
+half-set GITHUB_* and a changed ENCRYPTION_KEY refusing to start, and a
+pg_dump backup restored into a fresh volume.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+Expected: a commit with nine changed files. (The message is the checkpoint's. If a later step finds a fix, it goes into a separate commit in Step 9.)
+
+- [ ] **Step 6: (user, say first: writes to GitHub and GHCR) The `v0.1.0-rc.2` image**
+
+`v0.1.0-rc.1` was built before first-run mode existed, so the live run needs a new pre-release tag, on this commit. I check `git status` is clean and `git log -1` is the Step 5 commit, then say "this pushes the branch and a tag to GitHub, and the tag pushes an image to GHCR" and wait for go. The user runs, from the repo folder (I don't push), one command at a time:
+
+```bash
+git push origin plan-3-deploy-and-launch
+```
+```bash
+git tag v0.1.0-rc.2
+```
+```bash
+git push origin v0.1.0-rc.2
+```
+
+(`-u` is not needed: the branch was pushed with `-u` in Task 6.)
+
+Click-steps, in the browser signed in to GitHub as **NikosGkikas13**:
+1. Open https://github.com/NikosGkikas13/nitpilot/actions. At the top of the list is a run called **Release**, on `v0.1.0-rc.2`. Click it.
+2. The run's page shows three jobs: **Check the tag**, **Image to GHCR**, **CLI to npm**. Wait until the first two have a green tick (a few minutes; the image layers that haven't changed since `rc.1` come from cache) and **CLI to npm** is grey with "This job was skipped". The skip is right: an `-rc` tag never goes to npm.
+3. Open https://github.com/NikosGkikas13/nitpilot. In the right-hand column under **Packages**, click **nitpilot**. The page shows `ghcr.io/nikosgkikas13/nitpilot` with the tags **0.1.0-rc.2** and **0.1.0-rc.1** and no `latest`, and the **Private** label.
+4. The **CI** run for the pushed branch (Actions → the top **CI** run on `plan-3-deploy-and-launch`) should be green too: **typecheck + lint + tests** and **Docker image (build + smoke test)**.
+
+I read the **Image to GHCR** job's log (`gh run view --log`, read-only) and note the pushed tag and digest in the ledger.
+
+- [ ] **Step 7: (live, say first) The clean-folder run with the `0.1.0-rc.2` image, through the dev tunnel**
+
+What this adds to Step 3: the real image from GHCR (`pull`), a real GitHub App made through the real manifest round trip, real webhooks signed with the stored secret, GitHub sign-in through the tunnel and Caddy, the CLI's WebSocket through both, and a real review posted by the test app. It writes to GitHub (creates and later deletes an app, installs it on the sandbox, opens a PR on the sandbox), so I announce each part and wait for go.
+
+**Dev tunnel: not `npm run dev:tunnel`.** `apps/server/scripts/dev-tunnel.ts` does two things this run must not: it points `cloudflared` at `http://localhost:${PORT}` (the dev server on 8787, not Caddy on 80), and as soon as the tunnel's URL appears it calls `PATCH /app/hook/config` with `nitpilot-dev`'s credentials from `apps/server/.env`, which re-points the real dev app's webhook at the new URL. So I run `cloudflared` directly, a plain quick tunnel that needs no account and changes nothing on GitHub. Nobody runs `npm run dev:tunnel` or the dev server during this step, and `nitpilot-dev`'s webhook keeps pointing at its old, dead URL, so only the test app hears about the sandbox PR.
+
+**7a. (user) Log Docker in to GHCR.** The image is private until D4, so the user runs this in their own terminal (it feeds `gh`'s token to Docker without showing it; `gh` is signed in as NikosGkikas13, which owns the package):
+
+```bash
+gh auth token | docker login ghcr.io -u NikosGkikas13 --password-stdin
+```
+Expected: `Login Succeeded`. If it says `unauthorized` or `denied`, `gh`'s token lacks the `read:packages` scope: the user runs `gh auth refresh -h github.com -s read:packages` (a browser approval as NikosGkikas13) and tries again.
+
+**7b. The tunnel.** I open a Terminal tab in the app (tab name `tunnel`) and run, and leave it running:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:80
+```
+Expected: within a few seconds the tab prints a box with `https://<random-words>.trycloudflare.com`. I read it with `read_terminal` and call it `<host>` below (no `https://`). It changes every time `cloudflared` starts, so do 7c right away and don't restart the tunnel until the run is over. Until Caddy is up, that URL answers a Cloudflare error page; that is fine.
+
+**7c. The clean folder.** (Literal `rm -rf` of the old scratch folder first, if Step 3 left one: its `.env` is already gone, and Step 3l ran `down -v`.)
+
+Run:
+```bash
+rm -rf ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && mkdir ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cp ~/Desktop/PracticeProjects/nitpilot/deploy/self-host/{docker-compose.yml,Caddyfile,.env.example} . && printf 'services:\n  caddy:\n    ports: !override\n      - "127.0.0.1:80:80"\n' > docker-compose.override.yml && ls -A
+```
+Expected: `.env.example  Caddyfile  docker-compose.override.yml  docker-compose.yml`.
+
+Fill `.env` (I type the tunnel's host in place of `<host>` myself; the secrets are fresh and never printed):
+
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && cp .env.example .env && sed -i '' -e "s|^NITPILOT_DOMAIN=\$|NITPILOT_DOMAIN=<host>|" -e "s|^POSTGRES_PASSWORD=\$|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" -e "s|^ENCRYPTION_KEY=\$|ENCRYPTION_KEY=$(openssl rand -base64 32)|" -e "s|^SITE_ADDRESS=\$|SITE_ADDRESS=:80|" -e "s|^TRUSTED_PROXIES=\$|TRUSTED_PROXIES=private_ranges|" -e "s|^NITPILOT_VERSION=\$|NITPILOT_VERSION=0.1.0-rc.2|" .env && grep -E '^(NITPILOT_DOMAIN|SITE_ADDRESS|TRUSTED_PROXIES|NITPILOT_VERSION)=' .env
+```
+Expected: four lines: the tunnel host, `SITE_ADDRESS=:80`, `TRUSTED_PROXIES=private_ranges`, `NITPILOT_VERSION=0.1.0-rc.2`. Why each: the domain is what ends up in `PUBLIC_URL` and in the manifest's webhook and callback URLs, so it must be the tunnel's host; `:80` because Cloudflare already does the HTTPS; `private_ranges` plus the loopback override so Caddy believes the proxy in front (Step 3f explains the Mac detail).
+
+**7d. Pull and start.**
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose pull nitpilot`
+Expected: `Container … Pulled` for `nitpilot` (a download of the image from GHCR; this is the first real `pull`). Then:
+
+Run: `docker compose up -d && sleep 10 && docker compose ps --format '{{.Service}} {{.Status}} {{.Ports}}'`
+Expected: `postgres … (healthy)`, `nitpilot … (healthy)`, `caddy Up … 127.0.0.1:80->80/tcp`.
+
+Run: `curl -s https://<host>/healthz; echo; docker compose logs nitpilot | grep "setup code" | tail -1`
+Expected: `{"ok":true,"version":"0.1.0"}` through Cloudflare and Caddy, and `[first-run] Open https://<host>/first-run and enter the setup code: XXXX-XXXX`. I show the user the code in chat (it is only good for this throwaway server).
+
+**7e. (user) Create the app, install it, sign in.** In the browser signed in to GitHub as **NikosGkikas13** (the one that owns `nitpilot-sandbox`):
+
+1. Open `https://<host>/first-run`. You see the Nitpilot wordmark at the top left and a card titled **Set up Nitpilot** with a small label **First run** above it. The card has: a text box **Setup code**, two radio buttons under **Create the app on** (**Your personal account**, already chosen, and **An organization**), a text box **App name** already filled with `Nitpilot (<host>)`, two radio buttons under **Who can install it** (**Only this account or organization**, already chosen, and **Anyone on GitHub**), and a button **Create GitHub App**.
+2. Click the **Setup code** box and type the code I gave you (like `K3F9-2MXA`). Leave **Your personal account** and **Only this account or organization** as they are. Click into **App name**, select everything in it (Cmd+A) and type `Nitpilot selfhost test`. Click **Create GitHub App**.
+3. The button changes to **Opening GitHub…** and the browser leaves for `github.com/settings/apps/new?state=…`. You see GitHub's page for registering a GitHub App with the name `Nitpilot selfhost test`, the homepage and webhook URL (`https://<host>/webhooks/github`), the callback URL and the permissions already filled in. Don't change anything. If GitHub first asks you to confirm access (a password, passkey or code prompt, GitHub's "sudo mode"), do that yourself.
+4. Scroll to the bottom and click the green button **Create GitHub App for NikosGkikas13**. GitHub creates the app and sends the browser straight back to `https://<host>/first-run/callback?code=…&state=…`, which bounces to `https://<host>/first-run?done=1`.
+5. You see a card with a spinner and the title **Restarting the server…** (the server stored the app and exited; Docker is starting it again). After a few seconds (the page asks every 2 seconds) the title becomes **Your GitHub App is ready** with a green tick, and two buttons: **Install the app on your repos** and **Sign in**. If it still says Restarting after a minute, a line appears telling you to check `docker compose ps`; tell me.
+6. Click **Install the app on your repos**. GitHub's install page opens (`github.com/apps/nitpilot-selfhost-test/installations/new/permissions?target_id=…`; the end of the address may differ) with the title **Install Nitpilot selfhost test**. Under **Install on your personal account** (NikosGkikas13) choose **Only select repositories**, click the **Select repositories** drop-down that appears and pick **nitpilot-sandbox** (only that one). Click the green **Install** button.
+7. GitHub sends the browser to `https://<host>/github/setup?installation_id=…`. You are not signed in to this server yet, so it passes you on to GitHub's sign-in for the app: a page **Authorize Nitpilot selfhost test** (it asks to act on your behalf). Click the green **Authorize NikosGkikas13**. This is the step that loops forever if the proxy headers are wrong; it must not.
+8. You land on the Nitpilot web app's setup checklist (`https://<host>/setup`) with **Install the GitHub App** ticked. If you land on the Nitpilot sign-in page instead, click **Sign in** once more.
+
+I check what the server saw (all read-only):
+
+Run: `cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose logs nitpilot | grep "boot\] GitHub App\|No pending"` then `docker compose exec -T postgres psql -U nitpilot -d nitpilot -c 'select slug from "GithubAppConfig"' -c 'select event, action, status, count(*) from "RawEvent" group by 1,2,3 order by 1,2' -c 'select login from "User"'`
+Expected: `[boot] GitHub App nitpilot-selfhost-test, from the database`; the slug row; `RawEvent` rows for `installation`/`created` and `installation_repositories` (or `ping`) with status `processed` or `ignored` (a row stuck in `received`, `retrying` or `failed` means the webhook's signature check failed: stop and tell me); and `User` has `NikosGkikas13`.
+
+**7f. The CLI, as NikosGkikas13, with the fake agent.** The fake agent exists only in a source checkout, so this runs the CLI from source, like `nit-b` in the acceptance runbook, with a fresh config folder so nothing from earlier runs leaks in. In a Terminal tab (`cli`), from the repo folder (`<host>` filled in by me):
+
+```bash
+cd ~/Desktop/PracticeProjects/nitpilot && export TUNNEL=https://<host> && nit-sh() { NITPILOT_CONFIG_DIR="$HOME/.nitpilot-selfhost" NITPILOT_SERVER="$TUNNEL" NITPILOT_FAKE_SCENARIO="$PWD/docs/acceptance/scenarios/sandbox-happy.json" "$PWD/node_modules/.bin/tsx" "$PWD/apps/cli/src/index.ts" "$@"; } && nit-sh login
+```
+Expected: it prints a link and a code and opens the default browser (NikosGkikas13's, which is the right account here). In that browser: the page **Approve this device?** on `https://<host>/…` shows the same code as the terminal; click **Approve**. The terminal then prints `Logged in as NikosGkikas13. The token is in …/config.json, readable by you only.` (codes last 10 minutes). The check this proves: the CLI's HTTPS requests and the sign-in link work through Cloudflare and Caddy.
+
+Run (same tab):
+```bash
+nit-sh repos add ~/nitpilot-acceptance/b/nitpilot-sandbox && jq '.agent = "fake"' ~/.nitpilot-selfhost/config.json > ~/.nitpilot-selfhost/config.json.tmp && chmod 600 ~/.nitpilot-selfhost/config.json.tmp && mv ~/.nitpilot-selfhost/config.json.tmp ~/.nitpilot-selfhost/config.json && nit-sh doctor
+```
+Expected: `repos add` confirms the sandbox repo is linked to this clone; `doctor` prints no `✗` lines. Then:
+
+Run: `nit-sh start`
+Expected: `Connected as NikosGkikas13.` and the command keeps running (leave the tab open). That is the WebSocket (`/ws/cli`) working through Cloudflare, Caddy and the server. Check the other side: in the `selfhost` folder, `docker compose logs --tail 20 nitpilot` shows the CLI connecting and no `401`.
+
+**7g. (user) ngkdev93-jpg opens a small PR and asks NikosGkikas13 for a review.** First I put a branch on GitHub as ngkdev93-jpg. **(say first: this pushes a branch to `NikosGkikas13/nitpilot-sandbox`.)** On go, in a third tab, from the repo folder (`new-branch.sh` copies `docs/acceptance/seed/orders-demo` onto a new branch off `main` in clone A, which is signed in as ngkdev93-jpg, and pushes it):
+
+```bash
+cd ~/nitpilot-acceptance/a/nitpilot-sandbox && REPO=~/Desktop/PracticeProjects/nitpilot bash ~/Desktop/PracticeProjects/nitpilot/docs/acceptance/new-branch.sh selfhost-reviewer
+```
+Expected: git pushes `acc/selfhost-reviewer` and prints `Branch pushed. Open the pull request as account A:` and a link like `https://github.com/NikosGkikas13/nitpilot-sandbox/compare/main...acc/selfhost-reviewer?expand=1`. (If git says `acc/selfhost-reviewer` already exists, an earlier run left it: use `selfhost-reviewer-2`.)
+
+Click-steps, in the browser signed in to GitHub as **ngkdev93-jpg** (a private window, or the other browser profile; not the one signed in as NikosGkikas13):
+1. Open that link. You see GitHub's **Open a pull request** page comparing `acc/selfhost-reviewer` with `main`.
+2. Click the **Title** box at the top and type `Self-host test: reviewer`.
+3. On the right, in the column of small headings (**Reviewers**, **Assignees**, **Labels** …), click the gear next to **Reviewers**. A small drop-down with a search box opens. Type `NikosGkikas13` and click their name in the list; a tick appears next to it. Click anywhere outside the drop-down to close it. **Reviewers** now shows `NikosGkikas13`.
+4. Click the green **Create pull request** button at the bottom left of the form. The PR page opens; note its number (`#<PR>` in the title).
+
+What should happen, with no further clicks: in the `cli` tab, within about 5 seconds, `→ review of NikosGkikas13/nitpilot-sandbox#<PR> (attempt 1)` and then `✓ review of …: done`. In the browser signed in as **NikosGkikas13**, open the PR (https://github.com/NikosGkikas13/nitpilot-sandbox/pulls → the PR → **Files changed**): one review by **NikosGkikas13** carrying the badge of the test app (`Nitpilot selfhost test`), with three inline comments on `orders-demo/src/orders.js` at lines 5, 12 and 18, and no summary comment (only one side of this PR is on Nitpilot).
+
+I check from the terminal (read-only), with `PR=<number>`:
+
+```bash
+gh api repos/NikosGkikas13/nitpilot-sandbox/pulls/$PR/reviews --jq '[.[] | {user: .user.login, app: .performed_via_github_app.slug}]'
+```
+```bash
+gh api repos/NikosGkikas13/nitpilot-sandbox/pulls/$PR/comments --jq '[.[] | {user: .user.login, line: .line}]'
+```
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose exec -T postgres psql -U nitpilot -d nitpilot -v pr=$PR -f - < ~/Desktop/PracticeProjects/nitpilot/docs/acceptance/check.sql
+```
+Expected: one review, `user` `NikosGkikas13`, `app` `nitpilot-selfhost-test` (the badge); three comments by `NikosGkikas13` on lines 5, 12 and 18; and in `check.sql`'s output the chat READY, one `review` job `done` for NikosGkikas13, no duplicate jobs (section 3 prints no rows), the `pull_request` `opened` and `review_requested` webhooks as `processed`, and no webhook left `received`/`retrying`/`failed`. Last, `docker compose logs --tail 80 nitpilot | grep -ci error` should be `0` or only lines I can explain (the boot-time `[recovery]` 404 is not expected here: this is a real app); I report anything else.
+
+**What this step must still prove (from the builder's local run).** I tick each one in my report, with the evidence:
+- [ ] The real image from GHCR (`0.1.0-rc.2`): `docker compose pull` worked and the server runs from it (7d).
+- [ ] The real manifest round trip, in a browser: GitHub's create page from the posted form, `/first-run/callback` with GitHub's real `code` and `state`, the conversion, the server's own exit after storing, and the page's **Restarting…** then **Your GitHub App is ready** (7e 3 to 5).
+- [ ] Sign-in does not loop through Cloudflare, Caddy and the server: the Authorize step in 7e lands on `/setup`. This needs `cloudflared` to send `X-Forwarded-Proto: https`, which the builder could not check locally. If the browser loops, I stop and report; the first thing to read is what Caddy received (add `log` to the Caddyfile's site block, or `curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1/auth/github/login -o /dev/null -w '%{redirect_url}'` from the Mac).
+- [ ] Rate limits count per visitor behind the tunnel (the setup-code limit from the Mac's browser, not shared with another visitor): after 7e, `docker compose logs caddy` shows the client address Caddy used is the visitor's, not `172.x.0.1`.
+- [ ] Real webhooks reach `https://<host>/webhooks/github` and pass the signature check with the stored secret (the `RawEvent` rows in 7e and 7g).
+- [ ] The installation on `nitpilot-sandbox` only; GitHub sign-in with the new app.
+- [ ] `NITPILOT_SERVER=<tunnel> login` and the WebSocket over the tunnel and Caddy (7f).
+- [ ] A real review posted by the test app on a real PR (7g).
+- Not provable here: Caddy's real Let's Encrypt certificate (the hosted instance's Caddy proves it in Task 12).
+
+- [ ] **Step 8: (user) Clean up**
+
+I say first, then tell the user which of these to do; the app deletion and the logout are theirs.
+
+1. In the `cli` tab press Ctrl-C to stop `nit-sh start`; in the `tunnel` tab press Ctrl-C to stop `cloudflared`. (I do this on go.)
+2. Close the PR and delete its branch, in the browser signed in as **ngkdev93-jpg**: open the PR (https://github.com/NikosGkikas13/nitpilot-sandbox/pulls → `Self-host test: reviewer`), scroll to the bottom of the conversation and click **Close pull request**. (Deleting the branch is optional.)
+3. Delete the test app, in the browser signed in as **NikosGkikas13**: open https://github.com/settings/apps (or click your picture at the top right → **Settings**, then in the left column at the very bottom **Developer settings**, then **GitHub Apps**). You see two apps: `nitpilot-dev` and **Nitpilot selfhost test**. **Do not touch nitpilot-dev.** Click **Edit** next to **Nitpilot selfhost test**. In the left column of the app's page click **Advanced**, scroll to the bottom to the red **Danger zone** box, click **Delete GitHub App**, type the app's name `Nitpilot selfhost test` when GitHub asks, and click the red confirm button. Back on the list only `nitpilot-dev` is left. (This also removes its installation on `nitpilot-sandbox`.)
+4. Remove the containers and data, the user's or my command (on go), from the scratch folder:
+
+```bash
+cd ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost && docker compose down -v
+```
+Expected: three containers, the network and the volumes `selfhost_postgres_data`, `selfhost_caddy_data`, `selfhost_caddy_config` removed.
+
+5. Log Docker out of GHCR, in the user's own terminal:
+
+```bash
+docker logout ghcr.io
+```
+Expected: `Removing login credentials for ghcr.io`.
+
+6. Delete the fresh CLI config and the folder with the `.env` (the live `.env` holds real secrets of a server that no longer exists, but delete it anyway):
+
+```bash
+rm -rf ~/.nitpilot-selfhost ~/Desktop/PracticeProjects/.nitpilot-scratch/selfhost
+```
+Expected: no output. The image `ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.2` stays in Docker's cache and on GHCR; leave both.
+
+- [ ] **Step 9: Doc fixes from the live run, tick, ledger**
+
+If the live run showed a doc or compose-file problem (a wrong click label, a missing step), fix it in `docs/self-hosting.md` or the file concerned and commit it on its own: `git add <those files>` then `git commit -m "docs(hosting): <what the run taught>"` ending with the trailer line below. A code fix would need a test first; stop and ask.
+
+Then tick Steps 1 to 9 in this plan, add the ledger line `Task 9: complete` (with the rc.2 image tag and digest from Step 6, and any surprise from Step 7), and commit:
+
+```bash
+git add docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+```
+```bash
+git commit -m "docs(plan): Task 9's self-hosting verified from a clean folder, locally and live
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 10: The secret scan before going public
 
-- [ ] **Step 1:** `docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8 git /repo --redact --report-path /repo/.superpowers/gitleaks.json` (pin the exact version tag when the task is written at step level; the report goes in a git-ignored folder). Expected: no findings, or only known test values.
-- [ ] **Step 2:** For each finding: a test key or a recorded fixture value → add it to `.gitleaks.toml`'s allowlist with a one-line reason; anything real → stop and tell the user (rotating it and rewriting history is their decision, and the repo stays private until it's settled).
-- [ ] **Step 3:** Add a `gitleaks` job to CI (the same image, on every PR, `--redact`), so nothing new slips in after going public. Commit `ci: scan for secrets on every PR`.
+**Files:**
+- Create: `.gitleaks.toml`
+- Modify: `.github/workflows/ci.yml` (a `gitleaks` job)
+
+**Interfaces:**
+- Consumes: the repo's whole git history (every branch and tag, including all of D1–D3's commits, so Task 10 runs after the other D3 commits and the scan covers them); the pinned image `zricethezav/gitleaks:v8.30.1` (digest `sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f`; Docker Hub has no `:v8` tag, so the exact version is the tag).
+- Produces: `.gitleaks.toml` (gitleaks' default rules plus narrow allowlists for the 14 known test values) and the CI job `gitleaks`, which fails any PR or push to `main` that adds a secret-shaped string. This scan is the gate for D4 Task 12 Step 1: the repo does not go public until it passes.
+
+**Why a scan, and why the whole history:** once the repo is public, anyone can `git clone` it and read every commit, including a key that was added in one commit and deleted in the next. gitleaks reads each commit's diff and matches it against a long list of secret patterns (AWS key ids, private keys, "generic API key" lookalikes). It's a spell-checker for secrets. A match in a test file is a false alarm to allowlist; a real match means rotating the secret, and that is the user's decision (see Step 1).
+
+- [ ] **Step 1: Scan the whole history, with no config**
+
+Why a mirror clone: a worktree's `.git` is a file that points at the main repo, so Docker can't see the history through it, and `.superpowers/` is NOT git-ignored here, so a report written into the repo would show up as an untracked file. Instead, clone the repo into a throwaway folder outside it (`--mirror` copies every branch, tag and remote ref; `--no-local` makes a real copy) and write the report there too.
+
+Run (from the repo folder; every line is safe to paste, nothing is written inside the repo):
+
+```bash
+REPO=$PWD
+T=$(mktemp -d) && echo "$T"
+git clone -q --mirror --no-local "$REPO" "$T/mirror"
+mkdir "$T/out"
+docker run --rm -v "$T/mirror:/repo:ro" -v "$T/out:/out" zricethezav/gitleaks:v8.30.1 \
+  git /repo --redact --no-banner --no-color --report-format json --report-path /out/history-1.json
+echo "exit=$?"
+```
+
+(v8's command is `gitleaks git`; the old `detect --source` form is gone. With no `--log-opts` it already scans every ref. `--redact` hides the matched value in the output and the report.)
+
+Expected: `leaks found: 14` and `exit=1`. The commit count is the number of commits in the clone (236 when this step was written at `cb8b010`, plus whatever lands after). List them without any value in them:
+
+```bash
+python3 -c 'import json,sys
+for f in json.load(open(sys.argv[1])): print(f["RuleID"], f["File"], f["Commit"][:8], f["StartLine"])' "$T/out/history-1.json"
+```
+
+Expected: exactly these 14 findings (13 rows; the `7348ec02` row has two), every one a test value, none a secret:
+
+| rule | file | commit | line | why it's not a secret |
+|---|---|---|---|---|
+| generic-api-key | `scripts/image-smoke.sh` | `f200a034` | 22 | `SMOKE_TOKEN_HASH`: the sha256 of the image smoke test's throwaway token, for a database that lives for one minute |
+| generic-api-key | `docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md` | `9bd64597` | 393 | the same hash, quoted in this plan |
+| generic-api-key | `apps/server/src/lib/env.test.ts` | `9c797cd5` | 20 | the `LEADING_ZERO` test VAPID key pair, made only for the env test |
+| generic-api-key | `docs/superpowers/plans/2026-10-15-plan-2-web-app.md` | `991dde4f` | 40507 | the same VAPID pair, quoted in plan 2 |
+| generic-api-key | `apps/server/src/http/routes/push.db.test.ts` | `63f2dea0` | 13 | a sample push subscription's `auth` value, naming a test endpoint |
+| generic-api-key | `packages/protocol/src/web-api.test.ts` | `63f2dea0` | 93 | the same sample `auth` |
+| generic-api-key | `docs/superpowers/plans/2026-10-15-plan-2-web-app.md` | `7348ec02` | 28032 and 29557 (2 findings) | the same sample `auth`, quoted in plan 2 |
+| generic-api-key | `apps/cli/src/agents/conformance/static.ts` | `85f87390` | 36 | the conformance suite's made-up MCP token `tok-...` for a server on 127.0.0.1 that never runs |
+| generic-api-key | `docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md` | `beef1241` | 11604 | the same fake MCP token, quoted in plan 1b |
+| private-key | `docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents.md` | `491ff952` | 14742 | the sanitizer test's sample: a truncated PEM header with no key body |
+| aws-access-token | `apps/server/src/lib/sanitize.test.ts` | `4f2c9143` | 11 | the sanitizer test's sample: `AKIA` plus the alphabet A to P, not a real key id |
+| private-key | `docs/superpowers/plans/2026-10-07-plan-1a-server-core.md` | `9f35621f` | 9667 | the sanitizer sample PEM quoted in plan 1a (63 characters, no key body) |
+| aws-access-token | `docs/superpowers/plans/2026-10-07-plan-1a-server-core.md` | `9f35621f` | 9665 | the same fake AWS key id, quoted in plan 1a |
+
+(Ruling 187's two recorded fixtures use this repo's own name and produce no finding.)
+
+**If there is any finding not on this list, STOP.** Tell the user the file, commit and rule only, never the value (not in chat, not in a commit message). Whether it's real, and then rotating it and rewriting history, is the user's call; the repo stays private until that is settled. Don't allowlist it to get past this step.
+
+- [ ] **Step 2: The allowlist, `.gitleaks.toml`**
+
+Create `.gitleaks.toml` at the repo root. Each `[[allowlists]]` block is one family of test values, matched as narrowly as gitleaks allows: only for the named rule, only in the named files, and only when the text around the value looks like the test line. `condition = "AND"` matters: gitleaks' default is OR, which would let a match on the path alone allowlist the whole file.
+
+```toml
+# gitleaks: the secret scanner CI runs on every PR and push (the `gitleaks` job in .github/workflows/ci.yml).
+# It keeps all of gitleaks' own rules and adds the allowlists below: each one is a test value that looks like a
+# secret but isn't one, matched as narrowly as gitleaks allows (the rule, the files, and the text around it).
+# A new finding means a new secret-shaped string: if it's real, remove and rotate it; if it's a test value, add an
+# allowlist here with a one-line reason. Never allowlist a whole file or rule.
+
+# The oldest gitleaks this file is tested with (the version CI pins).
+minVersion = "v8.30.1"
+
+[extend]
+useDefault = true
+
+# The image smoke test's token hash: the sha256 of a throwaway token for a database that lives for one minute.
+[[allowlists]]
+description = "image smoke test: SMOKE_TOKEN_HASH"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)scripts/image-smoke\.sh$''',
+  '''(^|/)docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^SMOKE_TOKEN_HASH=''']
+
+# A VAPID key pair made only for the env test (a private key starting with a zero byte); no server ever used it.
+[[allowlists]]
+description = "env test: the LEADING_ZERO VAPID pair"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/lib/env\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-15-plan-2-web-app\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^privateKey: ''']
+
+# A push subscription's `auth` value, copied from a browser into the tests; it only names a test endpoint.
+[[allowlists]]
+description = "push tests: a sample subscription's auth key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/http/routes/push\.db\.test\.ts$''',
+  '''(^|/)packages/protocol/src/web-api\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-15-plan-2-web-app\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^auth: ''']
+
+# The agent conformance suite's made-up MCP token (`tok-…`) for a server on 127.0.0.1 that never runs.
+[[allowlists]]
+description = "agent conformance: the fake MCP token"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/cli/src/agents/conformance/static\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents\.md$''',
+]
+regexTarget = "match"
+regexes = ['''^token: 'tok-''']
+
+# The sanitizer tests' samples: an AWS key id spelled from the alphabet and a truncated PEM header, which the
+# tests feed to the sanitizer to prove it redacts them.
+[[allowlists]]
+description = "sanitizer tests: fake AWS key id and private-key header"
+targetRules = ["aws-access-token", "private-key"]
+condition = "AND"
+paths = [
+  '''(^|/)apps/server/src/lib/sanitize\.test\.ts$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1a-server-core\.md$''',
+  '''(^|/)docs/superpowers/plans/2026-10-07-plan-1b-cli-and-agents\.md$''',
+]
+regexTarget = "line"
+regexes = ['''^\s*\['an? (AWS key id|private key)', ''']
+```
+
+Run the history scan again, now with the config:
+
+```bash
+cp .gitleaks.toml "$T/gitleaks.toml"
+docker run --rm -v "$T/mirror:/repo:ro" -v "$T/gitleaks.toml:/config/.gitleaks.toml:ro" -v "$T/out:/out" zricethezav/gitleaks:v8.30.1 \
+  git /repo --config /config/.gitleaks.toml --redact --no-banner --no-color --report-format json --report-path /out/history-2.json
+echo "exit=$?"
+```
+
+Expected: `236 commits scanned.` (same count as Step 1), `no leaks found`, `exit=0`.
+
+Then the working tree (the files as they are now; `dir` mode finds `./.gitleaks.toml` by itself):
+
+```bash
+docker run --rm -v "$PWD:/repo:ro" -v "$T/out:/out" -w /repo zricethezav/gitleaks:v8.30.1 \
+  dir . --redact --no-banner --no-color --report-format json --report-path /out/dir-1.json
+echo "exit=$?"
+```
+
+Expected: `no leaks found`, `exit=0`. (This scans untracked files too, such as `.superpowers/`; a finding there that isn't a test value is the same STOP as in Step 1. It never reads a git-ignored `.env`, but if the folder holds one, point `dir` at a clean `git archive` copy instead.)
+
+Note for later plans: plan text that copies a test value out of code (as plans 1a, 1b, 2 and 3 did) trips the scan in the plan file, so that plan's path has to be added to the matching allowlist's `paths` before it is committed.
+
+- [ ] **Step 3: The CI job**
+
+Append this job to `.github/workflows/ci.yml`, after the `image` job, at the same indentation (the file already runs on every pull request and on pushes to `main`):
+
+```yaml
+  gitleaks:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The whole history, not just the latest commit: a key added in one commit and deleted in the next is still
+      # readable by anyone who clones the public repo.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # gitleaks from its own image, pinned like every other tool here (the action version needs a licence for
+      # repos owned by an organization). It reads every commit's diff with gitleaks' default rules plus the
+      # allowlists in .gitleaks.toml (test values that look like secrets), and exits non-zero on a finding, which
+      # fails the job. --redact keeps the value out of this public log; the log still names the file, line, commit
+      # and rule.
+      - name: Scan every commit for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1
+          git /repo --config /repo/.gitleaks.toml --redact --verbose --no-banner --no-color
+```
+
+(Why the image and not the `gitleaks-action`: the action needs a paid licence for repos owned by an organization. The image is the same scanner. `fetch-depth: 0` makes the checkout fetch every commit; the default fetches one, and then the "whole history" scan would only see the tip. `--verbose` prints each finding's file, line, commit and rule, and `--redact` keeps the value out of the log, which becomes public.)
+
+Validate the workflow (Docker, nothing installed):
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -no-color
+```
+
+Expected: no output, exit 0.
+
+- [ ] **Step 4: Prove the CI command catches a leak**
+
+In a throwaway clone, so nothing touches the repo. The key is built at runtime and never written into the plan or the repo (a literal fake key here would trip the scan). `.gitleaks.toml` is copied in and committed because CI sees it as part of the checkout.
+
+```bash
+git clone -q --no-local "$REPO" "$T/leakcheck" && cd "$T/leakcheck"
+cp "$REPO/.gitleaks.toml" .
+git add .gitleaks.toml && git commit -qm "config"
+scan() { docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --config /repo/.gitleaks.toml --redact --verbose --no-banner --no-color; }
+scan; echo "exit=$?"
+```
+
+Expected: `no leaks found`, `exit=0`. Now add a key and scan again:
+
+```bash
+K="AKIA$(LC_ALL=C tr -dc 'A-Z2-7' </dev/urandom | head -c 16)"
+printf 'export const key = "%s";\n' "$K" > leak.ts
+git add leak.ts && git commit -qm "add a key"
+scan; echo "exit=$?"
+```
+
+Expected, in this order (entropy, commit id and date differ):
+
+```
+Finding:     REDACTED
+Secret:      REDACTED
+RuleID:      aws-access-token
+File:        leak.ts
+Line:        1
+Commit:      <the "add a key" commit>
+...
+INF <N> commits scanned.
+WRN leaks found: 1
+exit=1
+```
+
+Then delete the file in a new commit and scan once more:
+
+```bash
+git rm -q leak.ts && git commit -qm "delete it"
+scan > "$T/after-delete.log" 2>&1; echo "exit=$?"; tail -2 "$T/after-delete.log"
+```
+
+Expected: still `leaks found: 1` and `exit=1`. The scan reads history, so deleting the file doesn't hide it; once a real key is committed, it has to be rotated. Clean up:
+
+```bash
+cd "$REPO" && rm -rf "$T/leakcheck"
+```
+
+- [ ] **Step 5: Tick, ledger, commit; remove the scratch folder**
+
+```bash
+rm -rf "$T" && unset T
+```
+
+Tick Steps 1–5, append `Task 10: complete` to the ledger (no test counts change: this task adds no code and no tests), then:
+
+```bash
+git add .gitleaks.toml .github/workflows/ci.yml docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+git commit -m "ci: scan for secrets on every PR
+
+gitleaks v8.30.1 (pinned image) reads every commit on every PR and push to main, with the default rules plus
+.gitleaks.toml's allowlists: the 14 findings in today's history are all test values (the image smoke test's token
+hash, a test VAPID pair, a sample push subscription, the conformance suite's fake MCP token, the sanitizer tests'
+fake AWS key id and PEM header), each allowlisted by rule, files and surrounding text.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+The scan is the gate for D4 Task 12 Step 1: the repo goes public only after Steps 1 and 2 pass on the final history.
+
+### Checked against the code (D3)
+
+Checked at `d9fe4d8` and in the scratch build; each line is where the step-level text differs from the task-level text it replaced, or a fact the task-level text (or an earlier section of this plan) got wrong. Grouped by the task that found it.
+
+**Task 7**
+
+1. **Error body shape.** Global Constraints and the Task 7 text write the 503 as `{ error: 'first_run', message: 'Finish setup at /first-run.' }` and the wrong code as `{ error: 'setup_code' }`. The house shape in `http/errors.ts` is `{ error: { code, message } }`, so the built bodies are `{ error: { code: 'first_run', message: 'Finish setup at /first-run.' } }` and `{ error: { code: 'setup_code', message } }`. Two new codes, `setup_code` (403) and `first_run` (503), were added to `ErrorCode`. Spec §10 is written with the real shape. The Global Constraints "First-run mode" line should be corrected, and Task 8's page must read `error.code`.
+2. **`githubApp()` holder instead of passing credentials.** The task-level text says every reader of `env.GITHUB_*` takes a `GithubAppCredentials`. Threading it through `getUserToken`, `RepoAccess`, the auth and webhook routes and `OnboardingFacts` would touch most of the server, so `setup/credentials.ts` has a process-wide holder in the style of `getEnv()`: `main.ts` calls `setGithubApp(creds)` once at boot, and readers call `githubApp()`, which falls back to the environment's six values when nothing was set (tests, scripts). `main.ts` still passes `creds` explicitly to `AppAuth`. The Code facts line "Task 7 turns these into one `GithubAppCredentials` value loaded from the environment or the database" is true, but readers get it from `githubApp()`.
+3. **The setup-code alphabet is 31 characters, with rejection sampling.** A–Z and 2–9 without the look-alikes 0, O, 1, I, L leaves 31, which doesn't divide 256, so a plain `byte % 31` would favour the first 8 letters. `makeSetupCode` skips bytes 248–255 and draws again. (The task-level text only said "8 characters from an alphabet without look-alikes".) The constant-time compare uses `timingSafeEqual`, and the test watches that it is called.
+4. **`updatedAt` on `GithubAppConfig`.** The task-level data model lists `createdAt` only; the house convention (spec §8: `createdAt`/`updatedAt`) adds `updatedAt @updatedAt`. Spec §8 gets the row.
+5. **The `main.ts` seam is `startFirstRun` in `setup/boot.ts`, not `startServer(env, deps)`.** The task-level text asked for "a small `startServer(env, deps)` seam tested with the fake" choosing the mode. Built: `main()` calls `loadGithubApp`, then `runFirstRun` or `runNormally` (both in `main.ts`, untested directly because they start a real server); the testable first-run part is `startFirstRun({ env, github, exit, log? })` (prints the code, builds the app), tested in `boot.test.ts`. The normal-mode branch is covered by the live run (Step 20) and, from Task 5, the image smoke test. The test "main.ts chooses the mode" is therefore the env/credentials/boot tests plus the live check.
+6. **GitHub's refusal of the conversion is a 400 `validation_error`; only a failure on GitHub's side is a 502.** The task-level text only listed the success path. A 4xx from `POST /app-manifests/{code}/conversions` (code expired or used) is a 400 with "Start again at /first-run"; a 5xx, no answer, or an answer missing `pem`, `webhook_secret`, `client_secret` or `client_id` is a 502 `github_unavailable`, and nothing is stored (tested). These are Task 7's JSON statuses; Task 8 (`2d53716`) later changes the callback's failures to redirects, so this text describes the checkpoint as it is.
+7. **Order of checks on the manifest POST.** Rate limit first (counted before the code, so a right guess and a wrong one cost the same try), then the setup code (a missing code or a non-JSON body is a 403 `setup_code`), and only then the rest of the body (a bad `name` or `owner` with the right code is a 400). No Origin check on this POST: the setup code is the gate. Not in the task-level text.
+8. **A callback with a missing `code` and a valid `state` is a 400 without consuming the state** (the check short-circuits). Harmless: nothing is stored.
+9. **`name` is 1–34 characters and `owner.login` must look like a GitHub login** (protocol schema), because GitHub refuses longer names. The task-level body was `{ code, owner, name, isPublic }` with no limits.
+10. **The exit is a real 500 ms `setTimeout` (`EXIT_DELAY_MS`) through the `exit` dep, called once.** The test waits with `vi.waitFor` and checks at least 490 ms; fake timers are used only for `Date` (the 5-a-minute window and the 1-hour `state` expiry, via the `now` dep). `exit` in `main.ts` closes the server, releases the advisory lock and exits 0; SIGINT/SIGTERM do the same in first-run mode.
+11. **Other server paths in first-run mode.** All of `SERVER_PREFIXES` get the 503 `first_run`, any method, including GETs under `/ws/*`; WebSocket upgrades get a 404 (`routeUpgrades(server, {})`). The SPA's own GETs (`/`, `/first-run`, `/inbox`) still get `index.html`.
+12. **`form-action` in the Content-Security-Policy.** Not in the task-level text: GitHub takes a manifest only as a browser form post, and the page's policy said `form-action 'self'`, which would block it. `contentSecurityPolicy` and `spaRoutes` gained a `formActions` option; only `createFirstRunApp` passes one (`github.webBase`), so a normal server is unchanged (tested both ways). `isServerPath` is exported for the first-run app. `docs/why/content-security-policy.md` is edited (task-level said spec §8 and §10 only).
+13. **`.env.example`.** `GITHUB_APP_SLUG=nitpilot-dev` is emptied: with only the slug filled, a copied file would now refuse to start as half set. The comments explain all-or-none and first-run mode, and that `ENCRYPTION_KEY` must be kept because it also encrypts a first-run app.
+14. **Not in the task-level Files list but needed:** `scripts/dev-tunnel.ts` (uses `credentialsFromEnv`, exits with a message if the dev app isn't in `.env`), `test/db.ts` (`resetDb` truncates `"GithubAppConfig"`), `test/webhooks.ts` (signs with `githubApp().webhookSecret`), `lib/env.test.ts`, `http/spa.ts`, `http/errors.ts`. `scripts/record-fixtures.ts` still reads `process.env.GITHUB_WEBHOOK_SECRET` directly and is deliberately unchanged (it scrubs a secret from a recorded fixture and is not a server reader).
+15. **zod 4 detail.** `superRefine(fn, { when: () => true })` is needed so the all-or-none message appears even when another variable (say `PUBLIC_URL`) is also invalid; the existing "names every missing variable" test depends on it.
+16. **`prisma migrate dev` did not regenerate the client** in the reference build; Step 9 runs `npm run db:generate -w apps/server` explicitly. The migration's timestamp in the folder name is the implementer's own; the SQL must match.
+17. **Step order differs from the file list's order:** `test/db.ts` is changed in Step 8 (before the credentials code), not with the other support files, because the credentials tests need `resetDb` to know the table. The first-run routes test and the `createFirstRunApp` test are written together (Step 14) because the routes tests build their server with `createFirstRunApp`; `first-run.ts` (Step 15) alone doesn't turn them green, `app.ts` (Step 16) does.
+18. **Baseline counts.** Global "How to work" says baseline server 1037, protocol 82; the head at `d9fe4d8` is protocol 84, CLI 349 + 14 skipped, server 1059, web 344, e2e 6 (D1/D2 added tests). Task 7 ends at protocol 88, CLI 349 + 14, server 1106, web 344, root 6, e2e 6. Spec §17 needed no change.
+
+**Task 8**
+
+19. **The second Playwright server.** The task-level text said `apps/server/test/e2e/web-server.ts` gets "a first-run control: start the harness without credentials". It can't: the shared server must always have its app for the other 19 specs. Task 8 adds `apps/server/test/e2e/first-run-server.ts` (new `e2e:first-run-server` script, ports 4321 web / 4322 control in `apps/web/e2e/ports.ts`, own database `<test db>_first_run_test`, a `webServer` array in `playwright.config.ts`), and the spec sets `test.use({ baseURL })`. `web-server.ts` is unchanged.
+20. **The control port is also the stand-in for github.com** (the form posts to it and it redirects to the callback), and a real "exit" is simulated: `exit` takes the server down (502 text, like Caddy) and `POST /restart` brings it back in ready mode, reading the stored row. Task-level text said "`?done=1` → waits, then shows Install" without saying who restarts the server.
+21. **Ready-mode `GET /first-run/callback` redirects to `?error=exists`** instead of Task 7's JSON 404 (a browser GitHub sends back after the restart, a second tab). Task 7's test "refuse … with a JSON 404" lost its callback half and gained a new test. The manifest route stays a JSON 404.
+22. **The server change is part of Task 8, on top of Task 7.** Task-level text had no server work in Task 8. Every callback failure is now a 302 to `/first-run?error=expired|github|exists` (nothing stored, process kept running) instead of JSON 400/409/502, because the callback is a page load in the person's browser. GitHub refusing the code (4xx on conversion) is `expired`; 5xx, no answer, or a missing secret is `github`; unexpected errors (database down) stay a JSON 500. Spec §10 and `docs/why/first-run-and-app-manifests.md` updated accordingly (Task 7's wording "400/409/502" is superseded).
+23. **Additions not in the task-level text:** `FirstRunProblem` zod enum in `packages/protocol`; `ApiError.details` and `isFirstRunMode`; `retryUnlessClientError` doesn't retry a 503 `first_run` (otherwise the notice waits about 3 s); the page validates with the shared `FirstRunManifestRequest` before sending and maps a server 400 to a field via `details.issues`; "Taking a while?" with `docker compose ps` / `logs` after 60 s of restarting; a bfcache Back from GitHub resets "Opening GitHub…" (`pageshow` persisted); an unknown `?error=` value shows the `expired` copy; error copy tells people to delete the app GitHub may already have made.
+24. **A new `FirstRunNeeded` component, used by `Home` and `Approve`.** Task-level text said "every route shows a link to `/first-run`" in `app.tsx`. Home is the one place all non-lazy routes pass through (it asks `/api/me`), and the approve page asks `/api/me` itself (and would otherwise redirect to GitHub sign-in), so the two show the notice; `app.tsx` only gets the lazy `/first-run` route (outside Home, like `cli/approve`). The 503 isn't retried (item 5).
+25. **Default app name uses `URL.host`,** so locally it is `Nitpilot (127.0.0.1:4321)`; the default is trimmed to GitHub's 34 characters keeping the closing `)`.
+26. **Order of the page's steps.** `browser.submit` is added in Step 10 with the page's other code, not with the api client, so the page tests' RED really shows `The property "submit" is not defined on the object.`; the 22-of-23 RED has one test passing vacuously ("says it is loading", Home's own loading text). The page tests stay red after Step 12 and go green only with the route in Step 13.
+27. **The Playwright spec has no natural RED** (it is written after the page). Step 16 proves it by breaking the CSP's `formActions` (`formActions: []` in `http/app.ts`): `Expected …/first-run?done=1, Received …/first-run`. Checked by the plan's writer in the same way the builder did.
+28. **Bundle.** Main chunk 497.79 kB → 499.08 kB (gzip 152.32), no warning, about 0.9 kB margin (the carry-forward said "~4.7 kB margin" before Task 4; that number is stale). Settings was not split because no warning appeared; Step 19 spells out the split for the next task that trips it. `FirstRun` is its own chunk, about 10.3 kB js and 4.15 kB css.
+29. **Counts.** Protocol 88, CLI 349 + 14 skipped, server 1107 (+1), web 373 (+29 over Task 7's 344), root 6, e2e 6, Playwright 21 (+2 over 19).
+30. **Plan's Global Constraints still say** the 503 body is `{ error: 'first_run', message: … }`; the real shape is `{ error: { code: 'first_run', message } }` (already noted at Task 7; unchanged here).
+31. **Flake seen once, not reproducible:** in the writer's first `npm run test:web-e2e` run `drafts.spec.ts` failed once (20 passed); the immediate re-run of all 21 passed. Not caused by this task's files as far as could be told (cold first run); implementer should re-run before suspecting it.
+32. **The in-app browser look** is a controller step (Step 20), listing the states from the builder's notes; the builder fixed two layout problems during it (Install/Sign in side by side wrapped, now stacked; inline command broke mid-line on a phone, now `white-space: nowrap`), both already in the CSS in Step 12.
+
+**Task 9**
+
+33. **Caddyfile has `TRUSTED_PROXIES`, `trusted_proxies_strict` and `header_up X-Forwarded-For {client_ip}`** (task text: just `{$SITE_ADDRESS} { reverse_proxy nitpilot:8787 }`). Behind another HTTPS proxy (`SITE_ADDRESS=:80`: the dev tunnel in Step 7) Caddy overwrote `X-Forwarded-Proto` with `http`, so `cameInElsewhere` in `http/routes/auth.ts` redirected every sign-in to `PUBLIC_URL`: a redirect loop. And without `header_up` the last `X-Forwarded-For` entry is the outer proxy, one rate-limit bucket for all visitors. Empty by default = Caddy trusts nobody (old behaviour). `.env.example` and compose gained `TRUSTED_PROXIES`; spec §17 (two bullets), `docs/why/trusting-a-proxy.md` ("Two proxies") and `docs/self-hosting.md` ("Behind another HTTPS proxy") say so. Task-level "Interfaces" for compose/`.env.example` list no such variable.
+34. **Mac-only: the loopback override.** Docker Desktop shows clients of a `0.0.0.0`-published port to the container as a public-looking address (`140.82.121.6` in the builder's run), so `private_ranges` never matched; a `127.0.0.1`-bound port shows the gateway `172.x.0.1`. Local Step 3f and live Step 7 use a `docker-compose.override.yml` with `ports: !override ["127.0.0.1:80:80"]` in the scratch folder only (also in the docs as advice for a proxy on the same machine). Task text had Caddy on `80` and `443` only and tunnelled to "Caddy's port 80".
+35. **VAPID command.** Task 9's `.env.example` text and Task 12 Step 4 say `npm run vapid:keys -w apps/server`; in the image that fails (`npm error No workspaces found: --workspace=apps/server`, no `apps/server/scripts/` in the image). Working: `docker compose run --rm --no-deps nitpilot node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"`. **For the plan's D4 text:** Task 12 Step 4 must use this one-liner (with `docker run --rm --entrypoint node ghcr.io/nikosgkikas13/nitpilot:<rc> -e …` or the compose form), and Task 12 Step 5's `docker exec nitpilot-server wget -qO- http://127.0.0.1:8787/healthz` cannot work: the slim image has no `wget` (or curl). Use node's fetch like the image's HEALTHCHECK: `docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"`, or just `docker inspect -f '{{.State.Health.Status}}' nitpilot-server`.
+36. **Step 1's check can't be warning-free.** Task text: `docker compose -f … --env-file deploy/self-host/.env.example config` prints a valid config with no missing-variable warnings. With the example's required values empty (by design) `${NAME:?…}` makes it exit 1; and `--env-file` alone doesn't help because `env_file: .env` must exist next to the compose file. Step 2 now runs two commands from a `mktemp` folder: the expected failure (exit 1, first missing variable named) and the filled-in success (`config --quiet`, exit 0). Which variable Compose names first varied between runs (`services.nitpilot.environment.DATABASE_URL` for me, `services.postgres.environment.POSTGRES_PASSWORD` for the builder), so the step matches only the start and the end of the line.
+37. **`ENCRYPTION_KEY` is also listed under `environment:`** (`${ENCRYPTION_KEY:?…}`) although `env_file: .env` already carries it, only so a missing key fails at `docker compose up` (not inside the container). Not in the task text.
+38. **`env_file: .env` is the whole file** (task text: `env_file: .env`, same) but the optional settings are therefore not listed in compose; extras (`POSTGRES_PASSWORD`, `NITPILOT_DOMAIN`, ...) are ignored by the server. Postgres and Caddy get no env_file (never the key).
+39. **No top-level `name:` in the compose file**: the project is the folder's name (`selfhost` in both runs). `name: nitpilot` would collide with this repo's dev compose project on the Mac and `down -v` could hit its volume. Container names in the steps are `selfhost-postgres-1` etc.
+40. **Also published: 443/udp (HTTP/3);** Caddy `depends_on: nitpilot`; Postgres `pg_isready -h 127.0.0.1` (a first-start race: the temporary socket-only server says ready too early).
+41. **Docs also contain a "Restoring" section and "Behind another HTTPS proxy"** (task text: setup, upgrading, backups, private repos, the CLI's `"server"`); plus a Troubleshooting section. The curl download line, `dig`, `docker compose pull`, `npm install -g nitpilot` and `nitpilot login` in `docs/self-hosting.md` were not run by the builder (private repo, no GHCR, no GitHub); live Step 7 covers `pull` and `login`; Task 15's fresh-install check covers the public download and the npm install.
+42. **`apps/server/src/lib/env.ts` changes** (a doc comment on `TRUST_PROXY`, no behaviour). The task's Files list had no code file; the Modify list now has `env.ts`, `trusting-a-proxy.md` and the spec (the spec changes with the code: CLAUDE.md).
+43. **Step order differs.** Task text: Step 1 validate, Step 2 live run (after the user pushes `rc.2`), Step 3 cleanup, Step 4 write docs and commit. Now: files and docs are written and committed first (Steps 1 to 5), then a **local** clean-folder run with a locally built image (Step 3) that runs before the commit and before any push, then the push/tag (Step 6), the live run (Step 7), cleanup (Step 8), and ticks plus any doc fixes (Step 9). Reason: the surprises of the two Mac-only problems (items 1 and 2) came from the local run, and the `rc.2` tag must point at the commit that has `deploy/self-host/` and the Caddyfile fix (same ordering rule as Task 6).
+44. **Live run uses a plain `cloudflared tunnel --url http://127.0.0.1:80`, not `npm run dev:tunnel`.** `apps/server/scripts/dev-tunnel.ts` tunnels to `http://localhost:${env.PORT}` (the dev server, not Caddy) and, when the URL shows up, `PATCH /app/hook/config` re-points the `nitpilot-dev` app's webhook (using `apps/server/.env`'s credentials). Must not happen; so the dev tunnel is not reused, and no dev server / `dev:tunnel` runs during Step 7. `cloudflared` is at `/opt/homebrew/bin/cloudflared`. Unverified: that `cloudflared` sends `X-Forwarded-Proto: https` (item in the Step 7 checklist).
+45. **Install and sign-in order in the click-steps.** After **Install**, GitHub sends the browser to `/github/setup?installation_id=…`; `routes/setup.ts` redirects to GitHub sign-in when nobody is signed in (so "install, then sign in" happens as one chain: Install, then **Authorize <app>**), and ends on `/setup` with "Install the GitHub App" ticked. The task text said "install on nitpilot-sandbox only → sign in".
+46. **The PR is opened with `docs/acceptance/new-branch.sh`** (pushes `acc/selfhost-reviewer` from clone A, `~/nitpilot-acceptance/a/nitpilot-sandbox`, signed in as ngkdev93-jpg over `github-a`) and the fake agent follows `docs/acceptance/scenarios/sandbox-happy.json`; the review has three inline comments (lines 5, 12, 18 of `orders-demo/src/orders.js`), as in the Plan 1 runbook. The task text says only "a small PR". The review is shown with the test app's badge under NikosGkikas13's name (as in Plan 1), not as the bot; the `gh api` check reads `performed_via_github_app.slug` (not run by the builder; Step 7 reports what it prints).
+47. **Setup-code rate limit.** It is five tries a minute per visitor address (setup/first-run.ts uses `clientAddress`); the local Step 3d counts the valid request in 3c as the first try (hence `403 403 403 403 429 429 429`).
+48. **The builder's error-log note:** the half-set-`GITHUB_*` message ends "See apps/server/.env.example.", a file a self-hoster doesn't have (from `getEnv`, code). Left as is; flagged for Task 14's docs pass or a later one-line fix.
+49. Counts unchanged by this task: protocol 88, CLI 349 + 14 skipped, server 1107, web 373, root 6.
+
+**Task 10**
+
+50. **No `:v8` tag exists** for `zricethezav/gitleaks` (`docker manifest inspect` fails), so the task-level `:v8` placeholder is the exact tag `v8.30.1` (released 2026-03-21; digest `sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f`).
+51. **`gitleaks git`, not `detect --source`**: v8 syntax. `git /repo` already scans every ref; `--log-opts="--all"` is unnecessary.
+52. **The report goes outside the repo.** The task-level `/repo/.superpowers/gitleaks.json` would be an untracked file because `.superpowers/` is NOT in `.gitignore` (the text said "git-ignored folder"). Reports go to a `mktemp -d` folder.
+53. **Scan a `--mirror --no-local` clone, not `$PWD`.** A worktree's `.git` is a file pointing at the main repo, so a bind-mounted worktree has no history for gitleaks. It also keeps a stray `.env` out of the scan.
+54. **Expected result was "no findings, or only known test values"**: it is exactly 14 findings (13 table rows) at `cb8b010` (236 commits incl. D3's scratch refs), all test values; the table lists each with why it isn't a secret. Anything else is a STOP (file/commit/rule only, never the value).
+55. **`.gitleaks.toml` details**: `minVersion = "v8.30.1"`; `[extend] useDefault = true`; every allowlist uses `condition = "AND"` (default OR would allowlist whole files on a path match); `regexTarget` is `match` or `line` so the text around the value must also look like the test line.
+56. **The CI job uses the image, not `gitleaks/gitleaks-action`** (the action needs a licence for repos owned by an organization), with `fetch-depth: 0`, `--redact --verbose`, `timeout-minutes: 5`. ci.yml already triggers on pull_request and push to main, so no trigger change.
+57. **Throwaway-clone proof** builds the fake key at runtime; the plan never contains a literal key. It also shows a deleted leak is still found. The steps avoid `$PIPESTATUS` (the user's shell is zsh).
+58. **Plan text that copies a test value needs the plan's path in the allowlist** (plans 1a, 1b, 2 and this plan are already listed). Task 10 runs after D3's other commits so the scan covers them.
+59. **No unit tests; no test counts change**; ledger line `Task 10: complete`. Checkpoint `78c1902` (first built as `4b0dce6` on `d9fe4d8`; same change).
+60. **The `dir .` working-tree scan** also reads untracked files (e.g. `.superpowers/`); clean at the checkpoint.
+61. **The scan is the gate for D4 Task 12 Step 1** (repo goes public); re-run it on the final history before then.
 
 ---
 
@@ -1204,8 +6926,8 @@ D4 runs Nitpilot for real next to Odyhook. Every step that touches GitHub, the r
 - [ ] **Step 1: (user) The repo and the image go public.** Click-steps, signed in as NikosGkikas13: github.com/NikosGkikas13/nitpilot → Settings → General → bottom "Danger Zone" → Change visibility → Make public → type the name → confirm. Then the repo page → right sidebar "Packages" → `nitpilot` → Package settings → bottom "Danger Zone" → Change visibility → Public.
 - [ ] **Step 2: Memory check.** `ssh root@157.180.91.106 'docker stats --no-stream; free -m'`. Write the numbers in the task report. If free memory plus what Odyhook's containers really use leaves less than 384 MB, stop and ask.
 - [ ] **Step 3: The database.** On the box: create role `nitpilot` with a password made there (`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed) and database `nitpilot` owned by it, inside Odyhook's Postgres container. Check: `psql` as `nitpilot` connects.
-- [ ] **Step 4: `/opt/nitpilot`.** If anything changed since the last `rc` (Tasks 10–11), the user pushes the next `rc` tag first; `NITPILOT_VERSION` is that rc. Copy `deploy/hosted/docker-compose.yml` there; build `.env` on the box from `.env.example` with `ENCRYPTION_KEY` and VAPID keys made there (`docker run --rm ghcr.io/nikosgkikas13/nitpilot:<the newest rc> npm run vapid:keys -w apps/server` piped into the file). **(user)** The user runs `cat /opt/nitpilot/.env` in their own terminal and saves it in their password manager.
-- [ ] **Step 5: Start it.** `docker compose up -d`; the log shows first-run mode and the setup code; `docker exec nitpilot-server wget -qO- http://127.0.0.1:8787/healthz` answers.
+- [ ] **Step 4: `/opt/nitpilot`.** If anything changed since the last `rc` (Tasks 10–11), the user pushes the next `rc` tag first; `NITPILOT_VERSION` is that rc. Copy `deploy/hosted/docker-compose.yml` there; build `.env` on the box from `.env.example` with `ENCRYPTION_KEY` and VAPID keys made there (`docker run --rm ghcr.io/nikosgkikas13/nitpilot:<the newest rc> node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"` appended to the file; the image has no `vapid:keys` script, see Checked D3). **(user)** The user runs `cat /opt/nitpilot/.env` in their own terminal and saves it in their password manager.
+- [ ] **Step 5: Start it.** `docker compose up -d`; the log shows first-run mode and the setup code; `docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"` answers 200 (the image has no `wget` or `curl`), and `docker inspect -f '{{.State.Health.Status}}' nitpilot-server` says `healthy`.
 - [ ] **Step 6: (say first) Caddy, through Odyhook's repo.** In `~/Desktop/PracticeProjects/hooksmith` on a new branch `nitpilot-dev-site`: add the `nitpilot.dev` block (`reverse_proxy nitpilot-server:8787`) and `www.nitpilot.dev` → `https://nitpilot.dev{uri}` 301, with a comment saying they belong to Nitpilot. Commit there. The user reviews, merges and pushes it (Odyhook's workflow redeploys Caddy). Check odyhook.dev still answers afterwards.
 - [ ] **Step 7: (user) DNS**, done just before Step 6's push lands: at the registrar, for nitpilot.dev, `A @ 157.180.91.106` and `A www 157.180.91.106` (TTL 300, delete any parking records the registrar added). I check with `dig +short nitpilot.dev www.nitpilot.dev` until both answer the IP, then `curl -sI http://nitpilot.dev` (301 to https), `curl -sI https://www.nitpilot.dev` (301 to the apex), and the certificate from `curl -vI https://nitpilot.dev`.
 - [ ] **Step 8: (user) The production app.** Signed in as NikosGkikas13: open https://nitpilot.dev/first-run → paste the setup code (I read it from the log) → personal account → name `nitpilot` → "Who can install it": anyone → Create → on GitHub, Create GitHub App → back on the page, Install → install on `nitpilot-sandbox`. Then set the app's logo (github.com → Settings → Developer settings → GitHub Apps → nitpilot → Display information → upload `apps/web/public/icons/icon-512.png`) and its description from the spec's pitch.
