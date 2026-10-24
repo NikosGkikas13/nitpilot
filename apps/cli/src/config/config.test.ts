@@ -75,6 +75,13 @@ describe('the server address', () => {
     expect(load({ NITPILOT_SERVER: 'https://h.example/nitpilot' }).server).toBe('https://h.example/nitpilot');
   });
 
+  it('says "Invalid setting" for an address that is not a URL, instead of crashing', () => {
+    expect(() => load({ NITPILOT_SERVER: 'nitpilot.dev' })).toThrow(/Invalid setting "server"/);
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ server: 'not a url' }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow(/Invalid setting "server"/);
+  });
+
   it('applies the same rule to the file', () => {
     const dir = tempDir();
     writeConfig(dir, JSON.stringify({ server: 'http://nitpilot.example' }));

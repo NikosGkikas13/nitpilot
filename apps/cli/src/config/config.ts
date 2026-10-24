@@ -34,6 +34,8 @@ const SERVER_ADDRESS_MESSAGE = 'The server address must start with https:// (htt
 
 /** https anywhere; http only for a server on this computer, because http sends the device token in the clear. */
 function isHttpsOrThisComputer(address: string): boolean {
+  // Not a URL at all: z.url() has already said so, and a second message would only repeat it (new URL would also throw).
+  if (!URL.canParse(address)) return true;
   const { protocol, hostname } = new URL(address);
   if (protocol === 'https:') return true;
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname.endsWith('.localhost');
