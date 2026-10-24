@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { FirstRunManifestRequest, type FirstRunManifestResponse, type FirstRunStatus } from '@nitpilot/protocol';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { errorBody, HttpError } from '../http/errors';
 import { clientAddress } from '../lib/client-address';
@@ -18,6 +19,9 @@ const STATE_TTL_MS = 60 * 60_000;
 
 /** How long the server waits after answering the callback before it exits, so the browser gets its redirect first. */
 export const EXIT_DELAY_MS = 500;
+
+/** The manifest request is a code, a login, a name of at most 34 characters and a boolean: far under 4 KB. */
+const MAX_MANIFEST_REQUEST_BYTES = 4 * 1024;
 
 const EXPIRED_LINK = 'This setup link expired or was changed. Start again at /first-run.';
 
@@ -129,23 +133,29 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
     return c.json(body);
   });
 
-  app.post('/api/first-run/manifest', async (c) => {
-    // Counted before the code is looked at, so a wrong guess and a right one cost the same try.
-    if (!codeTries.allow(clientAddress(c, deps.trustProxy))) throw new HttpError('rate_limited', 'Too many tries from here. Wait a minute and try again.');
-    // The code first, before anything about the body is checked: without it, nothing here answers more than "no".
-    const body: unknown = await c.req.json().catch(() => null);
-    const code = (body as { code?: unknown } | null)?.code;
-    if (typeof code !== 'string' || !setupCodeMatches(code, deps.setupCode)) {
-      throw new HttpError('setup_code', "That code doesn't match the one in the server's log.");
-    }
+  app.post(
+    '/api/first-run/manifest',
+    // Before the handler: anyone can reach this route, and the handler reads the whole body before it checks the code.
+    // A refused body never reaches the rate limiter, so it doesn't count as a try at the code.
+    bodyLimit({ maxSize: MAX_MANIFEST_REQUEST_BYTES, onError: (c) => c.json(errorBody('payload_too_large', 'request body over 4 KB'), 413) }),
+    async (c) => {
+      // Counted before the code is looked at, so a wrong guess and a right one cost the same try.
+      if (!codeTries.allow(clientAddress(c, deps.trustProxy))) throw new HttpError('rate_limited', 'Too many tries from here. Wait a minute and try again.');
+      // The code first, before anything about the body is checked: without it, nothing here answers more than "no".
+      const body: unknown = await c.req.json().catch(() => null);
+      const code = (body as { code?: unknown } | null)?.code;
+      if (typeof code !== 'string' || !setupCodeMatches(code, deps.setupCode)) {
+        throw new HttpError('setup_code', "That code doesn't match the one in the server's log.");
+      }
 
-    const request = FirstRunManifestRequest.parse(body);
-    const answer: FirstRunManifestResponse = {
-      action: manifestFormAction({ webBase: deps.github.webBase, owner: request.owner, state: states.issue() }),
-      manifest: buildManifest({ publicUrl: deps.publicUrl, name: request.name, isPublic: request.isPublic }),
-    };
-    return c.json(answer);
-  });
+      const request = FirstRunManifestRequest.parse(body);
+      const answer: FirstRunManifestResponse = {
+        action: manifestFormAction({ webBase: deps.github.webBase, owner: request.owner, state: states.issue() }),
+        manifest: buildManifest({ publicUrl: deps.publicUrl, name: request.name, isPublic: request.isPublic }),
+      };
+      return c.json(answer);
+    },
+  );
 
   app.get('/first-run/callback', async (c) => {
     const code = c.req.query('code');

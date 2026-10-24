@@ -112,6 +112,18 @@ describe('POST /api/first-run/manifest', () => {
     expect((await callback(server, 'code=the-code&state=anything')).status).toBe(400);
   });
 
+  it('refuses a body over 4 KB with 413 before reading it; it is not counted as a try at the code', async () => {
+    const server = firstRunServer();
+    const oversize = { ...REQUEST, name: 'x'.repeat(5_000) };
+    for (let i = 0; i < 6; i++) {
+      const res = await askForManifest(server, oversize);
+      expect(res.status).toBe(413);
+      expect((await errorOf(res)).code).toBe('payload_too_large');
+    }
+    // Six refused bodies didn't use up the five tries.
+    expect((await askForManifest(server)).status).toBe(200);
+  });
+
   it('checks the rest of the request once the code is right', async () => {
     const res = await askForManifest(firstRunServer(), { ...REQUEST, name: '' });
     expect(res.status).toBe(400);
