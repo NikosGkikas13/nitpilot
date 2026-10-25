@@ -7739,7 +7739,7 @@ Then `git ls-files -s deploy/hosted/nitpilot-backup.sh` starts with `100755`.
 
 ---
 
-- [ ] **Step 1: (user, say first: GitHub and GHCR become public) The secret scan on the final history, then the repo and the image go public**
+- [x] **Step 1: (user, say first: GitHub and GHCR become public) The secret scan on the final history, then the repo and the image go public**
 
 First the Task 10 scan, again, on everything committed by now (Checked D3 item 61), the same commands as Task 10 Step 2. From the repo folder:
 
@@ -7770,7 +7770,7 @@ git diff --stat v0.1.0-rc.3 HEAD -- Dockerfile .dockerignore apps packages packa
 ```
 Expected: nothing (Tasks 10a, 11 and 13 touch none of those). If it lists files, the user pushes the branch and the next tag (`v0.1.0-rc.4`, the commands as in Task 10a Step 4) first, and every `0.1.0-rc.3` below becomes that one.
 
-- [ ] **Step 2: (say first: reads the box, changes nothing) What's on the box**
+- [x] **Step 2: (say first: reads the box, changes nothing) What's on the box**
 
 One ssh session, read-only (no command prints a secret: the backup script and cron file hold commands and names, the rclone listing only remote names):
 
@@ -7799,7 +7799,7 @@ Expected, and what to do when it differs:
 - `/opt/hooksmith`: no changes (empty `git status`), on `main`, at the same commit as `git -C ~/Desktop/PracticeProjects/hooksmith log -1 --oneline origin/main` on this Mac. A dirty checkout would make Odyhook's deploy fail in Step 8: stop and ask.
 - The clock in UTC (`Time zone: Etc/UTC` or `UTC`), so 03:30 in the cron file is 03:30 UTC.
 
-- [ ] **Step 3: (say first: creates /opt/nitpilot on the box and writes its .env) The folder and `.env`**
+- [x] **Step 3: (say first: creates /opt/nitpilot on the box and writes its .env) The folder and `.env`**
 
 ```bash
 ssh root@157.180.91.106 'mkdir -p /opt/nitpilot && chmod 700 /opt/nitpilot' && scp deploy/hosted/docker-compose.yml deploy/hosted/.env.example root@157.180.91.106:/opt/nitpilot/ && ssh root@157.180.91.106 'ls -la /opt/nitpilot && docker pull -q ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3'
@@ -7826,7 +7826,7 @@ EOF
 ```
 Expected: as in Task 11 Step 6c: `-rw------- 1 root root … .env`, every name `(set)` except `ALLOWED_LOGINS (empty)`, and the lengths `DATABASE_URL 93`, `ENCRYPTION_KEY 44`, `VAPID_PUBLIC_KEY 87`, `VAPID_PRIVATE_KEY 43`. `VAPID_SUBJECT` is `https://nitpilot.dev` from the example (not a secret). The VAPID one-liner uses `--entrypoint node` because the image has no `vapid:keys` npm script (Checked D3 item 35).
 
-- [ ] **Step 4: (say first: creates a role and a database inside Odyhook's Postgres) The database**
+- [x] **Step 4: (say first: creates a role and a database inside Odyhook's Postgres) The database**
 
 ```bash
 ssh root@157.180.91.106 'bash -s' <<'EOF'
@@ -7845,7 +7845,7 @@ EOF
 ```
 Expected: `nitpilot|nitpilot`. The `nitpilot` role owns only its own database: it has no rights on Odyhook's tables (Postgres gives a new role none), and `REVOKE ALL … FROM PUBLIC` keeps other roles out of Nitpilot's (Odyhook's `hooksmith` is a superuser and is not affected; nothing of Odyhook's changes).
 
-- [ ] **Step 5: (say first: starts nitpilot-server on the box) Start it**
+- [x] **Step 5: (say first: starts nitpilot-server on the box) Start it**
 
 ```bash
 ssh root@157.180.91.106 'bash -s' <<'EOF'
@@ -7860,21 +7860,21 @@ EOF
 ```
 Expected: `nitpilot-server Up 20 seconds (healthy) 8787/tcp`, `All migrations have been successfully applied.`, `Nitpilot server listening on http://localhost:8787, in first-run mode` (the setup-code line is left out here on purpose: Step 9's user reads it), `200 {"ok":true,"version":"0.1.0"}`, `healthy 402653184`, everyone's memory (nitpilot-server about 170 MiB), and `{"ok":true,"version":"0.1.0"}` once more, asked from inside Odyhook's Caddy container by name (Caddy's image is Alpine, which has `wget`; Nitpilot's doesn't). Nothing outside can reach it yet: Caddy has no `nitpilot.dev` block.
 
-- [ ] **Step 6: (user) The `.env` copy in the password manager**
+- [x] **Step 6: (user) The `.env` copy in the password manager**
 
-In the user's own terminal (not one of mine; the output is the secrets):
+In the user's own terminal (not one of mine, and not the `!` prompt in the Claude chat, which sends the output into the chat; the output is the secrets):
 
 ```bash
 ssh root@157.180.91.106 cat /opt/nitpilot/.env
 ```
 Select everything it printed, from `# The hosted instance's settings` to the last line, and save it in your password manager as a secure note named **nitpilot.dev /opt/nitpilot/.env**, with the date. Then clear the terminal (⌘K). That note is what `docs/hosting.md` "On a new box" starts from: without it a backup can't bring the instance back. Tell me "saved"; I don't check it.
 
-- [ ] **Step 7: (user) DNS at Porkbun**
+- [x] **Step 7: (user) DNS at Porkbun**
 
 nitpilot.dev's nameservers are Porkbun's (`dig +short NS nitpilot.dev`), so the records go there. In the browser, signed in to **porkbun.com** with the account that bought nitpilot.dev:
 
 1. Click **Account** (top right) → **Domain Management**. In the list of domains, find **nitpilot.dev**, and in its row click **DNS** (under the domain name, among the small links; on a narrow window it's behind **Details**). The **DNS Records** page opens with a form at the top (**Type**, **Host**, **Answer**, **TTL**) and the current records below it.
-2. Below the form, look at the existing records. Porkbun usually adds parking records to a new domain: an `ALIAS` or `CNAME` for the bare domain to `pixie.porkbun.com`, and a `CNAME` for `*` or `www`. Delete each of those: the trash-can icon at the right end of its row, then **Yes** in the confirmation. Leave any `NS`, `MX` or `TXT` record alone.
+2. Below the form, look at the existing records. Porkbun adds parking records to a new domain: on nitpilot.dev they were `ALIAS  nitpilot.dev  pixie.porkbun.com` and `CNAME  *.nitpilot.dev  pixie.porkbun.com` (both TTL 600). Delete each of those: the trash-can icon at the right end of its row, then **Yes** in the confirmation. Leave any `NS`, `MX` or `TXT` record alone.
 3. In the form at the top: **Type** `A - Address record`, **Host** empty (the bare domain), **Answer** `157.180.91.106`, **TTL** `600` (the smallest Porkbun offers; fine). Click **Add**. The new record shows in the list as `A  nitpilot.dev  157.180.91.106`.
 4. Again: **Type** `A - Address record`, **Host** `www`, **Answer** `157.180.91.106`, **TTL** `600`, **Add**. It shows as `A  www.nitpilot.dev  157.180.91.106`.
 
@@ -7885,7 +7885,7 @@ dig +short nitpilot.dev A; dig +short www.nitpilot.dev A; dig +short @1.1.1.1 ni
 ```
 Expected: `157.180.91.106` three times. Then `curl -sI --max-time 5 https://nitpilot.dev | head -n 1` fails with a TLS error: right, Caddy doesn't know the name yet (Step 8). DNS goes first so Caddy can get its certificate the moment it loads the block.
 
-- [ ] **Step 8: (say first: one commit in Odyhook's repo; the user reviews and merges it, which redeploys Odyhook) Caddy**
+- [x] **Step 8: (say first: one commit in Odyhook's repo; the user reviews and merges it, which redeploys Odyhook) Caddy**
 
 The user's Odyhook checkout (`~/Desktop/PracticeProjects/hooksmith`) is on `main` with uncommitted work of theirs (`.gitignore`, `ARCHITECTURE.md` on 2026-10-25), which must not move. So the branch is made in a separate worktree, from `origin/main`:
 
@@ -7930,6 +7930,8 @@ Then the user (in their own terminal, then the browser signed in as **NikosGkika
 4. Click **Merge pull request**, then **Confirm merge**. Then **Delete branch**.
 5. Open https://github.com/NikosGkikas13/odyhook/actions: a new **CI & Deploy** run on `main` starts. Wait until both its jobs (**tsc + vitest + build**, then **Deploy to production**) are green, about 5 minutes. Tell me when.
 
+**In the run (2026-10-25)** the deploy's `next build` on the box used up its memory with `nitpilot-server` running (no swap): the box stopped answering (odyhook.dev down about 25 minutes), GitHub cancelled the deploy at its 15-minute limit, and the user power-cycled the box in the Hetzner console. `git pull` had already run, so every container came back on the merge commit with Odyhook's old image (right: the merge only changed the Caddyfile), and Caddy, started fresh, read the new file: the restart below wasn't needed. `docs/hosting.md` "Memory" now says what to do before an Odyhook deploy until Odyhook builds elsewhere.
+
 Then Caddy. Odyhook's deploy runs `git pull` and `docker compose up -d --build` in `/opt/hooksmith`, which rebuilds Odyhook's app but leaves the Caddy container running with the file it read at start (a file mounted into a container keeps pointing at the old file after `git pull` replaces it, and Caddy doesn't watch it anyway). **(say first: restarts Odyhook's Caddy; odyhook.dev is unreachable for a second or two)**:
 
 ```bash
@@ -7952,7 +7954,7 @@ Expected: `HTTP/1.1 308 Permanent Redirect` + `Location: https://nitpilot.dev/`;
 
 Last, the worktree (the user's checkout is untouched): `cd ~/Desktop/PracticeProjects/hooksmith && git worktree remove ../.hooksmith-nitpilot-site && git branch -D nitpilot-dev-site && git status --short` shows only the user's own two changed files.
 
-- [ ] **Step 9: (user) The production app, through nitpilot.dev's own first-run page**
+- [x] **Step 9: (user) The production app, through nitpilot.dev's own first-run page**
 
 The setup code, in the user's own terminal (it guards the empty server until the app exists, so it isn't shown in chat):
 
@@ -7965,7 +7967,7 @@ In the browser signed in to GitHub as **NikosGkikas13**:
 
 1. Open https://nitpilot.dev/first-run. The Nitpilot wordmark is at the top left and a card titled **Set up Nitpilot** (small label **First run** above it) has: a **Setup code** box; **Create the app on** with **Your personal account** (chosen) and **An organization**; **App name**, filled with `Nitpilot (nitpilot.dev)`; **Who can install it** with **Only this account or organization** (chosen) and **Anyone on GitHub**; and a **Create GitHub App** button.
 2. Type the setup code into **Setup code**. Leave **Your personal account**. Click into **App name**, select all (⌘A) and type `nitpilot`. Under **Who can install it**, click **Anyone on GitHub** (the hosted instance is for everyone's public repos). Click **Create GitHub App**.
-3. The button says **Opening GitHub…** and the browser goes to `github.com/settings/apps/new?state=…`: GitHub's **Register new GitHub App** page with the name `nitpilot`, the homepage `https://nitpilot.dev`, the webhook URL `https://nitpilot.dev/webhooks/github`, the callback URL and the permissions filled in, and **Any account** chosen under *Where can this GitHub App be installed?*. Change nothing. If GitHub asks for your password, a passkey or a code first, do that.
+3. The button says **Opening GitHub…** and the browser goes to `github.com/settings/apps/new?state=…`: GitHub's **Register new GitHub App** page. Check the name at the top is `nitpilot` and **Any account** is chosen before going on (in the run the name was left at the default and GitHub made `nitpilot-nitpilot-dev`, private; it was deleted and made again, `docs/hosting.md` "Set it up" step 4). The page has the name `nitpilot`, the homepage `https://nitpilot.dev`, the webhook URL `https://nitpilot.dev/webhooks/github`, the callback URL and the permissions filled in, and **Any account** chosen under *Where can this GitHub App be installed?*. Change nothing. If GitHub asks for your password, a passkey or a code first, do that.
 4. At the bottom, click the green **Create GitHub App for NikosGkikas13**. If GitHub says the name is taken, stop and tell me (the spec checked it was free on 2026-10-24; picking another name changes the bot's name everywhere). GitHub sends the browser back to `https://nitpilot.dev/first-run/callback?…`, then `https://nitpilot.dev/first-run?done=1`.
 5. A card with a spinner, **Restarting the server…**, then (a few seconds) **Your GitHub App is ready** with a green tick and two buttons, **Install the app on your repos** and **Sign in**.
 6. Click **Install the app on your repos**. GitHub's **Install nitpilot** page: under your account choose **Only select repositories**, open **Select repositories**, pick **nitpilot-sandbox** only, and click **Install**.
@@ -7986,7 +7988,7 @@ Then the app's face, in the same browser: open https://github.com/settings/apps/
 2. In **Description** (further down, under **Basic information**), paste: `Your agents review each other's PRs the moment they open. You only hear about it when there's a decision to make. https://nitpilot.dev`
 3. Click **Save changes** at the bottom. The app's public page (https://github.com/apps/nitpilot) now shows the logo and the description.
 
-- [ ] **Step 10: (say first: installs a script and a cron file on the box, writes a backup to R2, and makes and drops a scratch database) Backups**
+- [x] **Step 10: (say first: installs a script and a cron file on the box, writes a backup to R2, and makes and drops a scratch database) Backups**
 
 ```bash
 scp deploy/hosted/nitpilot-backup.sh root@157.180.91.106:/usr/local/bin/nitpilot-backup.sh && scp deploy/hosted/cron root@157.180.91.106:/etc/cron.d/nitpilot && ssh root@157.180.91.106 'bash -s' <<'EOF'
@@ -8007,7 +8009,7 @@ Expected: the file name, then two equal lines, `nitpilot|13|1|0|1` and `nitpilot
 
 Odyhook's backup files are untouched: `ssh root@157.180.91.106 'rclone lsf r2:odyhook-backups | grep -c "^odyhook-"'` prints the same count as Step 2's listing implied (its files sit at the top of the bucket; Nitpilot's are only under `nitpilot/`). The first nightly run is checked in Task 13 section 9 (`/var/log/nitpilot-cron.log`).
 
-- [ ] **Step 11: Doc fixes from the run, tick, ledger, commit**
+- [x] **Step 11: Doc fixes from the run, tick, ledger, commit**
 
 If anything above differed from the text (a click label, a name on the box, a command), fix `docs/hosting.md`, a `deploy/hosted/` file or this plan, in a commit of its own: `git add <those files>` then `git commit -m "docs(hosting): <what the run taught>"` with the trailer. Then tick Steps 1 to 11, add the ledger line `Task 12: complete` with the image (tag and digest: `ssh root@157.180.91.106 "docker inspect -f '{{index .RepoDigests 0}}' ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3"`), the memory numbers from Step 2 and Step 5, the app's id (`ssh root@157.180.91.106 "docker exec hooksmith-postgres-1 psql -U nitpilot -d nitpilot -Atc 'select \"appId\" from \"GithubAppConfig\"'"`), and the Odyhook merge commit; and commit:
 
