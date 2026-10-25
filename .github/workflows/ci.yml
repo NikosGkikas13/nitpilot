@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only by default: no job here writes to the repo, issues or packages.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: typecheck + lint + tests
