@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: D1, D2 and D3 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`; see each "Checked against the code" section); D4–D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
+> **Status: D1 to D4 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`; see each "Checked against the code" section); D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
 **Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README with a demo video and a Show HN draft.
 
@@ -7079,44 +7079,1353 @@ Checked at `d9fe4d8` and in the scratch build; each line is where the step-level
 
 ## Milestone D4: nitpilot.dev
 
-D4 runs Nitpilot for real next to Odyhook. Every step that touches GitHub, the registrar, the box or the Odyhook repo is announced first. It ends with the live acceptance run on nitpilot.dev and the demo recording.
+D4 runs Nitpilot for real next to Odyhook. Task 11 writes the hosted folder, the backup script and the runbook, and proves them on this Mac against a stand-in for Odyhook's Postgres. Task 12 goes live: the repo and the image go public, then the box, the database, DNS, Odyhook's Caddyfile, the production `nitpilot` app made through nitpilot.dev's own first-run page, and backups. Task 13 is the live acceptance run and the demo recording. Every step that touches GitHub, GHCR, Porkbun (DNS), the box or Odyhook's repo is marked **(say first)** or **(user)**: I say what it does and wait for go; nothing of that was run while this milestone was written.
+
+**Files at the end of D4:**
+```
+deploy/hosted/docker-compose.yml        one service, nitpilot-server, on Odyhook's network hooksmith_default
+deploy/hosted/.env.example              the hosted settings; secrets made on the box
+deploy/hosted/nitpilot-backup.sh        pg_dump → check → gzip → rclone to R2 under nitpilot/
+deploy/hosted/cron                      /etc/cron.d/nitpilot: 03:30 UTC
+docs/hosting.md                         the runbook for nitpilot.dev
+docs/why/backups-and-restores.md        explainer
+docs/acceptance/plan-3.md               the live acceptance runbook
+docs/acceptance/hosted.sh               the run's shell helpers (nitpilot, nit-rf, nit-w, boxq, boxlog)
+docs/acceptance/scenarios/sandbox-slow.json   the fake reviewer, 45 s late (the restart check)
+docs/superpowers/specs/2026-10-07-nitpilot-design.md   §20 item 4: who runs which agent in the agent-to-agent run
+```
+Outside this repo (Task 12, said first): `/opt/nitpilot/{docker-compose.yml,.env.example,.env}`, `/usr/local/bin/nitpilot-backup.sh`, `/etc/cron.d/nitpilot` on the box; the `nitpilot` role and database in `hooksmith-postgres-1`; two site blocks in Odyhook's `Caddyfile` (one commit in NikosGkikas13/odyhook); two `A` records at Porkbun; the GitHub App `nitpilot`.
+
+**Names on the box this milestone relies on** (from Odyhook's `infra/README.md`, `infra/recovery.md` and `docker-compose.prod.yml`; Task 12 Step 2 confirms each before anything is written): the compose project `hooksmith` in `/opt/hooksmith`, so the containers are `hooksmith-postgres-1` and `hooksmith-caddy-1` and the network is `hooksmith_default`; Postgres's superuser is `hooksmith`; the rclone remote is `r2`, the bucket `odyhook-backups` (Odyhook's files are `odyhook-<UTC time>.sql.gz` at its top); Odyhook's backup runs at 03:00 UTC from `/etc/cron.d/odyhook`; DNS for Odyhook's domain is at Porkbun, and nitpilot.dev's nameservers are Porkbun's too (`dig +short NS nitpilot.dev`, 2026-10-25).
 
 ### Task 11: `deploy/hosted/`, the backup script and the runbook
 
+**What this task is.** The hosted instance is one container that borrows Odyhook's Postgres and Caddy, so its folder is much smaller than `deploy/self-host/`: a compose file with one service, an `.env.example`, a backup script and a cron line. Then the runbook (`docs/hosting.md`) and one explainer. No code changes, so no unit tests: the proof is a local run on this Mac (Step 6) against a stand-in for Odyhook's Postgres, on a stand-in network, with a stand-in for rclone that writes to a folder. Nothing touches the box, GitHub or R2.
+
+**Why one container on someone else's network (the React-dev version).** Odyhook's compose project is like an app that already has a router (Caddy) and a data layer (Postgres). Nitpilot doesn't bring its own; it registers itself with the router (a site block that points at `nitpilot-server`) and asks the data layer for its own table space (a database and a role). Joining Odyhook's Docker network is what lets both find it by name, like two components inside one provider.
+
 **Files:**
-- Create: `deploy/hosted/docker-compose.yml`, `deploy/hosted/.env.example`, `deploy/hosted/nitpilot-backup.sh`, `deploy/hosted/cron`, `docs/hosting.md`, `docs/why/backups-and-restores.md`
+- Create: `deploy/hosted/docker-compose.yml`, `deploy/hosted/.env.example`, `deploy/hosted/nitpilot-backup.sh` (mode 755), `deploy/hosted/cron`, `docs/hosting.md`, `docs/why/backups-and-restores.md`
+- Modify: this plan (ticks), the ledger
 
 **Interfaces:**
-- Compose (project name `nitpilot`): one service `nitpilot-server` (`container_name: nitpilot-server`, image `ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION}`, `init: true`, `restart: unless-stopped`, `env_file: .env`, `mem_limit: 384m`, `pids_limit: 256`, network `hooksmith_default` external, no published ports).
-- `.env.example`: every hosted setting from the Global Constraints, `DATABASE_URL=postgresql://nitpilot:<password>@postgres:5432/nitpilot`, no values.
-- `nitpilot-backup.sh`: `docker exec` into Odyhook's Postgres container, `pg_dump -U nitpilot nitpilot | gzip` → `rclone copy` to the existing R2 remote under `nitpilot/<UTC date>.sql.gz`; `set -euo pipefail`; logs one line. The step-level text reads the remote's name from the box (`rclone listremotes`) and Odyhook's script, never guessing. `cron`: `30 3 * * * root /usr/local/bin/nitpilot-backup.sh >> /var/log/nitpilot-cron.log 2>&1` (after Odyhook's 03:00).
-- `docs/hosting.md`: the box, the folders, deploy a version, logs, restart, the backup and a restore into a scratch database, where the `.env` copy lives (the user's password manager), and what to check after Odyhook's own deploys.
+- Consumes: the image (`ghcr.io/nikosgkikas13/nitpilot:<version>`; `CMD` runs `prisma migrate deploy` then the server; `HEALTHCHECK` asks `/healthz` with node's `fetch`; no `curl`/`wget` inside), first-run mode (the setup code line `[first-run] Open … and enter the setup code: XXXX-XXXX`, printed again with a new code at every start), `TRUST_PROXY` (Task 2), the advisory-lock exit when Postgres goes away (Task 2), `CLOSED_CHAT_RETENTION_DAYS` (Task 2).
+- Produces: what Task 12 copies to the box, and the runbook Task 12 and Task 13 follow.
 
-- [ ] Steps: `docker compose -f deploy/hosted/docker-compose.yml config` valid; `shellcheck` (from its Docker image) clean on the script; the docs; commit `feat(deploy): the hosted instance's compose, backups and runbook`.
+---
+
+- [ ] **Step 1: The compose file**
+
+Create `deploy/hosted/docker-compose.yml` with exactly this content:
+
+```yaml
+# The hosted instance, https://nitpilot.dev (spec §17 "Hosted instance", docs/hosting.md). It lives in /opt/nitpilot on
+# the Hetzner box, next to Odyhook, and is one container: Odyhook's Postgres holds its database and Odyhook's Caddy is
+# its front door. So unlike deploy/self-host/ there is no Postgres or Caddy here.
+#
+#   cd /opt/nitpilot
+#   docker compose pull && docker compose up -d      deploy the version named in .env (NITPILOT_VERSION)
+#   docker compose logs -f nitpilot-server           its log
+#
+# No top-level `name:`: Compose names the project after the folder, so in /opt/nitpilot it is `nitpilot`. Leaving it
+# out also means a copy of this file run elsewhere (a check on a laptop) can't take over another `nitpilot` project.
+
+services:
+  nitpilot-server:
+    # Never `web`, `postgres` or `redis`: those are Odyhook's names on the shared network below, and two containers
+    # answering to one name there would send Caddy's requests to the wrong one.
+    container_name: nitpilot-server
+    image: ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION:?set NITPILOT_VERSION in .env (e.g. 0.1.0-rc.3)}
+    # A tiny init process in front of node, so `docker compose up -d` / `restart` (SIGTERM) reaches the server and it
+    # shuts down cleanly, telling each CLI "server restarting" (docs/why/docker-images.md).
+    init: true
+    # Docker starts it again after a crash, a reboot, and the planned exit at the end of first-run mode
+    # (docs/why/first-run-and-app-manifests.md). Only `docker compose stop` / `down` keep it down.
+    restart: unless-stopped
+    # Every setting, secrets included, is in /opt/nitpilot/.env on the box only (from .env.example; docs/hosting.md).
+    env_file: .env
+    # Caps, not reservations: the box has 4 GB and Odyhook's own caps already add up to about 4.2 GB. If the server
+    # ever needs more, `docker stats` shows it first (docs/hosting.md, "Memory").
+    mem_limit: 384m
+    pids_limit: 256
+    # Keep the log from filling the disk: three files of 10 MB, the oldest dropped first. `docker compose logs` reads them.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - hooksmith
+    # No `ports:`: the server (8787) is reached only through Odyhook's Caddy, by the name nitpilot-server, on the
+    # shared network. The image's own HEALTHCHECK (/healthz) applies.
+
+networks:
+  # Odyhook's network (its compose project is `hooksmith`, from /opt/hooksmith). `external` means "made by someone else,
+  # just join it": this file never creates or deletes it. On it, `postgres` is Odyhook's Postgres and Caddy finds us.
+  hooksmith:
+    name: hooksmith_default
+    external: true
+```
+
+- [ ] **Step 2: The settings file**
+
+Create `deploy/hosted/.env.example` with exactly this content:
+
+```bash
+# The hosted instance's settings: copied to /opt/nitpilot/.env on the box and filled in there (docs/hosting.md, "Set it
+# up"). The real file never leaves the box except as one copy in the owner's password manager: the GitHub App's private
+# key and secrets live in the database encrypted with ENCRYPTION_KEY, so a backup without this file can't bring the
+# instance back. Never commit it, never paste it anywhere.
+
+# The image to run: a release (0.1.0) or a pre-release (0.1.0-rc.3). Deploying a new version = change this line, then
+# docker compose pull && docker compose up -d.
+NITPILOT_VERSION=
+
+# Fixed for nitpilot.dev.
+PUBLIC_URL=https://nitpilot.dev
+# The hosted instance takes public repos only (spec §18); webhooks from a private repo are dropped.
+PUBLIC_REPOS_ONLY=true
+# Every request comes through Odyhook's Caddy, which puts the visitor's address last in X-Forwarded-For
+# (docs/why/trusting-a-proxy.md). Safe because the container publishes no port: only Caddy can reach it.
+TRUST_PROXY=true
+# Chats are deleted 90 days after their PR closed (spec §17 "Closed-chat retention").
+CLOSED_CHAT_RETENTION_DAYS=90
+# Empty: anyone can sign in (each person sees only the repos they can read on GitHub).
+ALLOWED_LOGINS=
+
+# Made on the box, never printed (docs/hosting.md). `postgres` is Odyhook's Postgres on the shared network; the
+# `nitpilot` role and database are Nitpilot's own inside it.
+DATABASE_URL=
+# Encrypts people's GitHub tokens and the GitHub App's secrets: openssl rand -base64 32. Never change it.
+ENCRYPTION_KEY=
+# Web Push (all three). The two keys are made by the image itself (docs/hosting.md).
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=https://nitpilot.dev
+
+# No GITHUB_* here: the production app `nitpilot` is made through https://nitpilot.dev/first-run and stored in the
+# database, encrypted (docs/why/first-run-and-app-manifests.md).
+```
+
+`NODE_ENV` isn't listed: the image already sets `NODE_ENV=production`.
+
+- [ ] **Step 3: The backup script and its cron line**
+
+Create `deploy/hosted/nitpilot-backup.sh` with exactly this content:
+
+```bash
+#!/usr/bin/env bash
+# Nitpilot's nightly backup on the Hetzner box (spec §17 "Hosted instance", docs/hosting.md "Backups",
+# docs/why/backups-and-restores.md). Installed as /usr/local/bin/nitpilot-backup.sh and run by /etc/cron.d/nitpilot at
+# 03:30 UTC, after Odyhook's own backup at 03:00. Odyhook's script and cron file are left alone.
+#
+# What it does: dump the `nitpilot` database from inside Odyhook's Postgres container, check the dump is whole, gzip
+# it, and upload it to the same R2 bucket as Odyhook's backups under nitpilot/, through the rclone remote already set
+# up on the box. One line goes to the log either way.
+#
+# The defaults are the box's real names (infra/README.md in Odyhook's repo); each can be changed for a check elsewhere:
+#   NITPILOT_PG_CONTAINER=other-postgres NITPILOT_BACKUP_DEST=r2:some-bucket/nitpilot nitpilot-backup.sh
+set -euo pipefail
+
+pg_container="${NITPILOT_PG_CONTAINER:-hooksmith-postgres-1}"
+dest="${NITPILOT_BACKUP_DEST:-r2:odyhook-backups/nitpilot}"
+
+# The same naming as Odyhook's backups: UTC time, with dashes so the name sorts and works in any shell.
+stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+name="nitpilot-$stamp.sql.gz"
+
+log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) nitpilot-backup: $*"; }
+
+# A temporary folder only root can read, deleted however the script ends.
+work="$(mktemp -d "${TMPDIR:-/tmp}/nitpilot-backup.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+dump="$work/nitpilot.sql"
+
+# Inside the Postgres container a local connection needs no password. --no-owner / --no-privileges keep the dump
+# loadable as any role, so a restore into a scratch database (or a new server) doesn't depend on role names.
+if ! docker exec "$pg_container" pg_dump -U nitpilot -d nitpilot --no-owner --no-privileges > "$dump"; then
+  log "FAILED: pg_dump from $pg_container"
+  exit 1
+fi
+
+# pg_dump writes this line last. If it's missing, the dump stopped half way and must not be uploaded as if it were good.
+if ! tail -n 5 "$dump" | grep -q -- '-- PostgreSQL database dump complete'; then
+  log "FAILED: the dump is incomplete"
+  exit 1
+fi
+
+gzip -9 "$dump"
+if ! rclone copyto "$dump.gz" "$dest/$name"; then
+  log "FAILED: upload to $dest/$name"
+  exit 1
+fi
+
+log "ok $dest/$name ($(wc -c < "$dump.gz" | tr -d ' ') bytes)"
+```
+
+Make it executable (git keeps the bit): `chmod 755 deploy/hosted/nitpilot-backup.sh`
+
+Create `deploy/hosted/cron` with exactly this content (it must end with a newline: cron ignores a last line without one):
+
+```text
+# Nitpilot's nightly backup (deploy/hosted/nitpilot-backup.sh), installed on the box as /etc/cron.d/nitpilot
+# (docs/hosting.md, "Backups"). cron reads /etc/cron.d/ every minute; no restart needed after a change.
+# Times are the box's clock, UTC. 03:30 is after Odyhook's own backup at 03:00 (/etc/cron.d/odyhook), so the two
+# dumps never run at once.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 3 * * * root /usr/local/bin/nitpilot-backup.sh >> /var/log/nitpilot-cron.log 2>&1
+```
+
+- [ ] **Step 4: Validate**
+
+The compose file, three ways, from a temporary folder (Compose reads `.env` from the folder it runs in):
+
+```bash
+T=$(mktemp -d) && cp deploy/hosted/docker-compose.yml deploy/hosted/.env.example "$T"/ && cd "$T" && docker compose config --quiet; echo "exit $?"; cp .env.example .env && docker compose config --quiet; echo "exit $?"; sed -i '' 's/^NITPILOT_VERSION=$/NITPILOT_VERSION=0.1.0-rc.3/' .env && docker compose config --quiet; echo "exit $?"; docker compose config | grep -E 'container_name|image:|mem_limit|pids_limit|name: hooksmith|external'; cd - >/dev/null && rm -rf "$T"
+```
+Expected, in order: `error while interpolating services.nitpilot-server.image: required variable NITPILOT_VERSION is missing a value: set NITPILOT_VERSION in .env (e.g. 0.1.0-rc.3)` and `exit 1` (no `.env`); the same message and `exit 1` (`.env` copied, version empty); `exit 0`; then `container_name: nitpilot-server`, `image: ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3`, `mem_limit: "402653184"` (384 MiB), `pids_limit: 256`, `name: hooksmith_default`, `external: true`.
+
+The script, with shellcheck from its image (nothing installed):
+
+```bash
+docker run --rm -v "$PWD/deploy/hosted:/mnt:ro" koalaman/shellcheck:v0.11.0 /mnt/nitpilot-backup.sh; echo "exit $?"
+```
+Expected: no findings, `exit 0`.
+
+- [ ] **Step 5: The runbook and the explainer**
+
+Create `docs/hosting.md` with exactly this content:
+
+````markdown
+# Running nitpilot.dev
+
+The runbook for the hosted instance at **https://nitpilot.dev**. For running Nitpilot on your own server, see [self-hosting.md](self-hosting.md) instead.
+
+## The layout
+
+nitpilot.dev runs on the same Hetzner box as Odyhook (a CX23: 2 vCPU, 4 GB, Helsinki; `ssh root@157.180.91.106`, hostname `hooksmith`). It borrows two of Odyhook's containers and adds one of its own:
+
+| What | Where | Whose |
+|---|---|---|
+| `nitpilot-server`, the one Nitpilot container (the published image) | `/opt/nitpilot` (`docker-compose.yml` from `deploy/hosted/`, and `.env`) | Nitpilot |
+| Postgres: the `nitpilot` database and role | inside `hooksmith-postgres-1` | Odyhook's container, Nitpilot's database |
+| Caddy: HTTPS for `nitpilot.dev`, `www` → apex | `hooksmith-caddy-1`, two site blocks in Odyhook's `Caddyfile` | Odyhook's container and repo |
+| The nightly backup | `/usr/local/bin/nitpilot-backup.sh`, `/etc/cron.d/nitpilot`, log `/var/log/nitpilot-cron.log` | Nitpilot |
+| Backup files | R2 bucket `odyhook-backups`, under `nitpilot/` (rclone remote `r2`) | Odyhook's bucket, Nitpilot's folder |
+
+All three containers are on Odyhook's Docker network `hooksmith_default`, where each is reached by its name: Caddy sends `nitpilot.dev` to `nitpilot-server:8787`, and the server reaches the database at `postgres:5432`. `nitpilot-server` publishes no port; only Caddy can reach it.
+
+Odyhook's own files (`/opt/hooksmith`, its backup script, its cron file) are never edited by hand. The `nitpilot.dev` blocks in its Caddyfile are changed only by a commit to Odyhook's repo, deployed by Odyhook's workflow (see "Caddy" below).
+
+**Settings** are in `/opt/nitpilot/.env` (mode 600; made from `deploy/hosted/.env.example`): `NITPILOT_VERSION`, `PUBLIC_URL=https://nitpilot.dev`, `PUBLIC_REPOS_ONLY=true`, `TRUST_PROXY=true`, `CLOSED_CHAT_RETENTION_DAYS=90`, `ALLOWED_LOGINS` empty, and the secrets (`DATABASE_URL`, `ENCRYPTION_KEY`, the VAPID keys). The GitHub App `nitpilot` is not in `.env`: it was made through https://nitpilot.dev/first-run and is stored in the database, encrypted with `ENCRYPTION_KEY`.
+
+**The one copy of `.env` off the box** is in the owner's password manager. Without it a backup can't bring the instance back ([why/backups-and-restores.md](why/backups-and-restores.md)). After any change to `.env`, run `cat /opt/nitpilot/.env` in your own terminal and update that copy; never paste it into a chat, an issue or a commit.
+
+## Everyday commands
+
+All on the box, in `/opt/nitpilot`:
+
+```bash
+ssh root@157.180.91.106
+cd /opt/nitpilot
+```
+
+| To | Run |
+|---|---|
+| See if it's up | `docker compose ps` (look for `(healthy)`) |
+| Ask it directly | `docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"` (the image has no `curl` or `wget`) |
+| Read the log | `docker compose logs --tail 100 nitpilot-server`, or `-f` to follow |
+| Restart it | `docker compose restart` (CLIs see "server restarting" and reconnect; jobs carry on) |
+| See its memory | `docker stats --no-stream` |
+| Which version runs | `grep ^NITPILOT_VERSION= .env` and `docker inspect -f '{{.Config.Image}}' nitpilot-server` |
+
+From anywhere: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"…"}`.
+
+## Deploying a new version
+
+Releases come from the release workflow (a `v*` tag, [releasing.md](releasing.md)); nothing is built on the box.
+
+```bash
+cd /opt/nitpilot
+sed -i 's/^NITPILOT_VERSION=.*/NITPILOT_VERSION=0.1.1/' .env
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+`up -d` replaces the container: the old server gets SIGTERM, finishes the step it's on and tells each CLI "server restarting"; the new one runs any new migrations, then starts. Expect `(healthy)` within a minute and the new version in `curl -s https://nitpilot.dev/healthz`.
+
+**Going back** is the same with the old version number. The newer version's migrations stay in the database, so check its release notes first: going back is safe when they only added tables or columns.
+
+## Memory
+
+The box has 4 GB. Odyhook's containers have caps that add up to about 4.2 GB (caps limit, they don't reserve), and `nitpilot-server` is capped at 384 MB (`mem_limit` in `docker-compose.yml`). `docker stats --no-stream` shows what each really uses. If `nitpilot-server` sits near its cap, raise it in `docker-compose.yml` (in this repo, then copy it over) only if `free -m` shows the room; if the box itself is short, stop and ask rather than add anything.
+
+## Backups
+
+Every night at 03:30 UTC, after Odyhook's 03:00 backup, cron runs `nitpilot-backup.sh`: `pg_dump` of the `nitpilot` database inside Odyhook's Postgres, checked for completeness, gzipped, uploaded to `r2:odyhook-backups/nitpilot/nitpilot-<UTC time>.sql.gz`. Each run writes one line to `/var/log/nitpilot-cron.log`, `ok …` or `FAILED: …`.
+
+| To | Run |
+|---|---|
+| Back up now | `/usr/local/bin/nitpilot-backup.sh` |
+| See the last runs | `tail -n 5 /var/log/nitpilot-cron.log` |
+| List the backups | `rclone ls r2:odyhook-backups/nitpilot \| sort -k2 \| tail` |
+
+How long R2 keeps them is the bucket's lifecycle rule, set up for Odyhook (14 days); see that rule in Cloudflare's dashboard (R2 → `odyhook-backups` → Settings → Object lifecycle rules) for whether it covers `nitpilot/`.
+
+Installing them (done once, in Plan 3 Task 12): copy `deploy/hosted/nitpilot-backup.sh` to `/usr/local/bin/` (mode 755) and `deploy/hosted/cron` to `/etc/cron.d/nitpilot` (mode 644). cron reads `/etc/cron.d/` every minute.
+
+## Restoring
+
+### Check a backup (do this now and then)
+
+Loads the newest backup into a scratch database next to the real one, counts rows in both, and drops the scratch one. The live database isn't touched.
+
+```bash
+f="$(rclone lsf r2:odyhook-backups/nitpilot | sort | tail -n 1)" && echo "$f"
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'create database nitpilot_restore_check owner nitpilot'
+rclone cat "r2:odyhook-backups/nitpilot/$f" | gunzip | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot_restore_check
+for db in nitpilot nitpilot_restore_check; do docker exec hooksmith-postgres-1 psql -U nitpilot -d "$db" -Atc 'select current_database(), (select count(*) from "_prisma_migrations"), (select count(*) from "User"), (select count(*) from "PrChat"), (select count(*) from "GithubAppConfig")'; done
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'drop database nitpilot_restore_check'
+```
+
+The two count lines should match, except for whatever happened since the backup (new chats, new people). `GithubAppConfig` is `1` in both.
+
+### Put a backup back (the database was lost or broken)
+
+This replaces the live `nitpilot` database. Nitpilot is down meanwhile; Odyhook isn't touched.
+
+```bash
+cd /opt/nitpilot
+docker compose stop
+f=nitpilot-2026-10-25T03-30-01Z.sql.gz     # the backup to restore, from rclone ls
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -c 'drop database nitpilot' -c 'create database nitpilot owner nitpilot'
+rclone cat "r2:odyhook-backups/nitpilot/$f" | gunzip | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot
+docker compose up -d
+docker compose logs --tail 20 nitpilot-server
+```
+
+The log should say `[boot] GitHub App nitpilot, from the database` and the server listening, not first-run mode. If it says first-run mode, the dump was empty or from before the app was made: stop (`docker compose stop`) and pick another file; never create a second app over it.
+
+### On a new box
+
+1. Set up Odyhook first (its `infra/recovery.md`), so `hooksmith-postgres-1`, its Caddy (with the `nitpilot.dev` blocks, from its repo) and the `hooksmith_default` network exist, and the rclone remote `r2` works.
+2. `mkdir -p /opt/nitpilot`; copy `deploy/hosted/docker-compose.yml` there; paste `.env` from the password manager into `/opt/nitpilot/.env` (`umask 077` first, so it's mode 600).
+3. Make the role and database with the password inside that `.env`'s `DATABASE_URL`: the commands in "Set it up" step 3 below.
+4. Restore the newest backup as in "Put a backup back" (skip the `drop database`), then `docker compose up -d`.
+5. Point the DNS records at the new box's address (Porkbun), install the backup script and cron file again.
+
+## Set it up (once)
+
+What Plan 3 Task 12 does, here so a new box can be set up the same way. Every command runs on the box; none prints a secret.
+
+1. `mkdir -p /opt/nitpilot` and copy `deploy/hosted/docker-compose.yml` and `deploy/hosted/.env.example` there (`scp` from a checkout).
+2. Make `.env`, with fresh secrets written straight into the file. `VERSION` is the image to run:
+   ```bash
+   cd /opt/nitpilot && VERSION=0.1.0 && umask 077
+   test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
+   cp .env.example .env
+   set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+   set_env NITPILOT_VERSION "$VERSION"
+   set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
+   set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
+   read -r pub priv < <(docker run --rm --entrypoint node "ghcr.io/nikosgkikas13/nitpilot:$VERSION" -e "const k = require('web-push').generateVAPIDKeys(); console.log(k.publicKey, k.privateKey)")
+   set_env VAPID_PUBLIC_KEY "$pub" && set_env VAPID_PRIVATE_KEY "$priv" && unset pub priv
+   ls -l .env && awk -F= '!/^#/ && NF { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
+   ```
+   Every name says `(set)` except `ALLOWED_LOGINS`, and `ls` shows `-rw-------`.
+3. The role and database, inside Odyhook's Postgres, with the password from `.env` (passed on standard input, so it never shows up in a process list):
+   ```bash
+   cd /opt/nitpilot
+   pw="$(sed -n 's|^DATABASE_URL=postgresql://nitpilot:\([0-9a-f]*\)@postgres:5432/nitpilot$|\1|p' .env)"
+   test ${#pw} -eq 48 || echo "STOP: no password in .env's DATABASE_URL"
+   docker exec -i hooksmith-postgres-1 psql -U hooksmith -d postgres -v ON_ERROR_STOP=1 -q <<SQL
+   CREATE ROLE nitpilot LOGIN PASSWORD '$pw';
+   CREATE DATABASE nitpilot OWNER nitpilot;
+   REVOKE ALL ON DATABASE nitpilot FROM PUBLIC;
+   SQL
+   unset pw
+   ```
+4. `docker compose up -d`, then `docker compose logs nitpilot-server | grep 'setup code' | tail -n 1` for the setup code (it changes each time the server starts), and make the GitHub App at https://nitpilot.dev/first-run.
+5. The backup script and cron file ("Backups" above), and save `.env` in the password manager.
+
+## Caddy
+
+Odyhook's Caddy answers for both sites. Its `Caddyfile` (in NikosGkikas13/odyhook) has these two blocks for Nitpilot, with a comment saying so:
+
+```
+nitpilot.dev {
+    reverse_proxy nitpilot-server:8787
+}
+
+www.nitpilot.dev {
+    redir https://nitpilot.dev{uri} permanent
+}
+```
+
+Caddy gets and renews the `nitpilot.dev` certificate itself, redirects `http://` to `https://`, and passes WebSockets (`/ws/cli`, `/ws/web`) through. To change them: a commit to Odyhook's repo, merged to its `main`, which redeploys Odyhook. That deploy does `git pull` and `docker compose up -d --build`, which doesn't restart Caddy, and a running Caddy never rereads its file. So after the deploy, restart Caddy once (odyhook.dev and nitpilot.dev both blink for a second or two):
+
+```bash
+cd /opt/hooksmith && docker compose -f docker-compose.prod.yml restart caddy
+docker exec hooksmith-caddy-1 grep -c 'nitpilot.dev' /etc/caddy/Caddyfile
+```
+
+The `grep` should count `3` (the three lines that name the domain). `0` means Caddy still has the old file: restart it again.
+
+**DNS** (Porkbun, the `nitpilot.dev` domain): `A` for the bare domain and `A` for `www`, both `157.180.91.106`.
+
+## After Odyhook's own deploys
+
+Odyhook redeploys on every push to its `main`. Nitpilot needs nothing from you then, but if something looks off afterwards:
+
+- **Odyhook's Postgres was restarted** (a new Postgres image, a box reboot): `nitpilot-server` loses its database connection, exits on purpose, and Docker starts it again; it's back within a minute. `docker compose ps` in `/opt/nitpilot` shows it `(healthy)`, and `docker inspect -f '{{.RestartCount}}' nitpilot-server` went up by one.
+- **Odyhook ran `docker compose down`**: Compose says `Network hooksmith_default Resource is still in use` and leaves the network (Nitpilot is still on it); Odyhook's next `up -d` uses it again. Nothing to do.
+- **nitpilot.dev answers 502**: Caddy is up but `nitpilot-server` isn't. `docker compose ps` and `docker compose logs --tail 50 nitpilot-server` in `/opt/nitpilot`.
+- **nitpilot.dev doesn't answer at all, odyhook.dev neither**: Caddy is down; that's Odyhook's side (`docker compose -f docker-compose.prod.yml ps` in `/opt/hooksmith`).
+````
+
+Create `docs/why/backups-and-restores.md` with exactly this content:
+
+```markdown
+# Backups and restores (and why a backup you never restored isn't one)
+
+**In one sentence:** a backup is a copy of the database taken every night and kept somewhere else, and it only counts once you've loaded one back and seen your data in it.
+
+## The React comparison
+
+Think of `git push` for your work in progress. Your laptop holds the real thing; the remote holds a copy, somewhere that doesn't die with the laptop. If the laptop is stolen you `git clone` and carry on.
+
+A database backup is the same idea for the server's data. The server's disk holds the live database; every night a copy goes to another company's storage (Cloudflare R2), so a dead disk, a deleted server or a bad migration costs at most one day.
+
+The difference from git: nobody runs `git clone` on a backup until the day they need it. A backup that was silently empty for three months looks exactly like a good one until then. That's why Nitpilot's setup includes **restoring one on purpose** into a scratch database and counting the rows.
+
+## What gets copied
+
+- **`pg_dump`** writes the whole database out as SQL: `CREATE TABLE …` for every table, then every row. Loading that file into an empty database (`psql < dump.sql`) rebuilds it exactly. It reads a consistent snapshot, so the server can keep running while it works.
+- **gzip** shrinks it (SQL text compresses well).
+- **rclone** uploads it. It's `cp` for cloud storage: the box already has an rclone "remote" called `r2` set up for Odyhook's backups, and Nitpilot's files go into the same bucket under `nitpilot/`.
+
+The script checks that `pg_dump` finished (its output ends with a "dump complete" line) before it uploads, so a dump cut short by a crash is never stored as if it were good.
+
+## What a backup can't bring back on its own
+
+The database holds the GitHub App's private key and secrets and people's GitHub tokens, **encrypted with `ENCRYPTION_KEY`** ([first-run-and-app-manifests.md](first-run-and-app-manifests.md)). That key lives in the server's `.env`, not in the database, on purpose: someone who gets a copy of the backup gets only scrambled secrets.
+
+So a restore needs two things: the dump **and** the `.env` it was made with. The dump is in R2; the `.env` has one copy outside the server, in the owner's password manager. Lose the key and the restored database still has every chat, but the server can't use its GitHub App and refuses to start; you'd have to make a new app.
+
+## Where
+
+- `deploy/hosted/nitpilot-backup.sh`: the nightly backup for nitpilot.dev (dump, check, gzip, upload, one log line).
+- `deploy/hosted/cron`: runs it at 03:30 UTC, after Odyhook's own backup.
+- `docs/hosting.md`, "Backups" and "Restoring": the commands, including the restore into a scratch database.
+- `docs/self-hosting.md`, "Backups" and "Restoring": the same idea for a team's own server.
+```
+
+- [ ] **Step 6: The local run, against stand-ins for Odyhook**
+
+What this proves before the box: the compose file starts the image on an external network, the server finds Postgres by the name `postgres` there and runs its migrations, the `.env` and database commands that Task 12 runs on the box work as written and print no secret, a Caddy on the same network reaches `nitpilot-server:8787` by name, Odyhook's Caddyfile with the two new blocks is valid, the backup script uploads a complete dump and refuses a failed one, a restore into a scratch database matches, and the server comes back by itself when "Odyhook's" Postgres restarts. The stand-ins: a network `d4_hooksmith_default` (not the real name: this Mac already has a `hooksmith_default` from Odyhook's own local dev, which is left alone) and a Postgres container `d4-hooksmith-postgres-1` with the alias `postgres` and the superuser `hooksmith`, like the box. Everything lives in `~/Desktop/PracticeProjects/.nitpilot-scratch/` and is removed in 6k.
+
+**6a. The image.** Build it from this checkout and give it a version tag the compose file can name (the real rc is private until Task 12):
+
+```bash
+docker build -q -t ghcr.io/nikosgkikas13/nitpilot:0.1.0-local .
+```
+Expected: one `sha256:` line.
+
+**6b. The stand-ins.**
+
+```bash
+export S=~/Desktop/PracticeProjects/.nitpilot-scratch && docker network create d4_hooksmith_default && docker run -d --name d4-hooksmith-postgres-1 --network d4_hooksmith_default --network-alias postgres -e POSTGRES_USER=hooksmith -e POSTGRES_PASSWORD=hooksmith-local -e POSTGRES_DB=hooksmith postgres:16-alpine && sleep 6 && docker exec d4-hooksmith-postgres-1 pg_isready -h 127.0.0.1
+```
+Expected: the network id, the container id, `127.0.0.1:5432 - accepting connections`.
+
+```bash
+rm -rf "$S/hosted" && mkdir "$S/hosted" && cp deploy/hosted/docker-compose.yml deploy/hosted/.env.example "$S/hosted"/ && printf 'networks:\n  hooksmith:\n    name: d4_hooksmith_default\n    external: true\n' > "$S/hosted/docker-compose.override.yml" && ls -A "$S/hosted"
+```
+Expected: `.env.example  docker-compose.override.yml  docker-compose.yml`. The override only renames the network; Compose merges it automatically.
+
+**6c. `.env`, exactly as Task 12 Step 3 makes it on the box** (only the folder and the version differ; `bash -s` as there, so `exit` and `< <( … )` behave the same in a zsh tab):
+
+```bash
+bash -s <<'EOF'
+set -euo pipefail
+cd "$S/hosted" && VERSION=0.1.0-local && umask 077
+test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
+cp .env.example .env
+set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+set_env NITPILOT_VERSION "$VERSION"
+set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
+set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
+read -r pub priv < <(docker run --rm --entrypoint node "ghcr.io/nikosgkikas13/nitpilot:$VERSION" -e "const k = require('web-push').generateVAPIDKeys(); console.log(k.publicKey, k.privateKey)")
+set_env VAPID_PUBLIC_KEY "$pub" && set_env VAPID_PRIVATE_KEY "$priv" && unset pub priv
+ls -l .env && awk -F= '!/^#/ && NF { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
+EOF
+```
+Expected: `-rw-------` for `.env`, then `NITPILOT_VERSION (set)`, `PUBLIC_URL (set)`, `PUBLIC_REPOS_ONLY (set)`, `TRUST_PROXY (set)`, `CLOSED_CHAT_RETENTION_DAYS (set)`, `ALLOWED_LOGINS (empty)`, `DATABASE_URL (set)`, `ENCRYPTION_KEY (set)`, `VAPID_PUBLIC_KEY (set)`, `VAPID_PRIVATE_KEY (set)`, `VAPID_SUBJECT (set)`. No value is printed. The lengths, still without values:
+
+```bash
+awk '/^(ENCRYPTION_KEY|VAPID_PUBLIC_KEY|VAPID_PRIVATE_KEY|DATABASE_URL)=/ { i = index($0, "="); print substr($0, 1, i - 1), length(substr($0, i + 1)) }' "$S/hosted/.env"
+```
+Expected: `DATABASE_URL 93`, `ENCRYPTION_KEY 44`, `VAPID_PUBLIC_KEY 87`, `VAPID_PRIVATE_KEY 43`. (Why `awk` and not `sed -i`: one command works the same on this Mac and on the box's Linux, and none of the values (hex, base64, base64url) can contain the `=`-free key names it matches on.)
+
+**6d. The role and database, exactly as Task 12 Step 4** (container name differs). The password goes in on standard input, never on a command line:
+
+```bash
+bash -s <<'EOF'
+set -euo pipefail
+cd "$S/hosted" && PG=d4-hooksmith-postgres-1
+pw="$(sed -n 's|^DATABASE_URL=postgresql://nitpilot:\([0-9a-f]*\)@postgres:5432/nitpilot$|\1|p' .env)"
+test ${#pw} -eq 48 || { echo "STOP: no password in .env's DATABASE_URL"; exit 1; }
+docker exec -i "$PG" psql -U hooksmith -d postgres -v ON_ERROR_STOP=1 -q <<SQL
+CREATE ROLE nitpilot LOGIN PASSWORD '$pw';
+CREATE DATABASE nitpilot OWNER nitpilot;
+REVOKE ALL ON DATABASE nitpilot FROM PUBLIC;
+SQL
+unset pw
+docker exec "$PG" psql -U hooksmith -d postgres -Atc "select datname, pg_get_userbyid(datdba) from pg_database where datname = 'nitpilot'"
+EOF
+```
+Expected: `nitpilot|nitpilot`. (Whether the password itself works is proved by the next step: the server's migrations connect with it.)
+
+**6e. Start it.**
+
+```bash
+cd "$S/hosted" && docker compose up -d && sleep 15 && docker compose ps --format '{{.Name}} {{.Status}} {{.Ports}}' && docker compose logs nitpilot-server | grep -E 'successfully applied|first-run|listening'
+```
+Expected: `nitpilot-server Up 15 seconds (healthy) 8787/tcp` (no host port), `All migrations have been successfully applied.`, `[first-run] Open https://nitpilot.dev/first-run and enter the setup code: XXXX-XXXX` and `Nitpilot server listening on http://localhost:8787, in first-run mode`.
+
+```bash
+docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))" && docker inspect -f '{{.State.Health.Status}} {{.HostConfig.Memory}} {{.HostConfig.PidsLimit}} {{.HostConfig.Init}} {{.HostConfig.RestartPolicy.Name}}' nitpilot-server && docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.PIDs}}' nitpilot-server
+```
+Expected: `200 {"ok":true,"version":"0.1.0"}`, `healthy 402653184 256 true unless-stopped`, and the memory line (the builder saw `170.5MiB / 384MiB`, 24 PIDs, idle in first-run mode).
+
+**6f. Caddy reaches it by name, and Odyhook's Caddyfile stays valid.** A throwaway Caddy on the stand-in network, plain HTTP on a local port:
+
+```bash
+N=$(mktemp -d) && printf ':8080 {\n    reverse_proxy nitpilot-server:8787\n}\n' > "$N/Caddyfile" && docker run -d --rm --name d4-caddy --network d4_hooksmith_default -p 127.0.0.1:18080:8080 -v "$N/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine && sleep 3 && curl -s http://127.0.0.1:18080/healthz; echo; curl -s -w ' %{http_code}\n' http://127.0.0.1:18080/api/me; docker stop d4-caddy
+```
+Expected: `{"ok":true,"version":"0.1.0"}` and `{"error":{"code":"first_run","message":"Finish setup at /first-run."}} 503`.
+
+Then Odyhook's current Caddyfile with Task 12 Step 8's two blocks appended (`$N/Caddyfile.odyhook`; the blocks are the ones in Task 12 Step 8, copied by hand into the file), checked by Caddy itself, which needs no DNS or certificate for this:
+
+```bash
+cp ~/Desktop/PracticeProjects/hooksmith/Caddyfile "$N/Caddyfile.odyhook" && cat >> "$N/Caddyfile.odyhook" <<'EOF'
+
+# Nitpilot (github.com/NikosGkikas13/nitpilot) shares this box: its own container, nitpilot-server, joins this
+# project's network from /opt/nitpilot. These two blocks are Nitpilot's; see docs/hosting.md in that repo.
+nitpilot.dev {
+    reverse_proxy nitpilot-server:8787
+}
+
+www.nitpilot.dev {
+    redir https://nitpilot.dev{uri} permanent
+}
+EOF
+docker run --rm -v "$N/Caddyfile.odyhook:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | grep -E 'Valid|Error'; grep -c 'nitpilot.dev' "$N/Caddyfile.odyhook"; rm -rf "$N"
+```
+Expected: `Valid configuration` and `3` (the count `docs/hosting.md` tells you to expect inside Caddy's container after the deploy).
+
+**6g. The backup script, with a stand-in for rclone.** The stand-in is a two-line `rclone` that runs rclone's own image with the remote `r2` set to a local folder, so the script's real `rclone copyto` runs:
+
+```bash
+mkdir -p "$S/d4-bin" "$S/d4-r2" "$S/d4-tmp" && printf '#!/bin/sh\nexec docker run --rm -i -v "%s:%s" -w "%s/d4-r2" -e RCLONE_CONFIG_R2_TYPE=local rclone/rclone:1.71.2 "$@"\n' "$S" "$S" "$S" > "$S/d4-bin/rclone" && chmod +x "$S/d4-bin/rclone"
+```
+```bash
+PATH="$S/d4-bin:$PATH" TMPDIR="$S/d4-tmp" NITPILOT_PG_CONTAINER=d4-hooksmith-postgres-1 bash deploy/hosted/nitpilot-backup.sh 2>&1 | grep -v NOTICE; PATH="$S/d4-bin:$PATH" rclone ls r2:odyhook-backups/nitpilot 2>/dev/null; ls -A "$S/d4-tmp"; echo "(tmp listed)"
+```
+Expected: `<time> nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-<UTC time>.sql.gz (<about 5400> bytes)`, the same file in the listing, and nothing in the temporary folder (the `trap` removed it). The rclone image's `Config file … not found - using defaults` notices are expected and filtered.
+
+The failure path:
+
+```bash
+PATH="$S/d4-bin:$PATH" TMPDIR="$S/d4-tmp" NITPILOT_PG_CONTAINER=no-such-container bash deploy/hosted/nitpilot-backup.sh; echo "exit $?"; ls -A "$S/d4-tmp"; PATH="$S/d4-bin:$PATH" rclone lsf r2:odyhook-backups/nitpilot 2>/dev/null
+```
+Expected: Docker's `No such container: no-such-container`, `nitpilot-backup: FAILED: pg_dump from no-such-container`, `exit 1`, an empty temporary folder, and still only the one file (nothing uploaded).
+
+**6h. The restore checks from `docs/hosting.md`, verbatim.** Written in Step 5; here with the stand-in names (`sed` swaps the container name; the stand-in `rclone` is on `PATH`):
+
+```bash
+sed -n '/^### Check a backup/,/^The two count lines/p' docs/hosting.md | sed -n '/^```bash$/,/^```$/p' | grep -v '^```' | sed 's/hooksmith-postgres-1/d4-hooksmith-postgres-1/g' > "$S/check-backup.sh" && PATH="$S/d4-bin:$PATH" bash "$S/check-backup.sh" 2>&1 | grep -v NOTICE
+```
+Expected: the file name, then `nitpilot|13|0|0|0` and `nitpilot_restore_check|13|0|0|0` (13 migrations, no people, chats or app yet in first-run mode), and the scratch database gone afterwards (`docker exec d4-hooksmith-postgres-1 psql -U hooksmith -d postgres -Atc "select count(*) from pg_database where datname = 'nitpilot_restore_check'"` prints `0`).
+
+Then "Put a backup back", with the file name from the listing:
+
+```bash
+cd "$S/hosted" && export PATH="$S/d4-bin:$PATH" && docker compose stop && f=<the file name> && docker exec d4-hooksmith-postgres-1 psql -U hooksmith -d postgres -c 'drop database nitpilot' -c 'create database nitpilot owner nitpilot' && rclone cat "r2:odyhook-backups/nitpilot/$f" 2>/dev/null | gunzip | docker exec -i d4-hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot; echo "restore exit $?"; docker compose up -d && sleep 12 && docker compose logs --tail 3 nitpilot-server && docker compose ps --format '{{.Name}} {{.Status}}'
+```
+Expected: `DROP DATABASE`, `CREATE DATABASE`, `restore exit 0`, `No pending migrations to apply.`, the first-run line (no app was ever made here) and `(healthy)`. On the box, the same commands end in `[boot] GitHub App nitpilot, from the database`.
+
+**6i. "Odyhook's" Postgres restarts under the running server** (Review Focus 5, and `docs/hosting.md` "After Odyhook's own deploys"):
+
+```bash
+docker inspect -f '{{.RestartCount}}' nitpilot-server && docker restart d4-hooksmith-postgres-1 && sleep 25 && docker inspect -f '{{.RestartCount}} {{.State.Health.Status}}' nitpilot-server && docker compose -f "$S/hosted/docker-compose.yml" -f "$S/hosted/docker-compose.override.yml" logs --since 40s nitpilot-server | grep -E 'No pending|first-run|listening'
+```
+Expected: `0`, then `1 healthy` (the server exited when its lock connection died and Docker started it again), `No pending migrations to apply.`, a **new** setup code (it changes at every start: Task 12 reads the newest line), and the listening line.
+
+**6j. Odyhook's `docker compose down` while Nitpilot is on its network** (also for "After Odyhook's own deploys"). A tiny stand-in project:
+
+```bash
+T=$(mktemp -d)/d4ody && mkdir -p "$T" && cd "$T" && printf 'services:\n  web:\n    image: caddy:2-alpine\n' > docker-compose.yml && docker compose up -d && docker run -d --rm --name d4-attached --network d4ody_default caddy:2-alpine && docker compose down; echo "down exit $?"; docker network ls --filter name=d4ody --format '{{.Name}}'; docker compose up -d && docker network inspect d4ody_default -f '{{range .Containers}}{{.Name}} {{end}}'; docker stop d4-attached; docker compose down; cd - >/dev/null
+```
+Expected: `Network d4ody_default  Resource is still in use`, `down exit 0`, the network still listed, and after `up -d` both `d4ody-web-1` and `d4-attached` on it. So an Odyhook `down`/`up` leaves Nitpilot connected.
+
+**6k. Clean up.**
+
+```bash
+cd "$S/hosted" && docker compose down && docker rm -f d4-hooksmith-postgres-1 && docker network rm d4_hooksmith_default && docker rmi ghcr.io/nikosgkikas13/nitpilot:0.1.0-local && rm -rf "$S/hosted" "$S/d4-bin" "$S/d4-r2" "$S/d4-tmp" "$S/check-backup.sh" && docker ps -a --format '{{.Names}}' | grep -c d4
+```
+Expected: `Container nitpilot-server  Removed`, the removals, and `0`. This Mac's own `hooksmith_default` network was never used.
+
+- [ ] **Step 7: Secret scan of the new files, tick, ledger, commit**
+
+The Task 10 scan over the new files, copied to a throwaway folder with the config (so no other file of the checkout, such as `apps/server/.env`, is read):
+
+```bash
+R=$(mktemp -d) && mkdir -p "$R/src/docs/why" && cp -R deploy .gitleaks.toml "$R/src/" && cp docs/hosting.md "$R/src/docs/" && cp docs/why/backups-and-restores.md "$R/src/docs/why/" && docker run --rm -v "$R/src:/repo:ro" zricethezav/gitleaks:v8.30.1 dir /repo --config /repo/.gitleaks.toml --redact --no-banner --no-color; echo "exit=$?"; rm -rf "$R"
+```
+Expected: `no leaks found`, `exit=0`.
+
+Tick Steps 1 to 7, add the ledger line `Task 11: complete`, and commit:
+
+```bash
+git add deploy/hosted docs/hosting.md docs/why/backups-and-restores.md docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+```
+```bash
+git commit -m "feat(deploy): the hosted instance's compose, backups and runbook
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+Then `git ls-files -s deploy/hosted/nitpilot-backup.sh` starts with `100755`.
 
 ### Task 12: Going live (ops, every step said first)
 
-- [ ] **Step 1: (user) The repo and the image go public.** Click-steps, signed in as NikosGkikas13: github.com/NikosGkikas13/nitpilot → Settings → General → bottom "Danger Zone" → Change visibility → Make public → type the name → confirm. Then the repo page → right sidebar "Packages" → `nitpilot` → Package settings → bottom "Danger Zone" → Change visibility → Public.
-- [ ] **Step 2: Memory check.** `ssh root@157.180.91.106 'docker stats --no-stream; free -m'`. Write the numbers in the task report. If free memory plus what Odyhook's containers really use leaves less than 384 MB, stop and ask.
-- [ ] **Step 3: The database.** On the box: create role `nitpilot` with a password made there (`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed) and database `nitpilot` owned by it, inside Odyhook's Postgres container. Check: `psql` as `nitpilot` connects.
-- [ ] **Step 4: `/opt/nitpilot`.** If anything changed since the last `rc` (Tasks 10, 10a and 11), the user pushes the next `rc` tag first; `NITPILOT_VERSION` is that rc. Copy `deploy/hosted/docker-compose.yml` there; build `.env` on the box from `.env.example` with `ENCRYPTION_KEY` and VAPID keys made there (`docker run --rm ghcr.io/nikosgkikas13/nitpilot:<the newest rc> node -e "const k = require('web-push').generateVAPIDKeys(); console.log('VAPID_PUBLIC_KEY=' + k.publicKey + '\nVAPID_PRIVATE_KEY=' + k.privateKey)"` appended to the file; the image has no `vapid:keys` script, see Checked D3). **(user)** The user runs `cat /opt/nitpilot/.env` in their own terminal and saves it in their password manager.
-- [ ] **Step 5: Start it.** `docker compose up -d`; the log shows first-run mode and the setup code; `docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"` answers 200 (the image has no `wget` or `curl`), and `docker inspect -f '{{.State.Health.Status}}' nitpilot-server` says `healthy`.
-- [ ] **Step 6: (say first) Caddy, through Odyhook's repo.** In `~/Desktop/PracticeProjects/hooksmith` on a new branch `nitpilot-dev-site`: add the `nitpilot.dev` block (`reverse_proxy nitpilot-server:8787`) and `www.nitpilot.dev` → `https://nitpilot.dev{uri}` 301, with a comment saying they belong to Nitpilot. Commit there. The user reviews, merges and pushes it (Odyhook's workflow redeploys Caddy). Check odyhook.dev still answers afterwards.
-- [ ] **Step 7: (user) DNS**, done just before Step 6's push lands: at the registrar, for nitpilot.dev, `A @ 157.180.91.106` and `A www 157.180.91.106` (TTL 300, delete any parking records the registrar added). I check with `dig +short nitpilot.dev www.nitpilot.dev` until both answer the IP, then `curl -sI http://nitpilot.dev` (301 to https), `curl -sI https://www.nitpilot.dev` (301 to the apex), and the certificate from `curl -vI https://nitpilot.dev`.
-- [ ] **Step 8: (user) The production app.** Signed in as NikosGkikas13: open https://nitpilot.dev/first-run → paste the setup code (I read it from the log) → personal account → name `nitpilot` → "Who can install it": anyone → Create → on GitHub, Create GitHub App → back on the page, Install → install on `nitpilot-sandbox`. Then set the app's logo (github.com → Settings → Developer settings → GitHub Apps → nitpilot → Display information → upload `apps/web/public/icons/icon-512.png`) and its description from the spec's pitch.
-- [ ] **Step 9: Backups.** Install the script and cron line; run the script once by hand; `rclone ls` shows today's file; restore it into a scratch database `nitpilot_restore_check` on the same Postgres and count `PrChat` rows; drop the scratch database.
-- [ ] **Step 10:** Tick the steps and commit any doc fixes the run taught (`docs(hosting): …`).
+**What this task is.** nitpilot.dev goes live, in an order where each step can be checked before the next depends on it: the repo and image public (so the box pulls without a token), a read-only look at the box, the folder and `.env`, the database, the container in first-run mode, the `.env` copy, DNS, Odyhook's Caddyfile (so `https://nitpilot.dev` answers with a certificate), the production app through the first-run page, and backups. **No step here runs without the user's go**: each one is said first (what it changes, where), or is a click-step for the user (named account, every click). Commands that could print a secret are the user's, in their own terminal; the ones I run print names and `(set)`, never values.
+
+**Odyhook while this runs.** Only Step 8 touches it: one commit to its Caddyfile, deployed by its own workflow, then one Caddy restart (odyhook.dev blinks for a second or two). Step 2 records what's running, and Step 8 checks odyhook.dev answers afterwards.
+
+**Files:** none planned. If the run shows a doc or compose-file problem, it's fixed in Step 11 (`docs(hosting): …`). A code problem: stop and ask (it needs a test first, and a new `rc`).
+
+---
+
+- [ ] **Step 1: (user, say first: GitHub and GHCR become public) The secret scan on the final history, then the repo and the image go public**
+
+First the Task 10 scan, again, on everything committed by now (Checked D3 item 61), the same commands as Task 10 Step 2. From the repo folder:
+
+```bash
+T=$(mktemp -d) && mkdir "$T/out" && git clone -q --mirror --no-local "$PWD" "$T/mirror" && cp .gitleaks.toml "$T/gitleaks.toml"
+docker run --rm -v "$T/mirror:/repo:ro" -v "$T/gitleaks.toml:/config/.gitleaks.toml:ro" -v "$T/out:/out" zricethezav/gitleaks:v8.30.1 \
+  git /repo --config /config/.gitleaks.toml --redact --no-banner --no-color --report-format json --report-path /out/history.json
+echo "exit=$?"; rm -rf "$T"
+```
+Expected: `<n> commits scanned.`, `no leaks found`, `exit=0`. Anything else is a STOP: I report the file, commit and rule only (never the value) and nothing goes public.
+
+Then the user, in the browser signed in to GitHub as **NikosGkikas13**:
+
+1. **The repo.** Open https://github.com/NikosGkikas13/nitpilot. Click **Settings** (the gear tab at the right end of the row under the repo name; it's there because you own the repo). You're on **General**. Scroll all the way down to the red box **Danger Zone**. In its first row, **Change repository visibility**, click **Change visibility**, then **Change to public**. GitHub shows a few warnings, each with a button; click through them (**I want to make this repository public**, **I have read and understand these effects**), then type `NikosGkikas13/nitpilot` in the box it shows and click **Make this repository public**. GitHub may ask for your password, a passkey or a 2FA code first. Back on the page, the repo name at the top now has a **Public** label.
+2. **The image.** Open https://github.com/NikosGkikas13/nitpilot/pkgs/container/nitpilot (or: the repo's main page → right-hand column → **Packages** → `nitpilot`). You see `ghcr.io/nikosgkikas13/nitpilot` with the tags `0.1.0-rc.1`, `0.1.0-rc.2`, `0.1.0-rc.3` and a **Private** label. Click **Package settings** (right-hand column, near the bottom). Scroll down to the red **Danger Zone**, click **Change visibility**, choose **Public**, type `nitpilot` where it asks, and click **I understand the consequences, change package visibility**. The package page now says **Public**.
+
+I check, without any login (`docker logout` first, so nothing of the user's is used):
+
+```bash
+docker logout ghcr.io; docker pull ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3 2>&1 | tail -2; curl -s -o /dev/null -w '%{http_code}\n' https://github.com/NikosGkikas13/nitpilot
+```
+Expected: `Status: Downloaded newer image …` (or `Image is up to date …`) and `200`.
+
+**Which version goes live:** `0.1.0-rc.3` unless the image's inputs changed since that tag. Check:
+
+```bash
+git diff --stat v0.1.0-rc.3 HEAD -- Dockerfile .dockerignore apps packages package.json package-lock.json | tail -n 1
+```
+Expected: nothing (Tasks 10a, 11 and 13 touch none of those). If it lists files, the user pushes the branch and the next tag (`v0.1.0-rc.4`, the commands as in Task 10a Step 4) first, and every `0.1.0-rc.3` below becomes that one.
+
+- [ ] **Step 2: (say first: reads the box, changes nothing) What's on the box**
+
+One ssh session, read-only (no command prints a secret: the backup script and cron file hold commands and names, the rclone listing only remote names):
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+hostname; uptime
+echo "== containers"; docker ps --format '{{.Names}}  {{.Image}}  {{.Status}}'
+echo "== memory"; docker stats --no-stream --format '{{.Name}}  {{.MemUsage}}  {{.MemPerc}}'; free -m
+echo "== disk"; df -h / | tail -n 1
+echo "== network"; docker network inspect hooksmith_default -f '{{.Name}} {{len .Containers}} containers'
+echo "== nitpilot names free?"; docker ps -a --format '{{.Names}}' | grep -c '^nitpilot' ; ls -d /opt/nitpilot 2>&1 | tail -n 1
+echo "== postgres"; docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -Atc "select current_user, (select rolsuper from pg_roles where rolname = current_user), version()"; docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -Atc "select rolname from pg_roles where rolname = 'nitpilot' union all select datname from pg_database where datname = 'nitpilot'"
+echo "== rclone"; command -v rclone; rclone version | head -n 1; rclone listremotes; rclone lsf r2:odyhook-backups | sort | tail -n 2
+echo "== odyhook backup"; grep -nE 'rclone|pg_dump|docker' /usr/local/bin/odyhook-backup.sh; cat /etc/cron.d/odyhook
+echo "== odyhook checkout"; cd /opt/hooksmith && git status --short | head -n 5 && git log -1 --oneline && git rev-parse --abbrev-ref HEAD
+echo "== clock"; date -u; timedatectl 2>/dev/null | grep -i 'time zone'
+EOF
+```
+Expected, and what to do when it differs:
+- Containers `hooksmith-postgres-1`, `hooksmith-redis-1`, `hooksmith-web-1`, `hooksmith-worker-1`, `hooksmith-caddy-1`, all `Up`. Other names: stop and ask (the names in this milestone come from Odyhook's docs).
+- **Memory:** I write every container's real use and `free -m`'s `available` in the task report. Rule from the spec: if `available` is under about 600 MB (the 384 MB cap plus room for the box), stop and ask; don't add swap or anything else.
+- `hooksmith_default 5 containers`; `0` containers named `nitpilot…`; `/opt/nitpilot` doesn't exist (`No such file or directory`).
+- Postgres: `hooksmith|t|PostgreSQL 16.…`, and no `nitpilot` role or database yet (no lines). If `rolsuper` is `f`, stop and ask.
+- rclone: a path, `rclone v1.7x`, `r2:` among the remotes, and Odyhook's two newest `odyhook-…sql.gz` files. If the remote isn't `r2` or the bucket isn't `odyhook-backups`, the script's defaults are wrong: stop; the fix is a one-line change of `NITPILOT_BACKUP_DEST`'s default in `deploy/hosted/nitpilot-backup.sh` (commit, then copy).
+- Odyhook's script pipes `pg_dump` into `rclone rcat r2:odyhook-backups/…`, and `/etc/cron.d/odyhook` has `0 3 * * * root /usr/local/bin/odyhook-backup.sh …`. If its backup runs at another time, move Nitpilot's line in `deploy/hosted/cron` to 30 minutes after it.
+- `/opt/hooksmith`: no changes (empty `git status`), on `main`, at the same commit as `git -C ~/Desktop/PracticeProjects/hooksmith log -1 --oneline origin/main` on this Mac. A dirty checkout would make Odyhook's deploy fail in Step 8: stop and ask.
+- The clock in UTC (`Time zone: Etc/UTC` or `UTC`), so 03:30 in the cron file is 03:30 UTC.
+
+- [ ] **Step 3: (say first: creates /opt/nitpilot on the box and writes its .env) The folder and `.env`**
+
+```bash
+ssh root@157.180.91.106 'mkdir -p /opt/nitpilot && chmod 700 /opt/nitpilot' && scp deploy/hosted/docker-compose.yml deploy/hosted/.env.example root@157.180.91.106:/opt/nitpilot/ && ssh root@157.180.91.106 'ls -la /opt/nitpilot && docker pull -q ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3'
+```
+Expected: the two files, and the image's `ghcr.io/…:0.1.0-rc.3` line (pulled anonymously: the package is public since Step 1).
+
+Then `.env`, with every secret made on the box and written straight into the file (the same commands as Task 11 Step 6c and `docs/hosting.md` "Set it up"):
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+set -euo pipefail
+cd /opt/nitpilot && VERSION=0.1.0-rc.3 && umask 077
+test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
+cp .env.example .env
+set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+set_env NITPILOT_VERSION "$VERSION"
+set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
+set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
+read -r pub priv < <(docker run --rm --entrypoint node "ghcr.io/nikosgkikas13/nitpilot:$VERSION" -e "const k = require('web-push').generateVAPIDKeys(); console.log(k.publicKey, k.privateKey)")
+set_env VAPID_PUBLIC_KEY "$pub" && set_env VAPID_PRIVATE_KEY "$priv" && unset pub priv
+ls -l .env && awk -F= '!/^#/ && NF { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
+awk '/^(ENCRYPTION_KEY|VAPID_PUBLIC_KEY|VAPID_PRIVATE_KEY|DATABASE_URL)=/ { i = index($0, "="); print substr($0, 1, i - 1), length(substr($0, i + 1)) }' .env
+EOF
+```
+Expected: as in Task 11 Step 6c: `-rw------- 1 root root … .env`, every name `(set)` except `ALLOWED_LOGINS (empty)`, and the lengths `DATABASE_URL 93`, `ENCRYPTION_KEY 44`, `VAPID_PUBLIC_KEY 87`, `VAPID_PRIVATE_KEY 43`. `VAPID_SUBJECT` is `https://nitpilot.dev` from the example (not a secret). The VAPID one-liner uses `--entrypoint node` because the image has no `vapid:keys` npm script (Checked D3 item 35).
+
+- [ ] **Step 4: (say first: creates a role and a database inside Odyhook's Postgres) The database**
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+set -euo pipefail
+cd /opt/nitpilot
+pw="$(sed -n 's|^DATABASE_URL=postgresql://nitpilot:\([0-9a-f]*\)@postgres:5432/nitpilot$|\1|p' .env)"
+test ${#pw} -eq 48 || { echo "STOP: no password in .env's DATABASE_URL"; exit 1; }
+docker exec -i hooksmith-postgres-1 psql -U hooksmith -d postgres -v ON_ERROR_STOP=1 -q <<SQL
+CREATE ROLE nitpilot LOGIN PASSWORD '$pw';
+CREATE DATABASE nitpilot OWNER nitpilot;
+REVOKE ALL ON DATABASE nitpilot FROM PUBLIC;
+SQL
+unset pw
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -Atc "select datname, pg_get_userbyid(datdba) from pg_database where datname = 'nitpilot'"
+EOF
+```
+Expected: `nitpilot|nitpilot`. The `nitpilot` role owns only its own database: it has no rights on Odyhook's tables (Postgres gives a new role none), and `REVOKE ALL … FROM PUBLIC` keeps other roles out of Nitpilot's (Odyhook's `hooksmith` is a superuser and is not affected; nothing of Odyhook's changes).
+
+- [ ] **Step 5: (say first: starts nitpilot-server on the box) Start it**
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+cd /opt/nitpilot && docker compose up -d && sleep 20
+docker compose ps --format '{{.Name}} {{.Status}} {{.Ports}}'
+docker compose logs nitpilot-server | grep -E 'successfully applied|first-run mode'
+docker exec nitpilot-server node -e "fetch('http://127.0.0.1:8787/healthz').then(async (r) => console.log(r.status, await r.text()))"
+docker inspect -f '{{.State.Health.Status}} {{.HostConfig.Memory}}' nitpilot-server
+docker stats --no-stream --format '{{.Name}}  {{.MemUsage}}'
+docker exec hooksmith-caddy-1 wget -qO- http://nitpilot-server:8787/healthz; echo
+EOF
+```
+Expected: `nitpilot-server Up 20 seconds (healthy) 8787/tcp`, `All migrations have been successfully applied.`, `Nitpilot server listening on http://localhost:8787, in first-run mode` (the setup-code line is left out here on purpose: Step 9's user reads it), `200 {"ok":true,"version":"0.1.0"}`, `healthy 402653184`, everyone's memory (nitpilot-server about 170 MiB), and `{"ok":true,"version":"0.1.0"}` once more, asked from inside Odyhook's Caddy container by name (Caddy's image is Alpine, which has `wget`; Nitpilot's doesn't). Nothing outside can reach it yet: Caddy has no `nitpilot.dev` block.
+
+- [ ] **Step 6: (user) The `.env` copy in the password manager**
+
+In the user's own terminal (not one of mine; the output is the secrets):
+
+```bash
+ssh root@157.180.91.106 cat /opt/nitpilot/.env
+```
+Select everything it printed, from `# The hosted instance's settings` to the last line, and save it in your password manager as a secure note named **nitpilot.dev /opt/nitpilot/.env**, with the date. Then clear the terminal (⌘K). That note is what `docs/hosting.md` "On a new box" starts from: without it a backup can't bring the instance back. Tell me "saved"; I don't check it.
+
+- [ ] **Step 7: (user) DNS at Porkbun**
+
+nitpilot.dev's nameservers are Porkbun's (`dig +short NS nitpilot.dev`), so the records go there. In the browser, signed in to **porkbun.com** with the account that bought nitpilot.dev:
+
+1. Click **Account** (top right) → **Domain Management**. In the list of domains, find **nitpilot.dev**, and in its row click **DNS** (under the domain name, among the small links; on a narrow window it's behind **Details**). The **DNS Records** page opens with a form at the top (**Type**, **Host**, **Answer**, **TTL**) and the current records below it.
+2. Below the form, look at the existing records. Porkbun usually adds parking records to a new domain: an `ALIAS` or `CNAME` for the bare domain to `pixie.porkbun.com`, and a `CNAME` for `*` or `www`. Delete each of those: the trash-can icon at the right end of its row, then **Yes** in the confirmation. Leave any `NS`, `MX` or `TXT` record alone.
+3. In the form at the top: **Type** `A - Address record`, **Host** empty (the bare domain), **Answer** `157.180.91.106`, **TTL** `600` (the smallest Porkbun offers; fine). Click **Add**. The new record shows in the list as `A  nitpilot.dev  157.180.91.106`.
+4. Again: **Type** `A - Address record`, **Host** `www`, **Answer** `157.180.91.106`, **TTL** `600`, **Add**. It shows as `A  www.nitpilot.dev  157.180.91.106`.
+
+I check from this Mac, a few times a minute until both answer (usually within 5 minutes):
+
+```bash
+dig +short nitpilot.dev A; dig +short www.nitpilot.dev A; dig +short @1.1.1.1 nitpilot.dev A
+```
+Expected: `157.180.91.106` three times. Then `curl -sI --max-time 5 https://nitpilot.dev | head -n 1` fails with a TLS error: right, Caddy doesn't know the name yet (Step 8). DNS goes first so Caddy can get its certificate the moment it loads the block.
+
+- [ ] **Step 8: (say first: one commit in Odyhook's repo; the user reviews and merges it, which redeploys Odyhook) Caddy**
+
+The user's Odyhook checkout (`~/Desktop/PracticeProjects/hooksmith`) is on `main` with uncommitted work of theirs (`.gitignore`, `ARCHITECTURE.md` on 2026-10-25), which must not move. So the branch is made in a separate worktree, from `origin/main`:
+
+```bash
+cd ~/Desktop/PracticeProjects/hooksmith && git fetch origin && git worktree add -b nitpilot-dev-site ../.hooksmith-nitpilot-site origin/main && cd ../.hooksmith-nitpilot-site && git log -1 --oneline
+```
+Expected: `Preparing worktree (new branch 'nitpilot-dev-site')` and Odyhook's latest commit (the same one Step 2 saw on the box).
+
+Append the two blocks to its `Caddyfile` (Odyhook's style: 4-space indents, a comment above):
+
+```bash
+cat >> Caddyfile <<'EOF'
+
+# Nitpilot (github.com/NikosGkikas13/nitpilot) shares this box: its own container, nitpilot-server, joins this
+# project's network from /opt/nitpilot. These two blocks are Nitpilot's; see docs/hosting.md in that repo.
+nitpilot.dev {
+    reverse_proxy nitpilot-server:8787
+}
+
+www.nitpilot.dev {
+    redir https://nitpilot.dev{uri} permanent
+}
+EOF
+docker run --rm -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | grep -E 'Valid|Error'; git diff --stat
+```
+Expected: `Valid configuration` and `Caddyfile | 10 ++++++++++`. Commit (only the Caddyfile):
+
+```bash
+git add Caddyfile && git commit -m "feat(caddy): serve nitpilot.dev from the nitpilot-server container
+
+Nitpilot (github.com/NikosGkikas13/nitpilot) runs one container on this box,
+on the hooksmith_default network, from /opt/nitpilot. www redirects to the apex.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git show --stat HEAD | tail -n 2
+```
+
+Then the user (in their own terminal, then the browser signed in as **NikosGkikas13**):
+
+1. Push the branch: `git -C ~/Desktop/PracticeProjects/.hooksmith-nitpilot-site push -u origin nitpilot-dev-site`. Git prints a link `https://github.com/NikosGkikas13/odyhook/pull/new/nitpilot-dev-site`; open it.
+2. GitHub's **Open a pull request** page, `nitpilot-dev-site` into `main`. Title `Serve nitpilot.dev from the nitpilot-server container`. Click **Create pull request**.
+3. On the PR, click **Files changed**: one file, `Caddyfile`, ten added lines (the comment and the two blocks). Back on **Conversation**, wait for the check **CI & Deploy / tsc + vitest + build** to turn green (a few minutes; on a PR it only tests, it doesn't deploy).
+4. Click **Merge pull request**, then **Confirm merge**. Then **Delete branch**.
+5. Open https://github.com/NikosGkikas13/odyhook/actions: a new **CI & Deploy** run on `main` starts. Wait until both its jobs (**tsc + vitest + build**, then **Deploy to production**) are green, about 5 minutes. Tell me when.
+
+Then Caddy. Odyhook's deploy runs `git pull` and `docker compose up -d --build` in `/opt/hooksmith`, which rebuilds Odyhook's app but leaves the Caddy container running with the file it read at start (a file mounted into a container keeps pointing at the old file after `git pull` replaces it, and Caddy doesn't watch it anyway). **(say first: restarts Odyhook's Caddy; odyhook.dev is unreachable for a second or two)**:
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+cd /opt/hooksmith && git log -1 --oneline && grep -c 'nitpilot.dev' Caddyfile
+docker compose -f docker-compose.prod.yml restart caddy
+sleep 10
+docker exec hooksmith-caddy-1 grep -c 'nitpilot.dev' /etc/caddy/Caddyfile
+docker logs --since 1m hooksmith-caddy-1 2>&1 | grep -E 'nitpilot.dev' | grep -oE '"msg":"[^"]*"' | sort | uniq -c
+EOF
+```
+Expected: the merge commit, `3`, `Container hooksmith-caddy-1  Restarting` / `Started`, `3` inside the container, and Caddy's log naming `nitpilot.dev` with `certificate obtained successfully` (and `www.nitpilot.dev` too). If the certificate lines say `error` or `challenge failed`, DNS isn't right yet (Step 7): Caddy retries on its own; check `dig` again and wait.
+
+From this Mac:
+
+```bash
+curl -sI http://nitpilot.dev | grep -iE '^(HTTP|location)'; curl -sI https://www.nitpilot.dev | grep -iE '^(HTTP|location)'; curl -s https://nitpilot.dev/healthz; echo; curl -s -w ' %{http_code}\n' https://nitpilot.dev/api/me; echo | openssl s_client -connect nitpilot.dev:443 -servername nitpilot.dev 2>/dev/null | openssl x509 -noout -subject -issuer -enddate; curl -s -o /dev/null -w 'odyhook %{http_code}\n' https://odyhook.dev
+```
+Expected: `HTTP/1.1 308 Permanent Redirect` + `Location: https://nitpilot.dev/`; `HTTP/2 301` + `location: https://nitpilot.dev/`; `{"ok":true,"version":"0.1.0"}`; the `first_run` 503 body; `subject=CN=nitpilot.dev`, an `issuer` of Let's Encrypt, an end date about 90 days out; `odyhook 200`.
+
+Last, the worktree (the user's checkout is untouched): `cd ~/Desktop/PracticeProjects/hooksmith && git worktree remove ../.hooksmith-nitpilot-site && git branch -D nitpilot-dev-site && git status --short` shows only the user's own two changed files.
+
+- [ ] **Step 9: (user) The production app, through nitpilot.dev's own first-run page**
+
+The setup code, in the user's own terminal (it guards the empty server until the app exists, so it isn't shown in chat):
+
+```bash
+ssh root@157.180.91.106 'docker logs nitpilot-server 2>&1 | grep "setup code" | tail -n 1'
+```
+It prints `[first-run] Open https://nitpilot.dev/first-run and enter the setup code: XXXX-XXXX`. The code changes whenever the server restarts, so use the newest line, and do the clicks below right away.
+
+In the browser signed in to GitHub as **NikosGkikas13**:
+
+1. Open https://nitpilot.dev/first-run. The Nitpilot wordmark is at the top left and a card titled **Set up Nitpilot** (small label **First run** above it) has: a **Setup code** box; **Create the app on** with **Your personal account** (chosen) and **An organization**; **App name**, filled with `Nitpilot (nitpilot.dev)`; **Who can install it** with **Only this account or organization** (chosen) and **Anyone on GitHub**; and a **Create GitHub App** button.
+2. Type the setup code into **Setup code**. Leave **Your personal account**. Click into **App name**, select all (⌘A) and type `nitpilot`. Under **Who can install it**, click **Anyone on GitHub** (the hosted instance is for everyone's public repos). Click **Create GitHub App**.
+3. The button says **Opening GitHub…** and the browser goes to `github.com/settings/apps/new?state=…`: GitHub's **Register new GitHub App** page with the name `nitpilot`, the homepage `https://nitpilot.dev`, the webhook URL `https://nitpilot.dev/webhooks/github`, the callback URL and the permissions filled in, and **Any account** chosen under *Where can this GitHub App be installed?*. Change nothing. If GitHub asks for your password, a passkey or a code first, do that.
+4. At the bottom, click the green **Create GitHub App for NikosGkikas13**. If GitHub says the name is taken, stop and tell me (the spec checked it was free on 2026-10-24; picking another name changes the bot's name everywhere). GitHub sends the browser back to `https://nitpilot.dev/first-run/callback?…`, then `https://nitpilot.dev/first-run?done=1`.
+5. A card with a spinner, **Restarting the server…**, then (a few seconds) **Your GitHub App is ready** with a green tick and two buttons, **Install the app on your repos** and **Sign in**.
+6. Click **Install the app on your repos**. GitHub's **Install nitpilot** page: under your account choose **Only select repositories**, open **Select repositories**, pick **nitpilot-sandbox** only, and click **Install**.
+7. GitHub goes to `https://nitpilot.dev/github/setup?installation_id=…`, which sends you on to **Authorize nitpilot**: click **Authorize NikosGkikas13**. You land on `https://nitpilot.dev/setup` with **Install the GitHub App** ticked.
+
+I check (read-only):
+
+```bash
+ssh root@157.180.91.106 'bash -s' <<'EOF'
+cd /opt/nitpilot && docker compose logs nitpilot-server | grep -E '\[boot\] GitHub App|listening' | tail -n 2
+docker exec hooksmith-postgres-1 psql -U nitpilot -d nitpilot -c 'select slug, "ownerLogin" from "GithubAppConfig"' -c 'select event, action, status, count(*) from "RawEvent" group by 1, 2, 3 order by 1, 2' -c 'select login from "User"' -c 'select "fullName", private from "Repo"'
+EOF
+```
+Expected: `[boot] GitHub App nitpilot, from the database` and `Nitpilot server listening …` (no "first-run mode"); `nitpilot | NikosGkikas13`; `installation`/`created` (and maybe `installation_repositories`) `processed` or `ignored`, nothing `received`/`retrying`/`failed`; `NikosGkikas13`; `NikosGkikas13/nitpilot-sandbox | f`.
+
+Then the app's face, in the same browser: open https://github.com/settings/apps/nitpilot (or your picture → **Settings** → **Developer settings** at the bottom of the left column → **GitHub Apps** → **Edit** next to **nitpilot**). On **General**:
+1. Under **Display information**, click **Upload a logo…**, choose `apps/web/public/icons/icon-512.png` from the Nitpilot folder, and click **Set new avatar** in the crop dialog (keep the whole square). Set **Badge background color** to `#0B0D10` if it asks.
+2. In **Description** (further down, under **Basic information**), paste: `Your agents review each other's PRs the moment they open. You only hear about it when there's a decision to make. https://nitpilot.dev`
+3. Click **Save changes** at the bottom. The app's public page (https://github.com/apps/nitpilot) now shows the logo and the description.
+
+- [ ] **Step 10: (say first: installs a script and a cron file on the box, writes a backup to R2, and makes and drops a scratch database) Backups**
+
+```bash
+scp deploy/hosted/nitpilot-backup.sh root@157.180.91.106:/usr/local/bin/nitpilot-backup.sh && scp deploy/hosted/cron root@157.180.91.106:/etc/cron.d/nitpilot && ssh root@157.180.91.106 'bash -s' <<'EOF'
+chmod 755 /usr/local/bin/nitpilot-backup.sh && chown root:root /etc/cron.d/nitpilot && chmod 644 /etc/cron.d/nitpilot
+ls -l /usr/local/bin/nitpilot-backup.sh /etc/cron.d/nitpilot
+/usr/local/bin/nitpilot-backup.sh
+rclone ls r2:odyhook-backups/nitpilot
+EOF
+```
+Expected: `-rwxr-xr-x … nitpilot-backup.sh`, `-rw-r--r-- … nitpilot`, `<time> nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-<UTC time>.sql.gz (<n> bytes)`, and that one file listed.
+
+The restore check, the commands from `docs/hosting.md` "Check a backup", in one session:
+
+```bash
+sed -n '/^### Check a backup/,/^The two count lines/p' docs/hosting.md | sed -n '/^```bash$/,/^```$/p' | grep -v '^```' | ssh root@157.180.91.106 'bash -s'
+```
+Expected: the file name, then two equal lines, `nitpilot|13|1|0|1` and `nitpilot_restore_check|13|1|0|1` (13 migrations, one person, no chats yet, one app), and no `nitpilot_restore_check` left (the last command drops it).
+
+Odyhook's backup files are untouched: `ssh root@157.180.91.106 'rclone lsf r2:odyhook-backups | grep -c "^odyhook-"'` prints the same count as Step 2's listing implied (its files sit at the top of the bucket; Nitpilot's are only under `nitpilot/`). The first nightly run is checked in Task 13 section 9 (`/var/log/nitpilot-cron.log`).
+
+- [ ] **Step 11: Doc fixes from the run, tick, ledger, commit**
+
+If anything above differed from the text (a click label, a name on the box, a command), fix `docs/hosting.md`, a `deploy/hosted/` file or this plan, in a commit of its own: `git add <those files>` then `git commit -m "docs(hosting): <what the run taught>"` with the trailer. Then tick Steps 1 to 11, add the ledger line `Task 12: complete` with the image (tag and digest: `ssh root@157.180.91.106 "docker inspect -f '{{index .RepoDigests 0}}' ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3"`), the memory numbers from Step 2 and Step 5, the app's id (`ssh root@157.180.91.106 "docker exec hooksmith-postgres-1 psql -U nitpilot -d nitpilot -Atc 'select \"appId\" from \"GithubAppConfig\"'"`), and the Odyhook merge commit; and commit:
+
+```bash
+git add docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+```
+```bash
+git commit -m "docs(plan): Task 12, nitpilot.dev is live
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ### Task 13: The live acceptance run on nitpilot.dev, and the demo
 
-**Files:** Create `docs/acceptance/plan-3.md` (the runbook: setup, each pass criterion from spec §20 item 4 as a checkbox, the click-steps, the SQL checks), reusing `docs/acceptance/` helpers where they fit.
+**What this task is.** Spec §20 item 4's acceptance test, run as a runbook like Plans 1 and 2: Step 1 writes it (and its helpers) and commits; Steps 2 to 5 run its sections with the user; Step 6 records the results. The runbook is the source of truth for the clicks; the steps here say which sections each covers and what to watch for.
 
-- [ ] **Step 1:** Write the runbook from spec §20 item 4 and commit it.
-- [ ] **Step 2: (say first) The single-player run.** NikosGkikas13's CLI (fresh `NITPILOT_CONFIG_DIR`, no `NITPILOT_SERVER`, from this branch's build) logs in to nitpilot.dev, links the sandbox clone and starts with Claude Code; ngkdev93-jpg (not on nitpilot.dev) opens the seeded demo PR and requests NikosGkikas13's review. Check: the job starts within 5 s (server log timestamps), the review lands on the PR in NikosGkikas13's name.
-- [ ] **Step 3: The demo recording (user).** Same flow on a fresh seeded PR, recorded with QuickTime following the shot list in spec §20 item 4: what to have open (GitHub PR page signed in as ngkdev93-jpg on the left, the terminal running `nitpilot start` on the right, the nitpilot.dev chat in a second tab), when to start and stop. I trim nothing; the user keeps the file for Task 14.
-- [ ] **Step 4: The agent-to-agent run:** ngkdev93-jpg's CLI with the fake agent joins; a PR reaches READY with one `nitpilot[bot]` summary comment.
-- [ ] **Step 5: The remaining criteria:** Web Push on desktop Chrome and the iPhone Home Screen app (no callback URL to add); a webhook from a private repo dropped (make a private repo, install the app on it, open a PR, check `RawEvent.status`); `docker compose restart` in `/opt/nitpilot` mid-job and the job completes; the backup holds the database (Task 12 Step 9 counts); `docker stats` after the run under the limit and odyhook.dev answers.
-- [ ] **Step 6:** Tick every criterion in `docs/acceptance/plan-3.md` with what was seen; fixes found during the run get their own commits (TDD) before ticking; commit `test(acceptance): the Plan 3 live run on nitpilot.dev`.
+**Who runs which agent.** The spec's setup line had the author (ngkdev93-jpg) on the fake agent in the agent-to-agent run. The fake agent can only answer points by their number, so as the author it would have to guess how many points the real reviewer (Claude) raised, and a run would fail on a review with two or four. So the roles there are Plan 1's: the reviewer's CLI switches to the fake reviewer (the same three points every time) and the author's Claude fixes them. The single-player run and the demo keep NikosGkikas13 on Claude Code, which is the launch story. Step 1 changes the spec's setup line to match (CLAUDE.md: the spec changes with the plan).
+
+**Files:**
+- Create: `docs/acceptance/plan-3.md`, `docs/acceptance/hosted.sh`, `docs/acceptance/scenarios/sandbox-slow.json`
+- Modify: `docs/superpowers/specs/2026-10-07-nitpilot-design.md` (§20 item 4, the setup line), this plan (ticks), the ledger
+
+**Reuses** from `docs/acceptance/`: `new-branch.sh` (a PR branch from the seed, pushed as ngkdev93-jpg from clone A), `seed/orders-demo` (three planted bugs), `stamp.pl` (UTC timestamps on the CLI's lines), `check.sql` and `check-web.sql` (run on the box through `boxq`), `scenarios/sandbox-happy.json`.
+
+---
+
+- [ ] **Step 1: The runbook, its helpers and the spec line; commit**
+
+Create `docs/acceptance/hosted.sh` with exactly this content:
+
+```bash
+# Source this in every terminal tab of the Plan 3 run (docs/acceptance/plan-3.md), from the Nitpilot checkout:
+#   cd /path/to/nitpilot && source docs/acceptance/hosted.sh
+# Unlike env.sh there is no local server: every CLI talks to https://nitpilot.dev, the CLI's default (no NITPILOT_SERVER).
+export REPO="$PWD"
+export SANDBOX=NikosGkikas13/nitpilot-sandbox
+export BOX=root@157.180.91.106
+export CLONE_A="$HOME/nitpilot-acceptance/a/nitpilot-sandbox"   # ngkdev93-jpg's clone (github-a)
+export CLONE_B="$HOME/nitpilot-acceptance/b/nitpilot-sandbox"   # NikosGkikas13's clone (github-b)
+
+# NikosGkikas13, the reviewer: the built CLI with Claude Code, named like the installed one so the demo shows
+# `nitpilot start`. Build it first: npm run build -w apps/cli
+nitpilot() {
+  NITPILOT_CONFIG_DIR="$HOME/.nitpilot-hosted-r" node "$REPO/apps/cli/dist/index.js" "$@"
+}
+
+# NikosGkikas13 again, from source with the fake agent (it only exists in a source checkout), same config folder.
+# Follows $R_SCENARIO. Its config must say "agent": "fake" first: nit-edit r '.agent = "fake"'.
+nit-rf() {
+  NITPILOT_CONFIG_DIR="$HOME/.nitpilot-hosted-r" \
+    NITPILOT_FAKE_SCENARIO="${R_SCENARIO:-$REPO/docs/acceptance/scenarios/sandbox-happy.json}" \
+    "$REPO/node_modules/.bin/tsx" "$REPO/apps/cli/src/index.ts" "$@"
+}
+
+# ngkdev93-jpg, the author in the agent-to-agent run: the built CLI with Claude Code.
+nit-w() {
+  NITPILOT_CONFIG_DIR="$HOME/.nitpilot-hosted-w" node "$REPO/apps/cli/dist/index.js" "$@"
+}
+
+# nit-edit r '.agent = "fake"'   changes ~/.nitpilot-hosted-r/config.json with a jq filter, readable by you only.
+nit-edit() {
+  local file="$HOME/.nitpilot-hosted-$1/config.json"
+  jq "$2" "$file" > "$file.tmp" && chmod 600 "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+# boxq -c 'select 1'   or   boxq -v pr=5 -f - < docs/acceptance/check.sql
+# psql on nitpilot.dev's database, over ssh, inside Odyhook's Postgres container. Read-only use only.
+boxq() {
+  ssh "$BOX" "docker exec -i hooksmith-postgres-1 psql -U nitpilot -d nitpilot $(printf '%q ' "$@")"
+}
+
+# boxlog 50   the last lines of the server's log.
+boxlog() {
+  ssh "$BOX" "cd /opt/nitpilot && docker compose logs --tail ${1:-50} nitpilot-server"
+}
+```
+
+Create `docs/acceptance/scenarios/sandbox-slow.json` with exactly this content (the happy scenario's review, 45 seconds late):
+
+```json
+{
+  "review": [
+    { "sleep": 45000 },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 5, "severity": "major", "category": "bug", "title": "Page 1 skips the first page", "body": "Pages start at 1 (see the comment above), but the start is page * size, so page 1 begins at item `size`. Use (page - 1) * size." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 12, "severity": "major", "category": "bug", "title": "averageTotal([]) is NaN", "body": "With no orders the sum is 0 and totals.length is 0, so this divides 0 by 0. Return 0 when there are no totals." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 18, "severity": "minor", "category": "bug", "title": "describeOrder throws for an id that does not exist", "body": "orders.find returns undefined for an unknown id, so order.id throws a TypeError. Say the order was not found instead." } },
+    { "finish": "Three bugs in orders.js: the page offset, the empty average and the missing order." }
+  ]
+}
+```
+
+Create `docs/acceptance/plan-3.md` with exactly this content:
+
+````markdown
+# Plan 3 acceptance run (live, on nitpilot.dev)
+
+The manual end-to-end test of the hosted instance, from [spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4 ("Plan 3 acceptance test"): the real https://nitpilot.dev on the Hetzner box, the production GitHub App `nitpilot`, real GitHub, two real accounts, a phone, and Claude Code. No tunnel and no local server: every CLI talks to nitpilot.dev, the CLI's default. Follow it top to bottom and tick the boxes. [why/live-acceptance.md](../why/live-acceptance.md) explains why this is a document and not a test.
+
+**Time:** about 2 hours. **Cost:** about 3 Claude Code runs of your Claude plan (section 3, section 4, and one or two in section 6). Sections 7 and 8 use the scripted fake agent and cost nothing. If a run ends with a `quota` failure, wait for the plan's window to reset and carry on.
+
+## Who is who
+
+| Account | Role | CLI | Agent | Where you click |
+|---|---|---|---|---|
+| `NikosGkikas13` | reviewer, owns the sandbox repo and the `nitpilot` app | `nitpilot` (the built CLI) in sections 2–4; `nit-rf` (from source) in sections 6–7 | **Claude Code**, then the **fake agent** | **NikosGkikas13's browser**: your normal Chrome window, signed in to GitHub as `NikosGkikas13`; and **NikosGkikas13's iPhone** |
+| `ngkdev93-jpg` | author | none until section 6, then `nit-w` (the built CLI) | **Claude Code** (section 6) | **ngkdev93-jpg's browser**: a Chrome private window (⇧⌘N) signed in to GitHub as `ngkdev93-jpg` |
+
+Sections 3 and 4 are the launch story: one person on Nitpilot, the reviewer, while the author is just someone on GitHub. In section 6 the author joins too and the two agents work it out in the chat. There the reviewer's agent is the fake one and the author's is Claude, as in Plan 1: the fake reviewer raises the same three points every time, so the author's Claude has something definite to fix, and a run never depends on how many points a real reviewer happens to raise.
+
+The sandbox is `NikosGkikas13/nitpilot-sandbox`, with `ngkdev93-jpg` as a collaborator, and the clones from [plan-1.md](plan-1.md) section 1: `~/nitpilot-acceptance/a/nitpilot-sandbox` (ngkdev93-jpg, over `github-a`) and `~/nitpilot-acceptance/b/nitpilot-sandbox` (NikosGkikas13, over `github-b`).
+
+**Terminals:** **T1** NikosGkikas13's CLI, **T2** ngkdev93-jpg's CLI (from section 6), **T3** commands. In each, first run `cd /path/to/nitpilot && source docs/acceptance/hosted.sh`. It defines `nitpilot`, `nit-rf`, `nit-w`, `nit-edit`, and two read-only views of the box: `boxq` (psql on nitpilot.dev's database) and `boxlog` (the server's log).
+
+**If something goes wrong**, stop and keep the evidence: a screenshot, the T1/T2 output, `boxlog 200`, and `check.sql`'s output. A bug found here gets a failing test first and a fix after; don't patch it live and carry on. A fix to the server reaches nitpilot.dev only through a new `rc` image and a deploy ([hosting.md](../hosting.md), "Deploying a new version").
+
+**Ask before:** every step that writes to GitHub (each PR, each review request, the private repo in section 8), each Claude Code run, turning push on, and the restart in section 7 (it restarts nitpilot.dev).
+
+---
+
+## 0. Before you start
+
+- [ ] nitpilot.dev is up: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"0.1.0"}`, and `boxlog 5` (it asks the box over ssh) shows no error.
+- [ ] The production app is installed on the sandbox: `boxq -c 'select slug, "ownerLogin" from "GithubAppConfig"' -c 'select "fullName", private from "Repo"'` prints `nitpilot | NikosGkikas13` and a row `NikosGkikas13/nitpilot-sandbox | f`.
+- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [ ] The tools exist: `command -v jq perl gh git node ssh` prints six paths.
+- [ ] The CLI is built from this branch: `npm run build -w apps/cli`, then `nitpilot --version` prints `0.1.0`.
+- [ ] Nothing points the CLI elsewhere: `echo "${NITPILOT_SERVER:-unset}"` prints `unset`, and `ls ~/.nitpilot-hosted-r ~/.nitpilot-hosted-w` finds neither folder (each person starts fresh).
+- [ ] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, both clones exist (`ls "$CLONE_A" "$CLONE_B"`), and clone A's commits are ngkdev93-jpg's: `git -C "$CLONE_A" config user.email` prints `340081894+ngkdev93-jpg@users.noreply.github.com`.
+- [ ] `gh` knows both accounts: `gh auth status` lists `NikosGkikas13` and `ngkdev93-jpg`.
+- [ ] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
+
+## 1. The addresses (no clicks)
+
+Already checked when nitpilot.dev went live (Plan 3 Task 12); repeat it here so the results are in one place.
+
+**T3:**
+```bash
+curl -sI http://nitpilot.dev | grep -iE '^(HTTP|location)'
+curl -sI https://www.nitpilot.dev | grep -iE '^(HTTP|location)'
+curl -sI http://www.nitpilot.dev | grep -iE '^(HTTP|location)'
+curl -s https://nitpilot.dev/healthz; echo
+echo | openssl s_client -connect nitpilot.dev:443 -servername nitpilot.dev 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+```
+Expect: `308` (or `301`) to `https://nitpilot.dev/`; `301` to `https://nitpilot.dev/`; a redirect that ends at `https://nitpilot.dev/` (http → https first, then to the apex); the health answer; and a certificate for `CN=nitpilot.dev` from Let's Encrypt with an end date about three months away.
+
+- [ ] `http://nitpilot.dev` and `www.nitpilot.dev` (http and https) end at `https://nitpilot.dev`, with a valid certificate.
+
+## 2. NikosGkikas13 connects a CLI (about 5 minutes)
+
+NikosGkikas13 signed in to nitpilot.dev when installing the app (Task 12), so only the CLI is new.
+
+1. **T1:** `nitpilot login`. It prints a link and a code and opens your default browser (**NikosGkikas13's browser**). On **Approve this device?** (on `https://nitpilot.dev/…`) check the code is the one in T1 and click **Approve**. T1 prints `Logged in as NikosGkikas13.`
+2. **T1:** link the clone and check:
+   ```bash
+   nitpilot repos add "$CLONE_B" && nitpilot doctor
+   ```
+   Expect `repos add` to confirm `NikosGkikas13/nitpilot-sandbox` is linked to that clone, and `doctor` to print no `✗` line.
+3. **T1:** `nitpilot start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.` Leave it running.
+
+- [ ] `nitpilot login` and `start` work against nitpilot.dev with no `NITPILOT_SERVER` and no tunnel.
+
+## 3. Single-player reviewer (the first PR; one Claude run)
+
+The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a review, and NikosGkikas13's own agent posts it within seconds.
+
+1. **T3** (say first: pushes a branch as ngkdev93-jpg):
+   ```bash
+   cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-reviewer; cd "$REPO"
+   ```
+   Expect `Branch pushed. Open the pull request as account A:` and a link.
+2. **ngkdev93-jpg's browser:** open that link. GitHub's **Open a pull request** page compares `acc/hosted-reviewer` with `main`. Click the **Title** box and type `Hosted: reviewer`. Don't pick a reviewer yet. Click the green **Create pull request** button. Note the number (`#<PR>` after the title); in **T3** run `export PR=<number>`.
+3. Wait about ten seconds (so the PR's own webhooks are done), then, still in **ngkdev93-jpg's browser**, on the PR's **Conversation** tab: in the right-hand column click the gear next to **Reviewers**, type `NikosGkikas13`, click the name (a tick appears), and click outside the list. **Reviewers** now shows NikosGkikas13 with a small dot (requested).
+4. Within about 5 seconds **T1** prints `→ review of NikosGkikas13/nitpilot-sandbox#<PR> (attempt 1)`. Claude works for one to three minutes; then `✓ review of …: done`.
+5. **ngkdev93-jpg's browser:** reload the PR. A review by **NikosGkikas13**, with the `nitpilot` app badge next to the name, and inline comments on `orders-demo/src/orders.js` (the seed has three planted bugs; Claude usually finds them and may add others). No comment from `nitpilot[bot]` (only one side is on Nitpilot).
+6. **T3:**
+   ```bash
+   boxq -v pr=$PR -f - < docs/acceptance/check.sql
+   gh api repos/$SANDBOX/pulls/$PR/reviews --jq '[.[] | {user: .user.login, state, submitted_at}]'
+   gh api repos/$SANDBOX/issues/$PR/comments --jq '[.[] | .user.login]'
+   ```
+   Compare the `review_requested` arrival time in `check.sql` section 4 with the `→ review of …` stamp in T1 (both UTC).
+
+- [ ] The review job started within 5 seconds of "Request review" (`check.sql` §4 `pull_request.review_requested` against T1's `→ review` stamp).
+- [ ] The review is on the PR in NikosGkikas13's name (with the app badge); no `nitpilot[bot]` comment.
+- [ ] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
+
+## 4. The demo recording (the second PR; one Claude run)
+
+The README's video ([spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4, "Demo video"): about 45 seconds of the same story on a fresh PR. You record; nothing is trimmed here (that happens with the README, Plan 3 Task 14).
+
+**Get ready (no recording yet):**
+1. **T3** (say first: pushes a branch): `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-demo; cd "$REPO"`.
+2. **ngkdev93-jpg's browser:** open the link, title `Add order paging and a summary line`, **Create pull request**. Don't request a reviewer. `export PR=<number>` in **T3**.
+3. Turn on Do Not Disturb (Control Center, top right of the menu bar → **Focus** → **Do Not Disturb**), so no notification pops up on the video.
+4. Lay out the screen:
+   - **Left half: ngkdev93-jpg's browser** on the new PR's **Conversation** tab, scrolled so the **Reviewers** box on the right is visible.
+   - **Right half: T1** with the CLI running. Make the text big (⌘+ three or four times) and clear it first: stop the CLI (Ctrl-C), run `clear`, then start it again without the timestamps so the screen reads like a user's: `nitpilot start`. It prints `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.`
+   - **NikosGkikas13's browser**, behind the other two, open on `https://nitpilot.dev/c/NikosGkikas13/nitpilot-sandbox/<PR>` (the chat). Before the review starts it says this PR has no chat yet; that's fine, it fills in by the end.
+
+**Record (about a minute and a half; the wait while Claude works is cut later):**
+5. Press ⇧⌘5. A bar appears at the bottom of the screen: click **Record Entire Screen** (the icon with a solid rectangle), then **Record**. A small stop button appears in the menu bar.
+6. Pause two seconds on the PR page. In **ngkdev93-jpg's browser** click the gear next to **Reviewers**, type `NikosGkikas13`, click the name, click outside the list.
+7. Look at **T1**: within a second or two `→ review of NikosGkikas13/nitpilot-sandbox#<PR> (attempt 1)`. Keep still while Claude works (this part is cut later); when T1 prints `✓ review of …: done`, reload **ngkdev93-jpg's browser** (⌘R) and scroll slowly down the conversation through NikosGkikas13's review and its inline comments.
+8. Click **NikosGkikas13's browser** to bring it to the front and reload it (⌘R): the chat with the review's points. Pause three seconds.
+9. Click the stop button in the menu bar. The recording opens in a corner preview; click it, then **File → Save…**, name it `nitpilot-demo`, save it in **Movies**. Keep the file: Task 14 makes the README's MP4 and GIF from it.
+10. Turn Do Not Disturb off. In **T1**, stop the CLI and start it with timestamps again: `nitpilot start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`.
+
+- [ ] `~/Movies/nitpilot-demo.mov` exists and shows the PR, "Request review", the terminal taking the job, the review on the PR, and the chat; the bot or account it shows is the production one (`nitpilot`), not `nitpilot-dev`.
+
+## 5. Push on desktop Chrome and on the iPhone (about 10 minutes)
+
+Ask first: turning push on registers each browser with its push service (Google's for Chrome, Apple's for the iPhone). Unlike Plan 2, there is no callback address to add for the run: `https://nitpilot.dev` is the app's own address for good.
+
+1. **NikosGkikas13's browser**, on https://nitpilot.dev/inbox: click your avatar at the top left beside the Nitpilot wordmark (*Settings · NikosGkikas13*). In the **Notifications** card click the **Push notifications** switch (grey). Chrome shows *nitpilot.dev wants to Show notifications* under the address bar: click **Allow**. The switch turns blue.
+2. **NikosGkikas13's iPhone:** open **Safari**, type `https://nitpilot.dev` (with the `https://`), tap **Sign in with GitHub** and sign in as `NikosGkikas13`; GitHub asks once to **Authorize nitpilot**. You land in the inbox.
+3. Tap **Share** (the square with an arrow up, in the bottom bar) → scroll down → **Add to Home Screen** → **Add**.
+4. Go to the Home Screen and open the new **Nitpilot** icon. If it shows the landing page, tap **Sign in with GitHub** again inside it (it keeps its own cookies).
+5. Tap your avatar → **Settings** → **Notifications** → the **Push notifications** switch → **Allow**.
+6. **T3:** `boxq -v pr=0 -f - < docs/acceptance/check-web.sql`. Section 4 lists two rows for `NikosGkikas13`: *Chrome on macOS* and *Safari on iPhone*.
+
+- [ ] Push is on in NikosGkikas13's Chrome and in the iPhone's Home Screen app (two subscriptions in `check-web.sql` §4), with no callback URL added anywhere.
+
+## 6. Agent to agent (the third PR; one or two Claude runs)
+
+ngkdev93-jpg joins, with Claude Code fixing; NikosGkikas13's agent becomes the fake reviewer.
+
+1. **ngkdev93-jpg's browser:** open https://nitpilot.dev and click **Sign in with GitHub**; on GitHub click **Authorize nitpilot**. You land on the setup checklist.
+2. **T2:** `nit-w login --no-open`. Copy the link it prints into **ngkdev93-jpg's browser**, check the code, click **Approve**. T2 prints `Logged in as ngkdev93-jpg.`
+3. **T2:** `nit-w repos add "$CLONE_A" && nit-w doctor` (no `✗`), then `nit-w start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as ngkdev93-jpg.`
+4. **T1:** stop the CLI (Ctrl-C), switch NikosGkikas13 to the fake agent and start it from source:
+   ```bash
+   nit-edit r '.agent = "fake"' && unset R_SCENARIO && nit-rf start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+   Expect `Connected as NikosGkikas13.`
+5. **T3** (say first: a branch, then Claude runs on ngkdev93-jpg's side): `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-pair; cd "$REPO"`. In **ngkdev93-jpg's browser** open the link, title `Hosted: agent to agent`, and this time pick the reviewer before creating it: the gear next to **Reviewers** → `NikosGkikas13` → click outside → **Create pull request**. `export PR=<number>` in **T3**.
+6. Expect, with no clicks:
+   - **T1** within 5 seconds: `→ review of …#<PR>`, then `✓ review … done` (three points, a second or two).
+   - GitHub: one comment from **`nitpilot[bot]`** (the summary) a few seconds later.
+   - **T2** about 30 seconds after the review (`debounce_seconds`): `→ address of …#<PR> (attempt 1)`; Claude edits `orders.js`, replies to each point, and a commit lands on the branch; `✓ address … done`.
+   - **T1:** `→ re_review of …`, `✓ … done` (all three resolved).
+   - The chat is ready: **NikosGkikas13's Mac** shows a notification from **Google Chrome** titled *Ready for your approval* (top right); click it and Chrome opens the chat. **NikosGkikas13's iPhone** shows the same from **Nitpilot**; tap it and the Home Screen app opens the chat. T1 prints a `🔔 Ready for your approval …` line, and no notification from **Script Editor** appears on the Mac (that's the CLI's fallback when push didn't reach you).
+7. **T3:**
+   ```bash
+   boxq -v pr=$PR -f - < docs/acceptance/check.sql
+   gh api repos/$SANDBOX/issues/$PR/comments | jq --arg link "/c/$SANDBOX/$PR" '[.[] | select(.user.login == "nitpilot[bot]")] | {bot_comments: length, edited: (.[0].updated_at != .[0].created_at), has_log: (.[0].body | contains("<summary>Review log")), has_transcript_link: (.[0].body | contains($link))}'
+   gh api repos/$SANDBOX/pulls/$PR/commits --jq '[.[] | {sha: .sha[0:7], author: .author.login, message: .commit.message}]'
+   ```
+   Expect `check.sql` §1 phase `ready`; the `jq` line `bot_comments: 1` with `edited`, `has_log` and `has_transcript_link` all `true`; and every commit's `author` `ngkdev93-jpg`.
+
+- [ ] The chat reached READY with exactly one `nitpilot[bot]` summary comment, edited across rounds.
+- [ ] The fix commit is authored by ngkdev93-jpg.
+- [ ] Web Push arrived on desktop Chrome and on the iPhone Home Screen app, and clicking it opened the chat; the CLI showed no OS notification.
+
+## 7. A restart in the middle of a job (the fourth PR; no Claude run)
+
+`docker compose restart` on the box while NikosGkikas13's agent is in the middle of a review. The fake reviewer waits 45 seconds before it raises its points (`scenarios/sandbox-slow.json`), which leaves time to restart.
+
+1. **T2:** stop ngkdev93-jpg's CLI (Ctrl-C), so no Claude address job starts in this section.
+2. **T1:** stop the CLI and start it on the slow scenario:
+   ```bash
+   R_SCENARIO="$REPO/docs/acceptance/scenarios/sandbox-slow.json" nit-rf start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"
+   ```
+3. **T3** (say first: a branch): `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-restart; cd "$REPO"`. **ngkdev93-jpg's browser:** open the link, title `Hosted: restart`, pick **NikosGkikas13** under **Reviewers**, **Create pull request**. `export PR=<number>`.
+4. The moment **T1** prints `→ review of …#<PR> (attempt 1)`, in **T3** (say first: restarts nitpilot.dev):
+   ```bash
+   ssh $BOX 'cd /opt/nitpilot && docker compose restart && docker compose ps --format "{{.Name}} {{.Status}}"'
+   ```
+   Expect `Container nitpilot-server  Restarting`, `Started`, and a status line. **T1** shows the connection dropping and, within a few seconds, `Connected as NikosGkikas13.` again, with no `■ Stopped` and no new `→ review` line.
+5. About 45 seconds after the job started, **T1** prints `✓ review of …: done`. **ngkdev93-jpg's browser:** the PR has NikosGkikas13's review with three inline comments (lines 5, 12, 18).
+6. **T3:** `boxq -v pr=$PR -f - < docs/acceptance/check.sql` and `boxlog 60 | grep -iE 'shutting|1012|listening|lock'`.
+
+- [ ] The restart lost nothing: one `review` job, `done` at attempt 1 (`check.sql` §2), no duplicates (§3), the review on the PR, and the CLI reconnected by itself; the log shows the shutdown and the new start.
+
+## 8. A webhook from a private repo is dropped (no agent runs)
+
+The hosted instance takes public repos only (`PUBLIC_REPOS_ONLY=true`). Ask first: this makes a private repo on NikosGkikas13's account, installs the app on it and opens a PR there.
+
+1. **T3:** make the repo with one commit on `main` and a branch:
+   ```bash
+   gh repo create NikosGkikas13/nitpilot-private-check --private --add-readme --description "Plan 3 acceptance: a private repo the hosted instance must ignore"
+   gh api -X PUT repos/NikosGkikas13/nitpilot-private-check/contents/check.txt -f message="Add check.txt" -f content="$(printf 'private\n' | base64)" -f branch=main
+   ```
+   That makes the repo (and `README.md` on `main`) and adds a file. Then a branch with a change, and its PR:
+   ```bash
+   sha=$(gh api repos/NikosGkikas13/nitpilot-private-check/git/ref/heads/main --jq .object.sha)
+   gh api repos/NikosGkikas13/nitpilot-private-check/git/refs -f ref=refs/heads/check -f sha="$sha"
+   blob=$(gh api repos/NikosGkikas13/nitpilot-private-check/contents/check.txt --jq .sha)
+   gh api -X PUT repos/NikosGkikas13/nitpilot-private-check/contents/check.txt -f message="Change check.txt" -f content="$(printf 'private, changed\n' | base64)" -f branch=check -f sha="$blob"
+   ```
+2. **NikosGkikas13's browser:** install the app on it. Open https://github.com/settings/installations, click **Configure** next to **nitpilot**. Under **Repository access** (**Only select repositories** is already chosen), click **Select repositories**, type `nitpilot-private-check`, click it, and click **Save** at the bottom. GitHub may ask for your password or a code first.
+3. **T3:** open the PR, asking for no review (there's nobody else on this repo):
+   ```bash
+   gh pr create -R NikosGkikas13/nitpilot-private-check --head check --base main --title "Private check" --body "Must be dropped by nitpilot.dev."
+   ```
+4. **T3**, after about 10 seconds:
+   ```bash
+   boxq -c "select event, action, status, note from \"RawEvent\" where body::jsonb -> 'repository' ->> 'full_name' = 'NikosGkikas13/nitpilot-private-check' order by \"createdAt\"" -c "select \"fullName\", private from \"Repo\" where \"fullName\" like '%private-check'" -c "select count(*) as chats from \"PrChat\" c join \"Repo\" r on r.id = c.\"repoId\" where r.\"fullName\" like '%private-check'"
+   ```
+   Expect the `installation_repositories` / `pull_request` rows for that repo `ignored` with the note `private repo (public-only mode)` (an `installation_repositories` delivery carries no `repository` field, so it may not be listed), and `0` chats. The `Repo` query may list the repo with `private` `t` (the installation sync records it); what matters is that nothing about its PR got through.
+5. Remove the repo again, **NikosGkikas13's browser**: open https://github.com/NikosGkikas13/nitpilot-private-check/settings, scroll to the red **Danger Zone** at the bottom, **Delete this repository**, confirm the steps GitHub shows (it asks you to type `NikosGkikas13/nitpilot-private-check`), and click the red delete button. (GitHub also removes it from the app's installation.)
+
+- [ ] The private repo's PR webhooks were stored as `ignored` (`private repo (public-only mode)`), and no chat or job came from them.
+
+## 9. Backups, memory, and Odyhook (no clicks)
+
+1. **T3:** a backup of what this run made, then the restore check (both on the box; "say first" covers the scratch database it makes and drops):
+   ```bash
+   ssh $BOX '/usr/local/bin/nitpilot-backup.sh && tail -n 3 /var/log/nitpilot-cron.log'
+   ```
+   Expect `nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-<time>.sql.gz (<n> bytes)`. Then the commands under "Check a backup" in [hosting.md](../hosting.md), on the box (`ssh $BOX`, paste them, `exit`). Expect the two count lines to match: the same number of migrations, people (`User`: 2 now), chats (this run's four PRs, plus Task 12's), and `1` app.
+2. **T3:** the cron line is in place: `ssh $BOX 'grep -c nitpilot-backup /etc/cron.d/nitpilot'` prints `1`. If a night has passed since Task 12, the log shows an `ok` line from 03:30 UTC.
+3. **T3:** `ssh $BOX 'docker stats --no-stream; free -m'`, and `curl -s -o /dev/null -w '%{http_code}\n' https://odyhook.dev`.
+
+- [ ] The nightly backup holds the `nitpilot` database, and restoring it into a scratch database works (the two count lines match).
+- [ ] `docker stats` after the run shows `nitpilot-server` under its 384 MiB limit, and odyhook.dev answers `200`.
+
+## 10. Wrap up
+
+1. **T1** and **T2:** stop both CLIs (Ctrl-C). Put NikosGkikas13 back on Claude Code: `nit-edit r '.agent = "claude-code"'`.
+2. Close the four PRs, as ngkdev93-jpg (say first): for each number, `GH_TOKEN=$(gh auth token -u ngkdev93-jpg) gh pr close <n> -R $SANDBOX --delete-branch`. Their chats close on nitpilot.dev and are deleted 90 days later (`CLOSED_CHAT_RETENTION_DAYS`).
+3. Keep `~/.nitpilot-hosted-r` (NikosGkikas13 stays on nitpilot.dev). For ngkdev93-jpg, either keep `~/.nitpilot-hosted-w` or sign that CLI out: in **ngkdev93-jpg's browser**, https://nitpilot.dev → avatar → **Settings** → **Devices** → **Revoke** on the device, then `rm -rf ~/.nitpilot-hosted-w`. (D5 repeats the single-player run with a fresh config anyway.)
+4. Turn off nothing on the box: nitpilot.dev stays up.
+
+## 11. Results
+
+Run on: <date>, <UTC times>, with nitpilot.dev on image `0.1.0-rc.<n>` (<digest>), the CLI from commit `<sha>`. Agents: Claude Code <version> (NikosGkikas13 in sections 3–4, ngkdev93-jpg in 6); the fake agent from source (NikosGkikas13 in 6–7). Desktop: Chrome <version> on macOS <version>. Phone: iPhone on iOS <version>. PRs: sandbox #<n> (3), #<n> (4), #<n> (6), #<n> (7), `nitpilot-private-check` #1 (8, repo deleted after).
+
+| Criterion (spec §20 item 4) | Section | Evidence |
+|---|---|---|
+| `http://nitpilot.dev` and `www.nitpilot.dev` end at `https://nitpilot.dev`, with a valid certificate | 1 | |
+| Single-player reviewer: the review job starts within 5 s of "Request review", and the review is posted in the reviewer's name | 3 | |
+| Agent to agent: the chat reaches READY with exactly one `nitpilot[bot]` summary comment | 6 | |
+| Web Push arrives on desktop Chrome and on the iPhone Home Screen app, with no per-run callback URL | 5, 6 | |
+| A webhook from a private repo is dropped (`PUBLIC_REPOS_ONLY`) | 8 | |
+| `docker compose restart` in `/opt/nitpilot` mid-job loses nothing: the CLI reconnects and the job completes | 7 | |
+| The nightly backup contains the `nitpilot` database, and restoring it into a scratch database works | 9 | |
+| `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers | 9 | |
+| The demo is recorded on nitpilot.dev, showing `nitpilot`, not `nitpilot-dev` | 4 | |
+
+**What was found and fixed during the run** (each with its commit): <none yet>
+````
+
+In `docs/superpowers/specs/2026-10-07-nitpilot-design.md`, §20 item 4, "Plan 3 acceptance test (live, on nitpilot.dev)", **Setup** bullet, replace
+
+```
+the author (ngkdev93-jpg) is not on Nitpilot for the single-player run, and runs the CLI with the fake agent for the agent-to-agent run.
+```
+with
+```
+the author (ngkdev93-jpg) is not on Nitpilot for the single-player run, and joins with Claude Code for the agent-to-agent run, where the reviewer's CLI switches to the scripted fake agent (as in Plan 1: the same three points every time, so the run never depends on how many points a real reviewer raises). The runbook is `docs/acceptance/plan-3.md`.
+```
+
+Check the helpers load and the scenario parses (no network):
+
+```bash
+zsh -c 'source docs/acceptance/hosted.sh && whence -w nitpilot nit-rf nit-w nit-edit boxq boxlog' && node -e 'const s = require("./docs/acceptance/scenarios/sandbox-slow.json"); console.log(s.review.length, JSON.stringify(s.review[0]))'
+```
+Expected: six `…: function` lines, then `5 {"sleep":45000}`.
+
+Commit:
+
+```bash
+git add docs/acceptance/plan-3.md docs/acceptance/hosted.sh docs/acceptance/scenarios/sandbox-slow.json docs/superpowers/specs/2026-10-07-nitpilot-design.md
+```
+```bash
+git commit -m "docs(acceptance): the Plan 3 runbook for nitpilot.dev
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 2: (say first: GitHub writes and a Claude run) The single-player run: runbook sections 0 to 3**
+
+I start the terminals (T1 to T3, each `source docs/acceptance/hosted.sh`) and run the checks of section 0 and section 1 myself; I say first before each GitHub write (the branch, then the user's PR and review request) and before Claude runs. The user approves the device in section 2 and does the clicks in section 3 as **ngkdev93-jpg**. Watch for: the `→ review` stamp in T1 against `check.sql` §4's `review_requested` time (the 5-second criterion), and the app badge on the review.
+
+- [ ] **Step 3: (user, say first: a GitHub write and a Claude run) The demo: runbook section 4**
+
+The user records with ⇧⌘5 following the runbook's layout and shot list; I push the branch and set up T1 (`clear`, `nitpilot start` without timestamps). I trim nothing; the user keeps `~/Movies/nitpilot-demo.mov` for Task 14.
+
+- [ ] **Step 4: (say first: push registration, GitHub writes, Claude runs) Push and agent to agent: runbook sections 5 and 6**
+
+The user turns push on in Chrome and on the iPhone (section 5) and signs ngkdev93-jpg in (section 6); I switch NikosGkikas13's CLI to the fake agent and start ngkdev93-jpg's. Watch for: exactly one `nitpilot[bot]` comment, the fix commit authored by ngkdev93-jpg, the *Ready for your approval* push on both devices, and no Script Editor notification.
+
+- [ ] **Step 5: (say first: restarts nitpilot.dev; makes and deletes a private repo) The remaining criteria: runbook sections 7 to 10**
+
+The restart (section 7) is the one moment the hosted instance goes down on purpose: I run it the moment T1 shows `→ review`. The private repo (section 8) is made with `gh` as NikosGkikas13 and deleted by the user at the end of that section. Section 9's backup and restore check run on the box (they write one more backup and make and drop the scratch database). Section 10 closes the PRs as ngkdev93-jpg.
+
+- [ ] **Step 6: Results, tick, commit**
+
+Fill section 11's table in `docs/acceptance/plan-3.md` with what was seen (times, PR numbers, the image digest, versions), tick every box in the runbook, and write "What was found and fixed during the run". A fix found during the run is its own commit first (TDD for code; a code fix reaches nitpilot.dev only through a new `rc` and `docs/hosting.md` "Deploying a new version", said first). Then tick Steps 1 to 6 here, add the ledger line `Task 13: complete`, and commit:
+
+```bash
+git add docs/acceptance/plan-3.md docs/superpowers/plans/2026-10-24-plan-3-deploy-and-launch.md
+```
+```bash
+git commit -m "test(acceptance): the Plan 3 live run on nitpilot.dev
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+### Checked against the code (D4)
+
+Checked at `528639f` and in the scratch build (`~/Desktop/PracticeProjects/.nitpilot-scratch/d4`, detached at `528639f`; checkpoints pinned as `refs/scratch/d4/task-11` = `5848d1f` and `refs/scratch/d4/task-13` = `c77c61a`; the local run used its own containers and network, all removed). Each line is where the step-level text differs from the task-level text it replaced, or a fact the task-level text got wrong. Nothing that writes outside the repo was run.
+
+**Task 11**
+
+1. **`rclone copyto` of a checked temp file, not `pg_dump | gzip | rclone copy`.** Odyhook's script streams into `rclone rcat` (no temp file). A streamed upload stores a dump cut short by a `pg_dump` failure as if it were whole (`pipefail` fails the script, but the object is already in R2). The script dumps to a `mktemp -d` folder, checks the `-- PostgreSQL database dump complete` line, gzips, then `copyto`; the `trap` removes the folder. Both failure paths were seen in the local run (a failed upload, and a missing container: `FAILED: …`, exit 1, nothing uploaded).
+2. **File name** `nitpilot/nitpilot-YYYY-MM-DDTHH-MM-SSZ.sql.gz` (task text: `nitpilot/<UTC date>.sql.gz`): Odyhook's naming, sorts by time, and two runs on one day don't overwrite each other.
+3. **`mktemp -d "${TMPDIR:-/tmp}/nitpilot-backup.XXXXXX"`**, not bare `mktemp -d`: macOS's `mktemp` ignores `TMPDIR` without a template (it used `/var/folders/…`, which the rclone stand-in couldn't see). Same behaviour on the box's Linux.
+4. **`pg_dump --no-owner --no-privileges`** (not in the task text), so the dump loads as any role into any database (the scratch database, or a new box before the role exists).
+5. **The box's names are taken from Odyhook's docs, and confirmed on the box in Task 12 Step 2, not read from the box while writing.** The task text said "reads the remote's name from the box (`rclone listremotes`) and Odyhook's script, never guessing". Reading the box would touch the server, which this milestone said it wouldn't do while writing; Odyhook's `infra/README.md` documents the remote `r2`, the bucket `odyhook-backups`, the script's `pg_dump | gzip | rclone rcat`, the 03:00 cron line, and `recovery.md` the superuser `hooksmith`. The script's defaults use them, overridable with `NITPILOT_PG_CONTAINER` / `NITPILOT_BACKUP_DEST` (which is also how the local run pointed it at stand-ins). Task 12 Step 2 stops if any differs.
+6. **No top-level `name: nitpilot` in the compose file** (task text: "project name `nitpilot`"). The folder `/opt/nitpilot` already names the project `nitpilot`; an explicit `name:` would make a copy run anywhere else (the local check on this Mac) join this repo's dev project `nitpilot` (`nitpilot-postgres-1`), where a `down --remove-orphans` could remove the dev database. Same reasoning as Checked D3 item 39.
+7. **`NITPILOT_VERSION` is required** (`${NITPILOT_VERSION:?…}`) instead of defaulting to `latest`: the hosted instance always names its version, and before D5 there is no `latest` (an rc never pushes it).
+8. **Added to the compose file:** a `logging` cap (json-file, 3 × 10 MB), so a chatty log can't fill the 40 GB disk; the network is declared as `hooksmith: { name: hooksmith_default, external: true }` (the service refers to it as `hooksmith`).
+9. **`.env.example` has no `NODE_ENV`** (the image sets `NODE_ENV=production`), and `DATABASE_URL=` is empty with a comment rather than `postgresql://nitpilot:<password>@postgres:5432/nitpilot` (the task text): the box command writes the whole URL with a fresh password, so there's no placeholder to forget.
+10. **The `.env` and database commands avoid `sed -i` and command-line secrets.** `set_env` is an `awk` rewrite (same on macOS and Linux); the VAPID keys are read with `read -r pub priv < <(docker run --rm --entrypoint node …)` (Checked D3 item 35), never echoed; the database password is read back from `.env` and sent to `psql` on standard input (a here-document), never as an argument (where `ps` would show it). The task text said "`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed" without the commands.
+11. **Database step order:** `.env` first (Task 12 Step 3, which makes the password), then the role (Step 4, which reads it back). The task text had the database first. `REVOKE ALL ON DATABASE nitpilot FROM PUBLIC` is added. "`psql` as `nitpilot` connects" is checked by the server's own migrations at start (Step 5) rather than a separate `psql` with the password on its command line.
+12. **Caddy restart after Odyhook's deploy** (not in the task text, which said Odyhook's workflow redeploys Caddy). Odyhook's deploy is `git pull --ff-only && docker compose -f docker-compose.prod.yml up -d --build` (its `infra/README.md`); `up -d` leaves an unchanged Caddy container running, Caddy doesn't watch its file, and `git pull` replaces the file, which a single-file bind mount doesn't follow. So Task 12 Step 8 restarts `hooksmith-caddy-1` once (said first) and checks the file inside the container. Not seen live; the `grep -c` inside the container is the check.
+13. **Odyhook's checkout has the user's uncommitted work** (`.gitignore`, `ARCHITECTURE.md`, on `main`, 2026-10-25), so the Caddyfile branch is made in a separate worktree from `origin/main` and removed afterwards; the user's checkout never moves. Odyhook's deploy workflow runs its test gate on the PR before the merge.
+14. **`docs/hosting.md` "After Odyhook's own deploys"** comes from two local checks: Postgres restarted under the server (it exited, Docker restarted it, healthy again, a new setup code in first-run mode), and an Odyhook `docker compose down` with Nitpilot attached (`Network … Resource is still in use`, exit 0, the network kept and reused by the next `up`).
+15. **Restore check commands** use `psql -q -o /dev/null`: a plain-SQL dump has a `SELECT pg_catalog.set_config(…)`, whose one-row result `-q` alone still prints.
+16. **The R2 lifecycle rule** (14 days, Odyhook's) may or may not cover `nitpilot/`; `docs/hosting.md` says where to look in Cloudflare's dashboard. Not checked (it needs the user's Cloudflare login); the dumps are a few KB, so either way costs nothing.
+17. **Memory in the local run:** `nitpilot-server` used 170.5 MiB of its 384 MiB, idle in first-run mode (arm64 build on this Mac). The box's numbers come in Task 12.
+18. **No counts change** (no code). The new files passed the Task 10 gitleaks scan (`dir`, `no leaks found`) and shellcheck v0.11.0.
+
+**Task 12**
+
+19. **Steps reordered and split** (task text: 10 steps). New order: public (1), a read-only look at the box (2, new), folder and `.env` (3), database (4), start (5), the `.env` copy (6, was inside Step 4), DNS (7), Caddy (8; DNS now comes first, not "just before Step 6's push lands", so Caddy gets its certificate at once), the app (9), backups (10), ticks (11).
+20. **Item 61 of Checked D3 is Step 1's first half**: the Task 10 mirror-clone scan with `.gitleaks.toml`, on the history as it is when the repo goes public; a finding stops the step.
+21. **Version:** the newest rc is `0.1.0-rc.3` (tags `v0.1.0-rc.1..3`), and `git diff --stat v0.1.0-rc.3 528639f -- Dockerfile .dockerignore apps packages package.json package-lock.json` is empty: D4 changes nothing in the image. Step 1 repeats the check and names the rule for an `rc.4`.
+22. **Health checks** use node's `fetch` inside the container and `docker inspect … Health.Status` (Checked D3 item 35); from Odyhook's Caddy container (Alpine) `wget` is available, which proves the by-name route Caddy will use.
+23. **The setup code is read by the user** in their own terminal (`docker logs … | grep "setup code" | tail -n 1`), not by me and shown in chat (task text: "I read it from the log"): on the production server it guards the empty instance, and the How-to-work rule says commands that print secrets are the user's. It changes at every server start (seen locally), hence `tail -n 1`.
+24. **DNS at Porkbun:** nitpilot.dev's nameservers are Porkbun's (`dig +short NS`, 2026-10-25), so the click-steps are Porkbun's DNS page. Porkbun's smallest TTL is 600, not 300 (task text). The parking records it adds by default are deleted. The labels in the click-steps are from Porkbun's page as it was described in Odyhook's setup, not seen this session; the user's report corrects them in Step 11 if they differ.
+25. **The redirect codes:** Caddy's automatic http→https redirect is a `308`, and the `www` block's `redir … permanent` a `301` (task text: `301` for both).
+26. **The app's name** `nitpilot` is typed over the page's default `Nitpilot (nitpilot.dev)` (Checked D3 item 25: the default uses `URL.host`); **Who can install it** = **Anyone on GitHub** (`public: true` in the manifest). GitHub's own page text in Step 9 3–7 is as seen in Task 9's live run with the throwaway app.
+27. **Step 9's app description** is the spec's §1 pitch plus the address; the badge colour is the web app's dark background token (an assumption: the user can leave GitHub's default).
+28. **Odyhook's Caddyfile commit carries the user's `Co-Authored-By` trailer** too (the user's rule is "every commit"); its message follows Odyhook's `feat(…)` style.
+
+**Task 13**
+
+29. **Agent-to-agent roles** (the spec's setup line changes in Step 1): the reviewer's CLI on the fake agent and the author's on Claude Code, as in Plan 1, because the fake agent answers points by number and can't play an author facing a real reviewer's unknown number of points (`apps/cli/src/agents/fake/agent.ts`: `reply: { point, … }`). The single-player run and the demo keep the reviewer on Claude Code.
+30. **The restart check uses the fake reviewer, 45 s late** (`scenarios/sandbox-slow.json`, new), so the restart lands mid-job every time and costs no Claude run; the author's CLI is stopped so no Claude address job follows. Points are buffered in the CLI until `finish` (`apps/cli/src/mcp/tools/write.ts`), and unacked answers are sent again after the CLI's next `Connected as …` (`apps/cli/src/daemon.ts`), which is what the check relies on.
+31. **`hosted.sh`** (new, next to `env.sh`): `nitpilot` is the built CLI under that name so the demo shows `nitpilot start`; `nit-rf` the same config folder from source (the fake agent exists only in a source checkout); `nit-w` ngkdev93-jpg's built CLI; `boxq`/`boxlog` read the box over ssh (arguments quoted with `printf '%q '`, checked in zsh against bash on the far side). No `NITPILOT_SERVER` anywhere: `DEFAULT_SERVER` is `https://nitpilot.dev`.
+32. **No `nitpilot logout` command exists** (`apps/cli/src/commands/`: doctor, login, repos, retry, start, status), so the wrap-up revokes the device in Settings → Devices instead.
+33. **The private-repo check** makes its repo with `gh` (a README, a file, a branch, a PR) and the user only adds it to the installation and deletes it, both in the browser; the drop is `RawEvent.status = 'ignored'` with the note `private repo (public-only mode)` (`apps/server/src/ingest/handle.ts`). An `installation_repositories` delivery has no `repository` field, so it isn't filtered there and the installation sync may record the repo (`private` true): that's expected, and the check is that no chat or job comes from its PR.
+34. **Push needs no callback-URL step** on nitpilot.dev (the Plan 2 run added the tunnel's callback to the dev app); the *Ready for your approval* push is the reviewer's, so it is checked in the agent-to-agent run, where NikosGkikas13's approval is what's asked for.
+35. **The demo layout** puts ngkdev93-jpg's PR page and T1 side by side and the chat (NikosGkikas13's Chrome) behind, recorded with ⇧⌘5 (whole screen); the wait while Claude works is cut in Task 14, where the MP4 and GIF are made.
+36. **Not verified while writing:** anything on the box, GitHub, Porkbun or R2; the CLI's exact words when the server restarts (only the second `Connected as …` line is certain); and the number of points Claude raises in sections 3 and 4 (the runbook doesn't depend on it).
 
 ---
 
