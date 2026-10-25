@@ -4,7 +4,7 @@
 
 > **Status: D1 to D4 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`; see each "Checked against the code" section); D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
-**Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README with a demo video and a Show HN draft.
+**Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README (the launch story in words; no demo video, the user's decision on 2026-10-25) and a Show HN draft.
 
 **Architecture:**
 - **One image** (`Dockerfile` at the root): the server and the built web app, `node:22` slim, non-root, `prisma migrate deploy` then the server on start. Published to `ghcr.io/nikosgkikas13/nitpilot` by a tag-driven release workflow, which also publishes the CLI to npm through trusted publishing.
@@ -13,7 +13,7 @@
 
 **Tech Stack:** everything from Plans 1 and 2, plus Docker (multi-stage build), Caddy 2, GitHub Actions (`docker/build-push-action`, `actions/setup-node` with npm trusted publishing / OIDC), gitleaks (run from its Docker image, never installed). No new runtime dependency in the server, CLI or web app unless a task names it.
 
-**Spec:** `docs/superpowers/specs/2026-10-07-nitpilot-design.md`. Read §7, §8, §14 (9: hosted instance), §15 (the app's events and permissions, for the manifest), §16 (onboarding), §17 (all of it: One image, Closed-chat retention, Hosted instance, Self-hosting), §20 item 4 (D1–D5, demo, acceptance), §21 and §22 before starting. **Builds on:** Plans 1a, 1b and 2, and `docs/superpowers/plans/2026-10-15-plan-2-rulings-and-minors.md` ("Deferred to Plan 3"). **Odyhook's infra** (read, never edit outside the one Caddyfile commit): `~/Desktop/PracticeProjects/hooksmith/{docker-compose.prod.yml,Caddyfile,infra/README.md,.github/workflows/deploy.yml}`.
+**Spec:** `docs/superpowers/specs/2026-10-07-nitpilot-design.md`. Read §7, §8, §14 (9: hosted instance), §15 (the app's events and permissions, for the manifest), §16 (onboarding), §17 (all of it: One image, Closed-chat retention, Hosted instance, Self-hosting), §20 item 4 (D1–D5, acceptance), §21 and §22 before starting. **Builds on:** Plans 1a, 1b and 2, and `docs/superpowers/plans/2026-10-15-plan-2-rulings-and-minors.md` ("Deferred to Plan 3"). **Odyhook's infra** (read, never edit outside the one Caddyfile commit): `~/Desktop/PracticeProjects/hooksmith/{docker-compose.prod.yml,Caddyfile,infra/README.md,.github/workflows/deploy.yml}`.
 
 ## Global Constraints
 
@@ -7079,7 +7079,7 @@ Checked at `d9fe4d8` and in the scratch build; each line is where the step-level
 
 ## Milestone D4: nitpilot.dev
 
-D4 runs Nitpilot for real next to Odyhook. Task 11 writes the hosted folder, the backup script and the runbook, and proves them on this Mac against a stand-in for Odyhook's Postgres. Task 12 goes live: the repo and the image go public, then the box, the database, DNS, Odyhook's Caddyfile, the production `nitpilot` app made through nitpilot.dev's own first-run page, and backups. Task 13 is the live acceptance run and the demo recording. Every step that touches GitHub, GHCR, Porkbun (DNS), the box or Odyhook's repo is marked **(say first)** or **(user)**: I say what it does and wait for go; nothing of that was run while this milestone was written.
+D4 runs Nitpilot for real next to Odyhook. Task 11 writes the hosted folder, the backup script and the runbook, and proves them on this Mac against a stand-in for Odyhook's Postgres. Task 12 goes live: the repo and the image go public, then the box, the database, DNS, Odyhook's Caddyfile, the production `nitpilot` app made through nitpilot.dev's own first-run page, and backups. Task 13 is the live acceptance run (its demo recording was later dropped: no demo video, the user's decision on 2026-10-25). Every step that touches GitHub, GHCR, Porkbun (DNS), the box or Odyhook's repo is marked **(say first)** or **(user)**: I say what it does and wait for go; nothing of that was run while this milestone was written.
 
 **Files at the end of D4:**
 ```
@@ -8022,7 +8022,7 @@ git commit -m "docs(plan): Task 12, nitpilot.dev is live
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-### Task 13: The live acceptance run on nitpilot.dev, and the demo
+### Task 13: The live acceptance run on nitpilot.dev, and the demo (dropped)
 
 **What this task is.** Spec §20 item 4's acceptance test, run as a runbook like Plans 1 and 2: Step 1 writes it (and its helpers) and commits; Steps 2 to 5 run its sections with the user; Step 6 records the results. The runbook is the source of truth for the clicks; the steps here say which sections each covers and what to watch for.
 
@@ -8197,6 +8197,8 @@ The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a 
 - [ ] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
 
 ## 4. The demo recording (the second PR; one Claude run)
+
+*(Dropped on 2026-10-25 by the user's decision: no demo video. The runbook's section 4 now says so; this is the text as first written.)*
 
 The README's video ([spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4, "Demo video"): about 45 seconds of the same story on a fresh PR. You record; nothing is trimmed here (that happens with the README, Plan 3 Task 14).
 
@@ -8384,11 +8386,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 I start the terminals (T1 to T3, each `source docs/acceptance/hosted.sh`) and run the checks of section 0 and section 1 myself; I say first before each GitHub write (the branch, then the user's PR and review request) and before Claude runs. The user approves the device in section 2 and does the clicks in section 3 as **ngkdev93-jpg**. Watch for: the `→ review` stamp in T1 against `check.sql` §4's `review_requested` time (the 5-second criterion), and the app badge on the review.
 
-- [ ] **Step 3: (user, say first: a GitHub write and a Claude run) The demo: runbook section 4**
+- [x] **Step 3: (dropped) The demo: runbook section 4**
 
 The user records with ⇧⌘5 following the runbook's layout and shot list; I push the branch and set up T1 (`clear`, `nitpilot start` without timestamps). I trim nothing; the user keeps `~/Movies/nitpilot-demo.mov` for Task 14.
 
-**Run note (2026-10-25): not done.** The take on #18 showed the Claude app instead of the terminal, plus a personal inbox and bookmarks; a retake needs a single-player PR, and ngkdev93-jpg had joined by then (section 6). The user moved the demo to D5; the runbook's section 4 now lists what the screen must show.
+**Run note (2026-10-25): not done.** The take on #18 showed the Claude app instead of the terminal, plus a personal inbox and bookmarks; a retake needs a single-player PR, and ngkdev93-jpg had joined by then (section 6). The user moved the demo to D5; the runbook's section 4 now lists what the screen must show. **Then dropped** by the user's decision (2026-10-25): no demo video; the runbook's section 4 now says so.
 
 - [x] **Step 4: (say first: push registration, GitHub writes, Claude runs) Push and agent to agent: runbook sections 5 and 6**
 
@@ -8459,20 +8461,20 @@ Checked at `528639f` and in the scratch build (`~/Desktop/PracticeProjects/.nitp
 32. **No `nitpilot logout` command exists** (`apps/cli/src/commands/`: doctor, login, repos, retry, start, status), so the wrap-up revokes the device in Settings → Devices instead.
 33. **The private-repo check** makes its repo with `gh` (a README, a file, a branch, a PR) and the user only adds it to the installation and deletes it, both in the browser; the drop is `RawEvent.status = 'ignored'` with the note `private repo (public-only mode)` (`apps/server/src/ingest/handle.ts`). An `installation_repositories` delivery has no `repository` field, so it isn't filtered there and the installation sync may record the repo (`private` true): that's expected, and the check is that no chat or job comes from its PR.
 34. **Push needs no callback-URL step** on nitpilot.dev (the Plan 2 run added the tunnel's callback to the dev app); the *Ready for your approval* push is the reviewer's, so it is checked in the agent-to-agent run, where NikosGkikas13's approval is what's asked for.
-35. **The demo layout** puts ngkdev93-jpg's PR page and T1 side by side and the chat (NikosGkikas13's Chrome) behind, recorded with ⇧⌘5 (whole screen); the wait while Claude works is cut in Task 14, where the MP4 and GIF are made.
+35. **The demo layout** puts ngkdev93-jpg's PR page and T1 side by side and the chat (NikosGkikas13's Chrome) behind, recorded with ⇧⌘5 (whole screen); the wait while Claude works is cut in Task 14, where the MP4 and GIF are made. (Dropped on 2026-10-25 with the demo.)
 36. **Not verified while writing:** anything on the box, GitHub, Porkbun or R2; the CLI's exact words when the server restarts (only the second `Connected as …` line is certain); and the number of points Claude raises in sections 3 and 4 (the runbook doesn't depend on it).
 
 ---
 
 ## Milestone D5: Launch
 
-### Task 14: README, docs pass, demo in the README
+### Task 14: README and docs pass
 
 **Files:** Modify `README.md` (rewrite), `docs/architecture.md` (deploy: one image, first-run mode, the hosted layout; Chosen / Alternatives / Why), `docs/why/README` index if there is one, `docs/adapters.md` (check it still matches), `apps/cli/package.json` `description` and its own `README.md` (npm shows it).
 
-- [ ] **Step 1:** README order: the one-line pitch; the demo video (the user uploads the MP4 by dragging it into a GitHub issue or the README editor on github.com, which gives a `user-attachments` URL; click-steps) and a GIF fallback (`ffmpeg` from the MP4, under 5 MB, in `docs/media/`); the launch story in three sentences; Install (`npm install -g nitpilot`, `nitpilot login`, install the app, `nitpilot repos add`, `nitpilot start`); "When your teammate is on it too"; How it works (short, links to architecture and `docs/why/`); Self-hosting (link); Security (what the agent can and can't do, the scrub list, a contact line using an address the user picks); Development (the current "Running it locally"); License.
+- [ ] **Step 1:** README order: the one-line pitch; the launch story in three sentences (in words: no demo video, the user's decision on 2026-10-25); Install (`npm install -g nitpilot`, `nitpilot login`, install the app, `nitpilot repos add`, `nitpilot start`); "When your teammate is on it too"; How it works (short, links to architecture and `docs/why/`); Self-hosting (link); Security (what the agent can and can't do, the scrub list, a contact line using an address the user picks); Development (the current "Running it locally"); License.
 - [ ] **Step 2:** Docs pass: every `docs/why/` file still names files that exist (`grep` each path), architecture covers Plan 3, no "Plan 3 adds…" future tense left anywhere (`grep -rn "Plan 3" README.md docs/*.md docs/why`).
-- [ ] **Step 3:** The user reads the README on GitHub (rendered) and says go; commit `docs: the launch README, with the demo`.
+- [ ] **Step 3:** The user reads the README on GitHub (rendered) and says go; commit `docs: the launch README`.
 
 ### Task 15: v0.1.0, the fresh-install check, and the Show HN draft
 

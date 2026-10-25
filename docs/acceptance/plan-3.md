@@ -2,16 +2,16 @@
 
 The manual end-to-end test of the hosted instance, from [spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4 ("Plan 3 acceptance test"): the real https://nitpilot.dev on the Hetzner box, the production GitHub App `nitpilot`, real GitHub, two real accounts, a phone, and Claude Code. No tunnel and no local server: every CLI talks to nitpilot.dev, the CLI's default. Follow it top to bottom and tick the boxes. [why/live-acceptance.md](../why/live-acceptance.md) explains why this is a document and not a test.
 
-**Time:** about 2 hours. **Cost:** about 3 Claude Code runs of your Claude plan (section 3, section 4, and one or two in section 6). Sections 7 and 8 use the scripted fake agent and cost nothing. If a run ends with a `quota` failure, wait for the plan's window to reset and carry on.
+**Time:** about 2 hours. **Cost:** about 3 Claude Code runs of your Claude plan (section 3, and one or two in section 6; section 4 was dropped). Sections 7 and 8 use the scripted fake agent and cost nothing. If a run ends with a `quota` failure, wait for the plan's window to reset and carry on.
 
 ## Who is who
 
 | Account | Role | CLI | Agent | Where you click |
 |---|---|---|---|---|
-| `NikosGkikas13` | reviewer, owns the sandbox repo and the `nitpilot` app | `nitpilot` (the built CLI) in sections 2–4; `nit-rf` (from source) in sections 6–7 | **Claude Code**, then the **fake agent** | **NikosGkikas13's browser**: your normal Chrome window, signed in to GitHub as `NikosGkikas13`; and **NikosGkikas13's iPhone** |
+| `NikosGkikas13` | reviewer, owns the sandbox repo and the `nitpilot` app | `nitpilot` (the built CLI) in sections 2–3; `nit-rf` (from source) in sections 6–7 | **Claude Code**, then the **fake agent** | **NikosGkikas13's browser**: your normal Chrome window, signed in to GitHub as `NikosGkikas13`; and **NikosGkikas13's iPhone** |
 | `ngkdev93-jpg` | author | none until section 6, then `nit-w` (the built CLI) | **Claude Code** (section 6) | **ngkdev93-jpg's browser**: a Chrome private window (⇧⌘N) signed in to GitHub as `ngkdev93-jpg` |
 
-Sections 3 and 4 are the launch story: one person on Nitpilot, the reviewer, while the author is just someone on GitHub. In section 6 the author joins too and the two agents work it out in the chat. There the reviewer's agent is the fake one and the author's is Claude, as in Plan 1: the fake reviewer raises the same three points every time, so the author's Claude has something definite to fix, and a run never depends on how many points a real reviewer happens to raise.
+Section 3 is the launch story: one person on Nitpilot, the reviewer, while the author is just someone on GitHub. In section 6 the author joins too and the two agents work it out in the chat. There the reviewer's agent is the fake one and the author's is Claude, as in Plan 1: the fake reviewer raises the same three points every time, so the author's Claude has something definite to fix, and a run never depends on how many points a real reviewer happens to raise.
 
 The sandbox is `NikosGkikas13/nitpilot-sandbox`, with `ngkdev93-jpg` as a collaborator, and the clones from [plan-1.md](plan-1.md) section 1: `~/nitpilot-acceptance/a/nitpilot-sandbox` (ngkdev93-jpg, over `github-a`) and `~/nitpilot-acceptance/b/nitpilot-sandbox` (NikosGkikas13, over `github-b`).
 
@@ -90,28 +90,9 @@ The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a 
 - [x] The review is on the PR in NikosGkikas13's name; no `nitpilot[bot]` comment.
 - [x] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
 
-## 4. The demo recording (the second PR; one Claude run)
+## 4. The demo recording (dropped)
 
-The README's video ([spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4, "Demo video"): about 45 seconds of the same story on a fresh PR. You record; nothing is trimmed here (that happens with the README, Plan 3 Task 14).
-
-**Get ready (no recording yet):**
-1. **T3** (say first: pushes a branch): `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-demo; cd "$REPO"`.
-2. **ngkdev93-jpg's browser:** open the link, title `Add order paging and a summary line`, **Create pull request**. Don't request a reviewer. `export PR=<number>` in **T3**.
-3. Turn on Do Not Disturb (Control Center, top right of the menu bar → **Focus** → **Do Not Disturb**), so no notification pops up on the video.
-4. Lay out the screen. Only these windows may show: run T1 in macOS's own **Terminal** app (not in a panel of another app), close every personal tab in both browsers, hide the bookmarks bar (⇧⌘B), and hide every other app. A retake needs a new single-player PR, so it must happen before ngkdev93-jpg signs in (section 6).
-   - **Left half: ngkdev93-jpg's browser** on the new PR's **Conversation** tab, scrolled so the **Reviewers** box on the right is visible.
-   - **Right half: T1** with the CLI running. Make the text big (⌘+ three or four times) and clear it first: stop the CLI (Ctrl-C), run `clear`, then start it again without the timestamps so the screen reads like a user's: `nitpilot start`. It prints `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.`
-   - **NikosGkikas13's browser**, behind the other two, open on `https://nitpilot.dev/c/NikosGkikas13/nitpilot-sandbox/<PR>` (the chat). Before the review starts it says this PR has no chat yet; that's fine, it fills in by the end.
-
-**Record (about a minute and a half; the wait while Claude works is cut later):**
-5. Press ⇧⌘5. A bar appears at the bottom of the screen: click **Record Entire Screen** (the icon with a solid rectangle), then **Record**. A small stop button appears in the menu bar.
-6. Pause two seconds on the PR page. In **ngkdev93-jpg's browser** click the gear next to **Reviewers**, type `NikosGkikas13`, click the name, click outside the list.
-7. Look at **T1**: within a second or two `→ review of NikosGkikas13/nitpilot-sandbox#<PR> (attempt 1)`. Keep still while Claude works (this part is cut later); when T1 prints `✓ review of …: done`, reload **ngkdev93-jpg's browser** (⌘R) and scroll slowly down the conversation through NikosGkikas13's review and its inline comments.
-8. Click **NikosGkikas13's browser** to bring it to the front and reload it (⌘R): the chat with the review's points. Pause three seconds.
-9. Click the stop button in the menu bar. The recording opens in a corner preview; click it, then **File → Save…**, name it `nitpilot-demo`, save it in **Movies**. Keep the file: Task 14 makes the README's MP4 and GIF from it.
-10. Turn Do Not Disturb off. In **T1**, stop the CLI and start it with timestamps again: `nitpilot start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`.
-
-- [ ] `~/Movies/nitpilot-demo.mov` exists and shows the PR, "Request review", the terminal taking the job, the review on the PR, and the chat; the bot or account it shows is the production one (`nitpilot`), not `nitpilot-dev`.
+Dropped by the user's decision on 2026-10-25: there is no demo video, and the README tells the launch story in words ([spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4). The one take, on #18, was unusable (it showed the Claude app instead of the terminal, plus a personal inbox and bookmarks), and a retake needed a fresh single-player PR, which ngkdev93-jpg's joining in section 6 rules out. Nothing to do here; go on to section 5.
 
 ## 5. Push on desktop Chrome and on the iPhone (about 10 minutes)
 
@@ -241,7 +222,7 @@ Run on: 2026-10-25, 11:01–18:05 UTC (with a break: the Mac slept between secti
 | `docker compose restart` in `/opt/nitpilot` mid-job loses nothing: the CLI reconnects and the job completes | 7 | ✅ #20: review started 17:36:20.855 (45 s fake); restart at 17:36:59; T1 `Disconnected (1012 server restarting)` 17:37:02, `(1006)` 17:37:03, `Connected` 17:37:06, `✓ done` 17:37:08. 1 review job, done at attempt 1, no duplicates, 3 points in the chat and the summary comment; log shows the new start at 17:37:03 |
 | The nightly backup contains the `nitpilot` database, and restoring it into a scratch database works | 9 | ✅ `nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-2026-10-25T18-00-58Z.sql.gz (37461 bytes)`; counts `nitpilot\|13\|2\|6\|1` = `nitpilot_restore_check\|13\|2\|6\|1`; cron line in place (no 03:30 run yet: Task 12 was the same day) |
 | `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers | 9 | ✅ `nitpilot-server` 179.4 MiB / 384 MiB; box 3819 MB, 2525 available, no swap; odyhook.dev `200` |
-| The demo is recorded on nitpilot.dev, showing `nitpilot`, not `nitpilot-dev` | 4 | ❌ Not yet. The take on #18 (73 s, kept on the user's Mac) can't be used: most of it shows the Claude app, the terminal never appears, and a personal inbox and bookmarks are visible. A retake needs a single-player PR, which ngkdev93-jpg's joining in section 6 rules out; the user moved the demo to D5 |
+| The demo is recorded on nitpilot.dev, showing `nitpilot`, not `nitpilot-dev` | 4 | Dropped by the user's decision (2026-10-25): no demo video. The take on #18 was unusable and a retake needed a fresh single-player PR |
 
 **What was found and fixed during the run** (each with its commit):
 
@@ -250,5 +231,5 @@ Run on: 2026-10-25, 11:01–18:05 UTC (with a break: the Mac slept between secti
 - **Section 9:** the cron log file exists only after cron's first run, and `grep -c nitpilot-backup` counts the file's comment too (prints `2`). Text fixed in `33ffb9e`.
 - **The address job** in section 6 started 3 s after the review, not ~30 s. Text fixed in `33ffb9e`.
 - **Open: the Mac didn't show the *Ready for your approval* push** (the iPhone did). Server side looks right; not diagnosed.
-- **Open: the demo** moved to D5 (see the table). Section 4 now says what the screen must show and that a retake has to come before section 6 (`33ffb9e`).
+- **The demo was dropped** by the user's decision (2026-10-25; see the table and section 4).
 - Not a finding: the app's terminal panel refuses a command line containing a lone `r` (`nit-edit r …`), so that edit was run outside it.
