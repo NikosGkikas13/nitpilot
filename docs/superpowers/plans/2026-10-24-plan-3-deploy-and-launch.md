@@ -7114,7 +7114,7 @@ Outside this repo (Task 12, said first): `/opt/nitpilot/{docker-compose.yml,.env
 
 ---
 
-- [ ] **Step 1: The compose file**
+- [x] **Step 1: The compose file**
 
 Create `deploy/hosted/docker-compose.yml` with exactly this content:
 
@@ -7167,7 +7167,7 @@ networks:
     external: true
 ```
 
-- [ ] **Step 2: The settings file**
+- [x] **Step 2: The settings file**
 
 Create `deploy/hosted/.env.example` with exactly this content:
 
@@ -7209,7 +7209,7 @@ VAPID_SUBJECT=https://nitpilot.dev
 
 `NODE_ENV` isn't listed: the image already sets `NODE_ENV=production`.
 
-- [ ] **Step 3: The backup script and its cron line**
+- [x] **Step 3: The backup script and its cron line**
 
 Create `deploy/hosted/nitpilot-backup.sh` with exactly this content:
 
@@ -7278,7 +7278,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 30 3 * * * root /usr/local/bin/nitpilot-backup.sh >> /var/log/nitpilot-cron.log 2>&1
 ```
 
-- [ ] **Step 4: Validate**
+- [x] **Step 4: Validate**
 
 The compose file, three ways, from a temporary folder (Compose reads `.env` from the folder it runs in):
 
@@ -7294,7 +7294,7 @@ docker run --rm -v "$PWD/deploy/hosted:/mnt:ro" koalaman/shellcheck:v0.11.0 /mnt
 ```
 Expected: no findings, `exit 0`.
 
-- [ ] **Step 5: The runbook and the explainer**
+- [x] **Step 5: The runbook and the explainer**
 
 Create `docs/hosting.md` with exactly this content:
 
@@ -7523,7 +7523,7 @@ So a restore needs two things: the dump **and** the `.env` it was made with. The
 - `docs/self-hosting.md`, "Backups" and "Restoring": the same idea for a team's own server.
 ```
 
-- [ ] **Step 6: The local run, against stand-ins for Odyhook**
+- [x] **Step 6: The local run, against stand-ins for Odyhook**
 
 What this proves before the box: the compose file starts the image on an external network, the server finds Postgres by the name `postgres` there and runs its migrations, the `.env` and database commands that Task 12 runs on the box work as written and print no secret, a Caddy on the same network reaches `nitpilot-server:8787` by name, Odyhook's Caddyfile with the two new blocks is valid, the backup script uploads a complete dump and refuses a failed one, a restore into a scratch database matches, and the server comes back by itself when "Odyhook's" Postgres restarts. The stand-ins: a network `d4_hooksmith_default` (not the real name: this Mac already has a `hooksmith_default` from Odyhook's own local dev, which is left alone) and a Postgres container `d4-hooksmith-postgres-1` with the alias `postgres` and the superuser `hooksmith`, like the box. Everything lives in `~/Desktop/PracticeProjects/.nitpilot-scratch/` and is removed in 6k.
 
@@ -7679,7 +7679,7 @@ cd "$S/hosted" && docker compose down && docker rm -f d4-hooksmith-postgres-1 &&
 ```
 Expected: `Container nitpilot-server  Removed`, the removals, and `0`. This Mac's own `hooksmith_default` network was never used.
 
-- [ ] **Step 7: Secret scan of the new files, tick, ledger, commit**
+- [x] **Step 7: Secret scan of the new files, tick, ledger, commit**
 
 The Task 10 scan over the new files, copied to a throwaway folder with the config (so no other file of the checkout, such as `apps/server/.env`, is read):
 
