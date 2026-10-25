@@ -24,7 +24,7 @@ Anything else (`0.1.0`, `v0.1`, `v0.1.0-beta.1`) is refused by the first job and
    ```
 4. Watch https://github.com/NikosGkikas13/nitpilot/actions: the **Release** run has three jobs.
    - **Check the tag** runs `node scripts/check-release-version.mjs <tag>` and passes `kind` (`rc` or `release`) and `version` to the others. A red job here means the tag and the files disagree; the message names both.
-   - **Image to GHCR** builds the Dockerfile and pushes the tags in the table. Look at its log for the pushed tags and digest. The package appears under the repo's Packages.
+   - **Image to GHCR** builds the Dockerfile for `linux/amd64` and `linux/arm64` and pushes the tags in the table (each tag holds both). The arm64 half is emulated, so this job takes the longest (well over ten minutes without cache). Look at its log for the pushed tags and digest. The package appears under the repo's Packages.
    - **CLI to npm** (releases only, after the image) builds `apps/cli` and runs `npm publish --provenance`. Check https://www.npmjs.com/package/nitpilot for the new version and its provenance badge.
 
 You can try the package contents any time without publishing: `npm run build -w apps/cli && npm publish -w apps/cli --dry-run`. CI does exactly this on every PR and every push to `main`.

@@ -4,7 +4,7 @@ Run your own Nitpilot server: for private repos, or to keep everything on your o
 
 ## What you need
 
-- **A server with Docker** (Docker Engine with the Compose plugin: `docker compose version` prints a version). 1 GB of memory is plenty; Nitpilot is one Node process and Postgres.
+- **A server with Docker** (Docker Engine with the Compose plugin: `docker compose version` prints a version), Intel/AMD or ARM: the image is published for both, and Docker picks the right one. 1 GB of memory is plenty; Nitpilot is one Node process and Postgres.
 - **A domain or subdomain** for it, e.g. `nitpilot.example.com`, whose DNS you can edit.
 - **Ports 80 and 443 open** to the internet on that server (Caddy needs both to get its HTTPS certificate). Nothing else needs to be open.
 - **A GitHub account or organization** to own the GitHub App (for an organization you must be one of its owners).

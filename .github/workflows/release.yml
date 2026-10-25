@@ -36,12 +36,14 @@ jobs:
     name: Image to GHCR
     needs: version
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+      # Lets this amd64 runner build the arm64 half of the image by emulating an ARM processor (docs/why/docker-images.md).
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -51,6 +53,9 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          # One tag, two images: Docker on an Intel/AMD server pulls the amd64 one, on ARM (Apple Silicon, Hetzner CAX,
+          # a Raspberry Pi) the arm64 one.
+          platforms: linux/amd64,linux/arm64
           push: true
           # An rc gets only its own tag; the empty second line is skipped.
           tags: |

@@ -54,6 +54,14 @@ The `HEALTHCHECK` line asks Docker to call `/healthz` every 30 seconds, from ins
 
 `npm run image:smoke` builds the image and runs it next to a throwaway Postgres, then checks that: `/healthz` answers; Docker reports it healthy; `GET /` returns the web app; the server uses under 384 MiB of memory while idle; `docker stop` ends with exit code 0 in under 10 seconds; a connected CLI socket is closed with 1012; a fresh container migrates with no internet; and the same container starts again with its migrations already applied. It removes everything it made, pass or fail. CI runs it on every pull request (the `image` job in `.github/workflows/ci.yml`), so a change that breaks the image fails before it merges.
 
+## One tag, two kinds of processor
+
+A compiled program only runs on the processor family it was built for: Intel and AMD chips (`amd64`, also called x86-64) or ARM chips (`arm64`: Apple Silicon Macs, Hetzner's CAX servers, a Raspberry Pi). A Docker image is full of compiled programs (Node itself, Prisma's schema engine), so it has the same limit.
+
+You've met the fix in npm: `esbuild` ships one package per platform (`@esbuild/darwin-arm64`, `@esbuild/linux-x64`, …) and `npm install` picks the one for your machine. A **multi-platform image** does that for Docker: the tag `ghcr.io/nikosgkikas13/nitpilot:0.1.0` points at a small index listing one image per platform, and `docker pull` takes the entry for the machine it runs on. Nobody has to choose.
+
+The release workflow builds both halves on GitHub's runners, which are amd64. The arm64 half is built under **QEMU**, a program that pretends to be an ARM processor; it's correct but slow, which is why the image job has a long timeout. CI's per-PR image check builds only amd64, to stay fast. `docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:<tag>` lists the platforms a tag holds.
+
 ## Where
 
-`Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh` at the repository root. The shutdown code is `shutdown()` in `apps/server/src/main.ts`; the CI job is `image` in `.github/workflows/ci.yml`.
+`Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh` at the repository root. The shutdown code is `shutdown()` in `apps/server/src/main.ts`; the CI job is `image` in `.github/workflows/ci.yml`. The two platforms are set in `.github/workflows/release.yml` (`platforms:` and the QEMU step).
