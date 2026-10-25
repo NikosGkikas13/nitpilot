@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: D1 to D4 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`, Task 14 of D5 on 2026-10-25 against `eaf19e2`; see each "Checked against the code" section); Task 15 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
+> **Status: D1 to D5 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`, Task 14 of D5 on 2026-10-25 against `eaf19e2`, Task 15 on 2026-10-25 against `7e73698`; see each "Checked against the code" section).** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
 **Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README (the launch story in words; no demo video, the user's decision on 2026-10-25) and a Show HN draft.
 
@@ -8497,8 +8497,68 @@ Written 2026-10-25 against `eaf19e2` on `plan-3-deploy-and-launch`.
 
 ### Task 15: v0.1.0, the fresh-install check, and the Show HN draft
 
-- [ ] **Step 1: (say first) Release.** First the trusted publisher (click-steps on npmjs.com, signed in as the package owner): open https://www.npmjs.com/package/nitpilot → **Settings** → **Trusted Publisher** → **GitHub Actions**; fill **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml`, **Environment name** empty; for **Permissions** choose `npm publish` (not `npm stage publish`); **Set up connection**, approve with 2FA. npm wants the connection used within 48 hours (it shows "Pending validation"), so push the tag right after; if it expires, delete the connection and make it again (the fields can't be edited). The user pushes the branch's state to `main` (their merge) and the tag `v0.1.0` (commands given). The workflow: image `0.1.0` and `latest` on GHCR; `nitpilot@0.1.0` on npm with the provenance badge (check npmjs.com/package/nitpilot shows "Built and signed on GitHub Actions"). If npm's staged publishing holds the version for approval, the user approves it with 2FA (npmjs.com → the package's **Staged Packages** tab, or `npm stage approve <stage-id>`). Deprecate the placeholder: the user runs `npm deprecate nitpilot@0.0.0 "Placeholder; use 0.1.0 or later"`.
-- [ ] **Step 2:** Deploy `0.1.0` on the box (`NITPILOT_VERSION=0.1.0`, `docker compose pull && docker compose up -d`) and check `/healthz`.
-- [ ] **Step 3: The fresh-install check:** in a new folder with a fresh `NITPILOT_CONFIG_DIR`, `npm install -g nitpilot` (from npm, not the repo), `nitpilot --version` = 0.1.0, `nitpilot login` against nitpilot.dev, repeat Task 13 Step 2's single-player run once. Tick spec §20's D5 line in `docs/acceptance/plan-3.md`.
-- [ ] **Step 4: The Show HN draft** in `docs/launch/show-hn.md`: a title under 80 characters starting "Show HN:", a first comment in the user's voice (what it is, why: the launch story; how: own agent, own machine, own subscription, one server process; what's honest: Claude Code only today, Gemini waiting on Google's sign-in, public repos on the hosted instance, self-host for private ones; the links). Plain, no hype words. The user posts it themselves.
-- [ ] **Step 5:** Commit `docs(launch): the Show HN draft`; then the plan's final review (one opus reviewer over the whole branch against the spec, Global Constraints and Review Focus), the fix chunks the user picks, and the rulings and minors written to `docs/superpowers/plans/2026-10-24-plan-3-rulings-and-minors.md`.
+**What this task is.** The release itself: `v0.1.0` on npm and GHCR, nitpilot.dev moved to it, a check that a stranger's install from npm works against nitpilot.dev, and the Show HN draft. Then the plan's final review. No code changes unless the review asks for them.
+
+**Files:**
+- Create: `docs/launch/show-hn.md`, `docs/superpowers/plans/2026-10-24-plan-3-rulings-and-minors.md`
+- Modify: `docs/acceptance/plan-3.md` (new section 12, the D5 run from npm), this plan (ticks), the ledger
+- On the box: `/opt/nitpilot/.env` (`NITPILOT_VERSION` only); in nitpilot.dev's database, ngkdev93-jpg's `User` row (Step 3)
+
+- [ ] **Step 1: (say first) (user) Release.**
+  1. **The trusted publisher** (npmjs.com, signed in as the `nitpilot` package owner): https://www.npmjs.com/package/nitpilot → **Settings** tab → **Trusted Publisher** → **GitHub Actions**. Fill **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml`, **Environment name** empty; **Permissions** `npm publish` (not `npm stage publish`). Click **Set up connection** and approve with 2FA. It shows "Pending validation" until a publish uses it; npm wants that within 48 hours, so do sub-steps 2–4 the same day. If it expires: delete it and make it again (the fields can't be edited).
+  2. **The merge** (say first: opens a PR): Claude opens the PR `plan-3-deploy-and-launch` → `main` (`gh pr create`, title `Plan 3: deploy and launch`). CI runs on it (`typecheck + lint + tests`, the image job). When it is green, the user merges it on GitHub with **Create a merge commit** (the PR page's green button; the arrow next to it picks the kind).
+  3. **The tag** (user, from the repo folder):
+     ```bash
+     git fetch origin
+     git tag v0.1.0 origin/main
+     git push origin v0.1.0
+     ```
+     `scripts/check-release-version.mjs` passes: `apps/cli/package.json` and `CLI_VERSION` are both `0.1.0`.
+  4. **The run:** https://github.com/NikosGkikas13/nitpilot/actions → **Release** for `v0.1.0`: **Check the tag** (kind `release`), **Image to GHCR** (`:0.1.0` and `:latest`, both platforms; about 8–10 minutes), **CLI to npm**. Then, no clicks:
+     ```bash
+     npm view nitpilot dist-tags --json                       # latest: 0.1.0
+     npm view nitpilot@0.1.0 dist.attestations --json         # a provenance entry (predicateType slsa.dev/provenance)
+     docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:0.1.0   # linux/amd64 and linux/arm64
+     docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:latest  # the same digest as :0.1.0
+     ```
+     https://www.npmjs.com/package/nitpilot shows 0.1.0, the README, and the provenance line ("Built and signed on GitHub Actions"). If npm's staged publishing holds the version, the user approves it with 2FA (the package's **Staged Packages** tab, or `npm stage approve <stage-id>`). If **CLI to npm** fails after the image succeeded, **Re-run failed jobs** (`docs/releasing.md`).
+  5. **The placeholders** (user, needs npm 2FA):
+     ```bash
+     npm deprecate nitpilot@0.0.0 "Placeholder; use 0.1.0 or later"
+     npm deprecate nitpilot@0.0.0-stage "Placeholder; use 0.1.0 or later"
+     ```
+     `npm view nitpilot@0.0.0 deprecated` prints the message.
+- [ ] **Step 2: (say first) Deploy `0.1.0` on the box.** `/healthz` says `0.1.0` on the rc too (it reports the server's own version), so the check is the image the container runs:
+  ```bash
+  ssh root@157.180.91.106
+  cd /opt/nitpilot
+  sed -i 's/^NITPILOT_VERSION=.*/NITPILOT_VERSION=0.1.0/' .env
+  docker compose pull && docker compose up -d
+  docker compose ps                                                        # (healthy) within a minute
+  docker inspect nitpilot-server --format '{{.Config.Image}} {{.Image}}'   # ghcr.io/nikosgkikas13/nitpilot:0.1.0
+  exit
+  ```
+  From the Mac: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"0.1.0"}`; https://nitpilot.dev loads; `boxlog 20` shows the new start and no error.
+- [ ] **Step 3: The fresh-install check** (`docs/acceptance/plan-3.md` section 12, written in this step). In short:
+  1. **(say first) Make ngkdev93-jpg a stranger again.** Single-player needs the PR's author to have no account (`chats/people.ts`, `withPeople`). One SQL line on the box deletes ngkdev93-jpg's `User` row by GitHub id; Postgres also deletes its sign-in, sessions, CLI tokens, push subscriptions, chat reads and its jobs from Task 13 (all `onDelete: Cascade`). Chats and participants keep the GitHub id and login (`Participant.userId` is a plain column). ngkdev93-jpg can sign in again any time after.
+  2. **A stranger's install:** a new folder `~/nitpilot-fresh`, the package installed into its own prefix there (`npm install -g nitpilot --prefix ~/nitpilot-fresh/npm`, so nothing global on the Mac changes) and a fresh `NITPILOT_CONFIG_DIR=~/nitpilot-fresh/config`; `nitpilot --version` prints `0.1.0`.
+  3. **NikosGkikas13's CLI from npm:** `nitpilot login` (approve in NikosGkikas13's browser), `nitpilot repos add "$CLONE_B"`, `nitpilot doctor`, `nitpilot start`. The Task 13 CLI (`~/.nitpilot-hosted-r`) stays stopped, so only this one is connected.
+  4. **(say first: a PR as ngkdev93-jpg, one Claude run)** Task 13 section 3 once: `new-branch.sh d5-from-npm`, the PR opened and NikosGkikas13's review requested in ngkdev93-jpg's browser, the job within 5 s, the review in NikosGkikas13's name, no `nitpilot[bot]` comment; `check.sql`.
+  5. **Wrap up:** stop the CLI; close the PR as ngkdev93-jpg (say first); keep `~/nitpilot-fresh` until the task is committed, then `rm -rf ~/nitpilot-fresh` (the CLI token stays listed under NikosGkikas13's Devices; revoke it there).
+  6. Tick section 12's box (spec §20 item 4: "D5 repeats the single-player run once with the CLI installed from npm") with the evidence.
+- [ ] **Step 4: The Show HN draft** in `docs/launch/show-hn.md`: a title under 80 characters starting "Show HN:"; the URL to submit (https://github.com/NikosGkikas13/nitpilot); a first comment in the user's voice: what it is, why (the launch story), how (your own agent on your own machine and subscription, one server process plus Postgres), what's honest (Claude Code only today, Gemini waiting on Google's sign-in; nitpilot.dev is public repos only, self-host for private ones; reviews show in your name with no app badge; single-player only while the author isn't on the instance; the laptop must be on), and the links (repo, nitpilot.dev, npm, self-hosting doc). Plain, no hype words, no emoji. The user posts it themselves.
+- [ ] **Step 5:** Commit `docs(launch): v0.1.0, the npm install check and the Show HN draft` (Steps 1–4's text). Then the plan's final review: one opus reviewer over `origin/main@61fbd64..HEAD` against the spec, Global Constraints and Review Focus. The user picks the fix chunks; fixes are TDD'd, committed, and ship as `0.1.1` if they touch the CLI or server. The rulings and minors from the ledger and the review go to `docs/superpowers/plans/2026-10-24-plan-3-rulings-and-minors.md` (shaped like Plan 2's), committed last.
+
+### Checked against the code (D5, Task 15)
+
+Written 2026-10-25 against `7e73698` on `plan-3-deploy-and-launch`.
+
+1. **npm today:** versions `0.0.0` and `0.0.0-stage`, `latest` = `0.0.0`. A normal `npm publish` of `0.1.0` moves `latest`. Both placeholders get deprecated (the task-level text named only `0.0.0`).
+2. **The version files** are already `0.1.0` (`apps/cli/package.json`, `apps/cli/src/version.ts`), so no release commit is needed; the tag check passes as is.
+3. **`main` is at `61fbd64`**, an ancestor of the branch (54 commits ahead). CI runs on pull requests and on pushes to `main`, so a PR gives a green run before the merge. The task-level "the user pushes the branch's state to main" becomes a PR and a merge commit; the tag goes on `origin/main` after the merge.
+4. **`/healthz` can't tell rc.3 from 0.1.0:** it returns `SERVER_VERSION` (`http/app.ts:56`), already `0.1.0`. Step 2 checks the container's image with `docker inspect` instead.
+5. **Single-player is decided at `pr_opened`**: `withPeople` (`chats/people.ts`) gives the author a `userId` when a `User` row has their GitHub id. ngkdev93-jpg has one since Task 13 section 6. The user's ruling (2026-10-25): delete that row rather than set up a third account. Every relation to `User` cascades; `Participant.userId` is a plain nullable column, so old chats keep their people and only lose the link.
+6. **No global `nitpilot` on this Mac** (`which -a nitpilot` finds none; Task 13 used a shell function from `hosted.sh`). Step 3 installs into `~/nitpilot-fresh/npm` with `--prefix`, so the user's global npm folder is untouched, and the function from `hosted.sh` must not be loaded in that terminal (it would shadow the npm one).
+7. **The fresh config's agent** is `claude-code` (the default in `config/config.ts:66`), so a fresh CLI needs no edit. The Mac runs Node 24.3; the package says `engines >=22`.
+8. **Review order:** the plan reviews after the tag. The user's ruling (2026-10-25): keep that order; rc.3 passed Task 13, and a fix ships as `0.1.1`.
+9. **No `docs/launch/` folder and no Plan 3 rulings file** exist yet; Step 4 and Step 5 create them.
