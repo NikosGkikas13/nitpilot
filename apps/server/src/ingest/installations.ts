@@ -61,6 +61,7 @@ async function upsertRepos(installationId: string, repos: RepoInfo[]): Promise<v
 export async function syncInstallationFromApi(installationId: string, github: GithubClient, appAuth: AppAuth): Promise<void> {
   const { data: inst } = await github.api<{ id: number; account: { login: string } }>('GET', `/app/installations/${installationId}`, { token: appAuth.jwt() });
   const token = await appAuth.installationToken(installationId);
-  const { data } = await github.api<{ repositories: GhRepo[] }>('GET', '/installation/repositories?per_page=100', { token });
-  await syncFromEvent({ scope: 'installation', action: 'created', installationId, accountLogin: inst.account.login, repos: data.repositories.map(toRepoInfo) });
+  // GitHub gives 100 repos a page; an installation on a whole organisation can have more.
+  const repos = await github.apiAllPages<{ repositories: GhRepo[] }, GhRepo>('/installation/repositories?per_page=100', (page) => page.repositories, { token });
+  await syncFromEvent({ scope: 'installation', action: 'created', installationId, accountLogin: inst.account.login, repos: repos.map(toRepoInfo) });
 }

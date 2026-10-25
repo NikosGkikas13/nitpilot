@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { getEnv } from '../../lib/env';
 import { verifyGithubSignature } from '../../lib/hmac';
 import type { Ingest } from '../../ingest/process';
 import { recordDelivery } from '../../ingest/record';
+import { githubApp } from '../../setup/credentials';
 import { errorBody, HttpError } from '../errors';
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -20,7 +20,7 @@ export function webhookRoutes(deps: { ingest: Ingest }): Hono {
     bodyLimit({ maxSize: MAX_BODY_BYTES, onError: (c) => c.json(errorBody('payload_too_large', 'webhook body over 1 MB'), 413) }),
     async (c) => {
       const raw = await c.req.text();
-      if (!verifyGithubSignature(raw, c.req.header('x-hub-signature-256'), getEnv().GITHUB_WEBHOOK_SECRET)) {
+      if (!verifyGithubSignature(raw, c.req.header('x-hub-signature-256'), githubApp().webhookSecret)) {
         throw new HttpError('unauthorized', 'bad webhook signature');
       }
       const deliveryId = c.req.header('x-github-delivery');

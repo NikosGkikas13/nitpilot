@@ -32,9 +32,11 @@ export const BUILD_HINT = "The web app isn't built. Run `npm run build -w apps/w
  * written in HTML or set as an attribute, and <style> elements. React's `style={{…}}` goes through the DOM's
  * style object, which the policy doesn't restrict; it's kept so a library that writes style attributes or
  * <style> tags still works. Scripts stay strict: a script can do far more harm than a style.
+ * `formActions`: other origins a form on the page may post to. Only first-run mode passes one, GitHub's, because its
+ * page posts the app manifest there as a form (setup/first-run.ts); everywhere else forms post only to this server.
  * See docs/why/content-security-policy.md.
  */
-export function contentSecurityPolicy(publicUrl: string): string {
+export function contentSecurityPolicy(publicUrl: string, opts: { formActions?: string[] } = {}): string {
   const url = new URL(publicUrl);
   const socket = `${url.protocol === 'https:' ? 'wss' : 'ws'}://${url.host}`;
   return [
@@ -44,12 +46,12 @@ export function contentSecurityPolicy(publicUrl: string): string {
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self'",
     "base-uri 'self'",
-    "form-action 'self'",
+    ["form-action 'self'", ...(opts.formActions ?? [])].join(' '),
     "frame-ancestors 'none'",
   ].join('; ');
 }
 
-function isServerPath(pathname: string): boolean {
+export function isServerPath(pathname: string): boolean {
   return SERVER_PATHS.has(pathname) || SERVER_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
@@ -75,10 +77,10 @@ async function fileIn(root: string, pathname: string): Promise<string | null> {
  * the server's own paths, so a link like /c/octo/sandbox/42 opens the app, which then shows that chat.
  * Mounted after every other route. See docs/why/serving-a-spa.md.
  */
-export function spaRoutes(opts: { distDir: string; publicUrl: string }): Hono {
+export function spaRoutes(opts: { distDir: string; publicUrl: string; formActions?: string[] }): Hono {
   const app = new Hono();
   const root = path.resolve(opts.distDir);
-  const csp = contentSecurityPolicy(opts.publicUrl);
+  const csp = contentSecurityPolicy(opts.publicUrl, { formActions: opts.formActions });
 
   app.get('*', async (c, next) => {
     if (isServerPath(c.req.path)) return next();

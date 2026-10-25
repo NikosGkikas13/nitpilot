@@ -20,8 +20,8 @@ export default tseslint.config(
     languageOptions: { globals: globals.serviceworker },
   },
   {
-    // Run by hand with Node (npm run icons -w apps/web), not in the browser.
-    files: ['apps/web/scripts/**/*.ts'],
+    // Run with Node, not in the browser: the web app's icon script and the release scripts in scripts/.
+    files: ['apps/web/scripts/**/*.ts', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   {

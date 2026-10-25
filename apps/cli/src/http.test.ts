@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ServerClient } from './http';
+import { joinServerUrl, ServerClient } from './http';
 import { CLI_VERSION } from './version';
 
 type Call = { url: URL; init: RequestInit };
@@ -18,6 +18,18 @@ function fakeFetch(reply: (url: URL) => Response | Promise<Response>) {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const SERVER = 'http://nitpilot.test';
 
+describe('joinServerUrl', () => {
+  it('keeps a path prefix on the server address', () => {
+    expect(joinServerUrl('https://h.example/nitpilot', '/api/me').href).toBe('https://h.example/nitpilot/api/me');
+    expect(joinServerUrl('https://h.example/nitpilot/', '/api/me').href).toBe('https://h.example/nitpilot/api/me');
+    expect(joinServerUrl('https://nitpilot.dev', '/api/me').href).toBe('https://nitpilot.dev/api/me');
+  });
+
+  it('keeps a query string in the path', () => {
+    expect(joinServerUrl('https://h.example/nitpilot', '/api/x?a=1').href).toBe('https://h.example/nitpilot/api/x?a=1');
+  });
+});
+
 describe('ServerClient', () => {
   it("sends the device's token and returns the checked answer", async () => {
     const fetch = fakeFetch(() => json({ login: 'maya', avatarUrl: null, githubAuth: 'ok' }));
@@ -25,6 +37,12 @@ describe('ServerClient', () => {
     const { url, init } = fetch.calls[0]!;
     expect(url.href).toBe(`${SERVER}/api/me`);
     expect(init.headers).toMatchObject({ authorization: 'Bearer nit_abc', 'user-agent': `nitpilot/${CLI_VERSION}` });
+  });
+
+  it('sends requests under the path prefix of the server address', async () => {
+    const fetch = fakeFetch(() => json({ login: 'maya', avatarUrl: null, githubAuth: 'ok' }));
+    await new ServerClient(`${SERVER}/nitpilot/`, 'nit_abc', fetch).me();
+    expect(fetch.calls[0]!.url.href).toBe(`${SERVER}/nitpilot/api/me`);
   });
 
   it('posts JSON to start a login', async () => {
@@ -39,6 +57,14 @@ describe('ServerClient', () => {
   it('says to log in again when the server rejects the token', async () => {
     const fetch = fakeFetch(() => json({ error: { code: 'unauthorized', message: 'Missing or invalid CLI token.' } }, 401));
     await expect(new ServerClient(SERVER, 'nit_old', fetch).me()).rejects.toThrow('Run `nitpilot login`');
+  });
+
+  it('says to sign in on the web, not to log in again, when the GitHub sign-in expired', async () => {
+    const message = 'Your GitHub sign-in expired, so Nitpilot cannot check which repos you can see. Sign in again.';
+    const fetch = fakeFetch(() => json({ error: { code: 'reauth', message } }, 401));
+    const err = await new ServerClient(SERVER, 'nit_abc', fetch).myChats().catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 401 });
+    expect((err as Error).message).toBe(`Your GitHub sign-in expired. Sign in again at ${SERVER}/`);
   });
 
   it("passes on the server's own error message", async () => {

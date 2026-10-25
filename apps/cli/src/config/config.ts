@@ -30,6 +30,25 @@ const RepoConfig = z.strictObject({
  */
 export const IGNORED_SETTINGS = ['auto', 'dailyJobCap'] as const;
 
+const SERVER_ADDRESS_MESSAGE = 'The server address must start with https:// (http is only for a server on this computer).';
+
+const SERVER_QUERY_MESSAGE = "The server address can't have a ?query or #fragment.";
+
+/** A path is added after the address (joinServerUrl), so a query or fragment would end up in the middle. Checked on the raw text: `new URL` drops an empty `?` or `#`. */
+function hasNoQueryOrFragment(address: string): boolean {
+  if (!URL.canParse(address)) return true; // z.url() has already said so
+  return !address.includes('?') && !address.includes('#');
+}
+
+/** https anywhere; http only for a server on this computer, because http sends the device token in the clear. */
+function isHttpsOrThisComputer(address: string): boolean {
+  // Not a URL at all: z.url() has already said so, and a second message would only repeat it (new URL would also throw).
+  if (!URL.canParse(address)) return true;
+  const { protocol, hostname } = new URL(address);
+  if (protocol === 'https:') return true;
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname.endsWith('.localhost');
+}
+
 /**
  * config.json (spec §13). Every field has a default, so a missing or empty file is valid.
  * Names it doesn't know are rejected, so a typo is an error instead of a setting silently ignored (and dropped on the next save).
@@ -38,7 +57,11 @@ export const IGNORED_SETTINGS = ['auto', 'dailyJobCap'] as const;
 export const PersonalConfigSchema = z.preprocess(
   withoutIgnoredSettings,
   z.strictObject({
-    server: z.url({ protocol: /^https?$/ }).default(DEFAULT_SERVER),
+    server: z
+      .url({ protocol: /^https?$/ })
+      .refine(isHttpsOrThisComputer, { error: SERVER_ADDRESS_MESSAGE })
+      .refine(hasNoQueryOrFragment, { error: SERVER_QUERY_MESSAGE })
+      .default(DEFAULT_SERVER),
     token: z.string().startsWith(BRAND.tokenPrefix).nullable().default(null),
     agent: AgentId.default('claude-code'),
     concurrency: z.number().int().min(1).max(4).default(1),

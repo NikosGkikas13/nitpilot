@@ -1,4 +1,5 @@
 import { CLI_WS_PATH, ServerToCli, type CliToServer } from '@nitpilot/protocol';
+import { joinServerUrl } from '../http';
 
 /** How a socket ended. `opened` is false when it never connected (refused, unreachable). */
 export type Closed = { code: number; reason: string; opened: boolean };
@@ -26,7 +27,7 @@ export type SocketHandlers = {
  * Messages that don't fit the protocol are reported and dropped.
  */
 export function openSocket(h: SocketHandlers): ServerSocket {
-  const ws = new WebSocket(socketUrl(h.server), { headers: { authorization: `Bearer ${h.token}` } });
+  const ws = new WebSocket(wsUrlFor(h.server), { headers: { authorization: `Bearer ${h.token}` } });
   let opened = false;
   let ended = false;
   let settle!: (closed: Closed) => void;
@@ -85,9 +86,9 @@ export function openSocket(h: SocketHandlers): ServerSocket {
   };
 }
 
-/** ws://host/ws/cli for http://host (wss for https), joined the way ServerClient joins its paths, so a trailing slash is fine. */
-function socketUrl(server: string): string {
-  const url = new URL(CLI_WS_PATH, server);
+/** ws://host/ws/cli for http://host (wss for https), joined the way ServerClient joins its paths, so a path prefix and a trailing slash are fine. */
+export function wsUrlFor(server: string): URL {
+  const url = joinServerUrl(server, CLI_WS_PATH);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  return url.href;
+  return url;
 }

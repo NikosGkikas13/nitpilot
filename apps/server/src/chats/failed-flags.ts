@@ -1,4 +1,4 @@
-import type { Role } from '@nitpilot/protocol';
+import { FailureReason, type Role } from '@nitpilot/protocol';
 import type { Person } from '../engine/types';
 import { prisma } from '../lib/prisma';
 import type { Dispatch } from './dispatch';
@@ -17,14 +17,28 @@ async function kindOf(participantId: string): Promise<FailureKind> {
   return newest?.status === 'failed' ? 'agent' : 'github_post';
 }
 
+/**
+ * Why this person is flagged in the chat, and for an agent failure, the reason it gave (`Job.failure`). One query:
+ * each role they hold that is flagged `failed`, with that role's newest job. The first role whose newest job failed
+ * is the agent's failure, and the reason comes from that same job. A reason this version doesn't know (a newer
+ * server wrote it) is null, not an error. Null when none of their roles is flagged.
+ */
+export async function failureOf(chatId: string, githubId: string): Promise<{ kind: FailureKind; reason: FailureReason | null } | null> {
+  const flagged = await prisma.participant.findMany({
+    where: { chatId, githubId, attention: 'failed' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { jobs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, failure: true } } },
+  });
+  if (flagged.length === 0) return null;
+  const failedJob = flagged.map((p) => p.jobs[0]).find((job) => job?.status === 'failed');
+  if (!failedJob) return { kind: 'github_post', reason: null };
+  const reason = FailureReason.safeParse(failedJob.failure);
+  return { kind: 'agent', reason: reason.success ? reason.data : null };
+}
+
 /** Why this person is flagged in the chat: null when none of their roles is, 'agent' when any flagged role's newest job failed. */
 export async function failureKind(chatId: string, githubId: string): Promise<FailureKind | null> {
-  const flagged = await prisma.participant.findMany({ where: { chatId, githubId, attention: 'failed' }, select: { id: true } });
-  if (flagged.length === 0) return null;
-  for (const p of flagged) {
-    if ((await kindOf(p.id)) === 'agent') return 'agent';
-  }
-  return 'github_post';
+  return (await failureOf(chatId, githubId))?.kind ?? null;
 }
 
 /**

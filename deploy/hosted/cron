@@ -1,0 +1,8 @@
+# Nitpilot's nightly backup (deploy/hosted/nitpilot-backup.sh), installed on the box as /etc/cron.d/nitpilot
+# (docs/hosting.md, "Backups"). cron reads /etc/cron.d/ every minute; no restart needed after a change.
+# Times are the box's clock, UTC. 03:30 is after Odyhook's own backup at 03:00 (/etc/cron.d/odyhook), so the two
+# dumps never run at once.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 3 * * * root /usr/local/bin/nitpilot-backup.sh >> /var/log/nitpilot-cron.log 2>&1

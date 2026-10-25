@@ -59,6 +59,45 @@ describe('loadConfig', () => {
   });
 });
 
+describe('the server address', () => {
+  const load = (env: Record<string, string>) => loadConfig({ env, dir: tempDir() });
+
+  it('takes http only for a server on this computer', () => {
+    expect(load({ NITPILOT_SERVER: 'http://localhost:8787' }).server).toBe('http://localhost:8787');
+    expect(load({ NITPILOT_SERVER: 'http://127.0.0.1:8787' }).server).toBe('http://127.0.0.1:8787');
+    expect(load({ NITPILOT_SERVER: 'http://[::1]:8787' }).server).toBeDefined();
+    expect(load({ NITPILOT_SERVER: 'http://app.localhost:5173' }).server).toBeDefined();
+    expect(() => load({ NITPILOT_SERVER: 'http://nitpilot.example' })).toThrow('must start with https://');
+    expect(() => load({ NITPILOT_SERVER: 'http://localhost.evil.example' })).toThrow('must start with https://');
+  });
+
+  it('takes https anywhere, with a path', () => {
+    expect(load({ NITPILOT_SERVER: 'https://h.example/nitpilot' }).server).toBe('https://h.example/nitpilot');
+  });
+
+  it('says "Invalid setting" for an address that is not a URL, instead of crashing', () => {
+    expect(() => load({ NITPILOT_SERVER: 'nitpilot.dev' })).toThrow(/Invalid setting "server"/);
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ server: 'not a url' }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow(/Invalid setting "server"/);
+  });
+
+  it('takes no query or fragment, since a path is added after the address', () => {
+    for (const server of ['https://h.example/x?a=1', 'https://h.example/x#y', 'https://h.example/x?', 'https://h.example/x#']) {
+      expect(() => load({ NITPILOT_SERVER: server })).toThrow(/can't have a \?query or #fragment/);
+      const dir = tempDir();
+      writeConfig(dir, JSON.stringify({ server }));
+      expect(() => loadConfig({ env: {}, dir })).toThrow(/can't have a \?query or #fragment/);
+    }
+  });
+
+  it('applies the same rule to the file', () => {
+    const dir = tempDir();
+    writeConfig(dir, JSON.stringify({ server: 'http://nitpilot.example' }));
+    expect(() => loadConfig({ env: {}, dir })).toThrow('must start with https://');
+  });
+});
+
 describe('settings that moved to the server', () => {
   it('accepts a Plan 1 config.json that still has auto and dailyJobCap, and ignores them', () => {
     const dir = tempDir();

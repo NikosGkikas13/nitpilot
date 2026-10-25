@@ -28,7 +28,7 @@ async function scene(repoOver: { rulesJson?: Prisma.InputJsonValue } = {}) {
 
 describe('buildJobBundle', () => {
   it('describes a first review: the PR, who you are, how to fetch the code, and the team rules', async () => {
-    const { repo, chat, review } = await scene({ rulesJson: { max_rounds: 2, ignore_paths: ['vendor/**'], max_points_per_review: 5 } });
+    const { leo, repo, chat, review } = await scene({ rulesJson: { max_rounds: 2, ignore_paths: ['vendor/**'], max_points_per_review: 5 } });
     expect(await buildJobBundle(review.id, platform)).toEqual({
       jobId: review.id,
       attempt: 1,
@@ -36,7 +36,7 @@ describe('buildJobBundle', () => {
       round: 1,
       maxRounds: 2,
       apply: 'auto',
-      you: { login: 'leo', role: 'reviewer' },
+      you: { login: 'leo', githubId: leo.githubId, role: 'reviewer' },
       pr: {
         repoFullName: repo.fullName,
         number: chat.number,
@@ -87,7 +87,15 @@ describe('buildJobBundle', () => {
         thread: [expect.objectContaining({ author: 'maya', kind: 'point_reply', body: 'Added the empty check.' })],
       }),
     ]);
-    expect(bundle.notes).toEqual([expect.objectContaining({ author: 'maya', body: 'Please keep the public API stable.' })]);
+    expect(bundle.notes).toEqual([expect.objectContaining({ author: 'maya', authorGithubId: maya.githubId, body: 'Please keep the public API stable.' })]);
+  });
+
+  it("labels each note with its writer's GitHub id, and who you are with yours, so the CLI can tell your notes apart", async () => {
+    const { leo, chat, dispatcher, review } = await scene();
+    await dispatcher.dispatch(chat.id, { type: 'human_note', author: personOf(leo), body: 'Focus on the schema.' });
+    const bundle = await buildJobBundle(review.id, platform);
+    expect(bundle.you.githubId).toBe(leo.githubId);
+    expect(bundle.notes).toEqual([expect.objectContaining({ author: 'leo', authorGithubId: leo.githubId })]);
   });
 
   it("tells the author's agent which points are trusted: an outsider's comment is for information only", async () => {

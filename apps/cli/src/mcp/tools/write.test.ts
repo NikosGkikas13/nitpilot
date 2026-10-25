@@ -99,7 +99,7 @@ describe('replyToPoint', () => {
   it('answers only open points', async () => {
     const ctx = await mcpJob(prRepo(), {
       type: 'address',
-      you: { login: 'maya', role: 'author' },
+      you: { login: 'maya', githubId: '7', role: 'author' },
       points: [bundlePoint({ number: 1 }), bundlePoint({ number: 2, status: 'resolved' })],
     });
     expect(replyToPoint(ctx, { point: 1, resolution: 'fixed', comment: 'Now 25.' })).toBe('P1: fixed.');
@@ -110,7 +110,7 @@ describe('replyToPoint', () => {
   it("refuses a point from someone outside the repo: it's for information only", async () => {
     const ctx = await mcpJob(prRepo(), {
       type: 'address',
-      you: { login: 'maya', role: 'author' },
+      you: { login: 'maya', githubId: '7', role: 'author' },
       points: [bundlePoint({ number: 1, origin: 'github', raisedBy: 'stranger', trusted: false })],
     });
     expect(await toolError(() => replyToPoint(ctx, { point: 1, resolution: 'fixed', comment: 'Done.' }))).toBe(

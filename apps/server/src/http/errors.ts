@@ -8,24 +8,30 @@ export type ErrorCode =
   /** Signed in to Nitpilot, but the GitHub sign-in expired: only signing in again helps (spec §16). */
   | 'reauth'
   | 'forbidden'
+  /** First-run mode: the setup code typed on /first-run isn't the one in the server's log (setup/first-run.ts). */
+  | 'setup_code'
   | 'not_found'
   | 'validation_error'
   | 'conflict'
   | 'payload_too_large'
   | 'rate_limited'
   | 'github_unavailable'
+  /** First-run mode: the server has no GitHub App yet, so only /first-run works (http/app.ts createFirstRunApp). */
+  | 'first_run'
   | 'server_error';
 
 const STATUS: Record<ErrorCode, ContentfulStatusCode> = {
   unauthorized: 401,
   reauth: 401,
   forbidden: 403,
+  setup_code: 403,
   not_found: 404,
   validation_error: 400,
   conflict: 409,
   payload_too_large: 413,
   rate_limited: 429,
   github_unavailable: 502,
+  first_run: 503,
   server_error: 500,
 };
 

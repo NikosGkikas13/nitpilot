@@ -16,6 +16,14 @@ export class ServerError extends CliError {
 
 type CallOptions = { body?: unknown; auth?: boolean; signal?: AbortSignal };
 
+/**
+ * `path` on the server, keeping any path the server address has: https://host/nitpilot + /api/me is
+ * https://host/nitpilot/api/me. (`new URL('/api/me', server)` would drop the `/nitpilot`.) A query string in `path` is kept.
+ */
+export function joinServerUrl(server: string, path: string): URL {
+  return new URL(`${server.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`);
+}
+
 /** The Nitpilot server's REST API (spec §10). Every answer is checked against the protocol's schemas. */
 export class ServerClient {
   constructor(
@@ -74,7 +82,7 @@ export class ServerClient {
     }
     let res: Response;
     try {
-      res = await this.fetchImpl(new URL(path, this.server), {
+      res = await this.fetchImpl(joinServerUrl(this.server, path), {
         method,
         headers,
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
@@ -84,13 +92,23 @@ export class ServerClient {
       throw new ServerError(0, `Can't reach ${this.server}: ${(err as Error).message}`);
     }
     if (res.ok) return res;
-    if (res.status === 401) throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
+    if (res.status === 401) {
+      const { code } = await errorBody(res);
+      // The device token is fine; the person's GitHub sign-in on the web expired, and only signing in there fixes it.
+      if (code === 'reauth') throw new ServerError(401, `Your GitHub sign-in expired. Sign in again at ${joinServerUrl(this.server, '/').href}`);
+      throw new ServerError(401, `The server didn't accept this device's token. Run \`${BRAND.cli} login\`.`);
+    }
     throw new ServerError(res.status, `${await errorMessage(res)} (HTTP ${res.status})`);
   }
 }
 
 /** The message in the server's `{ error: { message } }` body, or the status text. */
 async function errorMessage(res: Response): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  return body?.error?.message ?? res.statusText;
+  return (await errorBody(res)).message ?? res.statusText;
+}
+
+/** The `{ error: { code, message } }` body of a failed answer; both are undefined when the body isn't that. */
+async function errorBody(res: Response): Promise<{ code?: string; message?: string }> {
+  const body = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+  return body?.error ?? {};
 }

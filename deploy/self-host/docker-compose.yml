@@ -1,0 +1,86 @@
+# Nitpilot on your own server: the published image, Postgres and Caddy (spec §17 "Self-hosting", docs/self-hosting.md).
+#
+#   cp .env.example .env     then fill in the three required values
+#   docker compose up -d
+#   docker compose logs nitpilot     the setup code for https://<your domain>/first-run
+#
+# Only Caddy is reachable from outside (ports 80 and 443). Nitpilot and Postgres talk on the private network Compose
+# makes for this folder, where each service's name is its address (`postgres`, `nitpilot`), like an import path that
+# only works inside this project (docs/why/reverse-proxy-and-tls.md).
+
+services:
+  nitpilot:
+    image: ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION:-latest}
+    # A tiny init process in front of node, so `docker compose stop` / `up -d` (SIGTERM) reaches the server and it shuts
+    # down cleanly, telling each CLI "server restarting" (docs/why/docker-images.md).
+    init: true
+    # Also how first-run mode finishes: after storing the new GitHub App the server exits with 0 and Docker starts it
+    # again, in normal mode (docs/why/first-run-and-app-manifests.md). Only `docker compose stop` / `down` keep it down.
+    restart: unless-stopped
+    # The whole .env goes in, not a hand-picked list, so every optional setting (VAPID keys, ALLOWED_LOGINS, GITHUB_*
+    # for an app made by hand, ...) works by adding a line to .env, with no edit here. The extras it also carries
+    # (POSTGRES_PASSWORD, NITPILOT_DOMAIN, ...) are harmless: the server ignores names it doesn't know, and the password
+    # is in DATABASE_URL anyway. Postgres and Caddy get only what they need, below, never ENCRYPTION_KEY.
+    env_file: .env
+    # These win over .env (Compose's `environment` beats `env_file`): they're built from .env's values, not typed twice.
+    # `${NAME:?message}` stops `docker compose up` (and `config`) with the message when NAME is empty or missing.
+    environment:
+      DATABASE_URL: postgresql://nitpilot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}@postgres:5432/nitpilot
+      PUBLIC_URL: https://${NITPILOT_DOMAIN:?set NITPILOT_DOMAIN in .env (e.g. nitpilot.example.com)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env (openssl rand -base64 32)}
+      # Every request reaches the server through Caddy, so the visitor's address is in X-Forwarded-For
+      # (docs/why/trusting-a-proxy.md). Safe here because nothing but Caddy can reach the server: it has no port.
+      TRUST_PROXY: "true"
+    depends_on:
+      postgres:
+        # Wait for the healthcheck below, not just for the container to exist: the server runs its migrations at start.
+        condition: service_healthy
+    # No `ports:`: the server (8787) is reached only through Caddy. The image's own HEALTHCHECK (/healthz) applies.
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nitpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}
+      POSTGRES_DB: nitpilot
+    volumes:
+      # The database lives in a named volume, so it survives `docker compose down` and new images. `down -v` deletes it.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1 asks over TCP. On its very first start Postgres runs a temporary server on its local socket only
+      # (to create the database), then restarts; asking the socket would say "ready" too early.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "nitpilot", "-d", "nitpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No `ports:`: only the server reaches the database.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      # 80 and 443 must be open to the internet: Let's Encrypt checks the domain on them before giving Caddy a
+      # certificate (docs/why/reverse-proxy-and-tls.md). 443/udp is HTTP/3.
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # What the Caddyfile serves: your domain (Caddy gets and renews its HTTPS certificate), or `:80` for plain HTTP
+      # behind something else that already does HTTPS.
+      SITE_ADDRESS: ${SITE_ADDRESS:-${NITPILOT_DOMAIN}}
+      # Behind that other proxy only: its addresses, so Caddy believes the X-Forwarded-* headers it sends. Empty: nobody.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy's certificates and keys. Keep them across restarts, or Caddy asks Let's Encrypt again each time and can
+      # hit its rate limit.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - nitpilot
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

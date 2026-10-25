@@ -1,4 +1,4 @@
-import type { ChatView, PointView, WebMe } from '@nitpilot/protocol';
+import type { ChatView, FailureReason, PointView, WebMe } from '@nitpilot/protocol';
 
 /** The one banner under the chat's header (handoff §2 "Banners", §10 "Edge states"). */
 export type Banner =
@@ -7,6 +7,7 @@ export type Banner =
   | { kind: 'failed_job' }
   | { kind: 'failed_post' }
   | { kind: 'cap' }
+  | { kind: 'drafts'; count: number; firstJobId: string }
   | { kind: 'repo_not_linked'; repo: string }
   | { kind: 'waiting'; offlineSince: string | null }
   | { kind: 'ready_reviewer'; rounds: number; resolved: number }
@@ -15,8 +16,8 @@ export type Banner =
 
 /**
  * Which banner a chat shows the person reading it, most urgent first: a GitHub sign-in that expired (nothing can
- * be done as you until it's renewed), an escalation, your failed job or post, why your agent can't start, then
- * ready. A closed PR shows none.
+ * be done as you until it's renewed), an escalation, your failed job or post, why your agent can't start,
+ * your waiting drafts, then ready. A closed PR shows none.
  */
 export function chatBanner(view: ChatView, me: WebMe): Banner {
   if (view.closed) return { kind: 'none' };
@@ -28,8 +29,11 @@ export function chatBanner(view: ChatView, me: WebMe): Banner {
   if (a.kind === 'agent_waiting' && a.who === me.login) {
     if (a.why === 'cap_reached') return { kind: 'cap' };
     if (a.why === 'repo_not_linked') return { kind: 'repo_not_linked', repo: view.repo };
-    return { kind: 'waiting', offlineSince: a.offlineSince };
   }
+  // Work your agent finished with Auto off waits for you: say so before "waiting", which would be about the agent.
+  const drafts = myWaitingDrafts(view, me);
+  if (drafts[0]) return { kind: 'drafts', count: drafts.length, firstJobId: drafts[0].jobId };
+  if (a.kind === 'agent_waiting' && a.who === me.login) return { kind: 'waiting', offlineSince: a.offlineSince };
   if (view.phase === 'ready' && view.viewer.role !== null) {
     const rounds = view.round;
     const resolved = view.points.filter((p) => p.status === 'resolved').length;
@@ -39,6 +43,46 @@ export function chatBanner(view: ChatView, me: WebMe): Banner {
     return { kind: 'ready_author', reviewer, rounds, resolved };
   }
   return { kind: 'none' };
+}
+
+/** The drafts that are yours to Send or Discard: your agent's, and not already on their way out. */
+export function myWaitingDrafts(view: ChatView, me: WebMe) {
+  return view.drafts.filter((d) => d.owner === me.login && !d.sending);
+}
+
+/** The id the first draft card carries, so the drafts banner can scroll to it. */
+export const draftCardId = (jobId: string) => `draft-${jobId}`;
+
+/** Why a job failed, in one plain sentence for the failed banner. */
+export function failureText(reason: FailureReason): string {
+  switch (reason) {
+    case 'auth':
+      return "Your agent isn't signed in on that computer. Sign it in, then Retry.";
+    case 'quota':
+      return 'Your agent ran out of usage for now. Retry once your plan resets.';
+    case 'max_turns':
+      return 'Your agent used up all its steps before it finished.';
+    case 'crash':
+      return 'Your agent stopped unexpectedly.';
+    case 'timeout':
+      return 'Your agent took too long and was stopped.';
+    case 'no_result':
+      return 'Your agent finished without giving an answer.';
+    case 'stale_head':
+      return 'The PR moved on while your agent was working, so nothing was pushed.';
+    case 'branch_moved':
+      return 'Someone pushed to the branch while your agent was working.';
+    case 'setup_failed':
+      return "Your agent couldn't set up its working copy of the repo.";
+    case 'git_error':
+      return 'Git failed while your agent was working on the repo.';
+    case 'daily_cap':
+      return 'Your agent has used all its runs for today.';
+    case 'repo_not_linked':
+      return "This repo isn't linked on that computer yet.";
+    case 'unsupported_mode':
+      return "Your agent can't do this kind of work yet.";
+  }
 }
 
 /** Why the points went to a person, in one line: "Security points always go to a person." */

@@ -1,0 +1,9 @@
+{
+  "review": [
+    { "sleep": 45000 },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 5, "severity": "major", "category": "bug", "title": "Page 1 skips the first page", "body": "Pages start at 1 (see the comment above), but the start is page * size, so page 1 begins at item `size`. Use (page - 1) * size." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 12, "severity": "major", "category": "bug", "title": "averageTotal([]) is NaN", "body": "With no orders the sum is 0 and totals.length is 0, so this divides 0 by 0. Return 0 when there are no totals." } },
+    { "add_point": { "path": "orders-demo/src/orders.js", "line": 18, "severity": "minor", "category": "bug", "title": "describeOrder throws for an id that does not exist", "body": "orders.find returns undefined for an unknown id, so order.id throws a TypeError. Say the order was not found instead." } },
+    { "finish": "Three bugs in orders.js: the page offset, the empty average and the missing order." }
+  ]
+}

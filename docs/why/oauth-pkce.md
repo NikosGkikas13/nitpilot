@@ -12,7 +12,7 @@
 
 ## Why we keep GitHub tokens at all
 
-Reviews and replies are posted **as you**, so GitHub shows your avatar plus the app badge (spec §15). For that we need your token. When it expires, `auth/user-tokens.ts` refreshes it one refresh at a time, because each refresh token works only once.
+Reviews and replies are posted **as you**, so GitHub shows them under your name and avatar (spec §15; with no app badge, as the Plan 3 live run showed). For that we need your token. When it expires, `auth/user-tokens.ts` refreshes it one refresh at a time, because each refresh token works only once.
 
 ## Refreshing safely (`auth/user-tokens.ts`)
 

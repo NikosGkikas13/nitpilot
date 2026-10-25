@@ -29,6 +29,9 @@ export function retryAfterMs(headers: Headers, now = Date.now()): number | undef
   return undefined;
 }
 
+/** The most pages `apiAllPages` reads (5000 items at 100 a page): a Link header that points back at itself must not loop forever. */
+export const MAX_PAGES = 50;
+
 /** How long one GitHub call may take before we give up on it: a request waiting on GitHub never waits forever. */
 export const GITHUB_TIMEOUT_MS = 15_000;
 
@@ -77,6 +80,27 @@ export class GithubClient {
     return { status: res.status, data: data as T, headers: res.headers };
   }
 
+  /**
+   * GET a list that GitHub splits into pages and join the pages. `pick` takes the items out of one page's body
+   * (`/installation/repositories` wraps them as `{ repositories: [...] }`). GitHub names the next page in the `Link`
+   * header as an absolute URL; only its path and query are used, so the token only ever goes to `apiBase`.
+   */
+  async apiAllPages<Page, Item>(path: string, pick: (page: Page) => Item[], opts: GithubRequest = {}): Promise<Item[]> {
+    const items: Item[] = [];
+    let next: string | null = path;
+    for (let page = 1; next; page++) {
+      if (page > MAX_PAGES) {
+        // Keep what we have: a partial list beats failing the whole call.
+        console.warn(`[github] ${path} still had a next page after ${MAX_PAGES} pages; stopping there`);
+        break;
+      }
+      const { data, headers }: GithubResponse<Page> = await this.api<Page>('GET', next, opts);
+      items.push(...pick(data));
+      next = nextPagePath(headers.get('link'));
+    }
+    return items;
+  }
+
   /** POST to github.com/login/oauth/*. GitHub reports OAuth errors as 200 + `{ error }`. */
   async oauth<T>(path: string, params: Record<string, string>): Promise<T> {
     const { res, data } = await this.timed(`OAuth ${path}`, async (signal) => {
@@ -109,6 +133,15 @@ export class GithubClient {
       throw new GithubError(503, null, `Couldn't reach GitHub for ${what}: ${err instanceof Error ? err.message : String(err)}`, undefined, err);
     }
   }
+}
+
+/** The path and query of the `rel="next"` link in a `Link` header, or null on the last page. */
+function nextPagePath(link: string | null): string | null {
+  const next = link?.split(',').find((part) => /;\s*rel="next"/.test(part));
+  const url = next?.match(/<([^>]+)>/)?.[1];
+  if (!url) return null;
+  const { pathname, search } = new URL(url);
+  return pathname + search;
 }
 
 async function readBody(res: Response): Promise<unknown> {

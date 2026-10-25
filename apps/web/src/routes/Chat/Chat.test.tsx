@@ -166,7 +166,7 @@ describe('Chat (handoff §2)', () => {
   });
 
   it("starts the review of an outside contributor's PR from its card", async () => {
-    const fetch = serve(() => [200, chatResponse({ view: { trusted: false, viewer: { role: 'reviewer', attention: 'manual_review', failure: null }, permissions: { note: true, resolve: [], continue: [], review: true, retry: false, auto: ['reviewer'], drafts: [] } } })], {
+    const fetch = serve(() => [200, chatResponse({ view: { trusted: false, viewer: { role: 'reviewer', attention: 'manual_review', failure: null, failureReason: null }, permissions: { note: true, resolve: [], continue: [], review: true, retry: false, auto: ['reviewer'], drafts: [] } } })], {
       'POST /api/chats/chat_142/review': (): Answer => [200, { ok: true }],
     });
     renderApp(PATH);

@@ -1,7 +1,7 @@
 import { CliRequestDecision, type CliRequestView } from '@nitpilot/protocol';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { decideCliLogin, findCliLogin } from '../../auth/cli-login';
-import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import { requireSameOrigin, requireSession, requireUser, type UserVariables } from '../../auth/request-user';
 import type { CliLoginRequest } from '../../generated/prisma/client';
 import { HttpError } from '../errors';
 
@@ -16,15 +16,13 @@ import { HttpError } from '../errors';
 export function cliRequestRoutes(): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
 
-  app.get('/api/cli/requests/:userCode', requireUser, async (c) => {
-    sessionOnly(c);
+  app.get('/api/cli/requests/:userCode', requireUser, requireSession, async (c) => {
     const request = await findCliLogin(c.req.param('userCode'));
     if (!request) throw new HttpError('not_found', 'No such code.');
     return c.json(viewOf(request, new Date()));
   });
 
-  app.post('/api/cli/requests/:userCode', requireUser, requireSameOrigin, async (c) => {
-    sessionOnly(c);
+  app.post('/api/cli/requests/:userCode', requireUser, requireSession, requireSameOrigin, async (c) => {
     const { decision } = CliRequestDecision.parse(await c.req.json());
     const userCode = c.req.param('userCode');
     // decideCliLogin changes only a pending, unexpired login; anything else stays as it was.
@@ -37,10 +35,6 @@ export function cliRequestRoutes(): Hono<{ Variables: UserVariables }> {
   });
 
   return app;
-}
-
-function sessionOnly(c: Context<{ Variables: UserVariables }>): void {
-  if (c.get('via') !== 'session') throw new HttpError('unauthorized', 'Sign in with GitHub first.');
 }
 
 /**

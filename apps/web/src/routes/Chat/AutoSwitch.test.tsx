@@ -120,7 +120,7 @@ describe('the Auto switch in the chat header', () => {
   });
 
   it('is not there for someone who only reads along', async () => {
-    serve({ viewer: { role: null, attention: 'none', failure: null }, permissions: { ...chatView().permissions, auto: [] } });
+    serve({ viewer: { role: null, attention: 'none', failure: null, failureReason: null }, permissions: { ...chatView().permissions, auto: [] } });
     renderApp('/c/acme/shop-api/142');
     expect(await screen.findByRole('heading', { name: 'Add cursor pagination to /orders' })).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();

@@ -3,6 +3,7 @@ import { useIsMutating } from '@tanstack/react-query';
 import { useDiscardDraft, useSendDraft } from '../../api/drafts';
 import { Ping } from '../../components/Ping/Ping';
 import { useCopy } from '../../lib/clipboard';
+import { draftCardId } from '../../lib/banner';
 import { agentName } from '../../lib/names';
 import { DiffView } from './DiffView';
 import { PointCard, type People } from './PointCard';
@@ -33,7 +34,7 @@ export function DraftCard({ draft, view, you, canAct }: { draft: DraftView; view
   const { result } = draft;
   const repoUrl = view.url.replace(/\/pull\/\d+$/, '');
   return (
-    <section className={styles.card} aria-label={`Draft: ${title}`}>
+    <section id={draftCardId(draft.jobId)} className={styles.card} aria-label={`Draft: ${title}`}>
       <div className={styles.head}>
         <span className={styles.eyebrow}>Draft · {draft.role}</span>
         <span className={styles.state} data-state>

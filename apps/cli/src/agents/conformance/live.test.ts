@@ -67,7 +67,7 @@ function addressJob(bundle: AgentJobBundle): AgentJobBundle {
     number, origin: 'agent', raisedBy: 'leo', path: 'src/orders.ts', line: 1, side: 'RIGHT', severity: 'major', category: 'bug',
     title, body: `${title}.`, status: 'open', authorResolution: null, round: 1, trusted: true, thread: [],
   });
-  return { ...bundle, type: 'address', you: { login: 'maya', role: 'author' }, points: [point(1, 'Page size 50 is too big: use 20')] };
+  return { ...bundle, type: 'address', you: { login: 'maya', githubId: '7', role: 'author' }, points: [point(1, 'Page size 50 is too big: use 20')] };
 }
 
 /** Everything the agent produced that someone outside could see: its output, and the result Nitpilot would post. */

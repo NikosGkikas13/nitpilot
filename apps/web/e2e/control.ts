@@ -38,6 +38,12 @@ export async function stopCli(login: 'maya' | 'leo'): Promise<void> {
   if (!res.ok) throw new Error(`stopping ${login}'s CLI failed: ${res.status} ${await res.text()}`);
 }
 
+/** Make `login`'s agent have failed in PR `number` for `reason` (a FailureReason); load the chat page after this. */
+export async function failJob(job: { login: 'maya' | 'leo'; number: number; reason: string }): Promise<void> {
+  const res = await fetch(`${CONTROL_URL}/fail-job`, { method: 'POST', body: JSON.stringify(job) });
+  if (!res.ok) throw new Error(`failing ${job.login}'s job failed: ${res.status} ${await res.text()}`);
+}
+
 /**
  * What went wrong on the page: a script error, or something the Content-Security-Policy blocked. (A request
  * that answers 401 is logged by the browser too, but signed out that's expected, so it isn't collected.)

@@ -3,7 +3,7 @@ import { chatView } from '../test/chat';
 import { autoSwitchFor } from './auto';
 
 const rules = chatView().rules;
-const asLeo = { viewer: { role: 'reviewer' as const, attention: 'none' as const, failure: null }, permissions: { ...chatView().permissions, auto: ['reviewer' as const] } };
+const asLeo = { viewer: { role: 'reviewer' as const, attention: 'none' as const, failure: null, failureReason: null }, permissions: { ...chatView().permissions, auto: ['reviewer' as const] } };
 
 describe('autoSwitchFor (spec §16: one tooltip per reason)', () => {
   it("is your own switch for your role here, as you set it", () => {
@@ -13,7 +13,7 @@ describe('autoSwitchFor (spec §16: one tooltip per reason)', () => {
   });
 
   it('is not there for someone who only reads along, or on a closed PR where nobody can act', () => {
-    expect(autoSwitchFor(chatView({ viewer: { role: null, attention: 'none', failure: null }, permissions: { ...chatView().permissions, auto: [] } }), 'sam')).toBeNull();
+    expect(autoSwitchFor(chatView({ viewer: { role: null, attention: 'none', failure: null, failureReason: null }, permissions: { ...chatView().permissions, auto: [] } }), 'sam')).toBeNull();
     expect(autoSwitchFor(chatView({ closed: true, phase: 'closed', permissions: { ...chatView().permissions, auto: [] } }), 'maya')).toBeNull();
   });
 

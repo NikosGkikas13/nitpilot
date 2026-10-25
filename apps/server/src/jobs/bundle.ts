@@ -49,7 +49,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
     round: job.round,
     maxRounds: rules.max_rounds + chat.extraRounds,
     apply: job.applyState === 'draft' ? 'draft' : 'auto',
-    you: { login: job.participant.login, role: job.participant.role },
+    you: { login: job.participant.login, githubId: job.participant.githubId, role: job.participant.role },
     pr: {
       repoFullName: chat.repo.fullName,
       number: chat.number,
@@ -86,7 +86,13 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
     })),
     notes: chat.messages
       .filter((m) => m.kind === 'human' && m.pointNumber === null)
-      .map((m) => ({ author: m.authorLogin ?? 'unknown', body: m.body, at: m.createdAt.toISOString() })),
+      .map((m) => ({
+        author: m.authorLogin ?? 'unknown',
+        // Only system events have no author id, and those are never `human` notes; '' matches nobody, so it is never trusted.
+        authorGithubId: m.authorGithubId ?? '',
+        body: m.body,
+        at: m.createdAt.toISOString(),
+      })),
     rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review },
   });
 }

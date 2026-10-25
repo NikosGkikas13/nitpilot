@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MeResponse } from './api';
 import { jobResult, settings } from './test-samples';
 import {
-  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
-  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, type ChatView, type DeviceView, type InboxRow,
+  ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, FirstRunManifestRequest, FirstRunManifestResponse,
+  FirstRunStatus, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
+  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
@@ -44,7 +45,7 @@ describe('web API bodies', () => {
       id: 'chat_1', repo: 'acme/shop-api', number: 142, title: 'Cursor pagination', url: 'https://github.com/acme/shop-api/pull/142',
       author: 'maya', headRef: 'feature/cursor-pagination', baseRef: 'main', phase: 'escalated', round: 2, maxRounds: 3,
       merged: false, closed: false, trusted: true, isDraft: false,
-      viewer: { role: 'reviewer', attention: 'decision', failure: null },
+      viewer: { role: 'reviewer', attention: 'decision', failure: null, failureReason: null },
       participants: [{ githubId: '1002', login: 'leo', avatarUrl: 'https://avatars.githubusercontent.com/u/1002', role: 'reviewer', isBot: false, onNitpilot: true, requested: true, auto: false, agent: { online: false, offlineSince: '2026-10-16T18:04:00.000Z', working: false } }],
       activity: { kind: 'none', who: null, why: null, offlineSince: null },
       points: [{
@@ -63,6 +64,13 @@ describe('web API bodies', () => {
     expect(() => ChatResponse.parse({ ...body, view: { ...view, phase: 'waiting' } })).toThrow();
     const files = { files: [{ path: 'locales/tr.json', oldPath: null, status: 'added', adds: 412, dels: 0 }], adds: 412, dels: 0, truncated: false };
     expect(FilesResponse.parse(files)).toEqual(files);
+  });
+
+  it("gives a failed viewer a reason only from the known list, or null", () => {
+    const chat = (failureReason: unknown) => ChatView.shape.viewer.safeParse({ role: 'author', attention: 'failed', failure: 'agent', failureReason });
+    expect(chat('quota').success).toBe(true);
+    expect(chat(null).success).toBe(true);
+    expect(chat('because').success).toBe(false);
   });
 
   it('takes a note of 1 to 4,000 characters, trimmed, and answers a change with ok', () => {
@@ -156,5 +164,36 @@ describe('web API bodies', () => {
     expect(CliRequestView.safeParse({ ...request, status: 'consumed' }).success).toBe(false);
     expect(CliRequestDecision.parse({ decision: 'deny' })).toEqual({ decision: 'deny' });
     expect(CliRequestDecision.safeParse({ decision: 'maybe' }).success).toBe(false);
+  });
+});
+
+describe('first-run bodies', () => {
+  it('knows both modes of GET /api/first-run', () => {
+    expect(FirstRunStatus.parse({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' })).toEqual({ mode: 'first_run', publicUrl: 'https://nitpilot.example.com' });
+    expect(FirstRunStatus.parse({ mode: 'ready', installUrl: 'https://github.com/apps/nitpilot/installations/new' }).mode).toBe('ready');
+    expect(FirstRunStatus.safeParse({ mode: 'ready', publicUrl: 'https://nitpilot.example.com' }).success).toBe(false);
+  });
+
+  it('takes a manifest request for a personal account or an organization', () => {
+    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, name: 'Nitpilot (example)', isPublic: false };
+    expect(FirstRunManifestRequest.parse(request)).toEqual(request);
+    const forOrg = { ...request, owner: { kind: 'org', login: 'acme-inc' } };
+    expect(FirstRunManifestRequest.parse(forOrg)).toEqual(forOrg);
+  });
+
+  it("refuses an app name GitHub would refuse (1 to 34 characters), and a login that isn't GitHub's shape", () => {
+    const request = { code: 'ABCD-EF23', owner: { kind: 'user' }, isPublic: false };
+    expect(FirstRunManifestRequest.parse({ ...request, name: '  Nitpilot  ' }).name).toBe('Nitpilot');
+    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'x'.repeat(34) }).success).toBe(true);
+    for (const name of ['', '   ', 'x'.repeat(35)]) expect(FirstRunManifestRequest.safeParse({ ...request, name }).success).toBe(false);
+    for (const login of ['', '-acme', 'acme-', 'ac--me', 'acme/inc', 'x'.repeat(40)]) {
+      expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org', login } }).success, login).toBe(false);
+    }
+    expect(FirstRunManifestRequest.safeParse({ ...request, name: 'n', owner: { kind: 'org' } }).success).toBe(false);
+  });
+
+  it('round-trips the answer the page posts as a form', () => {
+    const answer = { action: 'https://github.com/settings/apps/new?state=abc', manifest: { name: 'Nitpilot', public: false } };
+    expect(FirstRunManifestResponse.parse(answer)).toEqual(answer);
   });
 });

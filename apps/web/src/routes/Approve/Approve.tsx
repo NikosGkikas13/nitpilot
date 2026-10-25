@@ -2,9 +2,10 @@ import { BRAND, type CliRequestView } from '@nitpilot/protocol';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { useCliRequest, useDecideCliRequest } from '../../api/cli-requests';
-import { ApiError } from '../../api/client';
+import { ApiError, isFirstRunMode } from '../../api/client';
 import { useMe } from '../../api/me';
 import { ErrorState } from '../../components/ErrorState/ErrorState';
+import { FirstRunNeeded } from '../../components/FirstRunNeeded/FirstRunNeeded';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
 import { browser } from '../../lib/browser';
 import { itemTime, useNow } from '../../lib/time';
@@ -28,6 +29,9 @@ export function Approve() {
   useEffect(() => {
     if (signedOut) browser.goTo(`/auth/github/login?next=${encodeURIComponent(location.pathname + location.search)}`);
   }, [signedOut, location.pathname, location.search]);
+
+  // A server with no GitHub App yet can't sign anyone in: the setup page comes first.
+  if (me.isError && isFirstRunMode(me.error)) return <FirstRunNeeded message={me.error.message} />;
 
   let content: ReactNode;
   if (me.isError) content = <ErrorState message={me.error.message} onRetry={() => void me.refetch()} />;

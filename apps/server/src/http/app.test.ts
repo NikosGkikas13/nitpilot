@@ -1,8 +1,12 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { fakeFetch } from '../../test/fake-fetch';
 import { GithubClient } from '../platform/github/client';
+import { createFirstRunApp } from './app';
 import { HttpError, onError } from './errors';
 import { testApp } from '../../test/app';
 
@@ -11,6 +15,59 @@ describe('createApp', () => {
     const res = await testApp({ github: new GithubClient(fakeFetch({})) }).request('/healthz');
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true });
+  });
+});
+
+describe('createFirstRunApp', () => {
+  // A pretend web app build, for the page itself.
+  const dist = mkdtempSync(path.join(tmpdir(), 'nitpilot-first-run-'));
+  mkdirSync(dist, { recursive: true });
+  writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>app</title>');
+  afterAll(() => rmSync(dist, { recursive: true, force: true }));
+
+  const app = createFirstRunApp({
+    github: new GithubClient(fakeFetch({})),
+    publicUrl: 'http://localhost:8787',
+    setupCode: 'K7PX-3MQD',
+    trustProxy: false,
+    exit: vi.fn(),
+    webDistDir: dist,
+  });
+
+  it('answers every other server path, whatever the method, with 503 "finish setup"', async () => {
+    const requests: [string, string][] = [
+      ['GET', '/api/me'],
+      ['POST', '/webhooks/github'],
+      ['GET', '/auth/github/login'],
+      ['GET', '/github/setup?installation_id=1'],
+      ['DELETE', '/api/cli/token'],
+      ['GET', '/ws/cli'],
+    ];
+    for (const [method, url] of requests) {
+      const res = await app.request(url, { method });
+      expect(res.status, `${method} ${url}`).toBe(503);
+      expect(await res.json()).toEqual({ error: { code: 'first_run', message: 'Finish setup at /first-run.' } });
+    }
+  });
+
+  it('still answers the health check', async () => {
+    const res = await app.request('/healthz');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true });
+  });
+
+  it("serves the web app's pages, whose forms may post to GitHub", async () => {
+    for (const page of ['/first-run', '/', '/inbox']) {
+      const res = await app.request(page);
+      expect(res.status, page).toBe(200);
+      expect(await res.text()).toContain('<title>app</title>');
+      expect(res.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com;");
+    }
+  });
+
+  it('keeps the normal server\'s forms to itself', async () => {
+    const res = await testApp({ webDistDir: dist }).request('/inbox');
+    expect(res.headers.get('content-security-policy')).toContain("form-action 'self';");
   });
 });
 

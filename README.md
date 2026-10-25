@@ -1,33 +1,75 @@
 # Nitpilot
 
-Developers' own AI agents review each other's pull requests the moment they open. The author's agent fixes what the reviewer's agent raises, the reviewer's agent checks the fixes, and a person is pinged only when there's a decision to make: the PR is ready to approve, or the agents need a human.
+Your own AI agent reviews your teammates' pull requests, and theirs reviews yours.
 
-The agents run on each developer's own machine, under their own login (Claude Code today). Nitpilot is the coordinator: a server that hears about PRs from GitHub, decides whose turn it is and hands jobs to the right laptop; a CLI on each laptop that runs the agent; and a web app where people follow and steer each PR's chat.
+You find Nitpilot here, run `npm install -g nitpilot`, sign in at [nitpilot.dev](https://nitpilot.dev) and install the app on your public repos. The next time a teammate requests your review, your own agent (Claude Code, on your own machine, under your own subscription) reads the PR and posts its review within seconds, in your name. Nobody else has to sign up for anything.
 
-Not released yet: the hosted version, self-hosting and the npm package come with Plan 3. [docs/architecture.md](docs/architecture.md) explains how it works and why; the design is in [the spec](docs/superpowers/specs/2026-10-07-nitpilot-design.md).
+## Install
 
-## What's in the repo
+You need Node 22 and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), installed and signed in.
 
-| Folder | What it is |
-|---|---|
-| `apps/server` | The server: one Node process (Hono, Prisma) and Postgres. Webhooks, the workflow engine, the CLI and web sockets, and the web app's files |
-| `apps/cli` | `nitpilot`: logs a computer in, links repos, and runs the agent for the jobs it's given |
-| `apps/web` | The web app: an installable PWA (React, Vite) with the inbox, each PR's chat, Settings and push notifications |
-| `packages/protocol` | The shared contract: every message and REST body as a zod schema, and the `BRAND` names |
-| `docs/` | The architecture, plain-language explainers in [`docs/why/`](docs/why/), and the live acceptance runbooks in [`docs/acceptance/`](docs/acceptance/) |
+```bash
+npm install -g nitpilot
+nitpilot login          # opens nitpilot.dev in your browser to approve this computer
+```
 
-## The web app
+Then, on nitpilot.dev's **Setup** page, click **Install on GitHub** and pick the repos (public ones on nitpilot.dev). In a local clone of each repo:
 
-The server serves the built web app from the same address as its API, so there is one origin and no CORS ([why/serving-a-spa.md](docs/why/serving-a-spa.md)). Signed in with GitHub, a person sees:
+```bash
+nitpilot repos add      # link this clone, so jobs for its PRs can come to this computer
+nitpilot start          # stay connected and run jobs (Ctrl-C stops)
+```
 
-- **The inbox:** the PRs they review and their own, each with a status pill (working, waiting, needs you, ready…) and an unread count, updated live.
-- **Each PR's chat:** the agents' points, replies and decisions as a timeline, a live line saying what an agent is doing this second, and the actions that are theirs to take: a note to the agents, Resolve or Continue on an escalated point, Retry on a failed job, and Send or Discard on a draft when their Auto switch is off.
-- **Settings:** their computers (with Revoke), their agents, push notifications, the defaults for new chats, the daily cap.
-- **Setup:** a checklist that ticks itself off as they install the GitHub App, log in a computer and start their agent.
+That's it. When someone requests your review, `nitpilot start` prints `→ review of owner/repo#12`, your agent reviews the PR in an isolated copy of it, and the review appears on GitHub with inline comments. `nitpilot status` shows your open PRs, and `nitpilot doctor` says what's wrong if nothing happens.
 
-It installs to the Home Screen (desktop and iPhone) and sends Web Push notifications, falling back to the CLI's desktop notification when push isn't on ([why/web-push.md](docs/why/web-push.md), [why/service-workers-and-pwa.md](docs/why/service-workers-and-pwa.md)).
+The web app at nitpilot.dev shows each PR as a chat: the points, the replies, and what is waiting for you. It installs to your Home Screen and sends push notifications. In **Settings** you can turn **Auto-review** off, and then your agent's review waits as a draft for you to send.
 
-## Running it locally
+## When your teammate is on it too
+
+When both sides of a PR are on Nitpilot, the agents work it out between them. The reviewer's agent raises points; the author's agent fixes them, answers or declines each one, and pushes a commit; the reviewer's agent checks the fixes. The PR gets one summary comment from `nitpilot[bot]`, edited as the rounds go, and a person is pinged only when there's a decision to make: the PR is ready to approve, or the agents disagree, or a point needs a human (security points always do). Approving and merging stay on GitHub, done by a person.
+
+The author side works alone too: if you're the author and your reviewer isn't on Nitpilot, their comments become points your agent can fix, and its replies go in each comment thread.
+
+## What to know
+
+- **Claude Code only, for now.** A Gemini CLI adapter waits on a way to sign in that Google allows. [docs/adapters.md](docs/adapters.md) shows how to add an agent.
+- **nitpilot.dev is for public repos.** Webhooks from private repos are dropped there. For private repos, [run your own](docs/self-hosting.md).
+- **Your review is posted in your name.** It uses your GitHub token, so GitHub shows it under your name and avatar, with no app badge. Only the summary comment comes from `nitpilot[bot]`.
+- **Single-player reviewing needs the author to be off Nitpilot.** Once the PR's author has an account on the same instance, the PR becomes agent-to-agent, and the points go to the chat and the summary comment instead of a GitHub review.
+- **Your computer has to be on.** Jobs run on your machine. When it's off, the job waits, and the chat says since when you've been offline.
+- **Jobs start by themselves only for trusted authors** (owners, members, collaborators, and bots you list). A PR from an outside contributor waits for you to start the review.
+
+## How it works
+
+Four pieces, in one repository:
+
+- **The server** (`apps/server`): one Node process and Postgres. It hears about PRs from GitHub's webhooks, decides whose turn it is with a pure workflow function, and hands jobs to the right computer over a WebSocket. It never runs code from a repository.
+- **The CLI** (`apps/cli`): runs on each developer's computer. It checks the PR out into an isolated folder, runs the developer's own agent with only Nitpilot's tools, and sends the result back.
+- **The web app** (`apps/web`): the inbox, each PR's chat, Settings and push notifications, served by the server from the same address.
+- **The protocol** (`packages/protocol`): every message between them as a zod schema, shared by all three.
+
+[docs/architecture.md](docs/architecture.md) follows one PR through all of it and explains each choice. [docs/why/](docs/why/) has short, plain-language explainers for each backend idea (webhooks, leases, the outbox, git worktrees, prompt injection, and more). The full design is in [the spec](docs/superpowers/specs/2026-10-07-nitpilot-design.md).
+
+## Self-hosting
+
+One Docker image, Postgres and Caddy, started with Docker Compose. The first time it starts, a page on your domain creates your own GitHub App for you, so private repos work. [docs/self-hosting.md](docs/self-hosting.md) walks through it.
+
+## Security
+
+A pull request is untrusted input, and the agent reading it runs on your computer. So:
+
+- **The agent gets tools, not a shell.** Each job starts a small local server (MCP) on `127.0.0.1` with a token that works for that job only. A reviewer can read the code and raise points, nothing else. An author's agent can also edit files and run the checks your repo allows (`npm test`, say), without a shell. Neither gets web access or a GitHub token.
+- **The repo can't configure the agent.** Before the agent starts, the CLI deletes the files an agent would load by itself: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case. Git runs with hooks, symlinks and submodules off.
+- **Text from the PR is marked as untrusted.** The title, body and comments reach the agent wrapped as data from an outside source, and the agent is told what that means.
+- **Your credentials stay yours.** Nitpilot never sees your Anthropic login. Your GitHub token is stored encrypted on the server and used only to post your reviews and replies.
+
+More in [why/prompt-injection.md](docs/why/prompt-injection.md), [why/safe-git.md](docs/why/safe-git.md) and [why/local-mcp-server.md](docs/why/local-mcp-server.md).
+
+Found a vulnerability? Please report it privately through [GitHub's vulnerability reporting](https://github.com/NikosGkikas13/nitpilot/security/advisories/new), not in a public issue.
+
+## Development
+
+### Running it locally
 
 You need Node 22, Docker, and a GitHub App of your own for development (its settings go in `apps/server/.env`; see `apps/server/.env.example`).
 
@@ -42,13 +84,18 @@ npm run dev:tunnel                         # GitHub's webhooks reach your laptop
 
 `npm run vapid:keys -w apps/server` makes the key pair Web Push needs; without it, push is off and notifications go to the CLI.
 
-## Tests
+### Tests
 
 ```bash
 npm test                 # every package's unit and database tests
 npm run typecheck && npm run lint
 npm run test:e2e         # the server, two CLIs and a scripted agent, end to end
 npm run test:web-e2e     # builds the web app, then Playwright drives it in Chromium against that same setup
+npm run image:smoke      # builds the Docker image and checks it starts, stops and migrates
 ```
 
-CI runs all of them on every pull request. The live acceptance runs, against real GitHub, real accounts and a real agent, are checklists: [Plan 1](docs/acceptance/plan-1.md) for the agents and the CLI, [Plan 2](docs/acceptance/plan-2.md) for the web app.
+CI runs them on every pull request. The live acceptance runs, against real GitHub, real accounts and a real agent, are checklists: [Plan 1](docs/acceptance/plan-1.md) for the agents and the CLI, [Plan 2](docs/acceptance/plan-2.md) for the web app, [Plan 3](docs/acceptance/plan-3.md) for nitpilot.dev. Releases are in [docs/releasing.md](docs/releasing.md); running nitpilot.dev is in [docs/hosting.md](docs/hosting.md).
+
+## License
+
+[MIT](LICENSE)

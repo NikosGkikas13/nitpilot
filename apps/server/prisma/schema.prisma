@@ -394,3 +394,21 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+/// The GitHub App this server created for itself in first-run mode (spec §17 "Self-hosting", setup/first-run.ts).
+/// At most one row (`id` is always "app"), written once and never overwritten. The private key and both secrets are
+/// encrypted with ENCRYPTION_KEY (AES-256-GCM, lib/crypto.ts); the rest is what GitHub shows on the app's page anyway.
+/// GITHUB_* variables in the environment win over this row (setup/credentials.ts).
+model GithubAppConfig {
+  id               String   @id @default("app")
+  appId            String
+  slug             String
+  clientId         String
+  privateKeyEnc    String
+  clientSecretEnc  String
+  webhookSecretEnc String
+  /// The account or organization that owns the app on GitHub.
+  ownerLogin       String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

@@ -1,0 +1,46 @@
+# The hosted instance, https://nitpilot.dev (spec §17 "Hosted instance", docs/hosting.md). It lives in /opt/nitpilot on
+# the Hetzner box, next to Odyhook, and is one container: Odyhook's Postgres holds its database and Odyhook's Caddy is
+# its front door. So unlike deploy/self-host/ there is no Postgres or Caddy here.
+#
+#   cd /opt/nitpilot
+#   docker compose pull && docker compose up -d      deploy the version named in .env (NITPILOT_VERSION)
+#   docker compose logs -f nitpilot-server           its log
+#
+# No top-level `name:`: Compose names the project after the folder, so in /opt/nitpilot it is `nitpilot`. Leaving it
+# out also means a copy of this file run elsewhere (a check on a laptop) can't take over another `nitpilot` project.
+
+services:
+  nitpilot-server:
+    # Never `web`, `postgres` or `redis`: those are Odyhook's names on the shared network below, and two containers
+    # answering to one name there would send Caddy's requests to the wrong one.
+    container_name: nitpilot-server
+    image: ghcr.io/nikosgkikas13/nitpilot:${NITPILOT_VERSION:?set NITPILOT_VERSION in .env (e.g. 0.1.0-rc.3)}
+    # A tiny init process in front of node, so `docker compose up -d` / `restart` (SIGTERM) reaches the server and it
+    # shuts down cleanly, telling each CLI "server restarting" (docs/why/docker-images.md).
+    init: true
+    # Docker starts it again after a crash, a reboot, and the planned exit at the end of first-run mode
+    # (docs/why/first-run-and-app-manifests.md). Only `docker compose stop` / `down` keep it down.
+    restart: unless-stopped
+    # Every setting, secrets included, is in /opt/nitpilot/.env on the box only (from .env.example; docs/hosting.md).
+    env_file: .env
+    # Caps, not reservations: the box has 4 GB and Odyhook's own caps already add up to about 4.2 GB. If the server
+    # ever needs more, `docker stats` shows it first (docs/hosting.md, "Memory").
+    mem_limit: 384m
+    pids_limit: 256
+    # Keep the log from filling the disk: three files of 10 MB, the oldest dropped first. `docker compose logs` reads them.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - hooksmith
+    # No `ports:`: the server (8787) is reached only through Odyhook's Caddy, by the name nitpilot-server, on the
+    # shared network. The image's own HEALTHCHECK (/healthz) applies.
+
+networks:
+  # Odyhook's network (its compose project is `hooksmith`, from /opt/hooksmith). `external` means "made by someone else,
+  # just join it": this file never creates or deletes it. On it, `postgres` is Odyhook's Postgres and Caddy finds us.
+  hooksmith:
+    name: hooksmith_default
+    external: true

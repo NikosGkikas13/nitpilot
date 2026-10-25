@@ -39,10 +39,46 @@ describe('getEnv', () => {
     expect(getEnv()).toMatchObject({ PUBLIC_REPOS_ONLY: true, ALLOWED_LOGINS: ['maya', 'leo'] });
   });
 
+  it('reads TRUST_PROXY and CLOSED_CHAT_RETENTION_DAYS', () => {
+    expect(getEnv().TRUST_PROXY).toBe(false);
+    expect(getEnv().CLOSED_CHAT_RETENTION_DAYS).toBeUndefined();
+    vi.stubEnv('TRUST_PROXY', 'true');
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '90');
+    expect(getEnv()).toMatchObject({ TRUST_PROXY: true, CLOSED_CHAT_RETENTION_DAYS: 90 });
+    // Left empty, as in a copied .env.example, counts as not set.
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '');
+    expect(getEnv().CLOSED_CHAT_RETENTION_DAYS).toBeUndefined();
+    vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '0');
+    expect(() => getEnv()).toThrow(/CLOSED_CHAT_RETENTION_DAYS/);
+  });
+
   it('names every missing variable', () => {
     vi.stubEnv('GITHUB_CLIENT_ID', '');
     vi.stubEnv('PUBLIC_URL', 'not a url');
     expect(() => getEnv()).toThrow(/GITHUB_CLIENT_ID[\s\S]*PUBLIC_URL|PUBLIC_URL[\s\S]*GITHUB_CLIENT_ID/);
+  });
+
+  describe('GitHub App variables', () => {
+    const SIX = ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET'];
+
+    it('are optional: with none set the server starts in first-run mode', () => {
+      // Left empty, as in a copied .env.example, counts as not set.
+      for (const name of SIX) vi.stubEnv(name, '');
+      expect(getEnv()).toMatchObject({ GITHUB_APP_ID: undefined, GITHUB_APP_PRIVATE_KEY: undefined, GITHUB_WEBHOOK_SECRET: undefined });
+    });
+
+    it('are all or none: half set refuses to start and names the missing ones', () => {
+      vi.stubEnv('GITHUB_CLIENT_SECRET', '');
+      vi.stubEnv('GITHUB_WEBHOOK_SECRET', ' ');
+      expect(() => getEnv()).toThrow(
+        'set all six GitHub App variables, or none to start in first-run mode; missing: GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET',
+      );
+    });
+
+    it('the error also points Docker installs at docs/self-hosting.md', () => {
+      vi.stubEnv('GITHUB_CLIENT_SECRET', '');
+      expect(() => getEnv()).toThrow('docs/self-hosting.md');
+    });
   });
 
   describe('Web Push keys', () => {

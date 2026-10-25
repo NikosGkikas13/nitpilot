@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fakeFetch, json } from '../../../test/fake-fetch';
-import { GithubClient, GithubError, retryAfterMs } from './client';
+import { GithubClient, GithubError, MAX_PAGES, retryAfterMs } from './client';
 
 const NOW = Date.parse('2026-10-09T12:00:00Z');
 
@@ -49,5 +49,25 @@ describe('a GitHub call that cannot reach GitHub', () => {
     expect(err).toMatchObject({ status: 503, message: "Couldn't reach GitHub for GET /repos/octo/sandbox: fetch failed" });
     expect((err as GithubError).cause).toBeInstanceOf(TypeError);
     await expect(github.oauth('/login/oauth/access_token', {})).rejects.toMatchObject({ status: 503, message: expect.stringContaining('OAuth /login/oauth/access_token') });
+  });
+});
+
+describe('apiAllPages', () => {
+  it('stops at MAX_PAGES when the Link header never runs out', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let calls = 0;
+    // A fake that would go on forever (here: MAX_PAGES + 5 pages, then it stops on its own).
+    const fetch = fakeFetch({
+      'GET /things': () => {
+        calls += 1;
+        const link: Record<string, string> = calls < MAX_PAGES + 5 ? { link: '<https://api.github.com/things?page=2>; rel="next"' } : {};
+        return json([calls], 200, link);
+      },
+    });
+    const items = await new GithubClient(fetch).apiAllPages<number[], number>('/things', (page) => page);
+    expect(calls).toBe(MAX_PAGES);
+    expect(items).toHaveLength(MAX_PAGES);
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
   });
 });

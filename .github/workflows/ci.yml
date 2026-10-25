@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only by default: no job here writes to the repo, issues or packages.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: typecheck + lint + tests
@@ -30,7 +34,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 22 LTS, the same major as the Docker image (spec §17).
+          node-version: 22.x
           cache: npm
       - run: npm ci
       # The script only exists once the server has a Prisma schema (Task 12).
@@ -39,6 +44,9 @@ jobs:
       # The web app's files, which the server serves (spec §7).
       - run: npm run build
       - run: npm run lint
+      # The CLI package as npm would get it: a broken package.json or a missing file fails here, not at release.
+      - run: npm run build -w apps/cli
+      - run: npm publish -w apps/cli --dry-run
       # Runs every workspace's tests: protocol, server and CLI.
       - run: npm test
       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
@@ -69,3 +77,46 @@ jobs:
           path: apps/web/test-results/
           retention-days: 14
           if-no-files-found: ignore
+
+  image:
+    name: Docker image (build + smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Build only, never push (the release workflow pushes). The layers are cached between runs, so a change that
+      # touches no dependency reuses the `npm ci` layers.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: nitpilot:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The image starts, serves the web app, stops cleanly on SIGTERM and starts again (scripts/image-smoke.sh).
+      - run: bash scripts/image-smoke.sh
+        env:
+          NITPILOT_SMOKE_SKIP_BUILD: '1'
+
+  gitleaks:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The whole history, not just the latest commit: a key added in one commit and deleted in the next is still
+      # readable by anyone who clones the public repo.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # gitleaks from its own image, pinned like every other tool here (the action version needs a licence for
+      # repos owned by an organization). It reads every commit's diff with gitleaks' default rules plus the
+      # allowlists in .gitleaks.toml (test values that look like secrets), and exits non-zero on a finding, which
+      # fails the job. --redact keeps the value out of this public log; the log still names the file, line, commit
+      # and rule.
+      # Pinned by digest as well as tag: a Docker Hub tag can be repointed at a different image, a digest can't.
+      - name: Scan every commit for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --config /repo/.gitleaks.toml --redact --verbose --no-banner --no-color

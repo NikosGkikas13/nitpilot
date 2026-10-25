@@ -1,6 +1,6 @@
 import { BRAND, type Attention, type MyChat } from '@nitpilot/protocol';
 import { loadConfig } from '../config/config';
-import { ServerClient } from '../http';
+import { joinServerUrl, ServerClient } from '../http';
 import { terminal, type Out } from '../out';
 
 export type StatusDeps = { env?: Record<string, string | undefined>; out?: Out; fetch?: typeof fetch };
@@ -23,7 +23,7 @@ export async function status(deps: StatusDeps = {}): Promise<void> {
 
   out.log(`Logged in as ${me.login} on ${cfg.server}`);
   if (me.githubAuth === 'needs_reauth') {
-    out.log(`! GitHub access expired. Sign in again at ${new URL('/', cfg.server).href} so ${BRAND.name} can post in your name.`);
+    out.log(`! GitHub access expired. Sign in again at ${joinServerUrl(cfg.server, '/').href} so ${BRAND.name} can post in your name.`);
   }
   if (chats.length === 0) {
     out.log(`No open PRs with ${BRAND.name} yet.`);

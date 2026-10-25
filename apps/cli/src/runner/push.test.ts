@@ -18,7 +18,7 @@ const branchOf = (pr: Pr) => pr.git(pr.base, 'rev-parse', `refs/heads/${pr.bundl
 
 /** An address job's worktree for a test PR, removed when the test ends. */
 async function addressJob(pr: Pr, apply: AgentJobBundle['apply'] = 'auto') {
-  const bundle: AgentJobBundle = { ...pr.bundle, type: 'address', apply, you: { login: 'maya', role: 'author' } };
+  const bundle: AgentJobBundle = { ...pr.bundle, type: 'address', apply, you: { login: 'maya', githubId: '7', role: 'author' } };
   const configDir = tempDir();
   const worktree = await prepareWorktree(bundle, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env: pr.env });
   onTestFinished(() => worktree.cleanup());

@@ -1,11 +1,13 @@
-import type { IncomingMessage } from 'node:http';
 import {
   CliLoginPollRequest, CliLoginStartRequest,
   type Attention, type MyChat, type MyChatsResponse, type Phase, type Role,
 } from '@nitpilot/protocol';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { LOGIN_TTL_MS, POLL_INTERVAL_SEC, pollCliLogin, startCliLogin } from '../../auth/cli-login';
+import type { RepoAccess } from '../../auth/repo-access';
 import { requireCliToken, type CliAuth } from '../../auth/cli-token';
+import { rowsInReposYouCanRead } from '../../chats/repo-filter';
+import { clientAddress } from '../../lib/client-address';
 import { getEnv } from '../../lib/env';
 import { prisma } from '../../lib/prisma';
 import { RateLimiter } from '../../lib/rate-limit';
@@ -17,15 +19,17 @@ import { HttpError } from '../errors';
 export const LOGIN_STARTS_PER_MINUTE = 10;
 
 /**
- * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats, retry and logging out. `meUpdates` tells the
- * person's open tabs when a login made a new token, so the setup checklist's "Connect your computer" ticks at once.
+ * The CLI's routes: `nitpilot login` (spec §10 "CLI login"), its chats (only of repos `access` says you can read),
+ * retry and logging out. `meUpdates` tells the person's open tabs when a login made a new token, so the setup
+ * checklist's "Connect your computer" ticks at once. `trustProxy` says whether to read the client's address from
+ * X-Forwarded-For (see lib/client-address.ts).
  */
-export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variables: { cli: CliAuth } }> {
+export function cliRoutes(deps: { access: RepoAccess; meUpdates?: MeUpdates; trustProxy?: boolean }): Hono<{ Variables: { cli: CliAuth } }> {
   const app = new Hono<{ Variables: { cli: CliAuth } }>();
   const loginStarts = new RateLimiter(LOGIN_STARTS_PER_MINUTE, 60_000);
 
   app.post('/api/cli/login', async (c) => {
-    if (!loginStarts.allow(clientAddress(c))) throw new HttpError('rate_limited', 'Too many logins started from here. Wait a minute and try again.');
+    if (!loginStarts.allow(clientAddress(c, deps.trustProxy ?? false))) throw new HttpError('rate_limited', 'Too many logins started from here. Wait a minute and try again.');
     const { deviceName } = CliLoginStartRequest.parse(await c.req.json());
     const login = await startCliLogin(deviceName);
     return c.json({
@@ -62,7 +66,8 @@ export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variable
       url: transcriptUrl(p.chat.repo.fullName, p.chat.number),
       updatedAt: p.chat.updatedAt.toISOString(),
     }));
-    const body: MyChatsResponse = { chats };
+    // Each row shows the PR's title, so only repos you can still read on GitHub (the same check as the inbox).
+    const body: MyChatsResponse = { chats: await rowsInReposYouCanRead(chats, user.id, deps.access) };
     return c.json(body);
   });
 
@@ -72,14 +77,4 @@ export function cliRoutes(deps: { meUpdates?: MeUpdates } = {}): Hono<{ Variable
   });
 
   return app;
-}
-
-/**
- * The address a request came from: Hono's Node adapter puts the raw request in `c.env.incoming`.
- * Tests call the app without a socket ('unknown'). Behind a reverse proxy (Plan 3) this is the
- * proxy's address, until we read X-Forwarded-For from it.
- */
-function clientAddress(c: Context): string {
-  const incoming = (c.env as { incoming?: IncomingMessage } | undefined)?.incoming;
-  return incoming?.socket.remoteAddress ?? 'unknown';
 }

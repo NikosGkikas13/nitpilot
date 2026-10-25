@@ -1,0 +1,18 @@
+# What `docker build` never sees (docs/why/docker-images.md). Secrets first: no .env file goes into the image.
+**/.env
+**/.env.*
+!**/.env.example
+
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+apps/server/src/generated
+
+.git
+.github
+.claude
+.superpowers
+docs
+**/.DS_Store

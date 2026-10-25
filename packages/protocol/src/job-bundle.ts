@@ -55,7 +55,8 @@ export const AgentJobBundle = z.object({
   maxRounds: z.number().int().positive(),
   /** `draft`: do the work but don't publish or push it (Auto is off). */
   apply: z.enum(['auto', 'draft']),
-  you: z.object({ login: z.string(), role: Role }),
+  /** `githubId` is who you are for good; `login` can be renamed, and someone else can take the old one. */
+  you: z.object({ login: z.string(), githubId: z.string().min(1), role: Role }),
   pr: z.object({
     repoFullName: z.string(),
     number: z.number().int().positive(),
@@ -72,7 +73,8 @@ export const AgentJobBundle = z.object({
   /** For re-reviews: only look at commits after this one. `null` means review everything. */
   sinceSha: z.string().nullable(),
   points: z.array(BundlePoint),
-  notes: z.array(z.object({ author: z.string(), body: z.string(), at: z.string() })),
+  /** `authorGithubId` is what the CLI compares with `you.githubId` to tell your own notes from anyone else's. Empty means "nobody" (no author id), and `you.githubId` can't be empty, so it never matches. */
+  notes: z.array(z.object({ author: z.string(), authorGithubId: z.string(), body: z.string(), at: z.string() })),
   rules: z.object({
     ignorePaths: z.array(z.string()),
     alwaysEscalate: z.array(Category),

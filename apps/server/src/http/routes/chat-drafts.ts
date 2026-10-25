@@ -1,7 +1,7 @@
 import { AutoRequest, FailureReason } from '@nitpilot/protocol';
 import { Hono } from 'hono';
 import type { RepoAccess } from '../../auth/repo-access';
-import { requireSameOrigin, requireUser, type UserVariables } from '../../auth/request-user';
+import { requireSameOrigin, requireSession, requireUser, type UserVariables } from '../../auth/request-user';
 import type { Dispatch } from '../../chats/dispatch';
 import { AUTO_NAME } from '../../engine/drafts';
 import { DRAFT_OUT_OF_DATE } from '../../engine/results';
@@ -12,7 +12,8 @@ import { CLOSED, mayAct, ok, readableChat, type Ctx } from './chat-actions';
 
 /**
  * The Auto switch and Send / Discard on drafts (spec §10 "Chat writes", §9 "Auto" and "Drafts"). The same checks and
- * answers as the other chat writes (routes/chat-actions.ts): who you are, the Origin, read access, your role (`can`:
+ * answers as the other chat writes (routes/chat-actions.ts): who you are (the browser's cookie only: a CLI token is
+ * refused), the Origin, read access, your role (`can`:
  * only your own switch, only your own agent's drafts), then one engine event under the chat's lock. An event that
  * changes nothing (a second press, a draft that was sent or discarded meanwhile) is a 409 that says why
  * (docs/why/races-and-conflicts.md). docs/why/drafts-and-publish-jobs.md explains drafts and publish jobs.
@@ -20,7 +21,7 @@ import { CLOSED, mayAct, ok, readableChat, type Ctx } from './chat-actions';
 export function chatDraftRoutes(deps: { access: RepoAccess; dispatch: Dispatch }): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
 
-  app.put('/api/chats/:id/auto', requireUser, requireSameOrigin, async (c) => {
+  app.put('/api/chats/:id/auto', requireUser, requireSession, requireSameOrigin, async (c) => {
     const { role, on } = AutoRequest.parse(await c.req.json());
     const chatId = await readableChat(c, deps.access);
     const who = await mayAct(c, chatId, { kind: 'auto', role });
@@ -31,14 +32,14 @@ export function chatDraftRoutes(deps: { access: RepoAccess; dispatch: Dispatch }
   });
 
   // A reviewer's draft is applied now; an author's draft queues a publish job for the laptop that holds its commit.
-  app.post('/api/chats/:id/drafts/:jobId/send', requireUser, requireSameOrigin, async (c) => {
+  app.post('/api/chats/:id/drafts/:jobId/send', requireUser, requireSession, requireSameOrigin, async (c) => {
     const { chatId, who, draftId } = await allowedOnDraft(c);
     const out = await deps.dispatch(chatId, { type: 'draft_send', who, jobId: draftId });
     if (out.timeline.length === 0) throw new HttpError('conflict', await whyNot('send', out.chat, chatId, draftId));
     return ok(c);
   });
 
-  app.post('/api/chats/:id/drafts/:jobId/discard', requireUser, requireSameOrigin, async (c) => {
+  app.post('/api/chats/:id/drafts/:jobId/discard', requireUser, requireSession, requireSameOrigin, async (c) => {
     const { chatId, who, draftId } = await allowedOnDraft(c);
     const out = await deps.dispatch(chatId, { type: 'draft_discard', who, jobId: draftId });
     if (out.timeline.length === 0) throw new HttpError('conflict', await whyNot('discard', out.chat, chatId, draftId));

@@ -1,0 +1,321 @@
+/* The first-run page. No screen in the handoff: it reuses device approval's frame (routes/Approve: the wordmark top
+   left, one centered 440px card with a 24px radius) and the handoff's tokens for fields and buttons. */
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--bg);
+}
+
+.topBar {
+  display: flex;
+  padding: 0 4px 8px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.loading {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg3);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px;
+  border: 1px solid var(--b1);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Restarting, ready and the problems: a 56px glyph, the title, a line or two, the buttons. */
+.centered {
+  align-items: center;
+  gap: 14px;
+  padding-top: 40px;
+  padding-bottom: 40px;
+  text-align: center;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.outcomeTitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.body {
+  margin: 0;
+  max-width: 24em;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fg2);
+  text-wrap: pretty;
+}
+
+.fine {
+  margin: 0;
+  max-width: 26em;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg3);
+  text-wrap: pretty;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.icon[data-kind='ready'] {
+  background: var(--ok-tint);
+  color: var(--ok-fg);
+}
+
+.icon[data-kind='problem'] {
+  background: var(--warn-tint);
+  color: var(--warn-fg);
+}
+
+/* The setup checklist's waiting spinner, at the glyph's size. Reduced motion stops it (styles/global.css). */
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 3px solid var(--b1);
+  border-top-color: var(--acc);
+  border-radius: var(--radius-pill);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg1);
+}
+
+.input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  font-size: 15px;
+}
+
+.input:focus {
+  border-color: var(--acc);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--fg3);
+}
+
+.inlineCode {
+  padding: 1px 5px;
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  background: var(--code);
+  font-size: 0.95em;
+  color: var(--fg1);
+  /* A command wraps to its own line as a whole rather than breaking inside. */
+  white-space: nowrap;
+}
+
+.fieldError,
+.formError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--red-fg);
+}
+
+.formError {
+  padding: 10px 12px;
+  border: 1px solid var(--red-line);
+  border-radius: var(--radius-control);
+  background: var(--red-tint);
+}
+
+.choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choices .label {
+  margin-bottom: 2px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background: var(--hover);
+}
+
+.choice:has(input:checked) {
+  border-color: var(--acc-line);
+  background: var(--acc-tint);
+}
+
+.choice input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--acc);
+}
+
+/* Install, then Sign in: stacked, so the longer label stays on one line in a 440px card. */
+.buttons {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.primary,
+.secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.secondary {
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+}
+
+.secondary:hover {
+  background: var(--hover);
+}
+
+.primary:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* Start again: one button, not stretched across the card. */
+.centered > .secondary {
+  flex: none;
+}
+
+/* Phone: the 16px side gutters every screen keeps, and a little less padding inside the card. */
+@media (max-width: 759px) {
+  .page {
+    padding: 14px 16px 16px;
+  }
+
+  .card {
+    padding: 22px;
+  }
+
+  .centered {
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+}

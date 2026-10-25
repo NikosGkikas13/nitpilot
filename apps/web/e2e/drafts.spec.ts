@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openPr, pageProblems, resetChats, signIn, startCli, stopCli } from './control';
+import { failJob, openPr, pageProblems, resetChats, signIn, startCli, stopCli } from './control';
 
 test.beforeEach(resetChats);
 
@@ -24,6 +24,9 @@ test("Auto-fix off: maya's agent drafts its fixes, she reads the diff and sends 
     const draft = page.getByRole('region', { name: 'Draft: Your agent wants to push fixes for P1 and reply on P2' });
     await expect(draft).toBeVisible({ timeout: 20_000 });
     await expect(draft.getByText('Not pushed')).toBeVisible();
+    // The banner under the header points at it.
+    await expect(page.getByText('1 draft waits for you')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review drafts' })).toBeVisible();
     await expect(draft.getByRole('button', { name: 'src/orders.ts, 1 added, 1 removed' })).toHaveAttribute('aria-expanded', 'true');
     await expect(draft.locator('[data-kind="add"]')).toContainText('export const pageSize = 25;');
 
@@ -39,4 +42,13 @@ test("Auto-fix off: maya's agent drafts its fixes, she reads the diff and sends 
     await stopCli('leo');
   }
   expect(errors).toEqual([]);
+});
+
+test("a failed job says why: leo's agent ran out of usage", async ({ page, context }) => {
+  await openPr({ number: 72, title: 'Quota', author: 'maya', reviewer: 'leo' });
+  await failJob({ login: 'leo', number: 72, reason: 'quota' });
+  await signIn(context, 'leo');
+  await page.goto('/c/octo/sandbox/72');
+  await expect(page.getByText("Your agent couldn't finish")).toBeVisible();
+  await expect(page.getByText('Your agent ran out of usage for now. Retry once your plan resets.')).toBeVisible();
 });

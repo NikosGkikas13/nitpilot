@@ -13,6 +13,10 @@ describe('job schemas', () => {
   it('round-trips a job bundle', () => roundTrip(JobBundle, jobBundle()));
   it('round-trips a publish bundle', () => roundTrip(JobBundle, publishBundle()));
 
+  it("refuses a job bundle that doesn't say who you are", () => {
+    expect(JobBundle.safeParse({ ...jobBundle(), you: { login: 'leo', githubId: '', role: 'reviewer' } }).success).toBe(false);
+  });
+
   it('tells the two kinds of bundle apart by type', () => {
     expect(JobBundle.parse(publishBundle()).type).toBe('publish');
     // A publish bundle names the draft it pushes; an agent bundle has no draft but needs its points and rules.

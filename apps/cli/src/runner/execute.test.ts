@@ -26,7 +26,7 @@ function openPoint(number: number, title: string): BundlePoint {
 
 /** The author's address job for `pr`, with the happy scenario's two points open. */
 function addressJob(pr: Pr, over: Partial<AgentJobBundle> = {}): AgentJobBundle {
-  return { ...pr.bundle, type: 'address', you: { login: 'maya', role: 'author' }, points: [openPoint(1, 'Page size is too big'), openPoint(2, 'Mention it in the README')], ...over };
+  return { ...pr.bundle, type: 'address', you: { login: 'maya', githubId: '7', role: 'author' }, points: [openPoint(1, 'Page size is too big'), openPoint(2, 'Mention it in the README')], ...over };
 }
 
 /** A daemon's executor for `pr`'s clone, with a real MCP server and the fake agent following `scenario`. */

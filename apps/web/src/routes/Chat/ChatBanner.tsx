@@ -2,7 +2,7 @@ import { BRAND, type ChatView, type PointView } from '@nitpilot/protocol';
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useContinue, useResolve, useRetry } from '../../api/actions';
-import type { Banner } from '../../lib/banner';
+import { draftCardId, failureText, type Banner } from '../../lib/banner';
 import { useCopy } from '../../lib/clipboard';
 import { itemTime } from '../../lib/time';
 import styles from './ChatBanner.module.css';
@@ -49,7 +49,7 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
       );
     case 'failed_job':
       return (
-        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body="The timeline says why.">
+        <Strip tone="warn" glyph="!" title="Your agent couldn't finish" body={view.viewer.failureReason ? failureText(view.viewer.failureReason) : 'The timeline says why.'}>
           {view.permissions.retry && <RetryButton chatId={view.id} />}
         </Strip>
       );
@@ -67,6 +67,12 @@ export function ChatBanner({ banner, view }: { banner: Banner; view: ChatView })
           <Link className={styles.dark} to="/settings">
             Raise cap
           </Link>
+        </Strip>
+      );
+    case 'drafts':
+      return (
+        <Strip tone="muted" title={banner.count === 1 ? '1 draft waits for you' : `${banner.count} drafts wait for you`} body="Your agent's work is ready. Send it or discard it.">
+          <ReviewDraftsButton firstJobId={banner.firstJobId} />
         </Strip>
       );
     case 'repo_not_linked':
@@ -130,6 +136,18 @@ function PointActions({ view, point }: { view: ChatView; point: PointView }) {
         </button>
       )}
     </div>
+  );
+}
+
+/** Scrolls to the first draft card in the feed (it carries `draftCardId`). */
+function ReviewDraftsButton({ firstJobId }: { firstJobId: string }) {
+  const go = () => {
+    document.getElementById(draftCardId(firstJobId))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  return (
+    <button type="button" className={`${styles.button} ${styles.dark}`} onClick={go}>
+      Review drafts
+    </button>
   );
 }
 

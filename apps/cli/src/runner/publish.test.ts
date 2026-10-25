@@ -27,7 +27,7 @@ const draftOf = (pr: Pr, jobId = 'job_1') => pr.git(pr.clone, 'for-each-ref', '-
  */
 async function drafted(pr: Pr) {
   const env = overSsh(pr);
-  const address: AgentJobBundle = { ...pr.bundle, type: 'address', apply: 'draft', you: { login: 'maya', role: 'author' } };
+  const address: AgentJobBundle = { ...pr.bundle, type: 'address', apply: 'draft', you: { login: 'maya', githubId: '7', role: 'author' } };
   const configDir = tempDir();
   const worktree = await prepareWorktree(address, pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env });
   writeFileSync(join(worktree.dir, 'src/orders.ts'), 'export const pageSize = 25;\n');
