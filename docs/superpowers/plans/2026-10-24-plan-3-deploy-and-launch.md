@@ -6847,7 +6847,7 @@ The scan is the gate for D4 Task 12 Step 1: the repo goes public only after Step
 - Consumes: the `Dockerfile` (unchanged), `scripts/image-smoke.sh` (`NITPILOT_SMOKE_SKIP_BUILD=1` tests an image already tagged `nitpilot:smoke`), the release workflow from Task 6.
 - Produces: every release tag from here on (`v0.1.0-rc.3` first, then D4's rc and `v0.1.0`) pushes one tag holding `linux/amd64` and `linux/arm64`. Task 12 Step 4 deploys whichever rc is newest; nothing there changes.
 
-- [ ] **Step 1: The workflow and the docs**
+- [x] **Step 1: The workflow and the docs**
 
 In `.github/workflows/release.yml`, job `image`: raise `timeout-minutes: 30` to `timeout-minutes: 60` (the emulated arm64 `npm ci` and build take several times longer than the amd64 half), and replace
 
@@ -6920,7 +6920,7 @@ with
 Run: `git diff --stat`
 Expected: the four files above (`release.yml`, `docker-images.md`, `releasing.md`, `self-hosting.md`). The spec already says both platforms (§17 "One image" and §20's D3 row, written with this task).
 
-- [ ] **Step 2: Prove the Dockerfile builds and runs on the other platform, locally**
+- [x] **Step 2: Prove the Dockerfile builds and runs on the other platform, locally**
 
 The reverse of what GitHub will do: on this arm64 Mac, build the **amd64** image under Docker Desktop's emulation and run the Task 5 smoke test on it. (The native arm64 build was proven in Task 9 Step 3.) Ports and the dev database are untouched: the smoke test uses its own throwaway network and Postgres.
 
@@ -6935,7 +6935,7 @@ Expected: ends with `image-smoke: PASS`. If it fails only on a timing check (`th
 
 Run: `docker rmi nitpilot:smoke`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run: `npm run lint` (the workflow file isn't linted by it, but nothing else changed either; this is the usual gate). Expected: clean.
 
@@ -6951,7 +6951,7 @@ Verified locally by building the amd64 image under emulation on an arm64 Mac and
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 4: (user, say first: writes to GitHub and GHCR) `v0.1.0-rc.3`, and a plain pull on this Mac**
+- [x] **Step 4: (user, say first: writes to GitHub and GHCR) `v0.1.0-rc.3`, and a plain pull on this Mac**
 
 I check `git status` is clean and `git log -1` is the Step 3 commit, say "this pushes the branch and a tag, and the tag pushes an image to GHCR", and wait for go. The user runs, from the repo folder, one at a time:
 
@@ -6983,7 +6983,7 @@ Expected: the pull succeeds with no `platform` setting, then `arm64` and `arm64`
 
 Then the user runs `docker logout ghcr.io`, and I run `docker rmi ghcr.io/nikosgkikas13/nitpilot:0.1.0-rc.3`. I note the tag's digest (`docker buildx imagetools inspect` prints it as `Digest:`) and the run time in the ledger.
 
-- [ ] **Step 5: Tick, ledger, commit**
+- [x] **Step 5: Tick, ledger, commit**
 
 Tick Steps 1–5, append `Task 10a: complete` (with rc.3's digest) to the ledger, then:
 
