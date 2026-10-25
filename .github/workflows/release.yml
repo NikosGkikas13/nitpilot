@@ -61,8 +61,9 @@ jobs:
           tags: |
             ghcr.io/nikosgkikas13/nitpilot:${{ needs.version.outputs.version }}
             ${{ needs.version.outputs.kind == 'release' && 'ghcr.io/nikosgkikas13/nitpilot:latest' || '' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Its own cache, apart from CI's per-PR build, so the slow arm64 layers stay cached between releases.
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,scope=release,mode=max
 
   npm:
     name: CLI to npm
