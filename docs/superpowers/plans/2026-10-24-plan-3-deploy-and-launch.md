@@ -6746,9 +6746,10 @@ Append this job to `.github/workflows/ci.yml`, after the `image` job, at the sam
       # allowlists in .gitleaks.toml (test values that look like secrets), and exits non-zero on a finding, which
       # fails the job. --redact keeps the value out of this public log; the log still names the file, line, commit
       # and rule.
+      # Pinned by digest as well as tag: a Docker Hub tag can be repointed at a different image, a digest can't.
       - name: Scan every commit for secrets
         run: >-
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
           git /repo --config /repo/.gitleaks.toml --redact --verbose --no-banner --no-color
 ```
 
