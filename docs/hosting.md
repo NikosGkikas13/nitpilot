@@ -20,7 +20,7 @@ Odyhook's own files (`/opt/hooksmith`, its backup script, its cron file) are nev
 
 **Settings** are in `/opt/nitpilot/.env` (mode 600; made from `deploy/hosted/.env.example`): `NITPILOT_VERSION`, `PUBLIC_URL=https://nitpilot.dev`, `PUBLIC_REPOS_ONLY=true`, `TRUST_PROXY=true`, `CLOSED_CHAT_RETENTION_DAYS=90`, `ALLOWED_LOGINS` empty, and the secrets (`DATABASE_URL`, `ENCRYPTION_KEY`, the VAPID keys). The GitHub App `nitpilot` is not in `.env`: it was made through https://nitpilot.dev/first-run and is stored in the database, encrypted with `ENCRYPTION_KEY`.
 
-**The one copy of `.env` off the box** is in the owner's password manager. Without it a backup can't bring the instance back ([why/backups-and-restores.md](why/backups-and-restores.md)). After any change to `.env`, run `cat /opt/nitpilot/.env` in your own terminal and update that copy; never paste it into a chat, an issue or a commit.
+**The one copy of `.env` off the box** is in the owner's password manager. Without it a backup can't bring the instance back ([why/backups-and-restores.md](why/backups-and-restores.md)). After any change to `.env`, run `ssh root@157.180.91.106 cat /opt/nitpilot/.env` in a terminal window of your own (Terminal or iTerm, not an AI assistant's in-chat `!` prompt, which sends the output into the chat) and update that copy; never paste it into a chat, an issue or a commit. If a secret does reach a chat, change it: for the database password, make a new one on the box, `ALTER ROLE nitpilot PASSWORD '…'` through `psql` on standard input (as in "Set it up" step 3), write it into `DATABASE_URL` with `set_env`, then `docker compose up -d --force-recreate --wait`.
 
 ## Everyday commands
 
@@ -61,6 +61,8 @@ docker compose ps
 ## Memory
 
 The box has 4 GB. Odyhook's containers have caps that add up to about 4.2 GB (caps limit, they don't reserve), and `nitpilot-server` is capped at 384 MB (`mem_limit` in `docker-compose.yml`). `docker stats --no-stream` shows what each really uses. If `nitpilot-server` sits near its cap, raise it in `docker-compose.yml` (in this repo, then copy it over) only if `free -m` shows the room; if the box itself is short, stop and ask rather than add anything.
+
+**Odyhook's deploys build on the box.** Odyhook's deploy runs `docker compose up -d --build`, which runs `next build` on this box, next to everything that's already running. The box has no swap. On 2026-10-25, the first Odyhook deploy with `nitpilot-server` running (about 170 MB) used up the memory: SSH stopped answering, odyhook.dev and nitpilot.dev went down, GitHub cancelled the deploy after its 15-minute limit, and the box came back only after a **Power cycle** in the Hetzner console (the server → **Power** → **Power cycle**). Every container came back on its own; nothing was lost. Until Odyhook builds somewhere else or the box gets more room (the owner's decision), treat every merge to Odyhook's `main` as a risk: `docker compose stop` in `/opt/nitpilot` before it, `docker compose up -d --wait` after its deploy is green. That frees about 170 MB; it has not been shown to be enough.
 
 ## Backups
 
@@ -163,7 +165,7 @@ What Plan 3 Task 12 does, here so a new box can be set up the same way. Every co
    unset pw
    EOF
    ```
-4. `docker compose up -d`, then `docker compose logs nitpilot-server | grep 'setup code' | tail -n 1` for the setup code (it changes each time the server starts), and make the GitHub App at https://nitpilot.dev/first-run.
+4. `docker compose up -d`, then `docker compose logs nitpilot-server | grep 'setup code' | tail -n 1` for the setup code (it changes each time the server starts), and make the GitHub App at https://nitpilot.dev/first-run. Before clicking **Create GitHub App for …** on GitHub's page, check that the name at the top is `nitpilot` (the first-run page's default is `Nitpilot (nitpilot.dev)`, which GitHub turns into `nitpilot-nitpilot-dev`) and that **Any account** is chosen. If the app came out wrong and nobody has installed it yet: delete it on GitHub (the app's settings → **Advanced** → **Delete GitHub App**), then `docker exec hooksmith-postgres-1 psql -U nitpilot -d nitpilot -c 'delete from "GithubAppConfig"' -c 'delete from "RawEvent"'` and `docker compose restart nitpilot-server`; the server is back in first-run mode with a new setup code.
 5. The backup script and cron file ("Backups" above), and save `.env` in the password manager.
 
 ## Caddy
@@ -180,7 +182,7 @@ www.nitpilot.dev {
 }
 ```
 
-Caddy gets and renews the `nitpilot.dev` certificate itself, redirects `http://` to `https://`, and passes WebSockets (`/ws/cli`, `/ws/web`) through. To change them: a commit to Odyhook's repo, merged to its `main`, which redeploys Odyhook. That deploy does `git pull` and `docker compose up -d --build`, which doesn't restart Caddy, and a running Caddy never rereads its file. So after the deploy, restart Caddy once (odyhook.dev and nitpilot.dev both blink for a second or two):
+Caddy gets and renews the `nitpilot.dev` certificate itself, redirects `http://` to `https://`, and passes WebSockets (`/ws/cli`, `/ws/web`) through. To change them: a commit to Odyhook's repo, merged to its `main`, which redeploys Odyhook (read "Odyhook's deploys build on the box" under Memory first). That deploy does `git pull` and `docker compose up -d --build`, which doesn't restart Caddy, and a running Caddy never rereads its file. So after the deploy, restart Caddy once (odyhook.dev and nitpilot.dev both blink for a second or two):
 
 ```bash
 cd /opt/hooksmith && docker compose -f docker-compose.prod.yml restart caddy
