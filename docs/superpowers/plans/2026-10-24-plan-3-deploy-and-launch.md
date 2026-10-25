@@ -8036,7 +8036,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-- [ ] **Step 1: The runbook, its helpers and the spec line; commit**
+- [x] **Step 1: The runbook, its helpers and the spec line; commit**
 
 Create `docs/acceptance/hosted.sh` with exactly this content:
 
@@ -8380,7 +8380,7 @@ git commit -m "docs(acceptance): the Plan 3 runbook for nitpilot.dev
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 2: (say first: GitHub writes and a Claude run) The single-player run: runbook sections 0 to 3**
+- [x] **Step 2: (say first: GitHub writes and a Claude run) The single-player run: runbook sections 0 to 3**
 
 I start the terminals (T1 to T3, each `source docs/acceptance/hosted.sh`) and run the checks of section 0 and section 1 myself; I say first before each GitHub write (the branch, then the user's PR and review request) and before Claude runs. The user approves the device in section 2 and does the clicks in section 3 as **ngkdev93-jpg**. Watch for: the `→ review` stamp in T1 against `check.sql` §4's `review_requested` time (the 5-second criterion), and the app badge on the review.
 
@@ -8388,15 +8388,17 @@ I start the terminals (T1 to T3, each `source docs/acceptance/hosted.sh`) and ru
 
 The user records with ⇧⌘5 following the runbook's layout and shot list; I push the branch and set up T1 (`clear`, `nitpilot start` without timestamps). I trim nothing; the user keeps `~/Movies/nitpilot-demo.mov` for Task 14.
 
-- [ ] **Step 4: (say first: push registration, GitHub writes, Claude runs) Push and agent to agent: runbook sections 5 and 6**
+**Run note (2026-10-25): not done.** The take on #18 showed the Claude app instead of the terminal, plus a personal inbox and bookmarks; a retake needs a single-player PR, and ngkdev93-jpg had joined by then (section 6). The user moved the demo to D5; the runbook's section 4 now lists what the screen must show.
+
+- [x] **Step 4: (say first: push registration, GitHub writes, Claude runs) Push and agent to agent: runbook sections 5 and 6**
 
 The user turns push on in Chrome and on the iPhone (section 5) and signs ngkdev93-jpg in (section 6); I switch NikosGkikas13's CLI to the fake agent and start ngkdev93-jpg's. Watch for: exactly one `nitpilot[bot]` comment, the fix commit authored by ngkdev93-jpg, the *Ready for your approval* push on both devices, and no Script Editor notification.
 
-- [ ] **Step 5: (say first: restarts nitpilot.dev; makes and deletes a private repo) The remaining criteria: runbook sections 7 to 10**
+- [x] **Step 5: (say first: restarts nitpilot.dev; makes and deletes a private repo) The remaining criteria: runbook sections 7 to 10**
 
 The restart (section 7) is the one moment the hosted instance goes down on purpose: I run it the moment T1 shows `→ review`. The private repo (section 8) is made with `gh` as NikosGkikas13 and deleted by the user at the end of that section. Section 9's backup and restore check run on the box (they write one more backup and make and drop the scratch database). Section 10 closes the PRs as ngkdev93-jpg.
 
-- [ ] **Step 6: Results, tick, commit**
+- [x] **Step 6: Results, tick, commit**
 
 Fill section 11's table in `docs/acceptance/plan-3.md` with what was seen (times, PR numbers, the image digest, versions), tick every box in the runbook, and write "What was found and fixed during the run". A fix found during the run is its own commit first (TDD for code; a code fix reaches nitpilot.dev only through a new `rc` and `docs/hosting.md` "Deploying a new version", said first). Then tick Steps 1 to 6 here, add the ledger line `Task 13: complete`, and commit:
 

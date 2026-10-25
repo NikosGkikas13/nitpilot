@@ -25,15 +25,15 @@ The sandbox is `NikosGkikas13/nitpilot-sandbox`, with `ngkdev93-jpg` as a collab
 
 ## 0. Before you start
 
-- [ ] nitpilot.dev is up: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"0.1.0"}`, and `boxlog 5` (it asks the box over ssh) shows no error.
-- [ ] The production app is installed on the sandbox: `boxq -c 'select slug, "ownerLogin" from "GithubAppConfig"' -c 'select "fullName", private from "Repo"'` prints `nitpilot | NikosGkikas13` and a row `NikosGkikas13/nitpilot-sandbox | f`.
-- [ ] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
-- [ ] The tools exist: `command -v jq perl gh git node ssh` prints six paths.
-- [ ] The CLI is built from this branch: `npm run build -w apps/cli`, then `nitpilot --version` prints `0.1.0`.
-- [ ] Nothing points the CLI elsewhere: `echo "${NITPILOT_SERVER:-unset}"` prints `unset`, and `ls ~/.nitpilot-hosted-r ~/.nitpilot-hosted-w` finds neither folder (each person starts fresh).
-- [ ] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, both clones exist (`ls "$CLONE_A" "$CLONE_B"`), and clone A's commits are ngkdev93-jpg's: `git -C "$CLONE_A" config user.email` prints `340081894+ngkdev93-jpg@users.noreply.github.com`.
-- [ ] `gh` knows both accounts: `gh auth status` lists `NikosGkikas13` and `ngkdev93-jpg`.
-- [ ] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
+- [x] nitpilot.dev is up: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"0.1.0"}`, and `boxlog 5` (it asks the box over ssh) shows no error.
+- [x] The production app is installed on the sandbox: `boxq -c 'select slug, "ownerLogin" from "GithubAppConfig"' -c 'select "fullName", private from "Repo"'` prints `nitpilot | NikosGkikas13` and a row `NikosGkikas13/nitpilot-sandbox | f`.
+- [x] Claude Code is signed in: `claude auth status` prints `"loggedIn": true`.
+- [x] The tools exist: `command -v jq perl gh git node ssh` prints six paths.
+- [x] The CLI is built from this branch: `npm run build -w apps/cli`, then `nitpilot --version` prints `0.1.0`.
+- [x] Nothing points the CLI elsewhere: `echo "${NITPILOT_SERVER:-unset}"` prints `unset`, and `ls ~/.nitpilot-hosted-r ~/.nitpilot-hosted-w` finds neither folder (each person starts fresh).
+- [x] Plan 1's one-time setup is still there: `ssh -T git@github-a` greets `ngkdev93-jpg`, `ssh -T git@github-b` greets `NikosGkikas13`, both clones exist (`ls "$CLONE_A" "$CLONE_B"`), and clone A's commits are ngkdev93-jpg's: `git -C "$CLONE_A" config user.email` prints `340081894+ngkdev93-jpg@users.noreply.github.com`.
+- [x] `gh` knows both accounts: `gh auth status` lists `NikosGkikas13` and `ngkdev93-jpg`.
+- [x] macOS lets Chrome show notifications: System Settings → **Notifications** → **Google Chrome** → *Allow notifications* is on.
 
 ## 1. The addresses (no clicks)
 
@@ -49,7 +49,7 @@ echo | openssl s_client -connect nitpilot.dev:443 -servername nitpilot.dev 2>/de
 ```
 Expect: `308` (or `301`) to `https://nitpilot.dev/`; `301` to `https://nitpilot.dev/`; a redirect that ends at `https://nitpilot.dev/` (http → https first, then to the apex); the health answer; and a certificate for `CN=nitpilot.dev` from Let's Encrypt with an end date about three months away.
 
-- [ ] `http://nitpilot.dev` and `www.nitpilot.dev` (http and https) end at `https://nitpilot.dev`, with a valid certificate.
+- [x] `http://nitpilot.dev` and `www.nitpilot.dev` (http and https) end at `https://nitpilot.dev`, with a valid certificate.
 
 ## 2. NikosGkikas13 connects a CLI (about 5 minutes)
 
@@ -63,7 +63,7 @@ NikosGkikas13 signed in to nitpilot.dev when installing the app (Task 12), so on
    Expect `repos add` to confirm `NikosGkikas13/nitpilot-sandbox` is linked to that clone, and `doctor` to print no `✗` line.
 3. **T1:** `nitpilot start 2>&1 | perl "$REPO/docs/acceptance/stamp.pl"`. Expect `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.` Leave it running.
 
-- [ ] `nitpilot login` and `start` work against nitpilot.dev with no `NITPILOT_SERVER` and no tunnel.
+- [x] `nitpilot login` and `start` work against nitpilot.dev with no `NITPILOT_SERVER` and no tunnel.
 
 ## 3. Single-player reviewer (the first PR; one Claude run)
 
@@ -86,9 +86,9 @@ The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a 
    ```
    Compare the `review_requested` arrival time in `check.sql` section 4 with the `→ review of …` stamp in T1 (both UTC).
 
-- [ ] The review job started within 5 seconds of "Request review" (`check.sql` §4 `pull_request.review_requested` against T1's `→ review` stamp).
-- [ ] The review is on the PR in NikosGkikas13's name; no `nitpilot[bot]` comment.
-- [ ] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
+- [x] The review job started within 5 seconds of "Request review" (`check.sql` §4 `pull_request.review_requested` against T1's `→ review` stamp).
+- [x] The review is on the PR in NikosGkikas13's name; no `nitpilot[bot]` comment.
+- [x] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
 
 ## 4. The demo recording (the second PR; one Claude run)
 
@@ -124,7 +124,7 @@ Ask first: turning push on registers each browser with its push service (Google'
 5. Tap your avatar → **Settings** → **Notifications** → the **Push notifications** switch → **Allow**.
 6. **T3:** `boxq -v pr=0 -f - < docs/acceptance/check-web.sql`. Section 4 lists two rows for `NikosGkikas13`: *Chrome on macOS* and *Safari on iPhone*.
 
-- [ ] Push is on in NikosGkikas13's Chrome and in the iPhone's Home Screen app (two subscriptions in `check-web.sql` §4), with no callback URL added anywhere.
+- [x] Push is on in NikosGkikas13's Chrome and in the iPhone's Home Screen app (two subscriptions in `check-web.sql` §4), with no callback URL added anywhere.
 
 ## 6. Agent to agent (the third PR; one or two Claude runs)
 
@@ -153,8 +153,8 @@ ngkdev93-jpg joins, with Claude Code fixing; NikosGkikas13's agent becomes the f
    ```
    Expect `check.sql` §1 phase `ready`; the `jq` line `bot_comments: 1` with `edited`, `has_log` and `has_transcript_link` all `true`; and every commit's `author` `ngkdev93-jpg`.
 
-- [ ] The chat reached READY with exactly one `nitpilot[bot]` summary comment, edited across rounds.
-- [ ] The fix commit is authored by ngkdev93-jpg.
+- [x] The chat reached READY with exactly one `nitpilot[bot]` summary comment, edited across rounds.
+- [x] The fix commit is authored by ngkdev93-jpg.
 - [ ] Web Push arrived on desktop Chrome and on the iPhone Home Screen app, and clicking it opened the chat; the CLI showed no OS notification.
 
 ## 7. A restart in the middle of a job (the fourth PR; no Claude run)
@@ -175,7 +175,7 @@ ngkdev93-jpg joins, with Claude Code fixing; NikosGkikas13's agent becomes the f
 5. About 45 seconds after the job started, **T1** prints `✓ review of …: done`. ngkdev93-jpg is on Nitpilot since section 6, so this is an agent-to-agent chat: the three points go to the chat and to the `nitpilot[bot]` summary comment, not to a GitHub review. Their address job stays `queued` (their CLI is stopped) until the PR is closed in section 10.
 6. **T3:** `boxq -v pr=$PR -f - < docs/acceptance/check.sql` and `ssh $BOX 'cd /opt/nitpilot && docker compose logs -t --since 5m nitpilot-server'`. The server logs nothing when it stops; the log shows the new start (`listening`, `[boot] re-ran …`) at the restart's time, and T1's `1012 server restarting` shows the clean stop.
 
-- [ ] The restart lost nothing: one `review` job, `done` at attempt 1 (`check.sql` §2), no duplicates (§3), the three points in the chat (§6) and the summary comment, and the CLI reconnected by itself after a `1012`; the log shows the new start.
+- [x] The restart lost nothing: one `review` job, `done` at attempt 1 (`check.sql` §2), no duplicates (§3), the three points in the chat (§6) and the summary comment, and the CLI reconnected by itself after a `1012`; the log shows the new start.
 
 ## 8. A webhook from a private repo is dropped (no agent runs)
 
@@ -205,7 +205,7 @@ The hosted instance takes public repos only (`PUBLIC_REPOS_ONLY=true`). Ask firs
    Expect the `installation_repositories` / `pull_request` rows for that repo `ignored` with the note `private repo (public-only mode)` (an `installation_repositories` delivery carries no `repository` field, so it may not be listed), and `0` chats. The `Repo` query may list the repo with `private` `t` (the installation sync records it); what matters is that nothing about its PR got through.
 5. Remove the repo again, **NikosGkikas13's browser**: open https://github.com/NikosGkikas13/nitpilot-private-check/settings, scroll to the red **Danger Zone** at the bottom, **Delete this repository**, confirm the steps GitHub shows (it asks you to type `NikosGkikas13/nitpilot-private-check`), and click the red delete button. (GitHub also removes it from the app's installation.)
 
-- [ ] The private repo's PR webhooks were stored as `ignored` (`private repo (public-only mode)`), and no chat or job came from them.
+- [x] The private repo's PR webhooks were stored as `ignored` (`private repo (public-only mode)`), and no chat or job came from them.
 
 ## 9. Backups, memory, and Odyhook (no clicks)
 
@@ -217,8 +217,8 @@ The hosted instance takes public repos only (`PUBLIC_REPOS_ONLY=true`). Ask firs
 2. **T3:** the cron line is in place: `ssh $BOX "grep -c '^30 3 ' /etc/cron.d/nitpilot"` prints `1` (the file's comment names the script too). If a night has passed since Task 12, the log shows an `ok` line from 03:30 UTC.
 3. **T3:** `ssh $BOX 'docker stats --no-stream; free -m'`, and `curl -s -o /dev/null -w '%{http_code}\n' https://odyhook.dev`.
 
-- [ ] The nightly backup holds the `nitpilot` database, and restoring it into a scratch database works (the two count lines match).
-- [ ] `docker stats` after the run shows `nitpilot-server` under its 384 MiB limit, and odyhook.dev answers `200`.
+- [x] The nightly backup holds the `nitpilot` database, and restoring it into a scratch database works (the two count lines match).
+- [x] `docker stats` after the run shows `nitpilot-server` under its 384 MiB limit, and odyhook.dev answers `200`.
 
 ## 10. Wrap up
 
@@ -229,18 +229,26 @@ The hosted instance takes public repos only (`PUBLIC_REPOS_ONLY=true`). Ask firs
 
 ## 11. Results
 
-Run on: <date>, <UTC times>, with nitpilot.dev on image `0.1.0-rc.<n>` (<digest>), the CLI from commit `<sha>`. Agents: Claude Code <version> (NikosGkikas13 in sections 3–4, ngkdev93-jpg in 6); the fake agent from source (NikosGkikas13 in 6–7). Desktop: Chrome <version> on macOS <version>. Phone: iPhone on iOS <version>. PRs: sandbox #<n> (3), #<n> (4), #<n> (6), #<n> (7), `nitpilot-private-check` #1 (8, repo deleted after).
+Run on: 2026-10-25, 11:01–18:05 UTC (with a break: the Mac slept between sections 5 and 6, and both CLIs reconnected by themselves each time), with nitpilot.dev on image `0.1.0-rc.3` (`sha256:e92412e6f7dd44dd0798ad507e59e0f343c59f66a8f70be42477bf1772ba711f`), the CLI from commit `ebf67f9`. Agents: Claude Code 2.1.277 (NikosGkikas13 in sections 3–4, ngkdev93-jpg in 6); the fake agent from source (NikosGkikas13 in 6–7). Desktop: Chrome 155.0.8059.85 on macOS 15.1. Phone: iPhone (iOS version not noted). PRs: sandbox #17 (3), #18 (4), #19 (6), #20 (7), `nitpilot-private-check` #1 (8, repo deleted after). All four sandbox PRs closed with their branches in section 10.
 
 | Criterion (spec §20 item 4) | Section | Evidence |
 |---|---|---|
-| `http://nitpilot.dev` and `www.nitpilot.dev` end at `https://nitpilot.dev`, with a valid certificate | 1 | |
-| Single-player reviewer: the review job starts within 5 s of "Request review", and the review is posted in the reviewer's name | 3 | |
-| Agent to agent: the chat reaches READY with exactly one `nitpilot[bot]` summary comment | 6 | |
-| Web Push arrives on desktop Chrome and on the iPhone Home Screen app, with no per-run callback URL | 5, 6 | |
-| A webhook from a private repo is dropped (`PUBLIC_REPOS_ONLY`) | 8 | |
-| `docker compose restart` in `/opt/nitpilot` mid-job loses nothing: the CLI reconnects and the job completes | 7 | |
-| The nightly backup contains the `nitpilot` database, and restoring it into a scratch database works | 9 | |
-| `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers | 9 | |
-| The demo is recorded on nitpilot.dev, showing `nitpilot`, not `nitpilot-dev` | 4 | |
+| `http://nitpilot.dev` and `www.nitpilot.dev` end at `https://nitpilot.dev`, with a valid certificate | 1 | ✅ `http://nitpilot.dev` 308 → `https://nitpilot.dev/`; `https://www` 301 → apex; `http://www` 308 → `https://www` → 301 → apex; `/healthz` `{"ok":true,"version":"0.1.0"}`; `CN=nitpilot.dev`, Let's Encrypt `YE1`, until 2027-01-23 |
+| Single-player reviewer: the review job starts within 5 s of "Request review", and the review is posted in the reviewer's name | 3 | ✅ #17: `review_requested` arrived 11:12:26.210, T1 `→ review` 11:12:26.569 (0.36 s); `✓ done` 11:13:06 (40 s). One review by NikosGkikas13 (COMMENTED), 4 inline comments, no `nitpilot[bot]` comment; 1 job, done at attempt 1, no duplicates; 7 webhooks processed or ignored. Claude raised 5 points (the 3 planted bugs, an SQL injection in `search.js` escalated as security, missing tests). No app badge: see below |
+| Agent to agent: the chat reaches READY with exactly one `nitpilot[bot]` summary comment | 6 | ✅ #19: review 17:28:48–17:28:50 (fake, 3 points), address 17:28:50–17:29:28 (Claude, commit `22a4f86` by ngkdev93-jpg), re-review 17:29:28–17:29:31 (all resolved), `ready` at round 2; `bot_comments: 1`, `edited`, `has_log`, `has_transcript_link` all true; both commits authored by ngkdev93-jpg |
+| Web Push arrives on desktop Chrome and on the iPhone Home Screen app, with no per-run callback URL | 5, 6 | ⚠️ Partly. Two subscriptions (`Chrome on macOS` 11:28, `Safari on iPhone` 11:33), no callback URL anywhere. The *Ready for your approval* push for #19 reached the **iPhone**; on the **Mac** nothing showed (Do Not Disturb off, Chrome allowed in macOS). The `notify` task ran at 17:29:32 and the server logged no push failure (failures are logged and counted; both rows kept `failCount` 0), so Google's push service took it. Not found why Chrome didn't show it; open |
+| A webhook from a private repo is dropped (`PUBLIC_REPOS_ONLY`) | 8 | ✅ `pull_request.opened` from `nitpilot-private-check` stored `ignored`, note `private repo (public-only mode)`; `installation_repositories.added` processed and the repo recorded with `private` `t`; 0 chats. The repo row went away when the repo was deleted |
+| `docker compose restart` in `/opt/nitpilot` mid-job loses nothing: the CLI reconnects and the job completes | 7 | ✅ #20: review started 17:36:20.855 (45 s fake); restart at 17:36:59; T1 `Disconnected (1012 server restarting)` 17:37:02, `(1006)` 17:37:03, `Connected` 17:37:06, `✓ done` 17:37:08. 1 review job, done at attempt 1, no duplicates, 3 points in the chat and the summary comment; log shows the new start at 17:37:03 |
+| The nightly backup contains the `nitpilot` database, and restoring it into a scratch database works | 9 | ✅ `nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-2026-10-25T18-00-58Z.sql.gz (37461 bytes)`; counts `nitpilot\|13\|2\|6\|1` = `nitpilot_restore_check\|13\|2\|6\|1`; cron line in place (no 03:30 run yet: Task 12 was the same day) |
+| `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers | 9 | ✅ `nitpilot-server` 179.4 MiB / 384 MiB; box 3819 MB, 2525 available, no swap; odyhook.dev `200` |
+| The demo is recorded on nitpilot.dev, showing `nitpilot`, not `nitpilot-dev` | 4 | ❌ Not yet. The take on #18 (73 s, kept on the user's Mac) can't be used: most of it shows the Claude app, the terminal never appears, and a personal inbox and bookmarks are visible. A retake needs a single-player PR, which ngkdev93-jpg's joining in section 6 rules out; the user moved the demo to D5 |
 
-**What was found and fixed during the run** (each with its commit): <none yet>
+**What was found and fixed during the run** (each with its commit):
+
+- **No app badge on reviews.** The runbook and spec §15 expected GitHub to show the `nitpilot` badge on a review posted with the user's token. It doesn't: no review comment on the sandbox, from Plans 1, 2 or this run, records an app (`performed_via_github_app` is null; the bot's own comments record it). Text fixed in `33ffb9e`; no code change.
+- **Section 7 is agent-to-agent once ngkdev93-jpg has joined**, so the points go to the chat, not to a GitHub review; the server logs nothing when it stops (the CLI's `1012` is the evidence). Text fixed in `33ffb9e`.
+- **Section 9:** the cron log file exists only after cron's first run, and `grep -c nitpilot-backup` counts the file's comment too (prints `2`). Text fixed in `33ffb9e`.
+- **The address job** in section 6 started 3 s after the review, not ~30 s. Text fixed in `33ffb9e`.
+- **Open: the Mac didn't show the *Ready for your approval* push** (the iPhone did). Server side looks right; not diagnosed.
+- **Open: the demo** moved to D5 (see the table). Section 4 now says what the screen must show and that a retake has to come before section 6 (`33ffb9e`).
+- Not a finding: the app's terminal panel refuses a command line containing a lone `r` (`nit-edit r …`), so that edit was run outside it.
