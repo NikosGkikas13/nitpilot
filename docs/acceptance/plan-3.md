@@ -77,7 +77,7 @@ The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a 
 2. **ngkdev93-jpg's browser:** open that link. GitHub's **Open a pull request** page compares `acc/hosted-reviewer` with `main`. Click the **Title** box and type `Hosted: reviewer`. Don't pick a reviewer yet. Click the green **Create pull request** button. Note the number (`#<PR>` after the title); in **T3** run `export PR=<number>`.
 3. Wait about ten seconds (so the PR's own webhooks are done), then, still in **ngkdev93-jpg's browser**, on the PR's **Conversation** tab: in the right-hand column click the gear next to **Reviewers**, type `NikosGkikas13`, click the name (a tick appears), and click outside the list. **Reviewers** now shows NikosGkikas13 with a small dot (requested).
 4. Within about 5 seconds **T1** prints `→ review of NikosGkikas13/nitpilot-sandbox#<PR> (attempt 1)`. Claude works for one to three minutes; then `✓ review of …: done`.
-5. **ngkdev93-jpg's browser:** reload the PR. A review by **NikosGkikas13**, with the `nitpilot` app badge next to the name, and inline comments on `orders-demo/src/orders.js` (the seed has three planted bugs; Claude usually finds them and may add others). No comment from `nitpilot[bot]` (only one side is on Nitpilot).
+5. **ngkdev93-jpg's browser:** reload the PR. A review by **NikosGkikas13** (your name and avatar; GitHub shows no app badge on a review posted with a user's token, seen in the Plan 3 run), and inline comments on `orders-demo/src/orders.js` (the seed has three planted bugs; Claude usually finds them and may add others). No comment from `nitpilot[bot]` (only one side is on Nitpilot).
 6. **T3:**
    ```bash
    boxq -v pr=$PR -f - < docs/acceptance/check.sql
@@ -87,7 +87,7 @@ The launch story: ngkdev93-jpg, who isn't on Nitpilot, asks NikosGkikas13 for a 
    Compare the `review_requested` arrival time in `check.sql` section 4 with the `→ review of …` stamp in T1 (both UTC).
 
 - [ ] The review job started within 5 seconds of "Request review" (`check.sql` §4 `pull_request.review_requested` against T1's `→ review` stamp).
-- [ ] The review is on the PR in NikosGkikas13's name (with the app badge); no `nitpilot[bot]` comment.
+- [ ] The review is on the PR in NikosGkikas13's name; no `nitpilot[bot]` comment.
 - [ ] Every webhook was processed or ignored (`check.sql` §5), and no job ran twice (§3 prints no rows).
 
 ## 4. The demo recording (the second PR; one Claude run)
@@ -98,7 +98,7 @@ The README's video ([spec §20](../superpowers/specs/2026-10-07-nitpilot-design.
 1. **T3** (say first: pushes a branch): `cd "$CLONE_A" && bash "$REPO/docs/acceptance/new-branch.sh" hosted-demo; cd "$REPO"`.
 2. **ngkdev93-jpg's browser:** open the link, title `Add order paging and a summary line`, **Create pull request**. Don't request a reviewer. `export PR=<number>` in **T3**.
 3. Turn on Do Not Disturb (Control Center, top right of the menu bar → **Focus** → **Do Not Disturb**), so no notification pops up on the video.
-4. Lay out the screen:
+4. Lay out the screen. Only these windows may show: run T1 in macOS's own **Terminal** app (not in a panel of another app), close every personal tab in both browsers, hide the bookmarks bar (⇧⌘B), and hide every other app. A retake needs a new single-player PR, so it must happen before ngkdev93-jpg signs in (section 6).
    - **Left half: ngkdev93-jpg's browser** on the new PR's **Conversation** tab, scrolled so the **Reviewers** box on the right is visible.
    - **Right half: T1** with the CLI running. Make the text big (⌘+ three or four times) and clear it first: stop the CLI (Ctrl-C), run `clear`, then start it again without the timestamps so the screen reads like a user's: `nitpilot start`. It prints `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.`
    - **NikosGkikas13's browser**, behind the other two, open on `https://nitpilot.dev/c/NikosGkikas13/nitpilot-sandbox/<PR>` (the chat). Before the review starts it says this PR has no chat yet; that's fine, it fills in by the end.
@@ -142,7 +142,7 @@ ngkdev93-jpg joins, with Claude Code fixing; NikosGkikas13's agent becomes the f
 6. Expect, with no clicks:
    - **T1** within 5 seconds: `→ review of …#<PR>`, then `✓ review … done` (three points, a second or two).
    - GitHub: one comment from **`nitpilot[bot]`** (the summary) a few seconds later.
-   - **T2** about 30 seconds after the review (`debounce_seconds`): `→ address of …#<PR> (attempt 1)`; Claude edits `orders.js`, replies to each point, and a commit lands on the branch; `✓ address … done`.
+   - **T2** a few seconds after the review (3 s in the Plan 3 run): `→ address of …#<PR> (attempt 1)`; Claude edits `orders.js`, replies to each point, and a commit lands on the branch; `✓ address … done`.
    - **T1:** `→ re_review of …`, `✓ … done` (all three resolved).
    - The chat is ready: **NikosGkikas13's Mac** shows a notification from **Google Chrome** titled *Ready for your approval* (top right); click it and Chrome opens the chat. **NikosGkikas13's iPhone** shows the same from **Nitpilot**; tap it and the Home Screen app opens the chat. T1 prints a `🔔 Ready for your approval …` line, and no notification from **Script Editor** appears on the Mac (that's the CLI's fallback when push didn't reach you).
 7. **T3:**
@@ -171,11 +171,11 @@ ngkdev93-jpg joins, with Claude Code fixing; NikosGkikas13's agent becomes the f
    ```bash
    ssh $BOX 'cd /opt/nitpilot && docker compose restart && docker compose ps --format "{{.Name}} {{.Status}}"'
    ```
-   Expect `Container nitpilot-server  Restarting`, `Started`, and a status line. **T1** shows the connection dropping and, within a few seconds, `Connected as NikosGkikas13.` again, with no `■ Stopped` and no new `→ review` line.
-5. About 45 seconds after the job started, **T1** prints `✓ review of …: done`. **ngkdev93-jpg's browser:** the PR has NikosGkikas13's review with three inline comments (lines 5, 12, 18).
-6. **T3:** `boxq -v pr=$PR -f - < docs/acceptance/check.sql` and `boxlog 60 | grep -iE 'shutting|1012|listening|lock'`.
+   Expect `Container nitpilot-server  Restarting`, `Started`, and a status line. **T1** shows the connection dropping (`Disconnected (1012 server restarting)`, maybe a `Disconnected (1006)` while the server starts) and, within a few seconds, `Connected as NikosGkikas13.` again, with no `■ Stopped` and no new `→ review` line.
+5. About 45 seconds after the job started, **T1** prints `✓ review of …: done`. ngkdev93-jpg is on Nitpilot since section 6, so this is an agent-to-agent chat: the three points go to the chat and to the `nitpilot[bot]` summary comment, not to a GitHub review. Their address job stays `queued` (their CLI is stopped) until the PR is closed in section 10.
+6. **T3:** `boxq -v pr=$PR -f - < docs/acceptance/check.sql` and `ssh $BOX 'cd /opt/nitpilot && docker compose logs -t --since 5m nitpilot-server'`. The server logs nothing when it stops; the log shows the new start (`listening`, `[boot] re-ran …`) at the restart's time, and T1's `1012 server restarting` shows the clean stop.
 
-- [ ] The restart lost nothing: one `review` job, `done` at attempt 1 (`check.sql` §2), no duplicates (§3), the review on the PR, and the CLI reconnected by itself; the log shows the shutdown and the new start.
+- [ ] The restart lost nothing: one `review` job, `done` at attempt 1 (`check.sql` §2), no duplicates (§3), the three points in the chat (§6) and the summary comment, and the CLI reconnected by itself after a `1012`; the log shows the new start.
 
 ## 8. A webhook from a private repo is dropped (no agent runs)
 
@@ -211,10 +211,10 @@ The hosted instance takes public repos only (`PUBLIC_REPOS_ONLY=true`). Ask firs
 
 1. **T3:** a backup of what this run made, then the restore check (both on the box; "say first" covers the scratch database it makes and drops):
    ```bash
-   ssh $BOX '/usr/local/bin/nitpilot-backup.sh && tail -n 3 /var/log/nitpilot-cron.log'
+   ssh $BOX '/usr/local/bin/nitpilot-backup.sh'
    ```
-   Expect `nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-<time>.sql.gz (<n> bytes)`. Then the commands under "Check a backup" in [hosting.md](../hosting.md), on the box (`ssh $BOX`, paste them, `exit`). Expect the two count lines to match: the same number of migrations, people (`User`: 2 now), chats (this run's four PRs, plus Task 12's), and `1` app.
-2. **T3:** the cron line is in place: `ssh $BOX 'grep -c nitpilot-backup /etc/cron.d/nitpilot'` prints `1`. If a night has passed since Task 12, the log shows an `ok` line from 03:30 UTC.
+   Expect (the script prints its line; `/var/log/nitpilot-cron.log` only exists after cron's first 03:30 run) `nitpilot-backup: ok r2:odyhook-backups/nitpilot/nitpilot-<time>.sql.gz (<n> bytes)`. Then the commands under "Check a backup" in [hosting.md](../hosting.md), on the box (`ssh $BOX`, paste them, `exit`). Expect the two count lines to match: the same number of migrations, people (`User`: 2 now), chats (this run's four PRs, plus Task 12's), and `1` app.
+2. **T3:** the cron line is in place: `ssh $BOX "grep -c '^30 3 ' /etc/cron.d/nitpilot"` prints `1` (the file's comment names the script too). If a night has passed since Task 12, the log shows an `ok` line from 03:30 UTC.
 3. **T3:** `ssh $BOX 'docker stats --no-stream; free -m'`, and `curl -s -o /dev/null -w '%{http_code}\n' https://odyhook.dev`.
 
 - [ ] The nightly backup holds the `nitpilot` database, and restoring it into a scratch database works (the two count lines match).

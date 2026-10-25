@@ -587,7 +587,7 @@ In Plan 1 this file also held `auto` (the Auto defaults for new chats) and `dail
   2. Insert a `RawEvent` keyed by `X-GitHub-Delivery`. If it's a duplicate, return 200 and stop.
   3. Reply 202 well within GitHub's 10-second limit.
   4. Normalize the event and dispatch it.
-- **Who writes:** the summary comment comes from the app bot (installation token). Reviews and thread replies come from the user (user access token), so GitHub shows the user's avatar plus the app badge.
+- **Who writes:** the summary comment comes from the app bot (installation token). Reviews and thread replies come from the user (user access token), so GitHub shows them under the user's name and avatar (with no app badge: GitHub doesn't mark a review or review comment made with a user's token, seen in the Plan 3 run).
 - **User tokens:**
   - Obtained with the web flow and PKCE. An access token lasts 8 hours; a refresh token lasts 6 months and can be used once, so refreshes run one at a time per user.
   - If a refresh fails, the user is marked `needs_reauth` and writes in their name stop. Nitpilot never quietly posts as the bot instead.
