@@ -36,8 +36,9 @@ if ! docker exec "$pg_container" pg_dump -U nitpilot -d nitpilot --no-owner --no
   exit 1
 fi
 
-# pg_dump writes this line last. If it's missing, the dump stopped half way and must not be uploaded as if it were good.
-if ! tail -n 5 "$dump" | grep -q -- '-- PostgreSQL database dump complete'; then
+# pg_dump writes this line near the end (newer versions add a line or two after it, hence 20). If it's missing, the
+# dump stopped half way and must not be uploaded as if it were good.
+if ! tail -n 20 "$dump" | grep -q -- '-- PostgreSQL database dump complete'; then
   log "FAILED: the dump is incomplete"
   exit 1
 fi

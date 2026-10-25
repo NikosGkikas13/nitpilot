@@ -14,7 +14,7 @@ nitpilot.dev runs on the same Hetzner box as Odyhook (a CX23: 2 vCPU, 4 GB, Hels
 | The nightly backup | `/usr/local/bin/nitpilot-backup.sh`, `/etc/cron.d/nitpilot`, log `/var/log/nitpilot-cron.log` | Nitpilot |
 | Backup files | R2 bucket `odyhook-backups`, under `nitpilot/` (rclone remote `r2`) | Odyhook's bucket, Nitpilot's folder |
 
-All three containers are on Odyhook's Docker network `hooksmith_default`, where each is reached by its name: Caddy sends `nitpilot.dev` to `nitpilot-server:8787`, and the server reaches the database at `postgres:5432`. `nitpilot-server` publishes no port; only Caddy can reach it.
+All three containers are on Odyhook's Docker network `hooksmith_default`, where each is reached by its name: Caddy sends `nitpilot.dev` to `nitpilot-server:8787`, and the server reaches the database at `postgres:5432`. `nitpilot-server` publishes no port, so only containers on that network can reach it, and of those only Caddy talks to it.
 
 Odyhook's own files (`/opt/hooksmith`, its backup script, its cron file) are never edited by hand. The `nitpilot.dev` blocks in its Caddyfile are changed only by a commit to Odyhook's repo, deployed by Odyhook's workflow (see "Caddy" below).
 
@@ -74,6 +74,8 @@ Every night at 03:30 UTC, after Odyhook's 03:00 backup, cron runs `nitpilot-back
 
 How long R2 keeps them is the bucket's lifecycle rule, set up for Odyhook (14 days); see that rule in Cloudflare's dashboard (R2 → `odyhook-backups` → Settings → Object lifecycle rules) for whether it covers `nitpilot/`.
 
+Odyhook's own listings (`rclone ls r2:odyhook-backups …` in its `infra/` docs) look inside folders, so they now show these `nitpilot/…` files too. Odyhook's are the `odyhook-…` files at the top level; nothing changes on its side.
+
 Installing them (done once, in Plan 3 Task 12): copy `deploy/hosted/nitpilot-backup.sh` to `/usr/local/bin/` (mode 755) and `deploy/hosted/cron` to `/etc/cron.d/nitpilot` (mode 644). cron reads `/etc/cron.d/` every minute.
 
 ## Restoring
@@ -94,26 +96,34 @@ The two count lines should match, except for whatever happened since the backup 
 
 ### Put a backup back (the database was lost or broken)
 
-This replaces the live `nitpilot` database. Nitpilot is down meanwhile; Odyhook isn't touched.
+This replaces the live `nitpilot` database. Nitpilot is down meanwhile; Odyhook isn't touched. Not between 03:00 and 04:00 UTC, so the nightly backup can't dump a half-restored database.
+
+First download the backup and check it's whole. Go on only if it prints `file ok`: the live database isn't touched until the next block.
 
 ```bash
 cd /opt/nitpilot
-docker compose stop
 f=nitpilot-2026-10-25T03-30-01Z.sql.gz     # the backup to restore, from rclone ls
+rclone copyto "r2:odyhook-backups/nitpilot/$f" "/root/$f" && gunzip -c "/root/$f" | tail -n 20 | grep -q -- '-- PostgreSQL database dump complete' && echo "file ok"
+```
+
+Then replace the database with it:
+
+```bash
+docker compose stop
 docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -c 'drop database nitpilot' -c 'create database nitpilot owner nitpilot'
-rclone cat "r2:odyhook-backups/nitpilot/$f" | gunzip | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot
-docker compose up -d
+gunzip -c "/root/$f" | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot && rm "/root/$f"
+docker compose up -d --wait
 docker compose logs --tail 20 nitpilot-server
 ```
 
-The log should say `[boot] GitHub App nitpilot, from the database` and the server listening, not first-run mode. If it says first-run mode, the dump was empty or from before the app was made: stop (`docker compose stop`) and pick another file; never create a second app over it.
+`--wait` returns once the server answers its health check, so the log shows this start. The log should say `[boot] GitHub App nitpilot, from the database` and the server listening, not first-run mode. If it says first-run mode, the dump was empty or from before the app was made: stop (`docker compose stop`) and pick another file; never create a second app over it.
 
 ### On a new box
 
 1. Set up Odyhook first (its `infra/recovery.md`), so `hooksmith-postgres-1`, its Caddy (with the `nitpilot.dev` blocks, from its repo) and the `hooksmith_default` network exist, and the rclone remote `r2` works.
 2. `mkdir -p /opt/nitpilot`; copy `deploy/hosted/docker-compose.yml` there; paste `.env` from the password manager into `/opt/nitpilot/.env` (`umask 077` first, so it's mode 600).
 3. Make the role and database with the password inside that `.env`'s `DATABASE_URL`: the commands in "Set it up" step 3 below.
-4. Restore the newest backup as in "Put a backup back" (skip the `drop database`), then `docker compose up -d`.
+4. Restore the newest backup with the "Put a backup back" commands, leaving out the `psql … drop database … create database` line: step 3 already made the empty database.
 5. Point the DNS records at the new box's address (Porkbun), install the backup script and cron file again.
 
 ## Set it up (once)
@@ -121,8 +131,10 @@ The log should say `[boot] GitHub App nitpilot, from the database` and the serve
 What Plan 3 Task 12 does, here so a new box can be set up the same way. Every command runs on the box; none prints a secret.
 
 1. `mkdir -p /opt/nitpilot` and copy `deploy/hosted/docker-compose.yml` and `deploy/hosted/.env.example` there (`scp` from a checkout).
-2. Make `.env`, with fresh secrets written straight into the file. `VERSION` is the image to run:
+2. Make `.env`, with fresh secrets written straight into the file. `VERSION` is the image to run. Paste the whole block: it runs in its own `bash`, which stops at the first error (and an `exit` there doesn't close your ssh session):
    ```bash
+   bash -s <<'EOF'
+   set -euo pipefail
    cd /opt/nitpilot && VERSION=0.1.0 && umask 077
    test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
    cp .env.example .env
@@ -133,19 +145,23 @@ What Plan 3 Task 12 does, here so a new box can be set up the same way. Every co
    read -r pub priv < <(docker run --rm --entrypoint node "ghcr.io/nikosgkikas13/nitpilot:$VERSION" -e "const k = require('web-push').generateVAPIDKeys(); console.log(k.publicKey, k.privateKey)")
    set_env VAPID_PUBLIC_KEY "$pub" && set_env VAPID_PRIVATE_KEY "$priv" && unset pub priv
    ls -l .env && awk -F= '!/^#/ && NF { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
+   EOF
    ```
    Every name says `(set)` except `ALLOWED_LOGINS`, and `ls` shows `-rw-------`.
-3. The role and database, inside Odyhook's Postgres, with the password from `.env` (passed on standard input, so it never shows up in a process list):
+3. The role and database, inside Odyhook's Postgres, with the password from `.env` (passed on standard input, so it never shows up in a process list). Again one block in its own `bash`:
    ```bash
+   bash -s <<'EOF'
+   set -euo pipefail
    cd /opt/nitpilot
    pw="$(sed -n 's|^DATABASE_URL=postgresql://nitpilot:\([0-9a-f]*\)@postgres:5432/nitpilot$|\1|p' .env)"
-   test ${#pw} -eq 48 || echo "STOP: no password in .env's DATABASE_URL"
+   test ${#pw} -eq 48 || { echo "STOP: no password in .env's DATABASE_URL"; exit 1; }
    docker exec -i hooksmith-postgres-1 psql -U hooksmith -d postgres -v ON_ERROR_STOP=1 -q <<SQL
    CREATE ROLE nitpilot LOGIN PASSWORD '$pw';
    CREATE DATABASE nitpilot OWNER nitpilot;
    REVOKE ALL ON DATABASE nitpilot FROM PUBLIC;
    SQL
    unset pw
+   EOF
    ```
 4. `docker compose up -d`, then `docker compose logs nitpilot-server | grep 'setup code' | tail -n 1` for the setup code (it changes each time the server starts), and make the GitHub App at https://nitpilot.dev/first-run.
 5. The backup script and cron file ("Backups" above), and save `.env` in the password manager.
