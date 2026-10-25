@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status: D1 to D4 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`; see each "Checked against the code" section); D5 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
+> **Status: D1 to D4 at step level (D2 written 2026-10-24 against `c302c25`, D3 on 2026-10-24 against `d9fe4d8`, D4 on 2026-10-25 against `528639f`, Task 14 of D5 on 2026-10-25 against `eaf19e2`; see each "Checked against the code" section); Task 15 at task level.** Written on 2026-10-24 against `main` at `61fbd64` plus the Plan 3 spec decisions in `a0b2e19` on branch `plan-3-deploy-and-launch`. As in Plan 2, each milestone after D1 is written at step level just before it is built, checked against the code at the head at that point, and gets its own "Checked against the code (Dn)" section. Steps marked **(user)** need the user's own accounts and are click-steps for them; steps marked **(say first)** write to something outside this repo (GitHub, npm, GHCR, DNS, the Hetzner box, the Odyhook repo) and are announced, then done only after the user says go.
 
 **Goal:** Ship Nitpilot: one Docker image, self-hosting that a team with private repos can really use (Compose + a first-run page that creates the GitHub App), the hosted instance on https://nitpilot.dev next to Odyhook, the CLI on npm, and a launch README (the launch story in words; no demo video, the user's decision on 2026-10-25) and a Show HN draft.
 
@@ -8470,11 +8470,30 @@ Checked at `528639f` and in the scratch build (`~/Desktop/PracticeProjects/.nitp
 
 ### Task 14: README and docs pass
 
-**Files:** Modify `README.md` (rewrite), `docs/architecture.md` (deploy: one image, first-run mode, the hosted layout; Chosen / Alternatives / Why), `docs/why/README` index if there is one, `docs/adapters.md` (check it still matches), `apps/cli/package.json` `description` and its own `README.md` (npm shows it).
+**What this task is.** The words a stranger reads first: the root README (GitHub), the CLI's own README (npmjs.com), and a pass over the docs so nothing still says "Plan 3 will…". No code changes. There is no demo video (the user's decision, 2026-10-25), so the README tells the launch story in words, and no media is added.
 
-- [ ] **Step 1:** README order: the one-line pitch; the launch story in three sentences (in words: no demo video, the user's decision on 2026-10-25); Install (`npm install -g nitpilot`, `nitpilot login`, install the app, `nitpilot repos add`, `nitpilot start`); "When your teammate is on it too"; How it works (short, links to architecture and `docs/why/`); Self-hosting (link); Security (what the agent can and can't do, the scrub list, a contact line using an address the user picks); Development (the current "Running it locally"); License.
-- [ ] **Step 2:** Docs pass: every `docs/why/` file still names files that exist (`grep` each path), architecture covers Plan 3, no "Plan 3 adds…" future tense left anywhere (`grep -rn "Plan 3" README.md docs/*.md docs/why`).
-- [ ] **Step 3:** The user reads the README on GitHub (rendered) and says go; commit `docs: the launch README`.
+**Files:**
+- Modify: `README.md` (rewrite), `docs/architecture.md` (§2 and §4.6, a new §4.14 Deploying, §4.12 and §6), `docs/why/oauth-pkce.md` and spec §6.1 (no app badge), `docs/hosting.md` (past tense for Task 12), this plan (ticks), the ledger
+- Create: `apps/cli/README.md`
+- Unchanged after checking: `docs/adapters.md` (matches `apps/cli/src/agents/` at the head), `apps/cli/package.json` (`description` already the pitch; npm packs a README whatever `files` says)
+
+- [x] **Step 1: The root README**, in this order: the one-line pitch; the launch story in three sentences (single-player reviewer: install, sign in at nitpilot.dev, install the app, and the next review request is answered by your own agent in your name); **Install** (`npm install -g nitpilot` (Node 22), `nitpilot login`, install the `nitpilot` app on public repos from the Setup page, `nitpilot repos add` in a local clone, `nitpilot start`, `nitpilot doctor` when something is off); **When your teammate is on it too** (both on Nitpilot: the agents work it out in the chat, one summary comment, a person pinged at Ready or Escalated; the author side alone works too); **What to know** (Claude Code only, Gemini waiting on Google's sign-in; nitpilot.dev is public repos only, self-host for private ones; reviews are posted with your token and show in your name with no app badge; single-player reviewer mode only while the PR's author has no account on the instance; the laptop must be on); **How it works** (the four pieces in a few lines, links to architecture and `docs/why/`); **Self-hosting** (link); **Security** (what the agent can and can't do: no shell, no web, read-only reviewer, edits plus allowlisted checks for an editor, a job-only MCP token; the scrub list `SCRUB_PATHS`; untrusted text marked; jobs start automatically only for trusted authors; report through GitHub's private vulnerability reporting); **Development** (the current "Running it locally" and "Tests"); **License** (MIT).
+- [x] **Step 2: The CLI's README** (`apps/cli/README.md`): the pitch, the install steps, the commands (from `nitpilot --help`), requirements, links to the repo and nitpilot.dev. `npm pack --dry-run -w apps/cli` lists `README.md`.
+- [x] **Step 3: Docs pass.** Every path a `docs/why/` or `docs/*.md` file names in backticks or links exists (scripted `grep` over each; the only misses are files the docs name as examples, such as `.mcp.json` or `AGENTS.md` in a PR); architecture covers Plan 3; the app-badge claim is fixed everywhere; `grep -rn "Plan 3" README.md docs/*.md docs/why` leaves only past-tense history.
+- [ ] **Step 4: (user)** The user switches on private vulnerability reporting (github.com/NikosGkikas13/nitpilot → **Settings** → **Code security** (left menu, under Security) → **Private vulnerability reporting** → **Enable**) and reads the README on GitHub once it is pushed. The commit `docs: the launch README and the docs pass` is made first (local); the user pushes.
+
+### Checked against the code (D5)
+
+Written 2026-10-25 against `eaf19e2` on `plan-3-deploy-and-launch`.
+
+1. **The CLI's commands** (`nitpilot --help` from `apps/cli/dist`): `login [--no-open]`, `start`, `status`, `doctor`, `repos add [path]`, `retry <pr-url>`, `--version`. `DEFAULT_SERVER` is `https://nitpilot.dev`, so no server flag is needed.
+2. **Installing the app** is the Setup page's button (`apps/web/src/routes/Setup/Setup.tsx`: `https://github.com/apps/<slug>/installations/new`); the slug on nitpilot.dev is `nitpilot`.
+3. **The scrub list** is `SCRUB_PATHS` in `apps/cli/src/runner/scrub.ts`: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, matched at any depth and in any letter case.
+4. **No app badge** on reviews or replies posted with a user's token (Task 13: `performed_via_github_app` is null on every one). Spec §15 was fixed in `33ffb9e`; spec §6.1, `docs/architecture.md` §4.6 and `docs/why/oauth-pkce.md` still said "with the app badge".
+5. **Single-player reviewer mode** needs the PR's author to have no account on the instance (Task 13, section 6: once ngkdev93-jpg signed in, PRs became agent-to-agent). nitpilot.dev runs `0.1.0-rc.3` until Task 15.
+6. **No `docs/why/README`** exists, so there is no index to update. `docs/adapters.md` matches the code.
+7. **"Plan 3" left in docs:** `README.md:7` ("come with Plan 3"), `docs/architecture.md:161` (§6, "are Plan 3"); `docs/hosting.md:81,133` are already past tense about Task 12.
+8. **Security contact:** the user picked GitHub's private vulnerability reporting (no email in the README); it is off until the user enables it (Step 4).
 
 ### Task 15: v0.1.0, the fresh-install check, and the Show HN draft
 

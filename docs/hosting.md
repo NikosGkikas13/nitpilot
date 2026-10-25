@@ -130,7 +130,7 @@ docker compose logs --tail 20 nitpilot-server
 
 ## Set it up (once)
 
-What Plan 3 Task 12 does, here so a new box can be set up the same way. Every command runs on the box; none prints a secret.
+What Plan 3 Task 12 did, here so a new box can be set up the same way. Every command runs on the box; none prints a secret.
 
 1. `mkdir -p /opt/nitpilot` and copy `deploy/hosted/docker-compose.yml` and `deploy/hosted/.env.example` there (`scp` from a checkout).
 2. Make `.env`, with fresh secrets written straight into the file. `VERSION` is the image to run. Paste the whole block: it runs in its own `bash`, which stops at the first error (and an `exit` there doesn't close your ssh session):

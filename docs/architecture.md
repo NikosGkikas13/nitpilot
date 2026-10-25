@@ -21,7 +21,7 @@ GitHub ──────────────────▶ ┌────
                            │ Postgres: chats · points · messages · jobs · tasks · raw  │
                            │ job assigner · task runner (outbox, timers) · WS hubs     │
                            └──────────▲───────────────────────────────────▲────────────┘
-                                      │ WebSocket /ws/cli                 │ web app (Plan 2)
+                                      │ WebSocket /ws/cli                 │ web app (same address)
                          ┌────────────┴────────────┐
                          │ Nitpilot CLI (each dev) │
                          │ safe git worktrees      │
@@ -36,7 +36,7 @@ Three programs, one shared package:
 
 1. **Server** (`apps/server`): one Node process (Hono) plus Postgres. It never runs code from a repository.
 2. **CLI** (`apps/cli`): runs on each developer's machine. It is the only component that touches code: it checks the PR out into an isolated folder, runs the developer's agent, and (for fixes) commits and pushes.
-3. **Web app** (`apps/web`): Plan 2. Plan 1 has three server-rendered pages: sign-in, CLI approval and a read-only chat transcript.
+3. **Web app** (`apps/web`): an installable PWA (React, Vite) with the inbox, each PR's chat, Settings and push notifications, served by the server from its own address ([why/serving-a-spa.md](why/serving-a-spa.md)). The server still renders a few pages itself: sign-in, CLI approval and a read-only chat transcript.
 4. **Protocol** (`packages/protocol`): zod schemas for every message, job and result, plus the `BRAND` constant. All three apps import it, and the CLI bundles it so `npx nitpilot` needs nothing else.
 
 ---
@@ -93,7 +93,7 @@ Three programs, one shared package:
 
 ### 4.6 A GitHub App that writes as two identities
 
-- **Chosen:** the summary comment is written with the app's installation token (so it shows as `nitpilot[bot]`); reviews and thread replies are written with the person's own user-to-server token, so GitHub shows their avatar plus the app badge. If a person's token can't be refreshed, their writes stop and they are told; Nitpilot never quietly posts as the bot instead.
+- **Chosen:** the summary comment is written with the app's installation token (so it shows as `nitpilot[bot]`); reviews and thread replies are written with the person's own user-to-server token, so GitHub shows them under the person's name and avatar (with no app badge: GitHub records no app on a review or reply posted with a user's token, seen in the Plan 3 live run). If a person's token can't be refreshed, their writes stop and they are told; Nitpilot never quietly posts as the bot instead.
 - **Alternatives:** post everything as the bot; use personal access tokens; require every user to create their own app.
 - **Why:** a review "from the bot" is easy to ignore and breaks the rule that the developer's agent speaks for the developer. Personal access tokens are broader than needed. The App model gives per-repo installation, short-lived tokens and a clear audit trail. See [why/github-app.md](why/github-app.md), [why/oauth-pkce.md](why/oauth-pkce.md).
 
@@ -129,7 +129,7 @@ Three programs, one shared package:
 
 ### 4.12 Testing: five layers
 
-- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) end-to-end tests with the real server, two real CLIs and the fake agent (`npm run test:e2e`), and the same setup driven through the web app by Playwright in Chromium (`npm run test:web-e2e`); (5) manual live acceptance runs against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md) for the agents, [acceptance/plan-2.md](acceptance/plan-2.md) for the web app, a phone included). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
+- **Chosen:** (1) engine tables; (2) protocol round trips; (3) real-Postgres tests with unique data per test, in a separate `nitpilot_test` database; (4) end-to-end tests with the real server, two real CLIs and the fake agent (`npm run test:e2e`), and the same setup driven through the web app by Playwright in Chromium (`npm run test:web-e2e`); (5) manual live acceptance runs against real GitHub ([acceptance/plan-1.md](acceptance/plan-1.md) for the agents, [acceptance/plan-2.md](acceptance/plan-2.md) for the web app, a phone included, [acceptance/plan-3.md](acceptance/plan-3.md) for nitpilot.dev itself). The GitHub adapter is also tested against recorded real webhooks ([why/recorded-fixtures.md](why/recorded-fixtures.md)).
 - **Alternatives:** mocks only; browser tests for everything.
 - **Why:** each layer catches what the one below can't. Mocks can't tell us what GitHub really sends, and the live run is the only place a real agent meets a real PR. The live run is manual because it needs two accounts and a subscription; it is written down so it can be repeated.
 
@@ -138,6 +138,13 @@ Three programs, one shared package:
 - **Chosen:** npm workspaces; `packages/protocol` holds the zod schemas, the enums and the `BRAND` constant.
 - **Alternatives:** separate repositories; OpenAPI-generated clients.
 - **Why:** the server and CLI must agree on every message exactly. One schema, imported by both, is the contract, and a protocol change fails to compile on both sides at once.
+
+### 4.14 Deploying: one image, a first-run page, two layouts
+
+- **Chosen:** one Docker image (`ghcr.io/nikosgkikas13/nitpilot`, amd64 and arm64) holds the server and the built web app; it runs `prisma migrate deploy` and then the server, as a non-root user, with a `/healthz` check. A version tag publishes it and the CLI (to npm, with provenance) from one workflow. A server with no GitHub App credentials starts in **first-run mode**: it serves only a setup page, which creates the team's own GitHub App through GitHub's manifest flow, stores the credentials encrypted in the database and restarts in normal mode. Two folders use the image: `deploy/self-host/` (the image, Postgres and Caddy) and `deploy/hosted/` (just `nitpilot-server`, on Odyhook's box, using Odyhook's Postgres and Caddy).
+- **Alternatives:** separate images for the server and the web app; a hosted service only; a setup guide that has the self-hoster create the GitHub App by hand and paste its keys into `.env`; Kubernetes or a platform-as-a-service.
+- **Why:** one image is one thing to version, pull and roll back, and the web app needs nothing but static files the server can serve. The manifest flow turns GitHub's long app form (permissions, events, webhook URL, keys) into one click, which is what makes self-hosting for private repos realistic. nitpilot.dev borrows the database and the HTTPS proxy Odyhook already runs, so the hosted instance adds one container and its memory limit, not a second box. See [why/docker-images.md](why/docker-images.md), [why/first-run-and-app-manifests.md](why/first-run-and-app-manifests.md), [why/reverse-proxy-and-tls.md](why/reverse-proxy-and-tls.md), [why/releasing.md](why/releasing.md), [self-hosting.md](self-hosting.md) and [hosting.md](hosting.md).
+- **Cost:** the hosted instance takes public repos only (`PUBLIC_REPOS_ONLY`, spec §14 item 9): nothing private passes through a box shared by strangers, and private repos mean self-hosting. Deploys are by hand ([hosting.md](hosting.md)).
 
 ---
 
@@ -158,4 +165,4 @@ Three programs, one shared package:
 
 ## 6. Not built yet
 
-The hosted deployment, self-hosting with Docker Compose, npm publishing and the nitpilot.dev site are Plan 3. Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).
+Automatic deploys, error tracking and private repos on nitpilot.dev ([spec §18 and §20](superpowers/specs/2026-10-07-nitpilot-design.md)). Gemini CLI is waiting on a way to sign in that Google allows ([spec §22](superpowers/specs/2026-10-07-nitpilot-design.md)).

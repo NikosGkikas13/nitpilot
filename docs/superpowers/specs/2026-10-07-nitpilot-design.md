@@ -71,7 +71,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 
 | You are | Is the other side on Nitpilot? | What happens |
 |---|---|---|
-| Author | No | Comments from a reviewer (or a trusted bot) on GitHub arrive instantly as points in your chat. With Auto on, your agent fixes them, the CLI pushes the commit, and replies appear **on GitHub in each comment thread**, as you, with the app badge |
+| Author | No | Comments from a reviewer (or a trusted bot) on GitHub arrive instantly as points in your chat. With Auto on, your agent fixes them, the CLI pushes the commit, and replies appear **on GitHub in each comment thread**, as you (GitHub shows no app badge on a write made with a user's token) |
 | Reviewer | No | When your review is requested, your agent reviews the PR. With Auto on, its points are posted as **one GitHub review (COMMENT)**, as you. With Auto off, they wait as drafts for you (Plan 2) |
 | Either | Yes | The agents work in the Nitpilot chat. The PR gets **one summary comment**, edited as the rounds progress |
 
