@@ -7236,6 +7236,10 @@ name="nitpilot-$stamp.sql.gz"
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) nitpilot-backup: $*"; }
 
+# Any other step that fails (the temporary folder, gzip on a full disk, ...) still leaves a FAILED line in the log,
+# saying where. The `if !` checks below don't trigger this: they write their own, clearer line.
+trap 'log "FAILED: line $LINENO"' ERR
+
 # A temporary folder only root can read, deleted however the script ends.
 work="$(mktemp -d "${TMPDIR:-/tmp}/nitpilot-backup.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -7381,11 +7385,11 @@ Installing them (done once, in Plan 3 Task 12): copy `deploy/hosted/nitpilot-bac
 
 ### Check a backup (do this now and then)
 
-Loads the newest backup into a scratch database next to the real one, counts rows in both, and drops the scratch one. The live database isn't touched.
+Loads the newest backup into a scratch database next to the real one, counts rows in both, and drops the scratch one. The live database isn't touched. It first drops any scratch copy an earlier check left behind (one cut short half way), so that copy can never be counted by mistake.
 
 ```bash
 f="$(rclone lsf r2:odyhook-backups/nitpilot | sort | tail -n 1)" && echo "$f"
-docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'create database nitpilot_restore_check owner nitpilot'
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -q -v ON_ERROR_STOP=1 -c 'set client_min_messages = warning' -c 'drop database if exists nitpilot_restore_check' -c 'create database nitpilot_restore_check owner nitpilot'
 rclone cat "r2:odyhook-backups/nitpilot/$f" | gunzip | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot_restore_check
 for db in nitpilot nitpilot_restore_check; do docker exec hooksmith-postgres-1 psql -U nitpilot -d "$db" -Atc 'select current_database(), (select count(*) from "_prisma_migrations"), (select count(*) from "User"), (select count(*) from "PrChat"), (select count(*) from "GithubAppConfig")'; done
 docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'drop database nitpilot_restore_check'
@@ -7427,7 +7431,7 @@ What Plan 3 Task 12 does, here so a new box can be set up the same way. Every co
    cd /opt/nitpilot && VERSION=0.1.0 && umask 077
    test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
    cp .env.example .env
-   set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+   set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
    set_env NITPILOT_VERSION "$VERSION"
    set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
    set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
@@ -7554,7 +7558,7 @@ set -euo pipefail
 cd "$S/hosted" && VERSION=0.1.0-local && umask 077
 test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
 cp .env.example .env
-set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
 set_env NITPILOT_VERSION "$VERSION"
 set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
 set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
@@ -7643,6 +7647,13 @@ The failure path:
 PATH="$S/d4-bin:$PATH" TMPDIR="$S/d4-tmp" NITPILOT_PG_CONTAINER=no-such-container bash deploy/hosted/nitpilot-backup.sh; echo "exit $?"; ls -A "$S/d4-tmp"; PATH="$S/d4-bin:$PATH" rclone lsf r2:odyhook-backups/nitpilot 2>/dev/null
 ```
 Expected: Docker's `No such container: no-such-container`, `nitpilot-backup: FAILED: pg_dump from no-such-container`, `exit 1`, an empty temporary folder, and still only the one file (nothing uploaded).
+
+A failure no `if !` check covers (here the temporary folder can't be made) still writes a `FAILED` line, from the `ERR` trap:
+
+```bash
+TMPDIR="$S/no-such-folder" NITPILOT_PG_CONTAINER=d4-hooksmith-postgres-1 bash deploy/hosted/nitpilot-backup.sh; echo "exit $?"
+```
+Expected: `mktemp`'s own error, `nitpilot-backup: FAILED: line 28`, `exit 1`.
 
 **6h. The restore checks from `docs/hosting.md`, verbatim.** Written in Step 5; here with the stand-in names (`sed` swaps the container name; the stand-in `rclone` is on `PATH`):
 
@@ -7785,7 +7796,7 @@ set -euo pipefail
 cd /opt/nitpilot && VERSION=0.1.0-rc.3 && umask 077
 test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
 cp .env.example .env
-set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
 set_env NITPILOT_VERSION "$VERSION"
 set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
 set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
@@ -8393,7 +8404,7 @@ Checked at `528639f` and in the scratch build (`~/Desktop/PracticeProjects/.nitp
 7. **`NITPILOT_VERSION` is required** (`${NITPILOT_VERSION:?…}`) instead of defaulting to `latest`: the hosted instance always names its version, and before D5 there is no `latest` (an rc never pushes it).
 8. **Added to the compose file:** a `logging` cap (json-file, 3 × 10 MB), so a chatty log can't fill the 40 GB disk; the network is declared as `hooksmith: { name: hooksmith_default, external: true }` (the service refers to it as `hooksmith`).
 9. **`.env.example` has no `NODE_ENV`** (the image sets `NODE_ENV=production`), and `DATABASE_URL=` is empty with a comment rather than `postgresql://nitpilot:<password>@postgres:5432/nitpilot` (the task text): the box command writes the whole URL with a fresh password, so there's no placeholder to forget.
-10. **The `.env` and database commands avoid `sed -i` and command-line secrets.** `set_env` is an `awk` rewrite (same on macOS and Linux); the VAPID keys are read with `read -r pub priv < <(docker run --rm --entrypoint node …)` (Checked D3 item 35), never echoed; the database password is read back from `.env` and sent to `psql` on standard input (a here-document), never as an argument (where `ps` would show it). The task text said "`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed" without the commands.
+10. **The `.env` and database commands avoid `sed -i` and command-line secrets.** `set_env` is an `awk` rewrite (same on macOS and Linux) that takes the name and value from its environment (`K=… V=… awk …`, read as `ENVIRON["K"]`), not as `-v` arguments, because a program's arguments are visible to anyone in `ps` while it runs and its environment only to its owner (Task 11 review, fixed in the same task); the VAPID keys are read with `read -r pub priv < <(docker run --rm --entrypoint node …)` (Checked D3 item 35), never echoed; the database password is read back from `.env` and sent to `psql` on standard input (a here-document), never as an argument (where `ps` would show it). The task text said "`openssl rand -hex 24`, written straight into `/opt/nitpilot/.env`, never echoed" without the commands.
 11. **Database step order:** `.env` first (Task 12 Step 3, which makes the password), then the role (Step 4, which reads it back). The task text had the database first. `REVOKE ALL ON DATABASE nitpilot FROM PUBLIC` is added. "`psql` as `nitpilot` connects" is checked by the server's own migrations at start (Step 5) rather than a separate `psql` with the password on its command line.
 12. **Caddy restart after Odyhook's deploy** (not in the task text, which said Odyhook's workflow redeploys Caddy). Odyhook's deploy is `git pull --ff-only && docker compose -f docker-compose.prod.yml up -d --build` (its `infra/README.md`); `up -d` leaves an unchanged Caddy container running, Caddy doesn't watch its file, and `git pull` replaces the file, which a single-file bind mount doesn't follow. So Task 12 Step 8 restarts `hooksmith-caddy-1` once (said first) and checks the file inside the container. Not seen live; the `grep -c` inside the container is the check.
 13. **Odyhook's checkout has the user's uncommitted work** (`.gitignore`, `ARCHITECTURE.md`, on `main`, 2026-10-25), so the Caddyfile branch is made in a separate worktree from `origin/main` and removed afterwards; the user's checkout never moves. Odyhook's deploy workflow runs its test gate on the PR before the merge.
@@ -8402,6 +8413,7 @@ Checked at `528639f` and in the scratch build (`~/Desktop/PracticeProjects/.nitp
 16. **The R2 lifecycle rule** (14 days, Odyhook's) may or may not cover `nitpilot/`; `docs/hosting.md` says where to look in Cloudflare's dashboard. Not checked (it needs the user's Cloudflare login); the dumps are a few KB, so either way costs nothing.
 17. **Memory in the local run:** `nitpilot-server` used 170.5 MiB of its 384 MiB, idle in first-run mode (arm64 build on this Mac). The box's numbers come in Task 12.
 18. **No counts change** (no code). The new files passed the Task 10 gitleaks scan (`dir`, `no leaks found`) and shellcheck v0.11.0.
+18a. **Task 11 review fixes (after `aed7bc8`).** `set_env` reads its value from the environment (item 10). The restore check drops a leftover `nitpilot_restore_check` first (`drop database if exists`, with `client_min_messages = warning` so a normal run prints no NOTICE), so a check cut short earlier can't leave a stale copy that the counts then compare. The backup script has `trap 'log "FAILED: line $LINENO"' ERR`, so a failure outside its three `if !` checks (`mktemp`, `gzip` on a full disk) still leaves a `FAILED` line in `/var/log/nitpilot-cron.log`; Step 6g has a third case for it.
 
 **Task 12**
 

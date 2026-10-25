@@ -80,11 +80,11 @@ Installing them (done once, in Plan 3 Task 12): copy `deploy/hosted/nitpilot-bac
 
 ### Check a backup (do this now and then)
 
-Loads the newest backup into a scratch database next to the real one, counts rows in both, and drops the scratch one. The live database isn't touched.
+Loads the newest backup into a scratch database next to the real one, counts rows in both, and drops the scratch one. The live database isn't touched. It first drops any scratch copy an earlier check left behind (one cut short half way), so that copy can never be counted by mistake.
 
 ```bash
 f="$(rclone lsf r2:odyhook-backups/nitpilot | sort | tail -n 1)" && echo "$f"
-docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'create database nitpilot_restore_check owner nitpilot'
+docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -q -v ON_ERROR_STOP=1 -c 'set client_min_messages = warning' -c 'drop database if exists nitpilot_restore_check' -c 'create database nitpilot_restore_check owner nitpilot'
 rclone cat "r2:odyhook-backups/nitpilot/$f" | gunzip | docker exec -i hooksmith-postgres-1 psql -q -o /dev/null -v ON_ERROR_STOP=1 -U nitpilot -d nitpilot_restore_check
 for db in nitpilot nitpilot_restore_check; do docker exec hooksmith-postgres-1 psql -U nitpilot -d "$db" -Atc 'select current_database(), (select count(*) from "_prisma_migrations"), (select count(*) from "User"), (select count(*) from "PrChat"), (select count(*) from "GithubAppConfig")'; done
 docker exec hooksmith-postgres-1 psql -U hooksmith -d postgres -qc 'drop database nitpilot_restore_check'
@@ -126,7 +126,7 @@ What Plan 3 Task 12 does, here so a new box can be set up the same way. Every co
    cd /opt/nitpilot && VERSION=0.1.0 && umask 077
    test ! -e .env || { echo "STOP: .env already exists"; exit 1; }
    cp .env.example .env
-   set_env() { awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { $0 = k "=" v } { print }' .env > .env.tmp && mv .env.tmp .env; }
+   set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
    set_env NITPILOT_VERSION "$VERSION"
    set_env DATABASE_URL "postgresql://nitpilot:$(openssl rand -hex 24)@postgres:5432/nitpilot"
    set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"

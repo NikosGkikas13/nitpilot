@@ -20,6 +20,10 @@ name="nitpilot-$stamp.sql.gz"
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) nitpilot-backup: $*"; }
 
+# Any other step that fails (the temporary folder, gzip on a full disk, ...) still leaves a FAILED line in the log,
+# saying where. The `if !` checks below don't trigger this: they write their own, clearer line.
+trap 'log "FAILED: line $LINENO"' ERR
+
 # A temporary folder only root can read, deleted however the script ends.
 work="$(mktemp -d "${TMPDIR:-/tmp}/nitpilot-backup.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
