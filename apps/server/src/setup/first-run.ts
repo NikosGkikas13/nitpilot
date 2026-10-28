@@ -166,19 +166,16 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
     },
   );
 
-  app.get('/first-run/callback', async (c) => {
-    const code = c.req.query('code');
-    const state = c.req.query('state');
-    if (!code || !state || !states.isUsable(state)) return c.redirect(backToThePage('expired'));
-
+  /** Trade the code for the app and store it; answers where the browser goes next. */
+  async function finishSetup(code: string, state: string): Promise<string> {
     const conversion = await convertManifest(deps.github, code);
     if (!conversion.ok) {
       // GitHub failing on its side (no answer, a 5xx, a half answer) may have created the app already. Keep the state
       // and hand the page the code and state back, so its "Try again" retries instead of making the owner create a
       // second app. Any other outcome ends the link.
-      if (conversion.problem === 'github') return c.redirect(backToThePage('github', { code, state }));
+      if (conversion.problem === 'github') return backToThePage('github', { code, state });
       states.forget(state);
-      return c.redirect(backToThePage(conversion.problem));
+      return backToThePage(conversion.problem);
     }
     states.forget(state);
     const { creds, ownerLogin } = conversion;
@@ -186,7 +183,7 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
       await saveGithubApp(creds, ownerLogin);
     } catch (err) {
       // Two tabs, one finished first: its app stays, and the page asks the person to delete the one GitHub just made.
-      if (err instanceof GithubAppExistsError) return c.redirect(backToThePage('exists'));
+      if (err instanceof GithubAppExistsError) return backToThePage('exists');
       throw err;
     }
 
@@ -196,7 +193,24 @@ export function firstRunRoutes(deps: FirstRunDeps): Hono {
       exiting = true;
       setTimeout(deps.exit, EXIT_DELAY_MS);
     }
-    return c.redirect('/first-run?done=1');
+    return '/first-run?done=1';
+  }
+
+  // A callback still talking to GitHub, by state: a second load of the same URL (a refresh) waits for its answer,
+  // since GitHub's code works only once and asking again would report "nothing was saved" after all.
+  const finishing = new Map<string, Promise<string>>();
+
+  app.get('/first-run/callback', async (c) => {
+    const code = c.req.query('code');
+    const state = c.req.query('state');
+    if (!code || !state) return c.redirect(backToThePage('expired'));
+    const running = finishing.get(state);
+    if (running) return c.redirect(await running);
+    if (!states.isUsable(state)) return c.redirect(backToThePage('expired'));
+
+    const done = finishSetup(code, state).finally(() => finishing.delete(state));
+    finishing.set(state, done);
+    return c.redirect(await done);
   });
 
   return app;
