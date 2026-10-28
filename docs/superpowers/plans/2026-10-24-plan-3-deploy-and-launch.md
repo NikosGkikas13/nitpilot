@@ -8504,7 +8504,7 @@ Written 2026-10-25 against `eaf19e2` on `plan-3-deploy-and-launch`.
 - Modify: `docs/acceptance/plan-3.md` (new section 12, the D5 run from npm), this plan (ticks), the ledger
 - On the box: `/opt/nitpilot/.env` (`NITPILOT_VERSION` only); in nitpilot.dev's database, ngkdev93-jpg's `User` row (Step 3)
 
-- [ ] **Step 1: (say first) (user) Release.**
+- [x] **Step 1: (say first) (user) Release.**
   1. **The trusted publisher** (npmjs.com, signed in as the `nitpilot` package owner): https://www.npmjs.com/package/nitpilot → **Settings** tab → **Trusted Publisher** → **GitHub Actions**. Fill **Organization or user** `NikosGkikas13`, **Repository** `nitpilot`, **Workflow filename** `release.yml`, **Environment name** empty; **Permissions** `npm publish` (not `npm stage publish`). Click **Set up connection** and approve with 2FA. It shows "Pending validation" until a publish uses it; npm wants that within 48 hours, so do sub-steps 2–4 the same day. If it expires: delete it and make it again (the fields can't be edited).
   2. **The merge** (say first: opens a PR): Claude opens the PR `plan-3-deploy-and-launch` → `main` (`gh pr create`, title `Plan 3: deploy and launch`). CI runs on it (`typecheck + lint + tests`, the image job). When it is green, the user merges it on GitHub with **Create a merge commit** (the PR page's green button; the arrow next to it picks the kind).
   3. **The tag** (user, from the repo folder):
@@ -8528,7 +8528,7 @@ Written 2026-10-25 against `eaf19e2` on `plan-3-deploy-and-launch`.
      npm deprecate nitpilot@0.0.0-stage "Placeholder; use 0.1.0 or later"
      ```
      `npm view nitpilot@0.0.0 deprecated` prints the message.
-- [ ] **Step 2: (say first) Deploy `0.1.0` on the box.** `/healthz` says `0.1.0` on the rc too (it reports the server's own version), so the check is the image the container runs:
+- [x] **Step 2: (say first) Deploy `0.1.0` on the box.** `/healthz` says `0.1.0` on the rc too (it reports the server's own version), so the check is the image the container runs:
   ```bash
   ssh root@157.180.91.106
   cd /opt/nitpilot
@@ -8539,14 +8539,14 @@ Written 2026-10-25 against `eaf19e2` on `plan-3-deploy-and-launch`.
   exit
   ```
   From the Mac: `curl -s https://nitpilot.dev/healthz` prints `{"ok":true,"version":"0.1.0"}`; https://nitpilot.dev loads; `boxlog 20` shows the new start and no error.
-- [ ] **Step 3: The fresh-install check** (`docs/acceptance/plan-3.md` section 12, written in this step). In short:
+- [x] **Step 3: The fresh-install check** (`docs/acceptance/plan-3.md` section 12, written in this step). In short:
   1. **(say first) Make ngkdev93-jpg a stranger again.** Single-player needs the PR's author to have no account (`chats/people.ts`, `withPeople`). One SQL line on the box deletes ngkdev93-jpg's `User` row by GitHub id; Postgres also deletes its sign-in, sessions, CLI tokens, push subscriptions, chat reads and its jobs from Task 13 (all `onDelete: Cascade`). Chats and participants keep the GitHub id and login (`Participant.userId` is a plain column). ngkdev93-jpg can sign in again any time after.
   2. **A stranger's install:** a new folder `~/nitpilot-fresh`, the package installed into its own prefix there (`npm install -g nitpilot --prefix ~/nitpilot-fresh/npm`, so nothing global on the Mac changes) and a fresh `NITPILOT_CONFIG_DIR=~/nitpilot-fresh/config`; `nitpilot --version` prints `0.1.0`.
   3. **NikosGkikas13's CLI from npm:** `nitpilot login` (approve in NikosGkikas13's browser), `nitpilot repos add "$CLONE_B"`, `nitpilot doctor`, `nitpilot start`. The Task 13 CLI (`~/.nitpilot-hosted-r`) stays stopped, so only this one is connected.
   4. **(say first: a PR as ngkdev93-jpg, one Claude run)** Task 13 section 3 once: `new-branch.sh d5-from-npm`, the PR opened and NikosGkikas13's review requested in ngkdev93-jpg's browser, the job within 5 s, the review in NikosGkikas13's name, no `nitpilot[bot]` comment; `check.sql`.
   5. **Wrap up:** stop the CLI; close the PR as ngkdev93-jpg (say first); keep `~/nitpilot-fresh` until the task is committed, then `rm -rf ~/nitpilot-fresh` (the CLI token stays listed under NikosGkikas13's Devices; revoke it there).
   6. Tick section 12's box (spec §20 item 4: "D5 repeats the single-player run once with the CLI installed from npm") with the evidence.
-- [ ] **Step 4: The Show HN draft** in `docs/launch/show-hn.md`: a title under 80 characters starting "Show HN:"; the URL to submit (https://github.com/NikosGkikas13/nitpilot); a first comment in the user's voice: what it is, why (the launch story), how (your own agent on your own machine and subscription, one server process plus Postgres), what's honest (Claude Code only today, Gemini waiting on Google's sign-in; nitpilot.dev is public repos only, self-host for private ones; reviews show in your name with no app badge; single-player only while the author isn't on the instance; the laptop must be on), and the links (repo, nitpilot.dev, npm, self-hosting doc). Plain, no hype words, no emoji. The user posts it themselves.
+- [x] **Step 4: The Show HN draft** in `docs/launch/show-hn.md`: a title under 80 characters starting "Show HN:"; the URL to submit (https://github.com/NikosGkikas13/nitpilot); a first comment in the user's voice: what it is, why (the launch story), how (your own agent on your own machine and subscription, one server process plus Postgres), what's honest (Claude Code only today, Gemini waiting on Google's sign-in; nitpilot.dev is public repos only, self-host for private ones; reviews show in your name with no app badge; single-player only while the author isn't on the instance; the laptop must be on), and the links (repo, nitpilot.dev, npm, self-hosting doc). Plain, no hype words, no emoji. The user posts it themselves.
 - [ ] **Step 5:** Commit `docs(launch): v0.1.0, the npm install check and the Show HN draft` (Steps 1–4's text). Then the plan's final review: one opus reviewer over `origin/main@61fbd64..HEAD` against the spec, Global Constraints and Review Focus. The user picks the fix chunks; fixes are TDD'd, committed, and ship as `0.1.1` if they touch the CLI or server. The rulings and minors from the ledger and the review go to `docs/superpowers/plans/2026-10-24-plan-3-rulings-and-minors.md` (shaped like Plan 2's), committed last.
 
 ### Checked against the code (D5, Task 15)
