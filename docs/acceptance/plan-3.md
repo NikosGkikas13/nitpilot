@@ -262,5 +262,5 @@ Run on: 2026-10-25, 11:01–18:05 UTC (with a break: the Mac slept between secti
 
 **Result** (2026-10-28, 14:13–14:18 UTC; nitpilot.dev and the CLI both `0.1.0`, the CLI from `~/nitpilot-fresh/npm/bin/nitpilot`; Claude Code 2.1.277): ✅ Sandbox #21. `review_requested` arrived 14:16:39.995, T1 `→ review` 14:16:40.470 (0.48 s); `✓ done` 14:17:17 (37 s). One review by NikosGkikas13 (COMMENTED), 4 inline comments, no `nitpilot[bot]` comment; 1 job, done at attempt 1, no duplicates; 7 webhooks processed or ignored. Claude raised 4 points; the SQL injection was escalated as security, which the CLI showed as `🔔 Needs you`.
 
-- ngkdev93-jpg already had no `User` row on nitpilot.dev (only NikosGkikas13 was listed), so nothing was deleted.
+- ngkdev93-jpg's `User` row was deleted in an earlier session of this step (`DELETE 1`), which also pushed `acc/d5-from-npm`; on 2026-10-28 the table listed only NikosGkikas13, and the run reused that branch.
 - In a shell where `hosted.sh` was sourced, its `nitpilot` function hides the npm one even after the `PATH` change (`command -v nitpilot` prints `nitpilot`, not a path). `unset -f nitpilot` fixes it; the steps above assume a terminal that never sourced it.
