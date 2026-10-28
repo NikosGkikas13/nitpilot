@@ -6,10 +6,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { checkReleaseTag } from './check-release-version.mjs';
 
-/** A folder laid out like the repo, with the CLI at these two versions. */
-function repoWith(packageVersion, cliVersion = packageVersion) {
+/** A folder laid out like the repo, with the CLI and the server at these versions. */
+function repoWith(packageVersion, cliVersion = packageVersion, serverVersion = packageVersion) {
   const root = mkdtempSync(path.join(tmpdir(), 'release-version-'));
   mkdirSync(path.join(root, 'apps/cli/src'), { recursive: true });
+  mkdirSync(path.join(root, 'apps/server/src'), { recursive: true });
+  writeFileSync(path.join(root, 'apps/server/src/version.ts'), `export const SERVER_VERSION = '${serverVersion}';\n`);
   writeFileSync(path.join(root, 'apps/cli/package.json'), JSON.stringify({ name: 'nitpilot', version: packageVersion }));
   writeFileSync(path.join(root, 'apps/cli/src/version.ts'), `export const CLI_VERSION = '${cliVersion}';\n`);
   return root;
@@ -34,6 +36,13 @@ test('a CLI_VERSION that disagrees is refused', () => {
   assert.deepEqual(checkReleaseTag('v0.1.0', repoWith('0.1.0', '0.0.9')), {
     ok: false,
     message: 'tag v0.1.0 but CLI_VERSION in apps/cli/src/version.ts says 0.0.9',
+  });
+});
+
+test('a SERVER_VERSION that disagrees is refused', () => {
+  assert.deepEqual(checkReleaseTag('v0.1.1', repoWith('0.1.1', '0.1.1', '0.1.0')), {
+    ok: false,
+    message: 'tag v0.1.1 but SERVER_VERSION in apps/server/src/version.ts says 0.1.0',
   });
 });
 

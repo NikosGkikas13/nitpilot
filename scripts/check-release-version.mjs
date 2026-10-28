@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The release workflow's first step (docs/releasing.md): is this git tag a version we can release, and does it match
-// the CLI's version in both places it's written? Prints `rc` or `release` and exits 0; otherwise names the mismatch
-// and exits 1, so nothing gets pushed under a wrong version.
+// the version in all three places it's written (the CLI's two, the server's one)? Prints `rc` or `release` and exits 0;
+// otherwise names the mismatch and exits 1, so nothing gets pushed under a wrong version.
 //
 //   node scripts/check-release-version.mjs v0.1.0-rc.1
 import { readFileSync } from 'node:fs';
@@ -25,6 +25,13 @@ export function checkReleaseTag(tag, repoRoot) {
   const versionFile = readFileSync(path.join(repoRoot, 'apps/cli/src/version.ts'), 'utf8');
   const cliVersion = /CLI_VERSION = '([^']+)'/.exec(versionFile)?.[1];
   if (cliVersion !== base) return { ok: false, message: `tag ${tag} but CLI_VERSION in apps/cli/src/version.ts says ${cliVersion}` };
+
+  // The server reports its own version in /healthz and to `nitpilot doctor`, so it ships with the same number.
+  const serverFile = readFileSync(path.join(repoRoot, 'apps/server/src/version.ts'), 'utf8');
+  const serverVersion = /SERVER_VERSION = '([^']+)'/.exec(serverFile)?.[1];
+  if (serverVersion !== base) {
+    return { ok: false, message: `tag ${tag} but SERVER_VERSION in apps/server/src/version.ts says ${serverVersion}` };
+  }
 
   return { ok: true, kind: rc ? 'rc' : 'release', version: tag.slice(1) };
 }

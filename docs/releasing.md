@@ -13,9 +13,10 @@ Anything else (`0.1.0`, `v0.1`, `v0.1.0-beta.1`) is refused by the first job and
 
 ## How to release
 
-1. Choose the version. Set it in **both** places, to the same value (the `-rc.N` part is never written in the files, only in the tag):
+1. Choose the version. Set it in **all three** places, to the same value (the `-rc.N` part is never written in the files, only in the tag):
    - `version` in `apps/cli/package.json`
    - `CLI_VERSION` in `apps/cli/src/version.ts`
+   - `SERVER_VERSION` in `apps/server/src/version.ts` (what `/healthz` and `nitpilot doctor` report)
 2. Commit that change, then open a PR (or push to `main`) and let CI go green before tagging.
 3. Tag the commit and push the tag (from the repo folder):
    ```bash
