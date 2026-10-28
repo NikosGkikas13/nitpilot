@@ -122,23 +122,13 @@ async function runNormally(env: Env, lock: SingletonLock, creds: GithubAppCreden
   // serve() makes a plain HTTP/1 server. Each WebSocket upgrade on it goes to the hub for its path.
   routeUpgrades(server as Server, { [CLI_WS_PATH]: hub.handleUpgrade, [WEB_WS_PATH]: webHub.handleUpgrade });
 
-  const recovered = await recoverOnBoot({ ingest, platform });
-  console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
-  runner.start();
-  // The server was away, not the CLIs: running jobs get a fresh lease, so CLIs that reconnect keep them.
-  await cliJobs.leases.renewAfterRestart();
-  cliJobs.start();
-  const purge = setInterval(() => {
-    void purgeOldRows().catch((err) => console.error('[purge]', err));
-    // Hosted instance only: self-hosters keep their closed chats.
-    if (env.CLOSED_CHAT_RETENTION_DAYS) void purgeClosedChats(new Date(), env.CLOSED_CHAT_RETENTION_DAYS).catch((err) => console.error('[purge]', err));
-  }, 60 * 60_000);
-  // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
-  const retries = setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000);
-
+  // Listen for the stop signal from here on, so a `docker stop` during the boot steps below still ends cleanly
+  // (CLIs told 1012, the lock released, exit 0) instead of Node's default: killed on the spot.
+  let stopping = false;
+  let timers: NodeJS.Timeout[] = [];
   const shutdown = async () => {
-    clearInterval(purge);
-    clearInterval(retries);
+    stopping = true;
+    for (const timer of timers) clearInterval(timer);
     // Let the task in flight finish and save its outcome, so it isn't cut off mid-write and run again at the next boot.
     await runner.stop();
     cliJobs.stop();
@@ -152,6 +142,25 @@ async function runNormally(env: Env, lock: SingletonLock, creds: GithubAppCreden
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+
+  const recovered = await recoverOnBoot({ ingest, platform });
+  console.log(`[boot] re-ran ${recovered.tasks} tasks, replayed ${recovered.replayed} deliveries, asked GitHub to resend ${recovered.redelivered}`);
+  // A stop arrived during recovery: don't start anything that shutdown has already stopped.
+  if (stopping) return;
+  runner.start();
+  // The server was away, not the CLIs: running jobs get a fresh lease, so CLIs that reconnect keep them.
+  await cliJobs.leases.renewAfterRestart();
+  if (stopping) return;
+  cliJobs.start();
+  timers = [
+    setInterval(() => {
+      void purgeOldRows().catch((err) => console.error('[purge]', err));
+      // Hosted instance only: self-hosters keep their closed chats.
+      if (env.CLOSED_CHAT_RETENTION_DAYS) void purgeClosedChats(new Date(), env.CLOSED_CHAT_RETENTION_DAYS).catch((err) => console.error('[purge]', err));
+    }, 60 * 60_000),
+    // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
+    setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000),
+  ];
 }
 
 main().catch((err) => {

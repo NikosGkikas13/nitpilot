@@ -14,6 +14,9 @@ services:
     # A tiny init process in front of node, so `docker compose stop` / `up -d` (SIGTERM) reaches the server and it shuts
     # down cleanly, telling each CLI "server restarting" (docs/why/docker-images.md).
     init: true
+    # Time to stop before Docker kills it (default 10 s): shutdown waits for the task in flight, and one GitHub call
+    # in it can take up to 15 s (GITHUB_TIMEOUT_MS).
+    stop_grace_period: 30s
     # Also how first-run mode finishes: after storing the new GitHub App the server exits with 0 and Docker starts it
     # again, in normal mode (docs/why/first-run-and-app-manifests.md). Only `docker compose stop` / `down` keep it down.
     restart: unless-stopped
