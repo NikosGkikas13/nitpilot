@@ -233,3 +233,34 @@ Run on: 2026-10-25, 11:01–18:05 UTC (with a break: the Mac slept between secti
 - **Open: the Mac didn't show the *Ready for your approval* push** (the iPhone did). Server side looks right; not diagnosed.
 - **The demo was dropped** by the user's decision (2026-10-25; see the table and section 4).
 - Not a finding: the app's terminal panel refuses a command line containing a lone `r` (`nit-edit r …`), so that edit was run outside it.
+
+## 12. D5: the CLI from npm (one Claude run)
+
+[Spec §20](../superpowers/specs/2026-10-07-nitpilot-design.md) item 4: "D5 repeats the single-player run once with the CLI installed from npm." Done after `v0.1.0` is on npm and nitpilot.dev runs `0.1.0` (Plan 3 Task 15). ngkdev93-jpg's account on nitpilot.dev was deleted first, so ngkdev93-jpg is again someone who isn't on Nitpilot.
+
+**T1** is a new terminal that does **not** source `hosted.sh` (its `nitpilot` function would hide the one from npm). **T3** sources it as usual.
+
+1. **T1:** a stranger's install, in its own folder, so nothing global on this Mac changes:
+   ```bash
+   mkdir -p ~/nitpilot-fresh && cd ~/nitpilot-fresh
+   npm install -g nitpilot --prefix ~/nitpilot-fresh/npm
+   export PATH="$HOME/nitpilot-fresh/npm/bin:$PATH" NITPILOT_CONFIG_DIR="$HOME/nitpilot-fresh/config"
+   command -v nitpilot && nitpilot --version
+   ```
+   Expect the path `~/nitpilot-fresh/npm/bin/nitpilot` and `0.1.0`.
+2. **T1:** `nitpilot login`. In **NikosGkikas13's browser**, on **Approve this device?** check the code and click **Approve**. T1 prints `Logged in as NikosGkikas13.`
+3. **T1:** link the clone, check, and start:
+   ```bash
+   nitpilot repos add ~/nitpilot-acceptance/b/nitpilot-sandbox && nitpilot doctor
+   nitpilot start 2>&1 | perl ~/Desktop/PracticeProjects/nitpilot/docs/acceptance/stamp.pl
+   ```
+   Expect no `✗` from `doctor`, then `Connected as NikosGkikas13. Linked: NikosGkikas13/nitpilot-sandbox.`
+4. Section 3's steps 1–6 once, with the branch `d5-from-npm` and the title `D5: from npm`.
+5. **Wrap up:** Ctrl-C in T1; close the PR as ngkdev93-jpg (`GH_TOKEN=$(gh auth token -u ngkdev93-jpg) gh pr close $PR -R $SANDBOX --delete-branch`); `rm -rf ~/nitpilot-fresh`; revoke the device in **NikosGkikas13's browser** (https://nitpilot.dev → avatar → **Settings** → **Devices** → **Revoke**).
+
+- [x] With `nitpilot@0.1.0` from npm: the review job started within 5 seconds of "Request review", the review is on the PR in NikosGkikas13's name, and there is no `nitpilot[bot]` comment.
+
+**Result** (2026-10-28, 14:13–14:18 UTC; nitpilot.dev and the CLI both `0.1.0`, the CLI from `~/nitpilot-fresh/npm/bin/nitpilot`; Claude Code 2.1.277): ✅ Sandbox #21. `review_requested` arrived 14:16:39.995, T1 `→ review` 14:16:40.470 (0.48 s); `✓ done` 14:17:17 (37 s). One review by NikosGkikas13 (COMMENTED), 4 inline comments, no `nitpilot[bot]` comment; 1 job, done at attempt 1, no duplicates; 7 webhooks processed or ignored. Claude raised 4 points; the SQL injection was escalated as security, which the CLI showed as `🔔 Needs you`.
+
+- ngkdev93-jpg's `User` row was deleted in an earlier session of this step (`DELETE 1`), which also pushed `acc/d5-from-npm`; on 2026-10-28 the table listed only NikosGkikas13, and the run reused that branch.
+- In a shell where `hosted.sh` was sourced, its `nitpilot` function hides the npm one even after the `PATH` change (`command -v nitpilot` prints `nitpilot`, not a path). `unset -f nitpilot` fixes it; the steps above assume a terminal that never sourced it.

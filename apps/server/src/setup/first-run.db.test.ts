@@ -228,6 +228,33 @@ describe('GET /first-run/callback', () => {
     expect(await prisma.githubAppConfig.count()).toBe(0);
   });
 
+  it('gives a second load of the same callback (a refresh while GitHub answers) the first one\'s outcome', async () => {
+    // GitHub's code works once: a second conversion of it is a 404. The first answer waits until `answer` is called.
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    let conversions = 0;
+    const { fetch, github } = fakeGithub(async () => {
+      conversions += 1;
+      if (conversions > 1) return json({ message: 'Not Found' }, 404);
+      await held;
+      return CONVERSION;
+    });
+    const server = firstRunServer({ github });
+    const state = await stateFrom(await askForManifest(server));
+
+    const first = callback(server, `code=the-code&state=${state}`);
+    await vi.waitFor(() => expect(fetch.calls).toHaveLength(1));
+    const second = callback(server, `code=the-code&state=${state}`);
+    answer();
+
+    expect((await first).headers.get('location')).toBe('/first-run?done=1');
+    expect((await second).headers.get('location')).toBe('/first-run?done=1');
+    expect(fetch.calls).toHaveLength(1);
+    expect(await prisma.githubAppConfig.count()).toBe(1);
+    // Used up once it's done.
+    expectBackOnThePage(await callback(server, `code=the-code&state=${state}`), 'expired');
+  });
+
   it('keeps the first app when a second comes back (two tabs, one finished), and says the new one is extra', async () => {
     const server = firstRunServer();
     const first = await stateFrom(await askForManifest(server));
