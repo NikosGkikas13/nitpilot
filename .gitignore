@@ -11,3 +11,6 @@ apps/server/src/generated/
 # Playwright
 test-results/
 playwright-report/
+
+# Brainstorm mockups and plan ledgers
+.superpowers/
