@@ -6,6 +6,7 @@ import { SIGN_IN_URL } from '../Landing/Landing';
 import { Docs } from './Docs';
 
 const fetchMock = vi.fn();
+const scrollIntoView = vi.fn(); // jsdom has no scrollIntoView
 
 function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
@@ -23,10 +24,14 @@ function renderAt(path: string) {
   );
 }
 
-beforeEach(() => vi.stubGlobal('fetch', fetchMock));
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock);
+  Element.prototype.scrollIntoView = scrollIntoView;
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   fetchMock.mockClear();
+  scrollIntoView.mockClear();
 });
 
 describe('Docs', () => {
@@ -80,5 +85,21 @@ describe('Docs', () => {
     expect(screen.getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', SIGN_IN_URL);
     expect(screen.getByRole('button', { name: /theme/ })).toBeInTheDocument();
+  });
+
+  it('scrolls to the heading named in the URL hash', () => {
+    renderAt('/docs/introduction#try-it');
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.contexts[0]).toHaveProperty('id', 'try-it');
+  });
+
+  it('opens and closes the page list with the Menu button', () => {
+    renderAt('/docs');
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('navigation', { name: 'Docs pages' }).querySelector('a')!);
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 });

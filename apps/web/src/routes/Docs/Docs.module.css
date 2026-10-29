@@ -54,7 +54,7 @@
   display: flex;
   align-items: flex-start;
   gap: 40px;
-  max-width: 1160px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -223,6 +223,50 @@
   cursor: pointer;
 }
 
+.rail {
+  position: sticky;
+  top: 62px;
+  flex: 0 0 190px;
+  padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railLink {
+  padding: 4px 10px;
+  border-left: 2px solid var(--b1);
+  font-size: 13px;
+  color: var(--fg3);
+  text-decoration: none;
+}
+
+.railDeep {
+  padding-left: 22px;
+}
+
+.railLink:hover {
+  color: var(--fg1);
+}
+
+.railLink[aria-current='location'] {
+  border-left-color: var(--acc-text);
+  color: var(--acc-text);
+  font-weight: 600;
+}
+
+.menuButton {
+  display: none;
+  padding: 3px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .pager {
   display: flex;
   justify-content: space-between;
@@ -259,6 +303,12 @@
   color: var(--fg3);
 }
 
+@media (max-width: 1100px) {
+  .rail {
+    display: none;
+  }
+}
+
 @media (max-width: 800px) {
   .top {
     gap: 12px;
@@ -271,12 +321,29 @@
     padding: 0 16px;
   }
 
-  /* Task 2 adds the Menu button; until then the page list sits above the page. */
+  /* On narrow screens .layout is a column, so .main must be told to fill the width. */
+  .main {
+    width: 100%;
+  }
+}
+
+/* Below 768px the page list hides behind the Menu button. */
+@media (max-width: 767px) {
+  .menuButton {
+    display: inline-block;
+  }
+
   .side {
+    display: none;
     position: static;
     flex: none;
     width: 100%;
     padding: 12px 0;
+    border-bottom: 1px solid var(--b1);
+  }
+
+  .sideOpen {
+    display: flex;
   }
 }
 

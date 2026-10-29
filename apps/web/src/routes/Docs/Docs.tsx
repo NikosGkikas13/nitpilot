@@ -1,11 +1,12 @@
 import { BRAND } from '@nitpilot/protocol';
-import { useEffect, useMemo, type MouseEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
 import { SIGN_IN_URL } from '../Landing/Landing';
 import styles from './Docs.module.css';
 import { renderMarkdown } from './markdown';
+import { OnThisPage } from './OnThisPage';
 import { DOC_GROUPS, DOC_PAGES, findPage, neighbours, pageSource } from './pages';
 
 const pagePath = (slug: string) => (slug === 'introduction' ? '/docs' : `/docs/${slug}`);
@@ -17,6 +18,13 @@ export function Docs() {
   const source = page && pageSource(slug);
   const rendered = useMemo(() => (source ? renderMarkdown(source) : undefined), [source]);
   const navigate = useNavigate();
+  const { hash } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // After each page render, jump to the heading named in the URL (#id). The page body is a plain HTML string, so React can't do this for us.
+  useEffect(() => {
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [slug, hash]);
 
   useEffect(() => {
     const before = document.title;
@@ -50,6 +58,15 @@ export function Docs() {
         <Link to="/" className={styles.brand}>
           <Wordmark size={22} />
         </Link>
+        <button
+          type="button"
+          className={styles.menuButton}
+          aria-expanded={menuOpen}
+          aria-controls="docs-pages"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          Menu
+        </button>
         <Link to="/docs" className={styles.tag}>
           Docs
         </Link>
@@ -64,7 +81,12 @@ export function Docs() {
       </header>
 
       <div className={styles.layout}>
-        <nav className={styles.side} aria-label="Docs pages">
+        <nav
+          id="docs-pages"
+          className={`${styles.side} ${menuOpen ? styles.sideOpen : ''}`}
+          aria-label="Docs pages"
+          onClick={() => setMenuOpen(false)}
+        >
           {DOC_GROUPS.map((group) => {
             const pages = DOC_PAGES.filter((p) => p.group === group);
             if (pages.length === 0) return null;
@@ -119,6 +141,7 @@ export function Docs() {
             </>
           )}
         </main>
+        {rendered && <OnThisPage headings={rendered.headings} />}
       </div>
     </div>
   );
