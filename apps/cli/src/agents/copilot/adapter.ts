@@ -23,11 +23,14 @@ const ALLOWED: Record<AgentMode, readonly string[]> = {
 };
 
 /**
- * Project files Copilot CLI loads by itself (spec §12.2), on top of every agent's (runner/scrub.ts), scrubbed
- * from the job's worktree. --no-custom-instructions and no --trust-folder already keep them out; this is the
+ * Project files Copilot CLI loads by itself (spec §12.2; runner/scrub.ts scrubs every agent's), scrubbed from
+ * the job's worktree. --no-custom-instructions and no --trust-folder already keep them out; this is the
  * second lock.
  */
-const SCRUB_PATHS = ['copilot-instructions.md', '.copilot/'];
+const SCRUB_PATHS = [
+  '.copilot/', '.github/copilot-instructions.md', '.github/instructions/', '.github/agents/', '.github/skills/', '.github/prompts/', '.github/hooks/',
+  '.github/mcp.json', '.vscode/mcp.json', '.mcp.json', 'AGENTS.md', 'CLAUDE.md',
+];
 
 /** A progress line is one line of the agent's own text, cut to this length. */
 const PROGRESS_MAX = 200;
