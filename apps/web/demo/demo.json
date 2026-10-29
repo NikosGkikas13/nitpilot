@@ -1,0 +1,27 @@
+{
+  "review": [
+    { "sleep": 2500 },
+    { "add_point": { "path": "src/orders.ts", "line": 1, "severity": "major", "category": "bug", "title": "Page size is too big", "body": "Use 25, like the other endpoints." } },
+    { "sleep": 1500 },
+    { "add_point": { "severity": "nit", "category": "docs", "title": "Mention the new page size in the README", "body": "Readers will look there first." } },
+    { "sleep": 1500 },
+    { "finish": "Two points: the page size, and the README." }
+  ],
+  "address": [
+    { "sleep": 2500 },
+    { "edit": { "path": "src/orders.ts", "content": "export const pageSize = 25;\n" } },
+    { "reply": { "point": 1, "resolution": "fixed", "comment": "Now 25." } },
+    { "sleep": 1500 },
+    { "reply": { "point": 2, "resolution": "answered", "comment": "The README covers setup, not settings." } },
+    { "sleep": 1000 },
+    { "finish": "Fixed the page size, answered the README point." }
+  ],
+  "re_review": [
+    { "sleep": 2500 },
+    { "decide": { "point": 1, "decision": "resolve", "comment": "Fixed." } },
+    { "sleep": 1000 },
+    { "decide": { "point": 2, "decision": "resolve", "comment": "Fair enough." } },
+    { "sleep": 1000 },
+    { "finish": "Both points settled." }
+  ]
+}
