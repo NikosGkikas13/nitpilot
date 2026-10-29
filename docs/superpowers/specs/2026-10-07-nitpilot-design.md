@@ -907,6 +907,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 - `docs/adapters.md`: how to write an agent or platform adapter, and how to run the conformance suite.
 - `docs/acceptance/plan-1.md`: the live acceptance run (§20) as a checklist, with the helper files beside it. `docs/acceptance/plan-2.md` does the same for Plan 2.
 - Plan 3: `docs/self-hosting.md` (for a team running its own), `docs/hosting.md` (the runbook for nitpilot.dev), `docs/launch/show-hn.md` (the draft post), the README rewritten around the launch story (§20 item 4), and `docs/why/` explainers for Docker images and containers, a reverse proxy and TLS certificates (Caddy), DNS records, GitHub App manifests and first-run mode, releasing (tags, GHCR, npm trusted publishing and provenance), and backups and restores.
+- The public docs site at `/docs` (nitpilot.dev and every self-hosted server): Markdown pages in `apps/web/src/routes/Docs/pages/`, a lazy chunk of the web app with no sign-in, API call or socket. The README and the site keep separate copies of the shared material. Design: `docs/superpowers/specs/2026-10-29-docs-site-design.md`.
 
 ## 22. Risks and open questions
 

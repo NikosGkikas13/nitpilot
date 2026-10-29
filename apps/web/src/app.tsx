@@ -15,6 +15,7 @@ import { InboxLayout } from './routes/Shell/Shell';
  */
 const Approve = lazy(() => import('./routes/Approve/Approve').then((module) => ({ default: module.Approve })));
 const Setup = lazy(() => import('./routes/Setup/Setup').then((module) => ({ default: module.Setup })));
+const Docs = lazy(() => import('./routes/Docs/Docs').then((module) => ({ default: module.Docs })));
 const FirstRun = lazy(() => import('./routes/FirstRun/FirstRun').then((module) => ({ default: module.FirstRun })));
 
 /** `queries` lets a test override a default (`retryDelay: 0`) while still using the real retry policy. */
@@ -39,7 +40,8 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
  * Every page. Home decides between the landing page (signed out) and the app, or only a link to /first-run while the
  * server has no GitHub App. Signed in, the chat pages open beside the inbox (routes/Shell/Shell.tsx `InboxLayout`);
  * Settings and the setup checklist are pages of their own. Device approval (`/cli/approve`, the link `nitpilot login`
- * opens) and the first-run page stand outside Home: no landing page, no inbox, no socket.
+ * opens), the first-run page and the public docs (`/docs`, `/docs/:slug`) stand outside Home: no landing page, no inbox,
+ * no socket. The docs are a lazy file of their own, so signed-in users never download them.
  */
 export function AppRoutes() {
   return (
@@ -76,6 +78,17 @@ export function AppRoutes() {
           </Suspense>
         }
       />
+      {['docs', 'docs/:slug'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <Suspense fallback={null}>
+              <Docs />
+            </Suspense>
+          }
+        />
+      ))}
     </Routes>
   );
 }

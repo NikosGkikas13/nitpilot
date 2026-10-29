@@ -1,0 +1,278 @@
+.page {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg1);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--side);
+  border-bottom: 1px solid var(--b1);
+}
+
+.brand {
+  display: inline-flex;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tag {
+  padding: 2px 10px;
+  border: 1px solid var(--acc-line);
+  border-radius: var(--radius-pill);
+  background: var(--acc-tint);
+  color: var(--acc-text);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.topLink {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.topLink:hover {
+  color: var(--fg1);
+}
+
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.side {
+  position: sticky;
+  top: 62px;
+  flex: 0 0 210px;
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groupName {
+  padding: 0 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+
+.sideLink {
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.sideLink:hover {
+  background: var(--hover);
+  color: var(--fg1);
+}
+
+.sideLink[aria-current='page'] {
+  background: var(--sel);
+  color: var(--acc-text);
+  font-weight: 600;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  max-width: 720px;
+  padding: 32px 0 64px;
+}
+
+.crumb {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--acc-text);
+}
+
+.title {
+  margin: 4px 0 20px;
+  font-size: 34px;
+  line-height: 1.15;
+}
+
+.body {
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--fg2);
+}
+
+.body :global(h2) {
+  margin: 36px 0 8px;
+  font-size: 22px;
+  color: var(--fg1);
+}
+
+.body :global(h3) {
+  margin: 24px 0 6px;
+  font-size: 17px;
+  color: var(--fg1);
+}
+
+.body :global(p),
+.body :global(ul),
+.body :global(ol),
+.body :global(table),
+.body :global(blockquote) {
+  margin: 0 0 14px;
+}
+
+.body :global(ul),
+.body :global(ol) {
+  padding-left: 22px;
+}
+
+.body :global(a) {
+  color: var(--acc-text);
+}
+
+.body :global(code) {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg1);
+}
+
+.body :global(blockquote) {
+  padding: 2px 16px;
+  border-left: 3px solid var(--acc-line);
+  background: var(--acc-tint);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.body :global(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.body :global(th),
+.body :global(td) {
+  padding: 8px 12px;
+  border: 1px solid var(--b1);
+  text-align: left;
+}
+
+.body :global(div.code) {
+  position: relative;
+  margin: 0 0 16px;
+}
+
+.body :global(div.code pre) {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  background: var(--code);
+}
+
+.body :global(div.code pre code) {
+  padding: 0;
+  background: none;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.body :global(div.code button) {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--fg2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.pagerLink {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  min-width: 140px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  color: var(--fg1);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pagerLink:hover {
+  border-color: var(--acc-line);
+}
+
+.pagerNext {
+  margin-left: auto;
+  text-align: right;
+}
+
+.pagerLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg3);
+}
+
+@media (max-width: 800px) {
+  .top {
+    padding: 12px 16px;
+  }
+
+  .layout {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 16px;
+  }
+
+  /* Task 2 adds the Menu button; until then the page list sits above the page. */
+  .side {
+    position: static;
+    flex: none;
+    width: 100%;
+    padding: 12px 0;
+  }
+}
