@@ -1,5 +1,5 @@
 import { BRAND } from '@nitpilot/protocol';
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
@@ -20,10 +20,16 @@ export function Docs() {
   const navigate = useNavigate();
   const { hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
 
   // After each page render, jump to the heading named in the URL (#id). The page body is a plain HTML string, so React can't do this for us.
   useEffect(() => {
-    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+    if (!hash) return;
+    try {
+      document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+    } catch {
+      // A malformed hash like "#%" can't be decoded; just don't scroll.
+    }
   }, [slug, hash]);
 
   useEffect(() => {
@@ -85,7 +91,11 @@ export function Docs() {
           id="docs-pages"
           className={`${styles.side} ${menuOpen ? styles.sideOpen : ''}`}
           aria-label="Docs pages"
-          onClick={() => setMenuOpen(false)}
+          onClick={() => {
+            // Closing the menu hides the focused link, so hand focus to the page first.
+            if (menuOpen) mainRef.current?.focus({ preventScroll: true });
+            setMenuOpen(false);
+          }}
         >
           {DOC_GROUPS.map((group) => {
             const pages = DOC_PAGES.filter((p) => p.group === group);
@@ -108,7 +118,7 @@ export function Docs() {
           })}
         </nav>
 
-        <main className={styles.main}>
+        <main className={styles.main} ref={mainRef} tabIndex={-1}>
           {page && rendered ? (
             <>
               <div className={styles.crumb}>{page.group}</div>

@@ -102,4 +102,16 @@ describe('Docs', () => {
     fireEvent.click(screen.getByRole('navigation', { name: 'Docs pages' }).querySelector('a')!);
     expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
+
+  it('does not crash on a malformed hash', () => {
+    renderAt('/docs#%');
+    expect(screen.getByRole('heading', { level: 1, name: 'Introduction' })).toBeInTheDocument();
+  });
+
+  it('moves focus to the page when a sidebar link closes the menu', () => {
+    renderAt('/docs');
+    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    fireEvent.click(screen.getByRole('navigation', { name: 'Docs pages' }).querySelector('a')!);
+    expect(screen.getByRole('main')).toHaveFocus();
+  });
 });

@@ -38,6 +38,10 @@
   flex: 1;
 }
 
+.top > * {
+  flex-shrink: 0;
+}
+
 .topLink {
   white-space: nowrap;
   font-size: 14px;
@@ -132,6 +136,11 @@
   margin: 36px 0 8px;
   font-size: 22px;
   color: var(--fg1);
+}
+
+.body :global(h2),
+.body :global(h3) {
+  scroll-margin-top: 80px; /* clears the sticky top bar and lands inside the rail's observer band */
 }
 
 .body :global(h3) {
@@ -348,6 +357,10 @@
 }
 
 @media (max-width: 480px) {
+  .top {
+    gap: 6px;
+  }
+
   .tag {
     display: none;
   }
