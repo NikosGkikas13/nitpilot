@@ -236,6 +236,8 @@
   position: sticky;
   top: 62px;
   flex: 0 0 190px;
+  max-height: calc(100vh - 62px); /* long lists scroll inside the rail */
+  overflow-y: auto;
   padding: 32px 0;
   display: flex;
   flex-direction: column;
@@ -353,6 +355,13 @@
 
   .sideOpen {
     display: flex;
+  }
+}
+
+@media (max-width: 360px) {
+  /* 320px phones: the landing page has the GitHub link, so drop it here to keep the gutters. */
+  .repoLink {
+    display: none;
   }
 }
 

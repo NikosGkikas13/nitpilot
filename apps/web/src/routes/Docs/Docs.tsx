@@ -18,8 +18,11 @@ export function Docs() {
   const source = page && pageSource(slug);
   const rendered = useMemo(() => (source ? renderMarkdown(source) : undefined), [source]);
   const navigate = useNavigate();
-  const { hash } = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { hash, pathname } = useLocation();
+  // The menu is open only for the page it was opened on, so changing page closes it without an effect.
+  const [openAt, setOpenAt] = useState<string | null>(null); // the pathname it was opened on
+  const menuOpen = openAt === pathname;
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   // After each page render, jump to the heading named in the URL (#id). The page body is a plain HTML string, so React can't do this for us.
@@ -59,17 +62,25 @@ export function Docs() {
 
   const { prev, next } = neighbours(slug);
   return (
-    <div className={styles.page}>
+    <div
+      className={styles.page}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !menuOpen) return;
+        setOpenAt(null);
+        menuButtonRef.current?.focus();
+      }}
+    >
       <header className={styles.top}>
         <Link to="/" className={styles.brand}>
           <Wordmark size={22} />
         </Link>
         <button
           type="button"
+          ref={menuButtonRef}
           className={styles.menuButton}
           aria-expanded={menuOpen}
           aria-controls="docs-pages"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => setOpenAt(menuOpen ? null : pathname)}
         >
           Menu
         </button>
@@ -77,7 +88,7 @@ export function Docs() {
           Docs
         </Link>
         <span className={styles.spacer} />
-        <a className={styles.topLink} href={BRAND.repoUrl}>
+        <a className={`${styles.topLink} ${styles.repoLink}`} href={BRAND.repoUrl}>
           GitHub <span aria-hidden="true">↗</span>
         </a>
         <a className={styles.topLink} href={SIGN_IN_URL}>
@@ -94,7 +105,7 @@ export function Docs() {
           onClick={() => {
             // Closing the menu hides the focused link, so hand focus to the page first.
             if (menuOpen) mainRef.current?.focus({ preventScroll: true });
-            setMenuOpen(false);
+            setOpenAt(null);
           }}
         >
           {DOC_GROUPS.map((group) => {

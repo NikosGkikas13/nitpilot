@@ -114,4 +114,22 @@ describe('Docs', () => {
     fireEvent.click(screen.getByRole('navigation', { name: 'Docs pages' }).querySelector('a')!);
     expect(screen.getByRole('main')).toHaveFocus();
   });
+
+  it('closes the menu when the page changes', () => {
+    renderAt('/docs');
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(document.querySelector('main a[href^="/docs"]')!); // goes /docs -> /docs/introduction
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes the menu on Escape and returns focus to the Menu button', () => {
+    renderAt('/docs');
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    fireEvent.click(menu);
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+    expect(menu).toHaveFocus();
+  });
 });
