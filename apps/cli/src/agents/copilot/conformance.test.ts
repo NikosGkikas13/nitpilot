@@ -16,7 +16,7 @@ const flagValues = (invocation: AgentInvocation, flag: string) => {
   const end = rest.findIndex((arg) => arg.startsWith('-'));
   return end < 0 ? rest : rest.slice(0, end);
 };
-const ISOLATION = [['--no-custom-instructions'], ['--disable-builtin-mcps'], ['--no-ask-user'], ['--disallow-temp-dir'], ['--no-auto-update']];
+const ISOLATION = [['--no-custom-instructions'], ['--disable-builtin-mcps'], ['--no-ask-user'], ['--disallow-temp-dir'], ['--no-auto-update'], ['--deny-tool', 'write(.git)']];
 
 staticConformance({
   adapter: copilotAdapter(),
@@ -25,8 +25,8 @@ staticConformance({
   readTools: ['view', 'grep', 'rg', 'glob'],
   editTools: ['edit', 'create', 'apply_patch'],
   isolation: {
-    reviewer: [...ISOLATION, ['--allow-tool', 'nitpilot', '--additional-mcp-config']],
-    editor: [...ISOLATION, ['--allow-tool', 'nitpilot', 'write', '--additional-mcp-config']],
+    reviewer: [...ISOLATION, ['--allow-tool', 'nitpilot', '--deny-tool']],
+    editor: [...ISOLATION, ['--allow-tool', 'nitpilot', 'write', '--deny-tool']],
   },
   // success and signal were recorded with Copilot CLI 1.0.105 (deltas dropped, paths and ids replaced); the
   // signal run was stopped the way runAgent does it, SIGTERM to the process group. Copilot has no max-turns

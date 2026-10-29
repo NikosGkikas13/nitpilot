@@ -475,7 +475,8 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
     --available-tools view grep rg glob nitpilot --allow-tool nitpilot
     --additional-mcp-config @<tmp>/mcp.json
   ```
-- **Editor:** the same, plus `edit create str_replace_editor apply_patch` in `--available-tools` and `write` in `--allow-tool`.
+- **Both modes** add `--deny-tool 'write(.git)'`: the live suite (L4) caught an editor with only `write` allowed rewriting the worktree's `.git` file with `apply_patch`. Deny rules win over allow rules, and `write(<name>)` matches that name in any folder.
+- **Editor:** the same, plus `edit create apply_patch` in `--available-tools` and `write` in `--allow-tool`.
   - **Tool names depend on the model:** GPT models get `rg` and `apply_patch`, others get `grep`, `edit` and `create`. So the whitelist names every variant; an unknown name is only an info event.
   - **Writes stay in the checkout:** writes outside the working directory are refused.
 - **Whitelist, not deny list:** `--available-tools` hides everything else from the model (`bash`, `web_fetch`, `task`, `sql`, `skill`, …). In `-p` mode anything not in `--allow-tool` is refused, never prompted.

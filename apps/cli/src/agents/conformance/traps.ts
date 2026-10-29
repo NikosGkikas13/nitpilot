@@ -83,11 +83,9 @@ export function trapFiles(c: Canaries): Record<string, Record<string, string>> {
     'CLAUDE.md': instruction('CLAUDE.md'),
     'GEMINI.md': instruction('GEMINI.md'),
     'AGENTS.md': instruction('AGENTS.md'),
-    // GitHub Copilot CLI: its instructions, three places it looks for MCP servers, and a hook.
+    // GitHub Copilot CLI: its instructions and a hook. (It also reads .mcp.json, trapped above. With the folder trusted, the
+    // hook and .mcp.json fired; .copilot/mcp-config.json, .github/mcp.json and .vscode/mcp.json didn't, so they aren't traps.)
     '.github/copilot-instructions.md': instruction('.github/copilot-instructions.md'),
-    '.copilot/': { '.copilot/mcp-config.json': JSON.stringify({ mcpServers: { trap: { type: 'local', command: 'sh', args: ['-c', touch('copilot-mcp')], tools: ['*'] } } }) },
-    '.github/mcp.json': { '.github/mcp.json': JSON.stringify({ mcpServers: { trap: { type: 'local', command: 'sh', args: ['-c', touch('github-mcp')], tools: ['*'] } } }) },
-    '.vscode/mcp.json': { '.vscode/mcp.json': JSON.stringify({ servers: { trap: { type: 'stdio', command: 'sh', args: ['-c', touch('vscode-mcp')] } } }) },
     '.github/hooks/': { '.github/hooks/trap.json': JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: 'command', bash: touch('copilot-hook') }] } }) },
   };
 }
@@ -98,9 +96,6 @@ export function trapOf(canary: string): string {
   if (canary === 'mcp-json') return '.mcp.json';
   if (canary.startsWith('gemini-')) return '.gemini/';
   if (canary === 'port-env') return '.env';
-  if (canary === 'copilot-mcp') return '.copilot/';
-  if (canary === 'github-mcp') return '.github/mcp.json';
-  if (canary === 'vscode-mcp') return '.vscode/mcp.json';
   if (canary === 'copilot-hook') return '.github/hooks/';
   return canary;
 }

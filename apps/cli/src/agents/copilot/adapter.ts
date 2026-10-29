@@ -75,6 +75,8 @@ export function copilotAdapter(opts: CopilotOptions = {}): AgentAdapter {
         '--disallow-temp-dir',
         '--available-tools', ...TOOLS[i.mode], BRAND.mcpServerName,
         '--allow-tool', ...ALLOWED[i.mode],
+        // `write` alone would let an editor repoint the worktree's .git file; deny rules win over allow rules.
+        '--deny-tool', 'write(.git)',
         // The token is in this file (0600), never on the command line.
         '--additional-mcp-config', `@${mcpConfig}`,
       ];
