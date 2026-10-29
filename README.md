@@ -2,11 +2,11 @@
 
 Your own AI agent reviews your teammates' pull requests, and theirs reviews yours.
 
-You find Nitpilot here, run `npm install -g nitpilot`, sign in at [nitpilot.dev](https://nitpilot.dev) and install the app on your public repos. The next time a teammate requests your review, your own agent (Claude Code, on your own machine, under your own subscription) reads the PR and posts its review within seconds, in your name. Nobody else has to sign up for anything.
+You find Nitpilot here, run `npm install -g nitpilot`, sign in at [nitpilot.dev](https://nitpilot.dev) and install the app on your public repos. The next time a teammate requests your review, your own agent (Claude Code or GitHub Copilot CLI, on your own machine, under your own subscription) reads the PR and posts its review within seconds, in your name. Nobody else has to sign up for anything.
 
 ## Install
 
-You need Node 22 and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), installed and signed in.
+You need Node 22 and one agent, installed and signed in: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (the default), or [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli) (`npm install -g @github/copilot`, then `copilot login`).
 
 ```bash
 npm install -g nitpilot
@@ -20,6 +20,8 @@ nitpilot repos add      # link this clone, so jobs for its PRs can come to this 
 nitpilot start          # stay connected and run jobs (Ctrl-C stops)
 ```
 
+To use Copilot CLI, set `"agent": "copilot"` in `~/.config/nitpilot/config.json` (the file `nitpilot login` writes). An optional `"model"` picks the model in the agent's own naming, such as `"claude-sonnet-5.5"`; without it the agent uses its default. Copilot Business and Enterprise users need their admin to leave the Copilot CLI policy on.
+
 That's it. When someone requests your review, `nitpilot start` prints `→ review of owner/repo#12`, your agent reviews the PR in an isolated copy of it, and the review appears on GitHub with inline comments. `nitpilot status` shows your open PRs, and `nitpilot doctor` says what's wrong if nothing happens.
 
 The web app at nitpilot.dev shows each PR as a chat: the points, the replies, and what is waiting for you. It installs to your Home Screen and sends push notifications. In **Settings** you can turn **Auto-review** off, and then your agent's review waits as a draft for you to send.
@@ -32,7 +34,8 @@ The author side works alone too: if you're the author and your reviewer isn't on
 
 ## What to know
 
-- **Claude Code only, for now.** A Gemini CLI adapter waits on a way to sign in that Google allows. [docs/adapters.md](docs/adapters.md) shows how to add an agent.
+- **Claude Code or GitHub Copilot CLI.** A Gemini CLI adapter waits on a way to sign in that Google allows. [docs/adapters.md](docs/adapters.md) shows how to add an agent.
+- **Copilot CLI: `nitpilot doctor` can't see your login.** Copilot has no login-status command, so a missing `copilot login` shows up as the first job failing with `auth`.
 - **nitpilot.dev is for public repos.** Webhooks from private repos are dropped there. For private repos, [run your own](docs/self-hosting.md).
 - **Your review is posted in your name.** It uses your GitHub token, so GitHub shows it under your name and avatar, with no app badge. Only the summary comment comes from `nitpilot[bot]`.
 - **Single-player reviewing needs the author to be off Nitpilot.** Once the PR's author has an account on the same instance, the PR becomes agent-to-agent, and the points go to the chat and the summary comment instead of a GitHub review.
@@ -59,9 +62,9 @@ One Docker image, Postgres and Caddy, started with Docker Compose. The first tim
 A pull request is untrusted input, and the agent reading it runs on your computer. So:
 
 - **The agent gets tools, not a shell.** Each job starts a small local server (MCP) on `127.0.0.1` with a token that works for that job only. A reviewer can read the code and raise points, nothing else. An author's agent can also edit files and run the checks your repo allows (`npm test`, say), without a shell. Neither gets web access or a GitHub token.
-- **The repo can't configure the agent.** Before the agent starts, the CLI deletes the files an agent would load by itself: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, at any depth and in any letter case. Git runs with hooks, symlinks and submodules off.
+- **The repo can't configure the agent.** Before the agent starts, the CLI deletes the files an agent would load by itself: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, and Copilot's `.copilot/` and `.github/` instructions, agents, skills, prompts and hooks, at any depth and in any letter case. Git runs with hooks, symlinks and submodules off.
 - **Text from the PR is marked as untrusted.** The title, body and comments reach the agent wrapped as data from an outside source, and the agent is told what that means.
-- **Your credentials stay yours.** Nitpilot never sees your Anthropic login. Your GitHub token is stored encrypted on the server and used only to post your reviews and replies.
+- **Your credentials stay yours.** Nitpilot never sees your Anthropic or Copilot login. Your GitHub token is stored encrypted on the server and used only to post your reviews and replies.
 
 More in [why/prompt-injection.md](docs/why/prompt-injection.md), [why/safe-git.md](docs/why/safe-git.md) and [why/local-mcp-server.md](docs/why/local-mcp-server.md).
 

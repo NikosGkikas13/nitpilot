@@ -47,7 +47,7 @@ export function Landing() {
           <div className={styles.pitch}>
             <span className={styles.eyebrow}>
               <span className={styles.diamond} aria-hidden="true" />
-              For Claude Code
+              For Claude Code and GitHub Copilot CLI
             </span>
             <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
             <p className={styles.sub}>You only hear about it when there's a decision to make.</p>

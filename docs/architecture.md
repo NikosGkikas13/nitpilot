@@ -6,7 +6,7 @@ This document follows one pull request through Nitpilot and explains every signi
 
 ## 1. What Nitpilot does
 
-Developers' own AI agents (Claude Code today, Gemini CLI next) review each other's pull requests the moment they open. The author's agent fixes what the reviewer's agent raises, the reviewer's agent checks the fixes, and a human is pinged only when there is a decision to make: the PR is ready to approve, or the agents disagree, or something needs a person.
+Developers' own AI agents (Claude Code and GitHub Copilot CLI today) review each other's pull requests the moment they open. The author's agent fixes what the reviewer's agent raises, the reviewer's agent checks the fixes, and a human is pinged only when there is a decision to make: the PR is ready to approve, or the agents disagree, or something needs a person.
 
 The agents run on each developer's own machine, under their own login. Nitpilot is the coordinator: it hears about PRs from GitHub, decides whose turn it is, hands jobs to the right laptop, and writes the results back to the PR.
 
@@ -29,7 +29,7 @@ GitHub ──────────────────▶ ┌────
                          │ agent adapters          │
                          └────────────┬────────────┘
                                       ▼
-                         claude / gemini (the user's own install)
+                         claude / copilot (the user's own install)
 ```
 
 Three programs, one shared package:
@@ -68,7 +68,7 @@ Three programs, one shared package:
 
 ### 4.2 Agents run on the developer's machine
 
-- **Chosen:** the CLI launches the developer's own `claude` (or `gemini`). Nitpilot never sees an Anthropic or Google credential.
+- **Chosen:** the CLI launches the developer's own `claude` (or `copilot`). Nitpilot never sees an Anthropic or GitHub Copilot credential.
 - **Alternatives:** run agents on the server in sandboxes; run them in GitHub Actions; ask users for API keys.
 - **Why:** server-side agents mean holding users' API keys and running untrusted repo code on our box, which is a security and cost problem and a different product. Local agents use the subscription the developer already pays for, can run the project's own checks with their real toolchain, and keep the code on the developer's disk.
 - **Cost:** a job needs the laptop to be on. The server tracks that honestly ("offline since 09:30" on the transcript page) instead of pretending.
@@ -123,7 +123,7 @@ Three programs, one shared package:
 
 ### 4.11 Adapters, fakes and a conformance suite
 
-- **Chosen:** two interfaces. `PlatformAdapter` (GitHub today) and `AgentAdapter` (Claude Code, Gemini CLI, a scripted fake). Every adapter passes one shared conformance suite for the modes it declares: static checks in CI, live checks run by hand. [adapters.md](adapters.md) shows how to write one.
+- **Chosen:** two interfaces. `PlatformAdapter` (GitHub today) and `AgentAdapter` (Claude Code, GitHub Copilot CLI, a scripted fake; Gemini CLI on hold). Every adapter passes one shared conformance suite for the modes it declares: static checks in CI, live checks run by hand. [adapters.md](adapters.md) shows how to write one.
 - **Alternatives:** call GitHub and `claude` directly; mock them per test.
 - **Why:** agent CLIs change flags quickly. A suite that checks the *command we would run* (no shell tool for a reviewer, the token only in a 0600 file, the isolation flags present) catches drift in CI. A `FakePlatform` and a fake agent make the whole loop testable without a network or a subscription.
 

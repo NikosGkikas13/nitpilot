@@ -143,6 +143,7 @@ function Checklist({ me, facts }: { me: WebMe; facts: Onboarding }) {
               <CommandBlock command={START} active={state(4) === 'active'} />
               <div className={styles.chips}>
                 <span className={styles.chip}>Claude Code · detected automatically</span>
+                <span className={styles.chip}>GitHub Copilot CLI · set "agent": "copilot" in the config</span>
               </div>
             </>
           )}

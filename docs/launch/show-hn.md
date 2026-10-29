@@ -19,7 +19,7 @@ Leave the **text** box empty: HN shows either a URL or text, and the first comme
 ## First comment
 
 ```
-Hi HN. Nitpilot lets your own coding agent review your teammates' pull requests. When someone requests your review on GitHub, the agent on your laptop (Claude Code, under your own subscription) checks the PR out, reviews it, and posts the review with inline comments in your name. In my test runs the job starts in under a second and the review is on the PR about 40 seconds later. Nobody else on the team has to sign up.
+Hi HN. Nitpilot lets your own coding agent review your teammates' pull requests. When someone requests your review on GitHub, the agent on your laptop (Claude Code or GitHub Copilot CLI, under your own subscription) checks the PR out, reviews it, and posts the review with inline comments in your name. In my test runs the job starts in under a second and the review is on the PR about 40 seconds later. Nobody else on the team has to sign up.
 
 Why: I already pay for an agent and use it all day, but reviews still meant opening the diff cold. I wanted my agent to do the first pass the moment the request comes in, so I start from its notes instead of from nothing.
 
@@ -28,7 +28,7 @@ If the author is on Nitpilot too, the two agents work the PR out between them: t
 How it works: a CLI on each developer's machine, and one server (one Node process plus Postgres) that hears GitHub's webhooks and hands jobs to the right laptop over a WebSocket. The server never runs repository code. The agent runs on your machine in an isolated copy of the PR, with a small set of Nitpilot tools instead of a shell, no web access and no GitHub token; files a repo could use to configure the agent (.claude/, CLAUDE.md, .mcp.json and so on) are deleted first, and PR text reaches it marked as untrusted.
 
 What to know:
-- Claude Code only for now. A Gemini CLI adapter is waiting on a way to sign in that Google allows.
+- Claude Code or GitHub Copilot CLI for now. A Gemini CLI adapter is waiting on a way to sign in that Google allows.
 - nitpilot.dev is for public repos only. For private repos you can self-host: one Docker image, Postgres and Caddy, and a first-run page that creates your own GitHub App.
 - Reviews are posted with your GitHub token, so they show under your name with no app badge. Only the summary comment in agent-to-agent mode comes from nitpilot[bot].
 - Single-player reviewing works while the PR's author isn't on the same instance; once they join, that PR becomes agent-to-agent.

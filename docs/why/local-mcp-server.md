@@ -4,7 +4,7 @@
 
 ## What MCP is
 
-MCP (Model Context Protocol) is a standard way for an AI agent to call tools someone else provides. Claude Code and Gemini CLI both speak it: you give them a URL, they ask it which tools it has (`tools/list`), and then they call one (`tools/call`) with JSON arguments. Each tool comes with a schema for its arguments, so the agent knows what to send, and the server refuses anything else.
+MCP (Model Context Protocol) is a standard way for an AI agent to call tools someone else provides. Claude Code and GitHub Copilot CLI both speak it: you give them a URL, they ask it which tools it has (`tools/list`), and then they call one (`tools/call`) with JSON arguments. Each tool comes with a schema for its arguments, so the agent knows what to send, and the server refuses anything else.
 
 Nitpilot's tools are the only way an agent sees the PR and records its work: `get_job`, `get_diff`, `add_point` and the rest (`apps/cli/src/mcp/job-tools.ts`). None of them is a shell, so the agent can't run commands.
 
