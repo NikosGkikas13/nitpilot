@@ -10,11 +10,13 @@ test("Auto-fix off: maya's agent drafts its fixes, she reads the diff and sends 
   // maya turns her Auto-fix off before any agent runs.
   await signIn(context, 'maya');
   await page.goto('/c/octo/sandbox/71');
+  // System lines also show as the inbox row's last line, so look for them in the chat only.
+  const timeline = page.getByRole('region', { name: 'Timeline' });
   const autoFix = page.getByRole('switch', { name: 'Auto-fix' });
   await expect(autoFix).toHaveAttribute('aria-checked', 'true');
   await autoFix.click();
   await expect(page.getByText("Auto-fix is off. Your agent's work will wait as drafts.")).toBeVisible();
-  await expect(page.getByText('maya turned Auto-fix off')).toBeVisible();
+  await expect(timeline.getByText('maya turned Auto-fix off')).toBeVisible();
   await expect(autoFix).toHaveAttribute('aria-checked', 'false');
 
   await startCli('leo', 'happy.json');
@@ -33,9 +35,9 @@ test("Auto-fix off: maya's agent drafts its fixes, she reads the diff and sends 
     // Send: her CLI pushes the drafted commit, its replies go out, and leo's agent looks again.
     await draft.getByRole('button', { name: 'Send' }).click();
     await expect(page.getByText("Sending your agent's fixes.")).toBeVisible();
-    await expect(page.getByText('maya is sending the drafted fixes')).toBeVisible();
-    await expect(page.getByText(/^maya's agent pushed [0-9a-f]{7}$/)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Round 2: leo's agent will review")).toBeVisible();
+    await expect(timeline.getByText('maya is sending the drafted fixes')).toBeVisible();
+    await expect(timeline.getByText(/^maya's agent pushed [0-9a-f]{7}$/)).toBeVisible({ timeout: 20_000 });
+    await expect(timeline.getByText("Round 2: leo's agent will review")).toBeVisible();
     await expect(draft).toHaveCount(0);
   } finally {
     await stopCli('maya');
