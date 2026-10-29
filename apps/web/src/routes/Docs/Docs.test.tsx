@@ -1,6 +1,6 @@
 import { BRAND } from '@nitpilot/protocol';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIGN_IN_URL } from '../Landing/Landing';
 import { Docs } from './Docs';
@@ -12,6 +12,11 @@ function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
 }
 
+function BackButton() {
+  const navigate = useNavigate();
+  return <button onClick={() => void navigate(-1)}>test-back</button>;
+}
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -20,6 +25,7 @@ function renderAt(path: string) {
         <Route path="docs/:slug" element={<Docs />} />
       </Routes>
       <Where />
+      <BackButton />
     </MemoryRouter>,
   );
 }
@@ -122,6 +128,9 @@ describe('Docs', () => {
     expect(menu).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(document.querySelector('main a[href^="/docs"]')!); // goes /docs -> /docs/introduction
     expect(menu).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByText('test-back'));
+    expect(screen.getByTestId('where').textContent).toBe('/docs');
+    expect(menu).toHaveAttribute('aria-expanded', 'false'); // Back must not reopen it
   });
 
   it('closes the menu on Escape and returns focus to the Menu button', () => {

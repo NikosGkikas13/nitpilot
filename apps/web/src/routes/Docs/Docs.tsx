@@ -18,10 +18,15 @@ export function Docs() {
   const source = page && pageSource(slug);
   const rendered = useMemo(() => (source ? renderMarkdown(source) : undefined), [source]);
   const navigate = useNavigate();
-  const { hash, pathname } = useLocation();
-  // The menu is open only for the page it was opened on, so changing page closes it without an effect.
-  const [openAt, setOpenAt] = useState<string | null>(null); // the pathname it was opened on
-  const menuOpen = openAt === pathname;
+  const location = useLocation();
+  const { hash } = location;
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Any navigation (links, Back, Forward) gives a new `location` object, which closes the menu. Resetting state during render is React's documented way to do this without an effect.
+  const [lastLocation, setLastLocation] = useState(location);
+  if (location !== lastLocation) {
+    setLastLocation(location);
+    setMenuOpen(false);
+  }
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -66,7 +71,7 @@ export function Docs() {
       className={styles.page}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !menuOpen) return;
-        setOpenAt(null);
+        setMenuOpen(false);
         menuButtonRef.current?.focus();
       }}
     >
@@ -80,7 +85,7 @@ export function Docs() {
           className={styles.menuButton}
           aria-expanded={menuOpen}
           aria-controls="docs-pages"
-          onClick={() => setOpenAt(menuOpen ? null : pathname)}
+          onClick={() => setMenuOpen(!menuOpen)}
         >
           Menu
         </button>
@@ -105,7 +110,7 @@ export function Docs() {
           onClick={() => {
             // Closing the menu hides the focused link, so hand focus to the page first.
             if (menuOpen) mainRef.current?.focus({ preventScroll: true });
-            setOpenAt(null);
+            setMenuOpen(false);
           }}
         >
           {DOC_GROUPS.map((group) => {
