@@ -6,7 +6,7 @@ const DESKTOP = '(min-width: 760px)';
 const WIDE = '(min-width: 1180px)';
 
 /** True while the media query matches, following the window as it's resized. Without matchMedia (very old browsers), true. */
-function useMediaQuery(query: string): boolean {
+export function useMediaQuery(query: string): boolean {
   // The same function each render, or React would stop listening and start again every time the page re-renders.
   const subscribe = useCallback(
     (onChange: () => void) => {

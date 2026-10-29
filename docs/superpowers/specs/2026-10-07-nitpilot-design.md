@@ -467,6 +467,48 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
   - a `tools.core` allowlist. Reviewer: `read_file, read_many_files, list_directory, glob, grep_search`. Editor adds `replace, write_file`.
 - **Policy:** denies `run_shell_command`, `web_fetch` and `google_web_search` at priority 999.
 
+**GitHub Copilot CLI** (verified against v1.0.105 on 2026-10-29; id `copilot`)
+- **Reviewer:**
+  ```
+  copilot -p <prompt> --output-format json --no-auto-update --no-color --no-ask-user
+    --disable-builtin-mcps --no-custom-instructions --disallow-temp-dir
+    --available-tools view grep rg glob nitpilot --allow-tool nitpilot
+    --additional-mcp-config @<tmp>/mcp.json
+  ```
+- **Editor:** the same, plus `edit create str_replace_editor apply_patch` in `--available-tools` and `write` in `--allow-tool`.
+  - **Tool names depend on the model:** GPT models get `rg` and `apply_patch`, others get `grep`, `edit` and `create`. So the whitelist names every variant; an unknown name is only an info event.
+  - **Writes stay in the checkout:** writes outside the working directory are refused.
+- **Whitelist, not deny list:** `--available-tools` hides everything else from the model (`bash`, `web_fetch`, `task`, `sql`, `skill`, …). In `-p` mode anything not in `--allow-tool` is refused, never prompted.
+  - Verified: a model told to run `touch` and to create a file did neither.
+  - MCP tools are named `<server>-<tool>` (`nitpilot-finish`); the bare server name `nitpilot` covers all of ours in both flags.
+- **MCP config:** `{"mcpServers":{"nitpilot":{"type":"http","url":…,"headers":{"Authorization":"Bearer …"},"tools":["*"]}}}` in a 0600 file passed with `@`, so the token never appears in the arguments. Verified end to end against `startMcpServer`.
+- **Never `--trust-folder`** (and never `COPILOT_ALLOW_ALL=true`): both trust the PR's own hooks, skills and MCP servers.
+  - Without them, a checkout with planted `.mcp.json`, `.vscode/mcp.json`, `.copilot/mcp-config.json` and `.github/mcp.json` started none of them.
+  - With `--no-custom-instructions`, none of `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `AGENTS.md` or `CLAUDE.md` reached the model.
+  - A new working directory does not prompt for trust in `-p` mode.
+- **Output:** JSONL, one event per line.
+
+  | Event | Meaning |
+  |---|---|
+  | `assistant.message` | `data.content` and `data.toolRequests[].name` |
+  | `tool.execution_start` | `data.toolName` |
+  | `tool.execution_complete` | `data.success` |
+  | `result` (last line) | `{"type":"result","exitCode":0,"usage":{…}}` |
+
+  The `*_delta` and `ephemeral` events can be ignored.
+- **Endings seen:**
+  - success: exit 0 and a `result` line;
+  - SIGTERM: exit 143, no `result` line;
+  - bad config or unavailable model: exit 1, a one-line `Error: …` / `Failed to …` on stderr, nothing on stdout.
+  - Copilot has no max-turns flag; the job timeout covers runaway runs. Quota and logged-out output are still to be recorded.
+- **Login:** the stored login in the macOS keychain (`copilot login`).
+  - The env vars `COPILOT_GITHUB_TOKEN`, `GH_TOKEN` and `GITHUB_TOKEN` take precedence, but a bad one falls back to the stored login. All three stay out of the agent's environment (conformance S3).
+  - `COPILOT_HOME` pointed at an empty folder still finds the keychain login on macOS. There is no `auth status` command.
+- **Models:** `--model <id>` (e.g. `claude-sonnet-5.5`). Without it, Copilot's "auto" picks one.
+  - Which ids work depends on the plan: on the developer's plan every explicit id was refused with `Error: Model "…" from --model flag is not available.` (exit 1), while auto worked.
+  - One small run used one premium request.
+- **Business/Enterprise:** an admin must leave the Copilot CLI policy enabled.
+
 **Fake agent.** A small Node script (`apps/cli/src/agents/fake/agent.ts`, run with Node's type stripping) that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and answer P2; on re-review, resolve both". It talks to the MCP server exactly like a real agent, reads its token from a 0600 file, and is used in CI. It only runs from a source checkout.
 
 ### 12.3 Conformance suite (every adapter must pass)
@@ -677,6 +719,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 - **Visual system: "Soft signal".** Sage neutrals, one deep-teal accent, Bricolage Grotesque + Fragment Mono, generous rounding.
 - **Chat layout: single-column feed.** Everyone is left-aligned like an activity log, and point cards are full width. The bubbles layout in the prototype was not chosen.
 - **Mark: "dotted n".** The wordmark is `nıtpilot` in Fragment Mono with a teal diamond as the dot on the i; the app icon is a mono "n" with the diamond.
+- **Landing clip (added 2026-10-29, beyond the handoff).** Between the hero and the three steps, a muted looping clip of a chat while two agents work a PR out, in the theme on screen, captioned as a scripted run with made-up teammates. It is recorded from the real web app and server with the fake agent (`apps/web/demo`, `hero.spec.ts` and `clip.sh`). It shows from 760 px only (unreadable and not worth the download on a phone); with reduced motion asked for, it rests on its last frame with controls. The server answers single `Range` requests for its files, since Safari plays a video only that way.
 
 **Fixes for Plan 2** (the mockups get these wrong; build them this way instead):
 - **Auto-switch tooltip mixes two reasons.** The disabled tooltip reads "Off for PRs from outside contributors. Your team set this in .nitpilot.yml." Those are separate cases: outside-contributor PRs are blocked by the built-in trust gate (§6.1; the reviewer's results there always wait as drafts, so the switch is truly off), while a team forbids auto modes with `auto.review` / `auto.address: false` in `.nitpilot.yml` (§13). Show one tooltip per reason.

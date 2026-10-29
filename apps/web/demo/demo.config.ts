@@ -1,7 +1,10 @@
 import { defineConfig } from '@playwright/test';
 import base from '../playwright.config';
 
-// The demo recording: the e2e servers, one spec, a video of every page.
+// The demo recordings: the e2e servers, a video of every page. `demo` is the captioned walkthrough; `hero-*` are the
+// landing page's clip, one per theme. (Playwright records CSS pixels, so a deviceScaleFactor of 2 wouldn't sharpen it.)
+const hero = { browserName: 'chromium' as const, viewport: { width: 1440, height: 760 }, video: { mode: 'on' as const, size: { width: 1440, height: 760 } } };
+
 export default defineConfig({
   ...base,
   testDir: '.',
@@ -12,6 +15,7 @@ export default defineConfig({
   projects: [
     {
       name: 'demo',
+      testMatch: 'demo.spec.ts',
       use: {
         browserName: 'chromium',
         viewport: { width: 1440, height: 900 },
@@ -20,5 +24,7 @@ export default defineConfig({
         video: { mode: 'on', size: { width: 1440, height: 900 } },
       },
     },
+    { name: 'hero-light', testMatch: 'hero.spec.ts', use: { ...hero, colorScheme: 'light' } },
+    { name: 'hero-dark', testMatch: 'hero.spec.ts', use: { ...hero, colorScheme: 'dark' } },
   ],
 });

@@ -20,6 +20,14 @@ describe('Landing', () => {
     expect(screen.queryByText('Fix race in session refresh')?.closest('[aria-hidden="true"]')).not.toBeNull();
   });
 
+  it('shows the chat clip, silent and hidden from screen readers, with a caption that says the run is scripted', () => {
+    const { container } = render(<Landing />);
+    const video = container.querySelector('video')!;
+    expect(video.muted).toBe(true);
+    expect(video).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText(/A scripted run with made-up teammates/)).toBeInTheDocument();
+  });
+
   it('does not make a screen reader say the arrow in the GitHub link', () => {
     render(<Landing />);
     expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument();
