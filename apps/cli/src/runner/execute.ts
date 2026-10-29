@@ -126,7 +126,7 @@ async function runAgentFor(ctx: McpJobContext, mode: AgentMode, io: JobIo, deps:
   try {
     job = deps.mcp.registerJob(jobTools(ctx));
     const invocation = deps.adapter.buildInvocation({
-      mode, cwd: ctx.worktree.dir, prompt: jobPrompt(ctx.bundle), mcp: { url: job.url, token: job.token }, tmpDir, baseEnv: agentBaseEnv(env), maxTurns: MAX_TURNS,
+      mode, cwd: ctx.worktree.dir, prompt: jobPrompt(ctx.bundle), mcp: { url: job.url, token: job.token }, tmpDir, baseEnv: agentBaseEnv(env), model: deps.config.model, maxTurns: MAX_TURNS,
     });
     io.progress('running_agent', `Running ${deps.adapter.id}`);
     const run = await runAgent(deps.adapter, invocation, {

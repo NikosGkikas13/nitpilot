@@ -19,6 +19,7 @@ export function getAdapter(id: AgentId, opts: { apiKey?: string; apiBilling?: bo
     case 'claude-code':
       return claudeCodeAdapter(opts);
     case 'gemini-cli':
+    case 'copilot': // Its adapter lands next (spec §12.2).
       return null;
   }
 }

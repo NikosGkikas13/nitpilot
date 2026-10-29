@@ -11,4 +11,4 @@ export function personName(login: string, yourLogin: string): string {
 }
 
 /** A coding agent's name, as the Settings page's Agent section shows it. */
-export const AGENT_NAME: Record<AgentId, string> = { 'claude-code': 'Claude Code', 'gemini-cli': 'Gemini CLI', fake: 'Fake agent' };
+export const AGENT_NAME: Record<AgentId, string> = { 'claude-code': 'Claude Code', 'gemini-cli': 'Gemini CLI', copilot: 'GitHub Copilot CLI', fake: 'Fake agent' };
