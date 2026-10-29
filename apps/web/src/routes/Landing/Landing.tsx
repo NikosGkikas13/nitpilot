@@ -1,6 +1,12 @@
 import { BRAND, type InboxStatus } from '@nitpilot/protocol';
 import { StatusPill } from '../../components/StatusPill/StatusPill';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
+import { useIsDesktop, useMediaQuery } from '../../lib/viewport';
+import { readTheme, shownTheme } from '../../theme';
+import darkPoster from './clip/chat-dark.jpg';
+import darkClip from './clip/chat-dark.mp4';
+import lightPoster from './clip/chat-light.jpg';
+import lightClip from './clip/chat-light.mp4';
 import styles from './Landing.module.css';
 
 /** Where GitHub sign-in starts; afterwards the server sends you back to `next` (apps/server/src/http/routes/auth.ts). */
@@ -21,6 +27,8 @@ const STEPS = [
 
 /** The signed-out home page (handoff §4, canvas 3b). */
 export function Landing() {
+  // On a phone the clip is too small to read, so it isn't worth the download.
+  const showClip = useIsDesktop();
   return (
     <div className={styles.page}>
       <nav className={styles.nav}>
@@ -74,6 +82,8 @@ export function Landing() {
           </div>
         </div>
 
+        {showClip && <DemoClip />}
+
         <section className={styles.steps} aria-label="How it works">
           {STEPS.map((step, i) => (
             <div key={step.title} className={styles.step}>
@@ -85,5 +95,37 @@ export function Landing() {
         </section>
       </main>
     </div>
+  );
+}
+
+/**
+ * A looping clip of a chat while two agents work a PR out (recorded by apps/web/demo, see hero.spec.ts), in the
+ * theme on screen. With reduced motion asked for, it waits on its last frame with controls instead of playing.
+ */
+function DemoClip() {
+  const dark = shownTheme(readTheme(), useMediaQuery('(prefers-color-scheme: dark)')) === 'dark';
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const clip = dark ? darkClip : lightClip;
+  return (
+    <figure className={styles.demo}>
+      <video
+        key={clip}
+        className={styles.demoVideo}
+        src={clip}
+        poster={dark ? darkPoster : lightPoster}
+        width={1082}
+        height={760}
+        muted
+        loop
+        playsInline
+        autoPlay={!reduceMotion}
+        controls={reduceMotion}
+        preload={reduceMotion ? 'none' : 'auto'}
+        aria-hidden="true"
+      />
+      <figcaption className={styles.demoCaption}>
+        Leo's agent reviews Maya's PR, hers fixes it, his settles it, and the PR waits for Leo's approval. A scripted run with made-up teammates.
+      </figcaption>
+    </figure>
   );
 }

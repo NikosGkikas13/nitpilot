@@ -18,6 +18,8 @@ const TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.mp4': 'video/mp4',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
@@ -92,7 +94,22 @@ export function spaRoutes(opts: { distDir: string; publicUrl: string; formAction
       const hashed = file.startsWith(path.join(root, 'assets') + path.sep);
       c.header('Cache-Control', hashed ? 'public, max-age=31536000, immutable' : 'no-cache');
       c.header('Content-Type', TYPES[path.extname(file)] ?? 'application/octet-stream');
-      return c.body(await readFile(file));
+      c.header('Accept-Ranges', 'bytes');
+      const body = await readFile(file);
+      const range = c.req.header('Range');
+      if (!range) return c.body(body);
+      // Safari asks for a video in pieces and won't play one served whole. One range only: `bytes=start-` or `bytes=start-end`.
+      // Anything else (several ranges, a suffix range) gets the whole file, which HTTP allows.
+      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+      if (!match) return c.body(body);
+      const start = Number(match[1]);
+      const end = match[2] ? Math.min(Number(match[2]), body.length - 1) : body.length - 1;
+      if (start > end) {
+        c.header('Content-Range', `bytes */${body.length}`);
+        return c.body(null, 416);
+      }
+      c.header('Content-Range', `bytes ${start}-${end}/${body.length}`);
+      return c.body(body.subarray(start, end + 1), 206);
     }
 
     // A missing build file is not an app URL, and HTML under a .js name breaks in a confusing way: let it 404.

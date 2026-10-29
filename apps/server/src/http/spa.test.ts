@@ -15,6 +15,7 @@ beforeAll(() => {
   mkdirSync(path.join(dist, 'assets'), { recursive: true });
   writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>app</title>');
   writeFileSync(path.join(dist, 'assets', 'index-abc123.js'), 'console.log(1)');
+  writeFileSync(path.join(dist, 'assets', 'clip-abc123.mp4'), '0123456789');
   writeFileSync(path.join(dist, 'sw.js'), 'self.addEventListener("push", () => {})');
   writeFileSync(path.join(outer, 'secret.txt'), 'TOP-SECRET');
 });
@@ -52,6 +53,31 @@ describe('serving the web app', () => {
     const sw = await app.request('/sw.js');
     expect(await sw.text()).toContain('push');
     expect(sw.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('serves part of a file when asked for a range (Safari plays a video only so), and says when the range is past the end', async () => {
+    const app = testApp({ webDistDir: dist });
+    const whole = await app.request('/assets/clip-abc123.mp4');
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get('content-type')).toBe('video/mp4');
+    expect(whole.headers.get('accept-ranges')).toBe('bytes');
+
+    const middle = await app.request('/assets/clip-abc123.mp4', { headers: { Range: 'bytes=2-5' } });
+    expect(middle.status).toBe(206);
+    expect(middle.headers.get('content-range')).toBe('bytes 2-5/10');
+    expect(await middle.text()).toBe('2345');
+
+    const rest = await app.request('/assets/clip-abc123.mp4', { headers: { Range: 'bytes=7-' } });
+    expect(rest.headers.get('content-range')).toBe('bytes 7-9/10');
+    expect(await rest.text()).toBe('789');
+
+    const tooFar = await app.request('/assets/clip-abc123.mp4', { headers: { Range: 'bytes=20-' } });
+    expect(tooFar.status).toBe(416);
+    expect(tooFar.headers.get('content-range')).toBe('bytes */10');
+
+    const several = await app.request('/assets/clip-abc123.mp4', { headers: { Range: 'bytes=0-1,4-5' } });
+    expect(several.status).toBe(200);
+    expect(await several.text()).toBe('0123456789');
   });
 
   it('answers a missing build file with a 404, not the app', async () => {

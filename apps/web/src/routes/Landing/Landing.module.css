@@ -227,6 +227,39 @@
   white-space: nowrap;
 }
 
+/* The chat clip: a window onto the real app, framed like the inbox card. */
+.demo {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 8px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.demoVideo {
+  display: block;
+  width: 100%;
+  max-width: 1082px;
+  height: auto;
+  border-radius: 18px;
+  border: 1px solid var(--b1);
+  box-shadow: var(--shadow-card);
+  background: var(--surface);
+}
+
+.demoCaption {
+  max-width: 44em;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg3);
+  text-align: center;
+  text-wrap: pretty;
+}
+
 .steps {
   padding: 8px 24px 40px;
   display: grid;
