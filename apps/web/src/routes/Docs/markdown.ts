@@ -11,6 +11,17 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** The words of a rendered heading: tags dropped, entities turned back into characters. */
+function plainText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
 /**
  * Turns one Markdown page into HTML. The first `# ` line is the page title and is left out of the HTML (the layout draws
  * it); `##` and `###` get ids and are listed in `headings`; each code block gets a Copy button that Docs.tsx wires up.
@@ -20,8 +31,9 @@ export function renderMarkdown(source: string): { title: string; html: string; h
   const seen = new Map<string, number>();
   const marked = new Marked({
     renderer: {
-      heading({ tokens, text, depth }) {
+      heading({ tokens, depth }) {
         const inner = this.parser.parseInline(tokens);
+        const text = plainText(inner);
         if (depth !== 2 && depth !== 3) return `<h${depth}>${inner}</h${depth}>\n`;
         const base = slugify(text);
         const count = (seen.get(base) ?? 0) + 1;

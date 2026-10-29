@@ -19,7 +19,11 @@ export function Docs() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const before = document.title;
     document.title = `${page?.title ?? 'Page not found'} · Nitpilot docs`;
+    return () => {
+      document.title = before;
+    };
   }, [page]);
 
   /** One handler for the whole page body: its HTML is a string, so links and Copy buttons can't carry their own. */

@@ -47,13 +47,13 @@ describe('Docs', () => {
     expect(links.length).toBeGreaterThan(1); // the sidebar's and the one in the message
   });
 
-  it('follows a link in the page body inside the app', async () => {
-    const { container } = renderAt('/docs/introduction');
-    const link = container.querySelector('a[href^="/docs"]')!;
-    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
-    link.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
-    expect(screen.getByTestId('where').textContent).toMatch(/^\/docs/);
+  it('follows a link in the page body inside the app', () => {
+    const { container } = renderAt('/docs');
+    expect(screen.getByTestId('where').textContent).toBe('/docs');
+    const link = container.querySelector('main a[href^="/docs"]')!;
+    const notPrevented = fireEvent.click(link);
+    expect(notPrevented).toBe(false); // the page didn't reload
+    expect(screen.getByTestId('where').textContent).toBe('/docs/introduction');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -65,6 +65,14 @@ describe('Docs', () => {
     fireEvent.click(button);
     expect(writeText).toHaveBeenCalledWith(container.querySelector('pre')!.textContent);
     expect(button).toHaveTextContent('Copied');
+  });
+
+  it('puts the tab title back when you leave the docs', () => {
+    document.title = 'Nitpilot';
+    const { unmount } = renderAt('/docs');
+    expect(document.title).toBe('Introduction · Nitpilot docs');
+    unmount();
+    expect(document.title).toBe('Nitpilot');
   });
 
   it('has the top bar links and the theme toggle', () => {

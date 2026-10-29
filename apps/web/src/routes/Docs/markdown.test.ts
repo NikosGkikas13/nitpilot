@@ -28,4 +28,9 @@ describe('renderMarkdown', () => {
     expect(box.querySelector('pre code')!.textContent).toBe('echo "<b>" > out\n');
     expect(html).toContain('&lt;b&gt;');
   });
+
+  it('keeps heading text and ids free of Markdown marks', () => {
+    const { headings } = renderMarkdown('# T\n\n## Use **bold** and `code` & more');
+    expect(headings).toEqual([{ id: 'use-bold-and-code-more', text: 'Use bold and code & more', depth: 2 }]);
+  });
 });
