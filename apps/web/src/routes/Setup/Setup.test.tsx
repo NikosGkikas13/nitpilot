@@ -61,7 +61,7 @@ describe('Setup (handoff §5): the checklist', () => {
       expect(within(row!).queryByRole('button')).not.toBeInTheDocument();
     }
     expect(start).toHaveTextContent('Claude Code · detected automatically');
-    expect(start).toHaveTextContent('Gemini CLI · coming later');
+    expect(start).not.toHaveTextContent('Gemini');
 
     expect(screen.getByRole('link', { name: 'Skip for now' })).toHaveAttribute('href', '/');
     expect(screen.queryByRole('link', { name: 'Open your inbox' })).not.toBeInTheDocument();
