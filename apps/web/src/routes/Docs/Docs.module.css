@@ -23,6 +23,7 @@
 }
 
 .tag {
+  white-space: nowrap;
   padding: 2px 10px;
   border: 1px solid var(--acc-line);
   border-radius: var(--radius-pill);
@@ -38,6 +39,7 @@
 }
 
 .topLink {
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
   color: var(--fg2);
@@ -157,7 +159,7 @@
 
 .body :global(code) {
   padding: 1px 5px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.9em;
@@ -259,6 +261,7 @@
 
 @media (max-width: 800px) {
   .top {
+    gap: 12px;
     padding: 12px 16px;
   }
 
@@ -274,5 +277,11 @@
     flex: none;
     width: 100%;
     padding: 12px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .tag {
+    display: none;
   }
 }
