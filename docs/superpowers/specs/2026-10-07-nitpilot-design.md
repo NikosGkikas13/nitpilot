@@ -498,9 +498,11 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
   The `*_delta` and `ephemeral` events can be ignored.
 - **Endings seen:**
   - success: exit 0 and a `result` line;
-  - SIGTERM: exit 143, no `result` line;
+  - SIGTERM to the process group (how `runAgent` stops it): killed by the signal, but the last line is still a `result` with `exitCode: 0`, so `outcome` trusts only the real exit code. SIGTERM to `copilot` alone leaves its child running to the end, which is why the whole group is killed;
   - bad config or unavailable model: exit 1, a one-line `Error: …` / `Failed to …` on stderr, nothing on stdout.
-  - Copilot has no max-turns flag; the job timeout covers runaway runs. Quota and logged-out output are still to be recorded.
+  - Copilot has no max-turns flag; the job timeout covers runaway runs.
+  - Quota and logged-out output were not recorded. `outcome` matches `Error: …` lines on stderr with wording from the docs (`auth`: "No authentication information found", "Bad credentials", 401; `quota`: limit, credits, rate limit, 429). Anything else is a retryable `crash`. Replace it with the real text the first time a run hits one.
+- **detect():** only `copilot --version`, since there is no login-status command; a missing login shows up as the first job's `auth` failure.
 - **Login:** the stored login in the macOS keychain (`copilot login`).
   - The env vars `COPILOT_GITHUB_TOKEN`, `GH_TOKEN` and `GITHUB_TOKEN` take precedence, but a bad one falls back to the stored login. All three stay out of the agent's environment (conformance S3).
   - `COPILOT_HOME` pointed at an empty folder still finds the keychain login on macOS. There is no `auth status` command.

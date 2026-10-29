@@ -22,7 +22,7 @@ export type StaticSuite = {
 };
 
 /** Variables that must never reach an agent (spec §12.3 S3). */
-const SECRETS = { ANTHROPIC_API_KEY: 'sk-ant-x', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'gho_x', NPM_TOKEN: 'npm_x', AWS_SECRET_ACCESS_KEY: 'aws-x', AWS_PROFILE: 'prod' };
+const SECRETS = { ANTHROPIC_API_KEY: 'sk-ant-x', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'gho_x', COPILOT_GITHUB_TOKEN: 'github_pat_x', NPM_TOKEN: 'npm_x', AWS_SECRET_ACCESS_KEY: 'aws-x', AWS_PROFILE: 'prod' };
 /** Lines that aren't the agent's events: parseLine must shrug at every one (S5). */
 const GARBAGE = ['', 'not json', 'null', '42', '[]', '"text"', '{}', '{"type":"assistant","message":{"content":[null,1,"x"]}}', '{"type":"result"}', '{"type":"result","errors":"x"}'];
 

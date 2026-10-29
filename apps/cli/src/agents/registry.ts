@@ -2,6 +2,7 @@ import { BRAND, type AgentId } from '@nitpilot/protocol';
 import type { PersonalConfig } from '../config/config';
 import type { RunProgram } from '../run-program';
 import { claudeCodeAdapter } from './claude-code/adapter';
+import { copilotAdapter } from './copilot/adapter';
 import { fakeAdapter } from './fake/adapter';
 import type { AgentAdapter } from './types';
 
@@ -18,8 +19,9 @@ export function getAdapter(id: AgentId, opts: { apiKey?: string; apiBilling?: bo
       return fakeAdapter({ scenario: opts.scenario });
     case 'claude-code':
       return claudeCodeAdapter(opts);
+    case 'copilot':
+      return copilotAdapter(opts);
     case 'gemini-cli':
-    case 'copilot': // Its adapter lands next (spec §12.2).
       return null;
   }
 }
