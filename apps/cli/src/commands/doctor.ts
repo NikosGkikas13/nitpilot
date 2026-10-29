@@ -140,7 +140,7 @@ export function printChecks(checks: Check[], out: Out): number {
 }
 
 /** Each agent's binary. The fake agent (Task 16) ships inside the CLI. */
-const AGENT_BINARIES: Record<AgentId, string | null> = { 'claude-code': 'claude', 'gemini-cli': 'gemini', fake: null };
+const AGENT_BINARIES: Record<AgentId, string | null> = { 'claude-code': 'claude', 'gemini-cli': 'gemini', copilot: 'copilot', fake: null };
 
 /**
  * Is the agent installed? For an agent without an adapter yet (Gemini CLI, Task 20) this only asks the

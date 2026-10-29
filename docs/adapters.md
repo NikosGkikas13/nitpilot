@@ -2,7 +2,7 @@
 
 Nitpilot talks to two kinds of outside thing through two small interfaces, so neither the engine nor the rest of the server knows which one it is using:
 
-- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, Gemini CLI, or the scripted fake agent;
+- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, GitHub Copilot CLI, Gemini CLI (on hold), or the scripted fake agent;
 - a **platform adapter** (in the server) knows one code host: GitHub today. [Spec §12.1](superpowers/specs/2026-10-07-nitpilot-design.md) checks the interface against GitLab's concepts.
 
 Both are held to the same rule: **an adapter may only declare what it has proven.** An agent adapter lists only the modes that pass the conformance suite; a platform adapter's parsing is tested against recorded real payloads.
@@ -29,7 +29,7 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 
 1. **Read the agent's own documentation and check its flags against the installed version.** Write the version in the adapter (`CLAUDE_CODE_CHECKED_VERSION`). Flags change fast; this is what the suite will catch later.
 2. **Pick the tools per mode.** A reviewer gets read tools only. An editor adds edit tools. No shell, no web, for either. Everything else the agent needs goes through Nitpilot's MCP tools.
-3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`).
+3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`; for Copilot CLI: `--no-custom-instructions`, `--disable-builtin-mcps`, a tool whitelist in `--available-tools`, and never `--trust-folder`).
 4. **Put the MCP token in a file, never on the command line.** Return it in `files`; `runAgent` writes it with mode 0600 inside the run's private folder and the executor deletes the folder afterwards.
 5. **Build the environment from `input.baseEnv`.** It is an allowlist. Add only what your agent needs. `ANTHROPIC_API_KEY` only when the user opted into API billing; `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `AWS_*` never.
 6. **Record real runs** of every way the agent can end (success, out of turns, logged out, rate limit, crash, killed by a signal) into `fixtures/*.jsonl`, with paths and ids replaced. Write what `outcome` must make of each. Read the agent's *error output*, never its own words: a model can say "I hit my limit" about anything.

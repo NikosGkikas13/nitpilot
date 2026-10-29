@@ -136,6 +136,6 @@ describe('Agent (handoff §7): worked out from your devices', () => {
 
   it('says what to do when no computer reported an agent', async () => {
     const section = await agents([device({ agent: null })]);
-    expect(await section.findByText(/Install Claude Code, then run/)).toHaveTextContent('Install Claude Code, then run nitpilot start.');
+    expect(await section.findByText(/Install Claude Code or GitHub Copilot CLI, then run/)).toHaveTextContent('Install Claude Code or GitHub Copilot CLI, then run nitpilot start.');
   });
 });

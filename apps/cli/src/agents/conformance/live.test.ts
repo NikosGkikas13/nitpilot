@@ -13,6 +13,7 @@ import { emptyHooksDir } from '../../runner/safe-git';
 import { scrubPathsFor } from '../../runner/scrub';
 import { prepareWorktree } from '../../runner/worktree';
 import { claudeCodeAdapter } from '../claude-code/adapter';
+import { copilotAdapter } from '../copilot/adapter';
 import { jobPrompt } from '../prompt';
 import { agentBaseEnv, KILL_GRACE_MS, runAgent, type AgentRun } from '../runner';
 import type { AgentAdapter, AgentMode } from '../types';
@@ -22,8 +23,9 @@ import { canaries, INSTRUCTION_FILES, injectedTitle, trapFiles, trapOf, type Can
  * The live conformance suite (spec §12.3 L1–L6): the real agent CLIs, logged in, on a test PR over real
  * MCP. It costs a few agent runs, so it only runs with NITPILOT_LIVE=1 (`npm run test:live -w apps/cli`).
  * An adapter that fails a mode must not declare that mode (spec §22). Gemini CLI joins when Task 20 lands.
+ * NITPILOT_LIVE_AGENT=<id> runs one agent only, so checking one doesn't spend the other's plan.
  */
-const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter()];
+const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter(), copilotAdapter()].filter((a) => !process.env.NITPILOT_LIVE_AGENT || a.id === process.env.NITPILOT_LIVE_AGENT);
 const LIVE = process.env.NITPILOT_LIVE === '1';
 /** Plenty for a small PR; a run that needs more is a failure worth seeing. */
 const TIMEOUT_MS = 5 * 60_000;
@@ -84,13 +86,14 @@ const injected = (job: LiveJob) => {
 };
 
 /**
- * Print which tools the agent called and which Claude Code refused (never asserted), so a green L3/L4 run
- * shows whether the attempt was blocked or the model just declined. These are Claude Code's stream-json
- * fields: another adapter's lines give empty lists.
+ * Print which tools the agent called and which were refused (never asserted), so a green L3/L4 run shows
+ * whether the attempt was blocked or the model just declined. Reads Claude Code's stream-json and Copilot
+ * CLI's json events.
  */
 function report(label: string, job: LiveJob): void {
   const called: string[] = [];
   const refused: string[] = [];
+  const toolOfCall = new Map<unknown, string>(); // Copilot names the tool when it starts, and says when it ends whether it was allowed
   for (const line of job.lines) {
     let event: unknown;
     try {
@@ -99,7 +102,12 @@ function report(label: string, job: LiveJob): void {
       continue;
     }
     if (typeof event !== 'object' || event === null) continue;
-    const { type, message, permission_denials } = event as { type?: unknown; message?: { content?: unknown }; permission_denials?: unknown };
+    const { type, message, permission_denials, data } = event as { type?: unknown; message?: { content?: unknown }; permission_denials?: unknown; data?: { toolName?: unknown; success?: unknown; toolCallId?: unknown } };
+    if (type === 'tool.execution_start' && typeof data?.toolName === 'string') {
+      called.push(data.toolName);
+      toolOfCall.set(data.toolCallId, data.toolName);
+    }
+    if (type === 'tool.execution_complete' && data?.success === false) refused.push(toolOfCall.get(data.toolCallId) ?? '?');
     if (type === 'assistant' && Array.isArray(message?.content)) {
       for (const block of message.content) if (block?.type === 'tool_use' && typeof block.name === 'string') called.push(block.name);
     }

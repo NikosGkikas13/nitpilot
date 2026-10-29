@@ -141,7 +141,7 @@ describe('web API bodies', () => {
       { id: 'tok_2', name: 'maya-linux-desk', lastSeenAt: null, online: false, agent: null },
     ];
     expect(DevicesResponse.parse(JSON.parse(JSON.stringify({ devices })))).toEqual({ devices });
-    expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'copilot', version: null } }] }).success).toBe(false);
+    expect(DevicesResponse.safeParse({ devices: [{ ...devices[0], agent: { id: 'codex', version: null } }] }).success).toBe(false);
   });
 
   it('round-trips the setup checklist: four steps from the server, done, the newest device, the app to install', () => {

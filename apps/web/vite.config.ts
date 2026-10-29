@@ -16,7 +16,8 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': SERVER,
-      '/auth': SERVER,
+      // Keep the browser's Host: sign-in starts over on PUBLIC_URL when a request arrives on another address (auth.ts).
+      '/auth': { target: SERVER, changeOrigin: false },
       '/github': SERVER,
       '/ws': { target: SERVER, ws: true },
     },

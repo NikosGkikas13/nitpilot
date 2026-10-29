@@ -32,3 +32,5 @@ Claude Code uses your own login (`claude auth login`), which `detect()` checks w
 ## The React analogy
 
 An adapter is like a small API client hook: `buildInvocation` is the request it sends, `parseLine` is the response parser, and the component (the executor) only ever sees `{ ok }` or a typed error, never the raw response.
+
+GitHub Copilot CLI is the second agent, with a different way of limiting tools: see [copilot-cli.md](copilot-cli.md).

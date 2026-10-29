@@ -44,7 +44,7 @@ export function Agent() {
     body =
       agents.length === 0 ? (
         <p className={styles.line}>
-          Install Claude Code, then run <span className={styles.mono}>{BRAND.cli} start</span>.
+          Install Claude Code or GitHub Copilot CLI, then run <span className={styles.mono}>{BRAND.cli} start</span>.
         </p>
       ) : (
         <ul className={styles.list}>
