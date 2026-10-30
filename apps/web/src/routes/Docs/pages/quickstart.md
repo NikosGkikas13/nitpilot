@@ -51,7 +51,7 @@ Copilot Business and Enterprise users need their admin to leave the Copilot CLI 
 When someone requests your review, `nitpilot start` prints a line like this:
 
 ```
-→ review of owner/repo#12
+→ review of owner/repo#12 (attempt 1)
 ```
 
 Your agent reviews the PR in an isolated copy of it. The review then appears on GitHub with inline comments, under your name.

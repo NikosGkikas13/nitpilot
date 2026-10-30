@@ -45,7 +45,7 @@ Common failures:
 nitpilot start
 ```
 
-Stays connected to the server and runs your jobs. Press Ctrl-C to stop; the first one stops cleanly, a second quits at once. Jobs only arrive while it runs. When someone requests your review, it prints a line like `→ review of owner/repo#12`.
+Stays connected to the server and runs your jobs. Press Ctrl-C to stop; the first one stops cleanly, a second quits at once. Jobs only arrive while it runs. When someone requests your review, it prints a line like `→ review of owner/repo#12 (attempt 1)`. The number goes up if the job is handed to your computer again.
 
 On start it also cleans up what a crash left behind, and removes drafts nobody sent or discarded in 14 days ("Removed N drafts older than 14 days.").
 

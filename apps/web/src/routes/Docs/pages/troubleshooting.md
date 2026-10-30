@@ -41,7 +41,7 @@ The banner says why, and offers **Retry**. You can also run `nitpilot retry <pr-
 
 ## GitHub sign-in expired
 
-The web app shows "GitHub sign-in expired", and `nitpilot status` shows `! GitHub access expired.` Nitpilot can't post or push as you until you sign in again. Click **Reconnect GitHub**, or open nitpilot.dev and sign in. Agents keep working in the meantime.
+The web app shows "GitHub sign-in expired", and `nitpilot status` shows `! GitHub access expired.` Nitpilot can't post or push as you until you sign in again. Click **Reconnect** in the strip on your inbox, or **Reconnect GitHub** in a chat that asks you to sign in again. You can also open nitpilot.dev and sign in.
 
 ## `nitpilot` says it isn't logged in, or the server didn't accept the token
 
