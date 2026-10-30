@@ -56,6 +56,6 @@ When someone requests your review, `nitpilot start` prints a line like this:
 
 Your agent reviews the PR in an isolated copy of it. The review then appears on GitHub with inline comments, under your name.
 
-`nitpilot status` shows your open PRs, and `nitpilot doctor` says what is wrong if nothing happens.
+`nitpilot status` shows your open PRs, and `nitpilot doctor` says what is wrong if nothing happens. See [Troubleshooting](/docs/troubleshooting) if you are stuck.
 
 Next, read [How it works](/docs/how-it-works).
