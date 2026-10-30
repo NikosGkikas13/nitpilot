@@ -31,6 +31,7 @@ export function Docs() {
     setMenuOpen(false);
   }
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -109,7 +110,7 @@ export function Docs() {
           Docs
         </Link>
         <span className={styles.spacer} />
-        <button type="button" className={styles.searchButton} aria-label="Search docs" onClick={() => setSearchOpen(true)}>
+        <button type="button" ref={searchButtonRef} className={styles.searchButton} aria-label="Search docs" onClick={() => setSearchOpen(true)}>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <circle cx="7" cy="7" r="4.5" />
             <path d="M10.5 10.5 14 14" />
@@ -193,7 +194,7 @@ export function Docs() {
         </main>
         {rendered && <OnThisPage headings={rendered.headings} />}
       </div>
-      <Search open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <Search open={searchOpen} onClose={() => setSearchOpen(false)} fallbackFocus={searchButtonRef} />
     </div>
   );
 }

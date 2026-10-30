@@ -166,4 +166,14 @@ describe('Docs', () => {
     fireEvent.keyDown(document.body, { key: 'K', ctrlKey: true });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('returns focus to the search button when the opener never had focus (Safari)', () => {
+    renderAt('/docs');
+    const opener = screen.getByRole('button', { name: 'Search docs' });
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(opener); // a click that leaves focus on <body>
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener).toHaveFocus();
+  });
 });

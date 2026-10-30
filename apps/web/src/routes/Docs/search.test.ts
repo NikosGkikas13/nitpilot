@@ -24,12 +24,10 @@ describe('searchDocs', () => {
     expect(searchDocs('npm pizza')).toEqual([]);
   });
 
-  it('gives short plain-text snippets', () => {
+  it('keeps snippets to 120 characters', () => {
     for (const q of ['introduction', 'try it', 'npm', 'review']) {
-      for (const hit of searchDocs(q)) {
-        expect(hit.snippet.length).toBeLessThanOrEqual(120);
-        expect(hit.snippet).not.toContain('<');
-      }
+      for (const hit of searchDocs(q)) expect(hit.snippet.length).toBeLessThanOrEqual(120);
     }
   });
+  // That snippets are plain text (no tags, no Markdown) is tested in searchPlainText.test.tsx with a stub page.
 });

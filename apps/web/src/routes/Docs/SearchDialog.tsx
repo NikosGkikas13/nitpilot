@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Link, useNavigate } from 'react-router';
 import styles from './SearchDialog.module.css';
 import { searchDocs, type SearchHit } from './search';
@@ -6,7 +6,16 @@ import { searchDocs, type SearchHit } from './search';
 const hitPath = (hit: SearchHit) => `/docs/${hit.slug}${hit.heading ? `#${hit.heading.id}` : ''}`;
 
 /** The ⌘K search: a dialog over the docs with an input and a list of matching pages and headings. */
-export function Search({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Search({
+  open,
+  onClose,
+  fallbackFocus,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Gets focus on close when nothing real had it on open (Safari doesn't focus a button when it is clicked). */
+  fallbackFocus?: RefObject<HTMLElement | null>;
+}) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -17,13 +26,15 @@ export function Search({ open, onClose }: { open: boolean; onClose: () => void }
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement;
+    const fallback = fallbackFocus?.current;
     inputRef.current?.focus();
     return () => {
       setQuery('');
       setActive(0);
-      if (opener instanceof HTMLElement) opener.focus();
+      const hasOpener = opener instanceof HTMLElement && opener !== document.body && document.contains(opener);
+      (hasOpener ? opener : fallback)?.focus();
     };
-  }, [open]);
+  }, [open, fallbackFocus]);
 
   if (!open) return null;
 
