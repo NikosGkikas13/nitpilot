@@ -180,7 +180,7 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
 - Consumes: `poll`, `singleFlight`, `POLL_INTERVAL_MS`, `Poll` (Task 1); `statusBar`, `tree`, `nextLastGood`, `retryMessage`, `ChatRow`, `LastGood` (Task 2); `loadConfig`, `ServerClient` (CLI) for retry.
 - Produces: `export function activate(context: vscode.ExtensionContext): void` and `export function deactivate(): void`.
 
-- [ ] **Step 1: Fill `contributes` in `package.json`**
+- [x] **Step 1: Fill `contributes` in `package.json`**
 
   - `viewsContainers.activitybar`: `{ id: 'nitpilot', title: 'Nitpilot', icon: 'media/nitpilot.svg' }`.
   - `views.nitpilot`: `{ id: 'nitpilot.prs', name: 'Pull requests' }`.
@@ -193,7 +193,7 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
     - `unreachable`: "Can't reach the Nitpilot server. Trying again every 30 seconds.\n[Retry now](command:nitpilot.refresh)"
     - `error`: "Something's wrong with Nitpilot's setup. The message above says what.\n[Retry now](command:nitpilot.refresh)"
 
-- [ ] **Step 2: Write `extension.ts`**
+- [x] **Step 2: Write `extension.ts`**
 
   - A `StatusBarItem` (`Left`, priority `-100`); after each poll set text/tooltip/command from `statusBar()`, and `backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')` when `warning`.
   - A `TreeDataProvider` over `tree(poll, lastGood)`: top level is the reauth row (if `reauthRow`; clicking runs `nitpilot.openServer`), then a `TreeItem` per group (`Expanded`), then `ChatRow`s (`iconPath: new vscode.ThemeIcon(row.icon)`, `contextValue`, `tooltip`, `description`, and `command: nitpilot.openChat` with the row). `createTreeView('nitpilot.prs', …)`; set `treeView.message = model.message`.
@@ -201,11 +201,11 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   - Timer: `setInterval(() => { if (vscode.window.state.focused) void refresh(); }, POLL_INTERVAL_MS)`; `onDidChangeWindowState(s => s.focused && refresh())`; `refresh()` on activate. Dispose all through `context.subscriptions`.
   - Commands: `openChat` / `openGithub` → `vscode.env.openExternal(vscode.Uri.parse(url))`; `openServer` → the server from the last poll (or `loadConfig().server`); `showPrs` → `workbench.view.extension.nitpilot`; `login` → reuse or create a terminal named `Nitpilot`, `show()`, `sendText('nitpilot login')`; `retry` → status bar `$(sync~spin) Retrying…`, `new ServerClient(cfg.server, cfg.token).retry(row.chat.id)`, then `setStatusBarMessage(retryMessage(...), 5000)` and `refresh()`; on error `showErrorMessage(err.message)` and `refresh()`.
 
-- [ ] **Step 3: Build, typecheck, lint**
+- [x] **Step 3: Build, typecheck, lint**
 
   Run: `npm run build -w apps/vscode && npm run typecheck -w apps/vscode && npx eslint apps/vscode`. Expected: `dist/extension.cjs` exists, no errors.
 
-- [ ] **Step 4: Hand-test in an Extension Development Host**
+- [x] **Step 4: Hand-test in an Extension Development Host**
 
   Run: `code --extensionDevelopmentPath="$PWD/apps/vscode"` (the developer's real login on nitpilot.dev). Check, and write each result in the task report:
   1. Status bar shows the right count within a few seconds of the window opening; clicking it opens the sidebar.
@@ -217,11 +217,22 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   7. Window unfocused for over a minute → the Output channel shows no polling noise; focus → one refresh.
   8. Corporate proxy (spec risk): if no proxy is available, write "not checked".
 
-- [ ] **Step 5: Write `docs/why/vscode-extensions.md`**
+**Hand test (2026-10-30)**, VS Code 1.143.1, in a test window against a throwaway stub API (the local logins were revoked and the nitpilot.dev login has no open PRs), checked through the Nitpilot Output log and by the user:
+1. Status bar showed `4 need you` (the stub had four PRs needing you), and clicking it opened the sidebar. Pass.
+2. The sidebar showed Needs you (4) and Open (2). Pass.
+3. Clicking a row opened that chat's link. Pass. Open PR on GitHub wasn't clicked.
+4. Retry agent wasn't clicked by hand; its wording is covered by the unit tests.
+5. Logged out: the window was unfocused while I removed the token, so no poll ran. That matches the design. Not seen in the UI.
+6. Unreachable: stopping the stub gave `unreachable: Can't reach http://localhost:8799: fetch failed` on the next poll. Pass.
+7. Each time the window got focus back from the browser, it polled at once. Pass.
+8. Proxy: not checked.
+Extra: zod's check for a `navigator` object makes VS Code log a harmless deprecation warning at startup. The bundle is minified (~470 KB, almost all zod).
+
+- [x] **Step 5: Write `docs/why/vscode-extensions.md`**
 
   Plain-language, React terms, as listed in the spec's Docs section: `contributes` is a static manifest like a route table; `activate()` is `main.tsx`; a TreeDataProvider's `getChildren` is its render and `onDidChangeTreeData` is `setState`; context keys and `when` clauses are like conditional rendering from global state; and why polling (link to `docs/why/websockets.md`). Point to `apps/vscode/src/extension.ts`.
 
-- [ ] **Step 6: Commit and push**
+- [x] **Step 6: Commit and push**
 
   ```bash
   git add apps/vscode docs/why/vscode-extensions.md

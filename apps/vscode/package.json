@@ -23,7 +23,130 @@
   "bugs": {
     "url": "https://github.com/NikosGkikas13/nitpilot/issues"
   },
-  "contributes": {},
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nitpilot",
+          "title": "Nitpilot",
+          "icon": "media/nitpilot.svg"
+        }
+      ]
+    },
+    "views": {
+      "nitpilot": [
+        {
+          "id": "nitpilot.prs",
+          "name": "Pull requests"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nitpilot.refresh",
+        "title": "Refresh",
+        "category": "Nitpilot",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nitpilot.login",
+        "title": "Log in",
+        "category": "Nitpilot"
+      },
+      {
+        "command": "nitpilot.showPrs",
+        "title": "Show PRs",
+        "category": "Nitpilot"
+      },
+      {
+        "command": "nitpilot.openServer",
+        "title": "Open Nitpilot",
+        "category": "Nitpilot"
+      },
+      {
+        "command": "nitpilot.openChat",
+        "title": "Open chat on Nitpilot",
+        "category": "Nitpilot"
+      },
+      {
+        "command": "nitpilot.openGithub",
+        "title": "Open PR on GitHub",
+        "category": "Nitpilot"
+      },
+      {
+        "command": "nitpilot.retry",
+        "title": "Retry agent",
+        "category": "Nitpilot"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "nitpilot.refresh",
+          "when": "view == nitpilot.prs",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nitpilot.openChat",
+          "when": "view == nitpilot.prs && viewItem =~ /^chat/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "nitpilot.openGithub",
+          "when": "view == nitpilot.prs && viewItem =~ /^chat/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "nitpilot.retry",
+          "when": "view == nitpilot.prs && viewItem == chat.failed",
+          "group": "2_act@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "nitpilot.openChat",
+          "when": "false"
+        },
+        {
+          "command": "nitpilot.openGithub",
+          "when": "false"
+        },
+        {
+          "command": "nitpilot.retry",
+          "when": "false"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "nitpilot.prs",
+        "contents": "Sign in to Nitpilot to see your PRs here.\n[Log in](command:nitpilot.login)\nNeeds the nitpilot CLI: `npm install -g nitpilot`.",
+        "when": "nitpilot.state == logged_out"
+      },
+      {
+        "view": "nitpilot.prs",
+        "contents": "No open PRs with Nitpilot yet. When a PR opens on a repo with Nitpilot, it shows up here.\n[Quickstart](https://nitpilot.dev/docs/quickstart)",
+        "when": "nitpilot.state == empty"
+      },
+      {
+        "view": "nitpilot.prs",
+        "contents": "Your GitHub sign-in expired. Sign in again on Nitpilot to see your PRs.\n[Sign in again](command:nitpilot.openServer)",
+        "when": "nitpilot.state == needs_reauth"
+      },
+      {
+        "view": "nitpilot.prs",
+        "contents": "Can't reach the Nitpilot server. Trying again every 30 seconds.\n[Retry now](command:nitpilot.refresh)",
+        "when": "nitpilot.state == unreachable"
+      },
+      {
+        "view": "nitpilot.prs",
+        "contents": "Something's wrong with Nitpilot's setup. The message above says what.\n[Retry now](command:nitpilot.refresh)",
+        "when": "nitpilot.state == error"
+      }
+    ]
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

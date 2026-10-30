@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="150 70 290 300">
+  <!-- The activity-bar icon: the app icon's mono "n" and diamond (apps/web/public/icons/icon.svg) in one color, which VS Code tints. -->
+  <path fill="currentColor" d="M212.1 356.3L183.0 356.3L183.0 172.4L210.0 172.4L210.0 203.0Q220.9 186.1 235.1 176.6Q249.3 167.2 271.1 167.2Q287.2 167.2 300.4 172.6Q313.5 178.0 321.4 189.1Q329.3 200.1 329.3 217.3L329.3 356.3L300.2 356.3L300.2 228.9Q300.2 210.3 289.0 201.6Q277.8 192.8 262.3 192.8Q245.8 192.8 234.6 201.2Q223.4 209.6 217.8 223.3Q212.1 237.0 212.1 252.8L212.1 356.3Z" />
+  <path fill="currentColor" d="M376.9 86.8L420.5 130.4L376.9 174L333.3 130.4Z" />
+</svg>
