@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## VS Code extension 0.1.0
+
+2026-10-30
+
+- **See your PRs from VS Code.** A new extension, on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=nitpilot.nitpilot-vscode) and [Open VSX](https://open-vsx.org/extension/nitpilot/nitpilot-vscode), shows how many PRs need you in the status bar and lists them in a sidebar, each one click from its chat. Right-click a failed one to run its agent again. It uses your `nitpilot login`. See [Use Nitpilot in VS Code](/docs/vscode).
+
 ## v0.3.1
 
 2026-10-30
