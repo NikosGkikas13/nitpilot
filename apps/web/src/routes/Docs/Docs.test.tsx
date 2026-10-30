@@ -187,4 +187,13 @@ describe('Docs', () => {
     expect(screen.getByTestId('where').textContent).toBe('/docs');
     expect(document.querySelector('main')).toHaveFocus();
   });
+
+  it('moves focus to the page after a search result is clicked', () => {
+    renderAt('/docs/introduction');
+    fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'try it' } });
+    fireEvent.click(screen.getByRole('option').querySelector('a')!);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.querySelector('main')).toHaveFocus();
+  });
 });

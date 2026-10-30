@@ -52,7 +52,12 @@ export function searchDocs(query: string, limit = 8): SearchHit[] {
     if (!section.heading && matches(section.pageTitle)) ranked.push({ rank: 0, section });
     else if (section.heading && matches(section.heading.text)) ranked.push({ rank: 1, section });
     // The words may be spread over the page title, heading and text.
-    else if (matches(`${section.pageTitle} ${section.heading?.text ?? ''} ${section.text}`)) ranked.push({ rank: 2, section });
+    // At least one word must be in the section itself, or a title match would pull in every section of the page.
+    else if (
+      words.some((w) => `${section.heading?.text ?? ''} ${section.text}`.toLowerCase().includes(w)) &&
+      matches(`${section.pageTitle} ${section.heading?.text ?? ''} ${section.text}`)
+    )
+      ranked.push({ rank: 2, section });
   }
   // Array.sort is stable, so equal ranks stay in sidebar order.
   ranked.sort((a, b) => a.rank - b.rank);
