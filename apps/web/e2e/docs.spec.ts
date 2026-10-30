@@ -18,6 +18,19 @@ test('the docs open signed out, page through, and fit a phone without calling th
   await expect(page).toHaveURL(/\/docs\/quickstart$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Quickstart' })).toBeVisible();
 
+  // A new page opens at the top, not at the old scroll position.
+  await page.goto('/docs/architecture');
+  await expect(page.getByRole('heading', { level: 1, name: 'Architecture' })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+  await page.getByRole('link', { name: /Next/ }).click();
+  await expect(page).toHaveURL(/\/docs\/writing-an-adapter$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(50);
+  // Back returns to where the reader was.
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1, name: 'Architecture' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+
   await page.setViewportSize({ width: 375, height: 812 });
   for (const path of ['/docs', '/docs/quickstart', '/docs/how-it-works']) {
     await page.goto(path);

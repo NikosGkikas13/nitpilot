@@ -33,6 +33,20 @@ describe('docs pages', () => {
     }
   });
 
+  it('same-page, /docs#id and raw-HTML links point at real headings', () => {
+    const headingIds = (slug: string) => renderMarkdown(pageSource(slug)!).headings.map((heading) => heading.id);
+    for (const [path, source] of Object.entries(files)) {
+      const own = headingIds(path.replace('./pages/', '').replace(/\.md$/, ''));
+      for (const [, id] of source.matchAll(/\]\(#([^)\s]+)\)/g)) expect(own, `${path} -> #${id}`).toContain(id);
+      for (const [, id] of source.matchAll(/\]\(\/docs#([^)\s]+)\)/g)) expect(headingIds('introduction'), `${path} -> /docs#${id}`).toContain(id);
+      for (const [, slug, id] of source.matchAll(/href="\/docs(?:\/([a-z0-9-]+))?(?:#([^"]+))?"/g)) {
+        expect(pageSource(slug ?? 'introduction'), `${path} href /docs/${slug}`).toBeDefined();
+        if (id) expect(headingIds(slug ?? 'introduction'), `${path} href ${slug}#${id}`).toContain(id);
+      }
+      for (const [, id] of source.matchAll(/href="#([^"]+)"/g)) expect(own, `${path} href #${id}`).toContain(id);
+    }
+  });
+
   it('has no previous page before the first one', () => {
     expect(neighbours('introduction').prev).toBeUndefined();
   });

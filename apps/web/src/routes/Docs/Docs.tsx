@@ -1,6 +1,6 @@
 import { BRAND } from '@nitpilot/protocol';
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { Link, useLocation, useNavigate, useNavigationType, useParams } from 'react-router';
 import { ThemeToggle } from '../../components/ThemeToggle/ThemeToggle';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
 import { SIGN_IN_URL } from '../Landing/Landing';
@@ -12,14 +12,16 @@ import { DOC_GROUPS, DOC_PAGES, findPage, neighbours, pagePath, pageSource } fro
 
 const SEARCH_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
 
-/** The public docs: `/docs` is the introduction, `/docs/<slug>` any other page. Needs no sign-in and makes no API call. */
+/** The public docs: `/docs` is the introduction, `/docs/<slug>` any other page (a deeper path is "Page not found"). Needs no sign-in and makes no API call. */
 export function Docs() {
-  const slug = useParams().slug ?? 'introduction';
+  const slug = (useParams()['*'] ?? '').replace(/\/$/, '') || 'introduction';
   const page = findPage(slug);
   const source = page && pageSource(slug);
-  const rendered = useMemo(() => (source ? renderMarkdown(source) : undefined), [source]);
+  // No useMemo: the React Compiler already caches this per `source`.
+  const rendered = source ? renderMarkdown(source) : undefined;
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const { hash } = location;
   const [menuOpen, setMenuOpen] = useState(false);
   // Any navigation (links, Back, Forward) gives a new `location` object, which closes the menu. Resetting state during render is React's documented way to do this without an effect.
@@ -33,15 +35,18 @@ export function Docs() {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
-  // After each page render, jump to the heading named in the URL (#id). The page body is a plain HTML string, so React can't do this for us.
+  // Every navigation gets a new `location.key`, so this runs once per navigation, even to the heading you are already on. With a #id it jumps to that heading (the body is a plain HTML string, so React can't do it for us); without one it goes to the top, because the browser keeps the old scroll position. Back and Forward (POP) are left alone: the browser restores where you were.
   useEffect(() => {
-    if (!hash) return;
-    try {
-      document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
-    } catch {
-      // A malformed hash like "#%" can't be decoded; just don't scroll.
+    if (hash) {
+      try {
+        document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+      } catch {
+        // A malformed hash like "#%" can't be decoded; just don't scroll.
+      }
+    } else if (navigationType !== 'POP') {
+      window.scrollTo(0, 0);
     }
-  }, [slug, hash]);
+  }, [location.key, hash, navigationType]); // hash and navigationType only change together with the key
 
   // ⌘K / Ctrl-K opens search from anywhere on the docs, even while typing in another field. Plain letters never do anything.
   useEffect(() => {
@@ -68,10 +73,15 @@ export function Docs() {
     if (!(event.target instanceof Element)) return;
     const button = event.target.closest<HTMLButtonElement>('button[data-copy]');
     if (button) {
-      const code = button.parentElement?.querySelector('pre')?.textContent ?? '';
-      navigator.clipboard?.writeText(code).catch(() => {});
-      button.textContent = 'Copied';
-      setTimeout(() => (button.textContent = 'Copy'), 1600);
+      const code = (button.parentElement?.querySelector('pre')?.textContent ?? '').trimEnd();
+      // Say "Copied" only once the clipboard accepted it; on failure the button stays "Copy".
+      void navigator.clipboard?.writeText(code).then(
+        () => {
+          button.textContent = 'Copied';
+          setTimeout(() => (button.textContent = 'Copy'), 1600);
+        },
+        () => {},
+      );
       return;
     }
     const link = event.target.closest<HTMLAnchorElement>('a[href^="/docs"]');

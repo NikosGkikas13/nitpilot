@@ -40,7 +40,7 @@ export function App({ queryClient }: { queryClient?: QueryClient }) {
  * Every page. Home decides between the landing page (signed out) and the app, or only a link to /first-run while the
  * server has no GitHub App. Signed in, the chat pages open beside the inbox (routes/Shell/Shell.tsx `InboxLayout`);
  * Settings and the setup checklist are pages of their own. Device approval (`/cli/approve`, the link `nitpilot login`
- * opens), the first-run page and the public docs (`/docs`, `/docs/:slug`) stand outside Home: no landing page, no inbox,
+ * opens), the first-run page and the public docs (`/docs/*`) stand outside Home: no landing page, no inbox,
  * no socket. The docs are a lazy file of their own, so signed-in users never download them.
  */
 export function AppRoutes() {
@@ -78,17 +78,14 @@ export function AppRoutes() {
           </Suspense>
         }
       />
-      {['docs', 'docs/:slug'].map((path) => (
-        <Route
-          key={path}
-          path={path}
-          element={
-            <Suspense fallback={null}>
-              <Docs />
-            </Suspense>
-          }
-        />
-      ))}
+      <Route
+        path="docs/*"
+        element={
+          <Suspense fallback={null}>
+            <Docs />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 }

@@ -6,7 +6,7 @@
   justify-content: center;
   align-items: flex-start;
   padding: 12vh 16px 16px;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim);
 }
 
 .dialog {

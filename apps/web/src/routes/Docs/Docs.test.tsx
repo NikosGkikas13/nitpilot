@@ -1,5 +1,5 @@
 import { BRAND } from '@nitpilot/protocol';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIGN_IN_URL } from '../Landing/Landing';
@@ -7,6 +7,7 @@ import { Docs } from './Docs';
 
 const fetchMock = vi.fn();
 const scrollIntoView = vi.fn(); // jsdom has no scrollIntoView
+const scrollTo = vi.fn();
 
 function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
@@ -21,8 +22,7 @@ function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="docs" element={<Docs />} />
-        <Route path="docs/:slug" element={<Docs />} />
+        <Route path="docs/*" element={<Docs />} />
       </Routes>
       <Where />
       <BackButton />
@@ -33,11 +33,14 @@ function renderAt(path: string) {
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   Element.prototype.scrollIntoView = scrollIntoView;
+  vi.spyOn(window, 'scrollTo').mockImplementation(scrollTo);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
   fetchMock.mockClear();
   scrollIntoView.mockClear();
+  scrollTo.mockClear();
+  vi.restoreAllMocks();
 });
 
 describe('Docs', () => {
@@ -67,14 +70,61 @@ describe('Docs', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('copies a code block and says Copied', async () => {
+  it('copies a code block without its trailing newline and says Copied', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
     const { container } = renderAt('/docs');
     const button = container.querySelector('button[data-copy]')!;
     fireEvent.click(button);
-    expect(writeText).toHaveBeenCalledWith(container.querySelector('pre')!.textContent);
-    expect(button).toHaveTextContent('Copied');
+    const code = container.querySelector('pre')!.textContent!;
+    expect(code.endsWith('\n')).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(code.trimEnd());
+    await waitFor(() => expect(button).toHaveTextContent('Copied'));
+  });
+
+  it('keeps saying Copy when the clipboard is missing or refuses', async () => {
+    vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+    const { container, unmount } = renderAt('/docs');
+    fireEvent.click(container.querySelector('button[data-copy]')!);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(container.querySelector('button[data-copy]')).toHaveTextContent('Copy');
+    unmount();
+
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    const second = renderAt('/docs');
+    const button = second.container.querySelector('button[data-copy]')!;
+    fireEvent.click(button);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(writeText).toHaveBeenCalled();
+    expect(button).toHaveTextContent('Copy');
+    expect(button).not.toHaveTextContent('Copied');
+  });
+
+  it('shows "Page not found" for a deeper path, without any fetch', () => {
+    renderAt('/docs/why/webhooks.md');
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('scrolls to the top when a link opens another page, but not on Back', () => {
+    renderAt('/docs');
+    scrollTo.mockClear();
+    fireEvent.click(document.querySelector('main a[href^="/docs"]')!);
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    scrollTo.mockClear();
+    fireEvent.click(screen.getByText('test-back'));
+    expect(scrollTo).not.toHaveBeenCalled(); // the browser restores the old position
+  });
+
+  it('scrolls again when you choose the heading you are already on', () => {
+    renderAt('/docs/introduction#try-it');
+    scrollIntoView.mockClear();
+    fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'try it' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it('puts the tab title back when you leave the docs', () => {
