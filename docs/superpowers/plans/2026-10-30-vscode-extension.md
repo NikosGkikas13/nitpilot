@@ -134,7 +134,7 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   export function retryMessage(chat: Pick<MyChat, 'repo' | 'number'>, status: RetryResponse['status']): string;
   ```
 
-- [ ] **Step 1: Write the failing tests** in `src/view-model.test.ts`
+- [x] **Step 1: Write the failing tests** in `src/view-model.test.ts`
 
   - `needYouCount`: four chats with attentions `none, decision, failed, none` → `2`.
   - `statusBar` for each spec row: ok with 2 needing you of 5 → `{ text: '$(bell-dot) 2 need you', warning: true, command: 'nitpilot.showPrs' }` and tooltip `2 PRs need you · 5 open on np.test`; ok with 1 → `'$(bell-dot) 1 needs you'`; ok, none needing → `'$(check) 5 open'`, `warning: false`; ok, empty → `'$(check) Nitpilot'`; `logged_out` → `'$(account) Nitpilot: log in'`, command `nitpilot.login`; `unreachable` → `'$(cloud-offline) Nitpilot'`, tooltip is the message; `needs_reauth` → `'$(warning) Nitpilot: sign in again'`, `warning: true`, command `nitpilot.openServer`; `error` → `'$(warning) Nitpilot'`, `warning: false`, tooltip is the message.
@@ -148,20 +148,22 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   - `nextLastGood`: `ok` (and `needs_reauth` with chats) replace it; `unreachable` keeps the previous; `logged_out` and `error` return `null`.
   - `retryMessage`: `queued` → `Queued your agent again on acme/web#88.`; `waiting` → `Cleared the failure on acme/web#88. Your agent runs again once the PR's current step is done.`
 
-- [ ] **Step 2: Run them, expect failures**
+- [x] **Step 2: Run them, expect failures**
 
   Run: `npm test -w apps/vscode`. Expected: FAIL, module not found.
 
-- [ ] **Step 3: Implement `view-model.ts`** to the interfaces above. No `vscode` import. Format "as of" with `toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })`; the test builds its expected string the same way so it passes in any locale.
+- [x] **Step 3: Implement `view-model.ts`** to the interfaces above. No `vscode` import. Format "as of" with `toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })`; the test builds its expected string the same way so it passes in any locale.
 
-- [ ] **Step 4: Run tests, typecheck, lint**
+- [x] **Step 4: Run tests, typecheck, lint**
 
   Run: `npm test -w apps/vscode && npm run typecheck -w apps/vscode && npx eslint apps/vscode`. Expected: pass.
 
-- [ ] **Step 5: Commit and push**
+**Built (2026-10-30):** the NEEDS words come from the CLI (`NEEDS` in `apps/cli/src/commands/status.ts`, now exported) so the sidebar and `nitpilot status` can't drift. `needs_reauth` with no list but a `lastGood` from the same server shows that list, stale, under the sign-in-again row (spec: "Errors").
+
+- [x] **Step 5: Commit and push**
 
   ```bash
-  git add apps/vscode/src/view-model.ts apps/vscode/src/view-model.test.ts
+  git add apps/vscode/src/view-model.ts apps/vscode/src/view-model.test.ts apps/cli/src/commands/status.ts
   git commit -m "feat(vscode): status bar and sidebar view model"
   git push origin main
   ```

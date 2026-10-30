@@ -23,7 +23,7 @@ export function statusOptions(args: string[]): { format: StatusFormat } {
 }
 
 /** What the NEEDS YOU column says for each attention flag. */
-const NEEDS: Record<Attention, string> = {
+export const NEEDS: Record<Attention, string> = {
   none: '',
   decision: 'a decision',
   manual_review: 'start review',
