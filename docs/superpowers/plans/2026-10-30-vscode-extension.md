@@ -248,27 +248,29 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
 - Create: `apps/vscode/README.md` (the Marketplace page), `apps/vscode/CHANGELOG.md` (`## 0.1.0`), `apps/vscode/LICENSE` (copy of `apps/cli/LICENSE`), `apps/vscode/.vscodeignore`, `apps/vscode/media/icon.png`, `apps/web/src/routes/Docs/pages/vscode.md`
 - Modify: `apps/vscode/package.json` (`icon: "media/icon.png"`, `galleryBanner`, `categories: ["Other"]`, `keywords: ["code-review", "pull-request", "github", "ai", "nitpilot"]`), `apps/web/src/routes/Docs/pages.ts`, `.github/workflows/ci.yml`
 
-- [ ] **Step 1: Icon.** Run `sips -Z 128 apps/web/public/icons/icon-512.png --out apps/vscode/media/icon.png`. Expected: a 128×128 PNG.
+- [x] **Step 1: Icon.** Run `sips -Z 128 apps/web/public/icons/icon-512.png --out apps/vscode/media/icon.png`. Expected: a 128×128 PNG.
 
-- [ ] **Step 2: `.vscodeignore`**: ignore everything (`**`), then un-ignore `dist/extension.cjs`, `media/**`, `README.md`, `CHANGELOG.md`, `LICENSE`, `package.json`.
+- [x] **Step 2: `.vscodeignore`**: ignore everything (`**`), then un-ignore `dist/extension.cjs`, `media/**`, `README.md`, `CHANGELOG.md`, `LICENSE`, `package.json`.
 
-- [ ] **Step 3: README and docs page.** `apps/web/src/routes/Docs/pages/vscode.md`, "Use Nitpilot in VS Code", in the style of `claude-code.md`: install (Marketplace and Open VSX links: `https://marketplace.visualstudio.com/items?itemName=nitpilot.nitpilot-vscode`, `https://open-vsx.org/extension/nitpilot/nitpilot-vscode`), needs `nitpilot login` (any CLI version), the status bar states, the sidebar and its right-click menu, retry, "checks every 30 seconds while the window is focused", and one troubleshooting line for proxies (from Task 3's result). Add `{ slug: 'vscode', title: 'Use Nitpilot in VS Code', group: 'Guides' }` right after `claude-code` in `pages.ts`. `apps/vscode/README.md` is the same content with absolute links to nitpilot.dev and a screenshot placeholder removed (no image until there's a real screenshot).
+- [x] **Step 3: README and docs page.** `apps/web/src/routes/Docs/pages/vscode.md`, "Use Nitpilot in VS Code", in the style of `claude-code.md`: install (Marketplace and Open VSX links: `https://marketplace.visualstudio.com/items?itemName=nitpilot.nitpilot-vscode`, `https://open-vsx.org/extension/nitpilot/nitpilot-vscode`), needs `nitpilot login` (any CLI version), the status bar states, the sidebar and its right-click menu, retry, "checks every 30 seconds while the window is focused", and one troubleshooting line for proxies (from Task 3's result). Add `{ slug: 'vscode', title: 'Use Nitpilot in VS Code', group: 'Guides' }` right after `claude-code` in `pages.ts`. `apps/vscode/README.md` is the same content with absolute links to nitpilot.dev and a screenshot placeholder removed (no image until there's a real screenshot).
 
-- [ ] **Step 4: Package locally**
+- [x] **Step 4: Package locally**
 
   Run: `npm run package -w apps/vscode && unzip -l apps/vscode/dist/nitpilot.vsix`. Expected: the list holds `extension/dist/extension.cjs`, `extension/media/…`, README, CHANGELOG, LICENSE, `package.json`, and no `node_modules` or `src`. Install it in your normal VS Code ("Extensions: Install from VSIX…") and confirm the status bar item appears.
 
-- [ ] **Step 5: CI.** In `.github/workflows/ci.yml`, after the CLI's `npm publish --dry-run` step, add:
+- [x] **Step 5: CI.** In `.github/workflows/ci.yml`, after the CLI's `npm publish --dry-run` step, add:
   ```yaml
       # The VS Code extension as the Marketplace would get it: a broken manifest fails here, not at release.
       - run: npm run package -w apps/vscode
   ```
 
-- [ ] **Step 6: Run everything the CI runs that this touches**
+- [x] **Step 6: Run everything the CI runs that this touches**
 
   Run: `npm run typecheck && npm run lint && npm test -w apps/vscode && npm test -w apps/web && npm run build`. Expected: pass (the web build includes the new docs page).
 
-- [ ] **Step 7: Commit and push**
+**Built (2026-10-30):** the `.vsix` is 108 KB with 9 files (no `node_modules`, no `src`). npm skipping `@vscode/vsce-sign`'s install script didn't matter for `vsce package`. Instead of the user's own VS Code, it was installed into a throwaway profile (`code --extensions-dir … --install-extension`), which listed `nitpilot.nitpilot-vscode@0.1.0`. The docs page was checked in the browser.
+
+- [x] **Step 7: Commit and push**
 
   ```bash
   git add apps/vscode apps/web/src/routes/Docs .github/workflows/ci.yml

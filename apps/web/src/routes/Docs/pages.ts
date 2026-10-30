@@ -10,6 +10,7 @@ export const DOC_PAGES: DocPage[] = [
   { slug: 'how-it-works', title: 'How it works', group: 'Get started' },
   { slug: 'copilot-cli', title: 'Use GitHub Copilot CLI', group: 'Guides' },
   { slug: 'claude-code', title: 'Use Nitpilot in Claude Code', group: 'Guides' },
+  { slug: 'vscode', title: 'Use Nitpilot in VS Code', group: 'Guides' },
   { slug: 'teammate-on-nitpilot', title: 'When your teammate is on it too', group: 'Guides' },
   { slug: 'settings', title: 'Settings & Auto-review', group: 'Guides' },
   { slug: 'self-hosting', title: 'Self-hosting', group: 'Guides' },

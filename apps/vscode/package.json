@@ -23,6 +23,21 @@
   "bugs": {
     "url": "https://github.com/NikosGkikas13/nitpilot/issues"
   },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#16707f",
+    "theme": "dark"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "github",
+    "ai",
+    "nitpilot"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [

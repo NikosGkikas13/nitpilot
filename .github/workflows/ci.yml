@@ -47,6 +47,8 @@ jobs:
       # The CLI package as npm would get it: a broken package.json or a missing file fails here, not at release.
       - run: npm run build -w apps/cli
       - run: npm publish -w apps/cli --dry-run
+      # The VS Code extension as the Marketplace would get it: a broken manifest fails here, not at release.
+      - run: npm run package -w apps/vscode
       # Runs every workspace's tests: protocol, server and CLI.
       - run: npm test
       # Plan 1 end to end: the server, two CLIs and the fake agent (spec §19).
