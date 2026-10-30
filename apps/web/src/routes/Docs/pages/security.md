@@ -7,7 +7,7 @@ A pull request is untrusted input, and the agent reading it runs on your compute
 - **Text from the PR is marked as untrusted.** The title, body and comments reach the agent wrapped as data from an outside source, and the agent is told what that means.
 - **Your credentials stay yours.** Nitpilot never sees your Anthropic or Copilot login. Your GitHub token is stored encrypted on the server and used only to post your reviews and replies.
 
-More in [why/prompt-injection.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/prompt-injection.md), [why/safe-git.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/safe-git.md) and [why/local-mcp-server.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/local-mcp-server.md). The [Architecture](/docs/architecture) page has the reasoning behind each choice.
+More in [prompt injection](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/prompt-injection.md), [safe git](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/safe-git.md) and [the local MCP server](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/local-mcp-server.md). The [Architecture](/docs/architecture) page has the reasoning behind each choice.
 
 ## Reporting a vulnerability
 

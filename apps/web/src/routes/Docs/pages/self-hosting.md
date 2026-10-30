@@ -1,6 +1,6 @@
 # Self-hosting
 
-Run your own Nitpilot server: for private repos, or to keep everything on your own machine. It's one folder with three files ([`deploy/self-host/`](https://github.com/NikosGkikas13/nitpilot/tree/main/deploy/self-host) in the repo): the published image, Postgres and Caddy, started with Docker Compose. The server creates its own GitHub App the first time you open it. Why it's built this way: [first-run and app manifests](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/first-run-and-app-manifests.md), [reverse proxy and TLS](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/reverse-proxy-and-tls.md).
+Run your own Nitpilot server: for private repos, or to keep everything on your own machine. It's one folder with three files ([the `deploy/self-host/` folder](https://github.com/NikosGkikas13/nitpilot/tree/main/deploy/self-host) in the repo): the published image, Postgres and Caddy, started with Docker Compose. The server creates its own GitHub App the first time you open it. Why it's built this way: [first-run and app manifests](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/first-run-and-app-manifests.md), [reverse proxy and TLS](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/reverse-proxy-and-tls.md).
 
 ## What you need
 
@@ -21,7 +21,7 @@ At your DNS provider, add an **A record**: name `nitpilot` (or whatever subdomai
 dig +short nitpilot.example.com
 ```
 
-Caddy asks Let's Encrypt for a certificate as soon as it starts, and Let's Encrypt checks the domain by connecting to it, so the record has to be right first ([why/dns-records.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/dns-records.md)).
+Caddy asks Let's Encrypt for a certificate as soon as it starts, and Let's Encrypt checks the domain by connecting to it, so the record has to be right first ([DNS records](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/dns-records.md)).
 
 ### 2. Get the folder and fill in `.env`
 

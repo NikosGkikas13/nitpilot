@@ -197,8 +197,10 @@ describe('Docs', () => {
   it('moves focus to the page after a search result is clicked', () => {
     renderAt('/docs/introduction');
     fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'try it' } });
-    fireEvent.click(screen.getAllByRole('option')[0].querySelector('a')!);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'behind another https proxy' } });
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(1);
+    fireEvent.click(options[0].querySelector('a')!);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('main')).toHaveFocus();
   });

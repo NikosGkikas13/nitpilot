@@ -29,4 +29,4 @@ Copilot Business and Enterprise users need their admin to leave the Copilot CLI 
 - **`nitpilot doctor` can't see your Copilot login.** Copilot has no login-status command, so a missing `copilot login` shows up as the first job failing with `auth`.
 - **Same safety rules as Claude Code.** The agent gets only Nitpilot's tools, and the files in the PR that Copilot would load by itself (`.copilot/`, and the instructions, agents, skills, prompts and hooks under `.github/`) are deleted first. See [Security](/docs/security).
 
-Why Nitpilot drives Copilot the way it does: [why/copilot-cli.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/copilot-cli.md).
+Why Nitpilot drives Copilot the way it does: [the Copilot CLI explainer](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/copilot-cli.md).

@@ -46,7 +46,7 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 
    It checks, without running the agent (S1 to S6): no shell, write or web tool in reviewer mode; the token only in a 0600 file; no secrets in the environment; the isolation flags are present; every recorded fixture gives the right outcome and junk lines never crash the parser; an unsupported mode throws. Each check was run against a deliberately broken adapter to be sure it can fail.
 8. **Register it** in `registry.ts` (`getAdapter`), and give `detect()` a real check so `nitpilot doctor` can say what is wrong.
-9. **Run the live suite** by hand: add the adapter to `ADAPTERS` in `conformance/live.test.ts`, make sure the agent is logged in, then `npm run test:live -w apps/cli`. It runs the real agent against booby-trapped checkouts (L1 to L6) and uses a little of the user's plan, about five minutes and 14 runs for Claude Code. [why/agent-conformance.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/agent-conformance.md) explains the canaries.
+9. **Run the live suite** by hand: add the adapter to `ADAPTERS` in `conformance/live.test.ts`, make sure the agent is logged in, then `npm run test:live -w apps/cli`. It runs the real agent against booby-trapped checkouts (L1 to L6) and uses a little of the user's plan, about five minutes and 14 runs for Claude Code. [agent conformance](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/agent-conformance.md) explains the canaries.
 10. **Declare only the modes that passed.** If the editor mode fails a live check, `modes` is `['reviewer']` until it is fixed.
 
 ### The fake agent
@@ -78,6 +78,6 @@ The webhook signature check is still GitHub-specific and lives in the HTTP route
 ### How a platform adapter is tested
 
 1. **Normalizers, with hand-built payloads** (`platform/github/normalize/*.test.ts`) for every action and edge case: fast, and they pin down each rule.
-2. **Recorded fixtures** (`test/fixtures/recorded/`): real deliveries from a sandbox repo, replayed through `parseGithubWebhook`, with hand-written expected events. This is what proves the adapter reads what the platform really sends. Record with `npm run record:fixtures -w apps/server`; see [why/recorded-fixtures.md](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/recorded-fixtures.md).
+2. **Recorded fixtures** (`test/fixtures/recorded/`): real deliveries from a sandbox repo, replayed through `parseGithubWebhook`, with hand-written expected events. This is what proves the adapter reads what the platform really sends. Record with `npm run record:fixtures -w apps/server`; see [recorded fixtures](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/recorded-fixtures.md).
 3. **`FakePlatform`** (`platform/fake/`): the whole interface in memory. It parses payloads with the same code and records every write, so the engine, dispatcher and end-to-end tests run without a network. A new platform's own fake is a copy of it with the new payloads.
 4. **The live acceptance run**, with the new platform's sandbox (a manual checklist for GitHub).
