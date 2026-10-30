@@ -66,7 +66,7 @@ The developer wants both understanding (portfolio, impress) and installs.
 | Under the hood | Architecture | `docs/architecture.md` |
 | | Writing an adapter | `docs/adapters.md` |
 
-**Branch and release:** built on `main` after Copilot support was merged (PR #10) and shipped together with GitHub Copilot CLI support in the next release (v0.1.3), so every page, Copilot ones included, matches what `npm install -g nitpilot` installs. The Changelog's latest entry is v0.1.3 (developer's decision).
+**Branch and release:** built on `main` after Copilot support was merged (PR #10) so every page, Copilot ones included, matches what `npm install -g nitpilot` installs (Copilot shipped in v0.2.0 while the docs were being built; main was merged in). The docs ship in the release after 0.2.0; the Changelog lists them under "Unreleased" above v0.2.0.
 
 **Where it lives:** in the existing web app (`apps/web`) as routes under `/docs`, served by the existing server like every other page (`apps/server/src/http/spa.ts` already returns `index.html` for unknown GETs). It sits outside `<Home>` in `AppRoutes`, like `/cli/approve`: no auth check, no socket.
 
