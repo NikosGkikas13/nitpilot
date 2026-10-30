@@ -20,7 +20,7 @@ Odyhook's own files (`/opt/hooksmith`, its backup script, its cron file) are nev
 
 **Settings** are in `/opt/nitpilot/.env` (mode 600; made from `deploy/hosted/.env.example`): `NITPILOT_VERSION`, `PUBLIC_URL=https://nitpilot.dev`, `PUBLIC_REPOS_ONLY=true`, `TRUST_PROXY=true`, `CLOSED_CHAT_RETENTION_DAYS=90`, `ALLOWED_LOGINS` empty, and the secrets (`DATABASE_URL`, `ENCRYPTION_KEY`, the VAPID keys). The GitHub App `nitpilot` is not in `.env`: it was made through https://nitpilot.dev/first-run and is stored in the database, encrypted with `ENCRYPTION_KEY`.
 
-**The one copy of `.env` off the box** is in the owner's password manager. Without it a backup can't bring the instance back ([why/backups-and-restores.md](why/backups-and-restores.md)). After any change to `.env`, run `ssh root@157.180.91.106 cat /opt/nitpilot/.env` in a terminal window of your own (Terminal or iTerm, not an AI assistant's in-chat `!` prompt, which sends the output into the chat) and update that copy; never paste it into a chat, an issue or a commit. If a secret does reach a chat, change it: for the database password, make a new one on the box, `ALTER ROLE nitpilot PASSWORD '…'` through `psql` on standard input (as in "Set it up" step 3), write it into `DATABASE_URL` with `set_env`, then `docker compose up -d --force-recreate --wait`.
+**The one copy of `.env` off the box** is in the owner's password manager. Without it a backup can't bring the instance back ([why/backups-and-restores.md](why/backups-and-restores.md)). After any change to `.env`, run `ssh root@157.180.91.106 cat /opt/nitpilot/.env` in a terminal window of your own (Terminal or iTerm, not an AI assistant's in-chat `!` prompt, which sends the output into the chat) and update that copy; never paste it into a chat, an issue or a commit. If a secret does reach a chat, change it: for the database password, make a new one on the box, `ALTER ROLE nitpilot PASSWORD '…'` through `psql` on standard input (as in "Set it up" step 3), write it into `DATABASE_URL` with `set_env`, then `docker compose up -d --force-recreate --wait`. For `ENCRYPTION_KEY`, see "Rotating ENCRYPTION_KEY" below.
 
 ## Everyday commands
 
@@ -57,6 +57,45 @@ docker compose ps
 `up -d` replaces the container: the old server gets SIGTERM, finishes the step it's on and tells each CLI "server restarting"; the new one runs any new migrations, then starts. Expect `(healthy)` within a minute and the new version in `curl -s https://nitpilot.dev/healthz`.
 
 **Going back** is the same with the old version number. The newer version's migrations stay in the database, so check its release notes first: going back is safe when they only added tables or columns.
+
+## Rotating ENCRYPTION_KEY
+
+Do this when the key may have leaked (it reached a chat, a log, someone who shouldn't have it). It needs 0.3.1 or newer. How it works: [why/key-rotation.md](why/key-rotation.md). The key is made on the box and never printed.
+
+1. Move the current key to `ENCRYPTION_KEY_PREVIOUS`, make a new one, and restart:
+
+   ```bash
+   ssh root@157.180.91.106 bash -s <<'EOF'
+   set -euo pipefail
+   cd /opt/nitpilot && umask 077
+   set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
+   grep -q '^ENCRYPTION_KEY_PREVIOUS=' .env || echo 'ENCRYPTION_KEY_PREVIOUS=' >> .env
+   test -z "$(grep '^ENCRYPTION_KEY_PREVIOUS=' .env | cut -d= -f2-)" || { echo "STOP: a rotation is already under way"; exit 1; }
+   set_env ENCRYPTION_KEY_PREVIOUS "$(grep '^ENCRYPTION_KEY=' .env | cut -d= -f2-)"
+   set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
+   ls -l .env && awk -F= '/^ENCRYPTION_KEY/ { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
+   docker compose up -d --force-recreate --wait
+   docker compose logs nitpilot-server | grep -E '\[keys\]|\[boot\]' | tail -n 2
+   EOF
+   ```
+
+   The log shows `[keys] re-encrypted N stored values …` (N is 2 per person who signed in, plus 3 for the GitHub App) and `[boot] GitHub App nitpilot, from the database`. If the server won't start, nothing was changed in the database: put the old key back as `ENCRYPTION_KEY` with `set_env`, empty `ENCRYPTION_KEY_PREVIOUS`, and restart.
+
+2. Check https://nitpilot.dev/healthz, and sign in at https://nitpilot.dev (your stored GitHub token must still work: the inbox loads).
+
+3. Save the old key for old backups, then drop it from `.env`. Every backup made before today was dumped with the old key, so restoring one needs it (see "Put a backup back"). Run `ssh root@157.180.91.106 cat /opt/nitpilot/.env` in a terminal window of your own and copy the `ENCRYPTION_KEY_PREVIOUS` line into the password manager next to `.env`, labelled with today's date. Then:
+
+   ```bash
+   ssh root@157.180.91.106 bash -s <<'EOF'
+   set -euo pipefail
+   cd /opt/nitpilot && umask 077
+   set_env() { K="$1" V="$2" awk 'BEGIN { FS = OFS = "=" } $1 == ENVIRON["K"] { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' .env > .env.tmp && mv .env.tmp .env; }
+   set_env ENCRYPTION_KEY_PREVIOUS ""
+   docker compose up -d --force-recreate --wait && docker compose ps
+   EOF
+   ```
+
+4. Save the new `.env` to the password manager (the `cat` above, in your own terminal).
 
 ## Memory
 
@@ -107,6 +146,8 @@ cd /opt/nitpilot
 f=nitpilot-2026-10-25T03-30-01Z.sql.gz     # the backup to restore, from rclone ls
 rclone copyto "r2:odyhook-backups/nitpilot/$f" "/root/$f" && gunzip -c "/root/$f" | tail -n 20 | grep -q -- '-- PostgreSQL database dump complete' && echo "file ok"
 ```
+
+A backup from before the last key rotation was made with the old key: put that key in `ENCRYPTION_KEY_PREVIOUS` (with `set_env`, as in "Rotating ENCRYPTION_KEY") before the `up` below, and the server moves it onto the current key as it starts; then empty it again.
 
 Then replace the database with it:
 

@@ -41,7 +41,7 @@ Open `.env` and fill in the three required values:
 - `POSTGRES_PASSWORD=` the output of `openssl rand -hex 24`
 - `ENCRYPTION_KEY=` the output of `openssl rand -base64 32`
 
-`ENCRYPTION_KEY` encrypts people's GitHub tokens and the GitHub App's private key and secrets in the database. **Save a copy of `.env` somewhere safe now** (a password manager): a backup of the database can't be used without this key, and a server whose key changed refuses to start.
+`ENCRYPTION_KEY` encrypts people's GitHub tokens and the GitHub App's private key and secrets in the database. **Save a copy of `.env` somewhere safe now** (a password manager): a backup of the database can't be used without this key, and a server whose key changed refuses to start. To change it on purpose, see "Rotating ENCRYPTION_KEY" below.
 
 The rest of `.env.example` is optional, one comment line each: web push keys, `ALLOWED_LOGINS`, `CLOSED_CHAT_RETENTION_DAYS`, `NITPILOT_VERSION`. Web push keys are made with the image itself:
 
@@ -119,6 +119,12 @@ docker compose up -d
 
 The server finds its GitHub App in the restored database and starts in normal mode (`docker compose logs nitpilot` shows `[boot] GitHub App <your app>, from the database`). If the domain moved to a new IP, update the DNS record first. Restoring over an existing database needs it empty first: `docker compose down -v` deletes it (and Caddy's certificates) for good, so only do that when the dump is safe.
 
+## Rotating ENCRYPTION_KEY
+
+If the key may have leaked, change it without losing anything: the server can read with the old key while it moves everything onto a new one ([key rotation](https://github.com/NikosGkikas13/nitpilot/blob/main/docs/why/key-rotation.md)). In `.env`, add a line `ENCRYPTION_KEY_PREVIOUS=` with the current key, put the output of `openssl rand -base64 32` in `ENCRYPTION_KEY`, and run `docker compose up -d`. The log shows `[keys] re-encrypted N stored values`. Check you can still sign in, save the old key with your old backups (they were made with it), then empty `ENCRYPTION_KEY_PREVIOUS`, run `docker compose up -d` again, and save the new `.env`.
+
+To restore a backup made before a rotation, put the key it was made with in `ENCRYPTION_KEY_PREVIOUS` before starting the server; it moves everything onto the current key as it starts.
+
 ## Behind another HTTPS proxy
 
 If something in front of this server already does HTTPS (a load balancer, Cloudflare Tunnel, another Caddy or nginx), let Caddy serve plain HTTP on port 80 and trust that proxy's headers. In `.env`:
@@ -146,7 +152,7 @@ services:
 Start with `docker compose ps` and `docker compose logs nitpilot` (or `logs caddy`).
 
 - **Lost the setup code, or it says it doesn't match:** use the last one printed (`docker compose logs nitpilot | grep "setup code" | tail -1`). `docker compose restart nitpilot` prints a new one; the old one stops working. Five tries a minute per address; after that the page asks you to wait.
-- **`nitpilot` keeps restarting with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with."** `ENCRYPTION_KEY` in `.env` isn't the one the app was stored with. Put the old value back from your saved copy and run `docker compose up -d`. The server never starts a new first run over the stored app.
+- **`nitpilot` keeps restarting with "The stored GitHub App can't be read with this ENCRYPTION_KEY. Put back the key it was made with."** `ENCRYPTION_KEY` in `.env` isn't the one the app was stored with. Put the old value back from your saved copy and run `docker compose up -d` (to change keys, see "Rotating ENCRYPTION_KEY"). The server never starts a new first run over the stored app.
 - **`nitpilot` keeps restarting with "set all six GitHub App variables, or none to start in first-run mode; missing: …"** Some `GITHUB_*` lines are in `.env` and some are empty. Remove them all (to use the app first-run mode made) or fill in all six (for an app you made by hand; they win over a stored app).
 - **No certificate / the browser can't connect:** `docker compose logs caddy`. Usually the DNS record doesn't point at this server yet (`dig +short` it) or ports 80 and 443 are blocked by a firewall.
 - **Sign-in loops back to the same page behind another proxy:** set `TRUSTED_PROXIES` (above).

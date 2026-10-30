@@ -48,6 +48,8 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   /** base64 of 32 random bytes: `openssl rand -base64 32` */
   ENCRYPTION_KEY: z.string().min(1),
+  /** Only while rotating ENCRYPTION_KEY: the old key, read but never written (lib/crypto.ts, docs/hosting.md). */
+  ENCRYPTION_KEY_PREVIOUS: optionalText,
   /**
    * The GitHub App (docs/why/github-app.md). Optional, but all six or none: with none the server starts in first-run
    * mode and creates its own app (setup/first-run.ts, docs/why/first-run-and-app-manifests.md). Read them through

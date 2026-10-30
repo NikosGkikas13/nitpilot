@@ -19,6 +19,7 @@ import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
 import { startFirstRun } from './setup/boot';
 import { loadGithubApp, setGithubApp, type GithubAppCredentials } from './setup/credentials';
+import { reEncryptStoredSecrets } from './setup/rotate-key';
 import { CliNotifier } from './tasks/cli-notifier';
 import { reportFailedWrite } from './tasks/handlers/failed-writes';
 import { createTaskHandlers } from './tasks/handlers/index';
@@ -44,6 +45,12 @@ async function main(): Promise<void> {
   if (!lock) {
     console.error('Another Nitpilot server is already running against this database. Refusing to start.');
     process.exit(1);
+  }
+
+  // Rotating ENCRYPTION_KEY: move every stored secret onto the new key before anything reads one (setup/rotate-key.ts).
+  if (env.ENCRYPTION_KEY_PREVIOUS) {
+    const rewritten = await reEncryptStoredSecrets();
+    console.log(`[keys] re-encrypted ${rewritten} stored values with the new ENCRYPTION_KEY; you can now remove ENCRYPTION_KEY_PREVIOUS`);
   }
 
   // Which GitHub App this server is: the GITHUB_* variables, else the one first-run mode stored, else none yet.

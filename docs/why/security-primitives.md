@@ -9,6 +9,7 @@ Some secrets have to be readable again later. Example: the GitHub access token w
 - **Encrypt, not hash,** because we need the original value back.
 - **A fresh random IV (starting value) every time,** so encrypting the same token twice gives two different results, and nobody can spot that two rows hold the same secret.
 - **GCM adds a tamper seal (the "auth tag").** If a single byte of the stored value changes, `decrypt` throws instead of returning garbage.
+- **The key can be changed** without losing what it locked: [key-rotation.md](key-rotation.md).
 
 ## Hashing tokens (`lib/tokens.ts`)
 
