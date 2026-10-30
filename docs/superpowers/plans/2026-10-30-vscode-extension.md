@@ -62,7 +62,7 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   export function singleFlight<T>(fn: () => Promise<T>): () => Promise<T>;
   ```
 
-- [ ] **Step 1: Create the package files**
+- [x] **Step 1: Create the package files**
 
   `package.json`: name/private/version/displayName/publisher/license per Global Constraints, `"type": "module"`, `"main": "./dist/extension.cjs"`, `engines.vscode`, `activationEvents: ["onStartupFinished"]`, `repository` (`directory: "apps/vscode"`), `homepage: "https://nitpilot.dev/docs/vscode"`, scripts `build` (`tsup`), `test` (`vitest run`), `typecheck` (`tsc -p tsconfig.json`), `vscode:prepublish` (`npm run build`), `package` (`vsce package --no-dependencies -o dist/nitpilot.vsix`). devDependencies: `nitpilot: "*"`, `@nitpilot/protocol: "*"`, `zod` (same range as the CLI), `@types/vscode: "~1.90.0"`, `tsup` (same range as the CLI), `@vscode/vsce`, `ovsx` (latest at build time, caret). Leave `contributes` empty here; Task 3 fills it.
   `tsconfig.json`: like the CLI's (`extends ../../tsconfig.base.json`, include `src`, `tsup.config.ts`, `vitest.config.ts`).
@@ -70,7 +70,7 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   `vitest.config.ts`: include `src/**/*.test.ts`.
   Run `npm install` at the repo root.
 
-- [ ] **Step 2: Write the failing tests** in `src/poll.test.ts`
+- [x] **Step 2: Write the failing tests** in `src/poll.test.ts`
 
   Each test makes a temp dir, writes `config.json` (`{ "server": "https://np.test", "token": "<BRAND.tokenPrefix>abc" }` unless stated), passes `env: { NITPILOT_CONFIG_DIR: dir }` and a fake `fetch` routing on URL path (`/api/me`, `/api/me/chats`).
   - `ok`: me 200 `{ login, avatarUrl: null, githubAuth: 'ok' }`, chats 200 with two chats → `{ state: 'ok', server: 'https://np.test', chats }`.
@@ -86,21 +86,23 @@ Also updates the main spec in this first commit (CLAUDE.md: spec and code change
   - `timeout`: a fetch that never resolves until aborted → `unreachable` (use fake timers or pass the signal through; assert the request got an `AbortSignal`).
   - `singleFlight` (Review Focus 4): two calls while the first is pending return the same promise and `fn` ran once; a call after it settles runs `fn` again; a rejection also clears it.
 
-- [ ] **Step 3: Run them, expect failures**
+- [x] **Step 3: Run them, expect failures**
 
   Run: `npm test -w apps/vscode`. Expected: FAIL, `poll` not found.
 
-- [ ] **Step 4: Implement `poll()` and `singleFlight()`**
+- [x] **Step 4: Implement `poll()` and `singleFlight()`**
 
   `loadConfig` in a try (throw → `error`, `server: null`). `token === null` → `logged_out` before any request. Then `Promise.allSettled([client.me({ signal }), client.myChats({ signal })])` with `AbortSignal.timeout(POLL_TIMEOUT_MS)` for each. Decide in this order: me rejected with `ServerError` 401 → `logged_out`; me fulfilled with `needs_reauth` → `needs_reauth` (chats or `null`); any rejection with `status === 0 || status >= 500` → `unreachable`; any rejection with `status` 200–299 (schema) → `error` with the suffix above; other rejection → `error` with its message; else `ok`. Comment the shortcut from the spec on `POLL_INTERVAL_MS`: `// shortcut: polling (30 s, focused windows only); a live "my chats changed" stream on a token-authed socket if users ask for instant updates.`
 
-- [ ] **Step 5: Run the tests, typecheck and lint**
+- [x] **Step 5: Run the tests, typecheck and lint**
 
   Run: `npm test -w apps/vscode && npm run typecheck -w apps/vscode && npx eslint apps/vscode`. Expected: all pass, no errors.
 
-- [ ] **Step 6: Update the main spec (§16, §21) as listed under Files.**
+- [x] **Step 6: Update the main spec (§16, §21) as listed under Files.**
 
-- [ ] **Step 7: Commit and push**
+**Built (2026-10-30):** `PollDeps` also takes `timeoutMs` (Vitest's fake timers don't drive `AbortSignal.timeout`, so the timeout test passes 20 ms). Dev deps resolved to `@vscode/vsce` ^4.1.0 and `ovsx` ^1.3.0. npm 11 skipped the install scripts of esbuild and `@vscode/vsce-sign`; tsup still bundles (checked), packaging is checked in Task 4.
+
+- [x] **Step 7: Commit and push**
 
   ```bash
   git add apps/vscode package-lock.json docs/superpowers/specs/2026-10-07-nitpilot-design.md
