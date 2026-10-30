@@ -1,6 +1,6 @@
 {
   "name": "nitpilot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Your own AI agent reviews your teammates' pull requests, and theirs reviews yours.",
   "repository": {
     "type": "git",
