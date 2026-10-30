@@ -21,7 +21,7 @@ describe('docs pages', () => {
   it('links between pages name a real page and heading', () => {
     for (const [path, source] of Object.entries(files)) {
       expect(source, path).not.toMatch(/\]\((?:\.\/)?docs\//);
-      expect(source, path).not.toMatch(/\]\([^)]*\.md[)#]/);
+      expect(source, path).not.toMatch(/\]\((?!https?:)[^)]*\.md[)#]/);
       for (const [, slug, anchor] of source.matchAll(/\]\(\/docs\/([a-z0-9-]+)(?:#([a-z0-9-]+))?\)/g)) {
         const target = pageSource(slug!);
         expect(target, `${path} -> ${slug}`).toBeDefined();

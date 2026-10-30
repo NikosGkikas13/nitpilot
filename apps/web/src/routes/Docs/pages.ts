@@ -8,6 +8,13 @@ export const DOC_PAGES: DocPage[] = [
   { slug: 'introduction', title: 'Introduction', group: 'Get started' },
   { slug: 'quickstart', title: 'Quickstart', group: 'Get started' },
   { slug: 'how-it-works', title: 'How it works', group: 'Get started' },
+  { slug: 'copilot-cli', title: 'Use GitHub Copilot CLI', group: 'Guides' },
+  { slug: 'teammate-on-nitpilot', title: 'When your teammate is on it too', group: 'Guides' },
+  { slug: 'self-hosting', title: 'Self-hosting', group: 'Guides' },
+  { slug: 'security', title: 'Security', group: 'Reference' },
+  { slug: 'limits-and-faq', title: 'Limits & FAQ', group: 'Help' },
+  { slug: 'architecture', title: 'Architecture', group: 'Under the hood' },
+  { slug: 'writing-an-adapter', title: 'Writing an adapter', group: 'Under the hood' },
 ];
 
 // Vite reads each Markdown file as text at build time, so the pages ship inside the docs chunk.

@@ -34,3 +34,5 @@ If the author is not on Nitpilot, your agent's review is posted as an ordinary G
 - Your computer has to be on. Jobs run there, and they wait while it is off.
 - Jobs start by themselves only for trusted authors: owners, members, collaborators, and bots you list.
 - nitpilot.dev is for public repos. Webhooks from private repos are dropped there.
+
+The full story, with every design choice: [Architecture](/docs/architecture).

@@ -96,7 +96,7 @@ describe('Docs', () => {
   it('has a GitHub link in the sidebar, for phones where the top bar hides it', () => {
     renderAt('/docs');
     const nav = screen.getByRole('navigation', { name: 'Docs pages' });
-    expect(within(nav).getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
+    expect(within(nav).getByRole('link', { name: /^GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
   });
 
   it('scrolls to the heading named in the URL hash', () => {
@@ -198,7 +198,7 @@ describe('Docs', () => {
     renderAt('/docs/introduction');
     fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'try it' } });
-    fireEvent.click(screen.getByRole('option').querySelector('a')!);
+    fireEvent.click(screen.getAllByRole('option')[0].querySelector('a')!);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('main')).toHaveFocus();
   });
