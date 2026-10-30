@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.3.0
+
+2026-10-30
+
+- **See your PRs from Claude Code.** `nitpilot status --line` prints one short line for Claude Code's status line, like `Nitpilot: 2 need you · 3 open`. A Claude Code plugin adds `/nitpilot:status`, which lists the PRs that need you first, with a link to each chat. See [Use Nitpilot in Claude Code](/docs/claude-code).
+- `nitpilot status --json` prints the same data as JSON, for your own scripts.
+
 ## v0.2.2
 
 2026-10-30
