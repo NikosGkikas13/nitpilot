@@ -22,7 +22,7 @@
 - NEEDS words (same as the CLI): `decision` → `a decision`, `manual_review` → `start review`, `failed` → `agent failed`, `drafts` → `drafts`.
 - Codicons: `decision` → `question`, `manual_review` → `eye`, `failed` → `error`, `drafts` → `edit`, `none` → `git-pull-request`.
 - Status bar texts and backgrounds: exactly the table in the spec's "Status bar" section.
-- Release tag `vscode-vX.Y.Z`, must equal `version` in `apps/vscode/package.json`. Secrets `VSCE_PAT`, `OVSX_PAT`.
+- Release tag `vscode-vX.Y.Z`, must equal `version` in `apps/vscode/package.json`. Trusted publishing for both stores (`id-token: write`); `OVSX_PAT` only for Open VSX's first upload.
 - Don't touch `.github/workflows/release.yml` or `scripts/check-release-version.mjs` (the CLI/server release stays as is).
 
 ## Review Focus
@@ -286,7 +286,7 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
 - Create: `.github/workflows/release-vscode.yml`
 - Modify: `docs/releasing.md` (new section "Releasing the VS Code extension"), `docs/why/releasing.md` (one paragraph: why the extension has its own version and tag)
 
-- [ ] **Step 1: Write `release-vscode.yml`**
+- [x] **Step 1: Write `release-vscode.yml`**
 
   Trigger `push: tags: ['vscode-v*']`; top-level `permissions: {}`; one job, `permissions: contents: write` (for the GitHub release), Node 22, `npm ci`, then:
   ```yaml
@@ -304,11 +304,13 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
   ```
   Use block-style `env:` mappings in the real file; the inline form above only keeps the plan short.
 
-- [ ] **Step 2: Check the YAML parses.** Run: `ruby -ryaml -e 'YAML.load_file(ARGV[0])' .github/workflows/release-vscode.yml`. Expected: no output. (The real test is the first release; the tag check is its first step, so a mistake fails before anything is published.)
+- [x] **Step 2: Check the YAML parses.** Run: `ruby -ryaml -e 'YAML.load_file(ARGV[0])' .github/workflows/release-vscode.yml`. Expected: no output. (The real test is the first release; the tag check is its first step, so a mistake fails before anything is published.)
 
-- [ ] **Step 3: `docs/releasing.md`.** Add the section: the tag (`vscode-vX.Y.Z`), the one place the version lives (`apps/vscode/package.json`, plus `apps/vscode/CHANGELOG.md` and the docs changelog page), try the `.vsix` locally first (Task 4 Step 4), what the workflow does, and the one-way door: a Marketplace version can't be published twice, so a mistake means a new patch version. Then the one-time setup (Step 4's clicks, written for the reader).
+- [x] **Step 3: `docs/releasing.md`.** Add the section: the tag (`vscode-vX.Y.Z`), the one place the version lives (`apps/vscode/package.json`, plus `apps/vscode/CHANGELOG.md` and the docs changelog page), try the `.vsix` locally first (Task 4 Step 4), what the workflow does, and the one-way door: a Marketplace version can't be published twice, so a mistake means a new patch version. Then the one-time setup (Step 4's clicks, written for the reader).
 
-- [ ] **Step 4: Commit and push**
+**Built (2026-10-30), changed from the steps above:** the Visual Studio Marketplace and Open VSX both support trusted publishing from GitHub Actions now (Marketplace personal access tokens are retired on 2026-12-01). So the workflow asks for `id-token: write` and runs `vsce publish --oidc`, and there is no `VSCE_PAT`. Open VSX trusts a workflow only once the extension exists there, so `OVSX_PAT` is used for the first upload only; with no secret, `ovsx` switches to trusted publishing by itself (checked in `node_modules/ovsx/lib/publish.js`). Both publish steps add `--skip-duplicate` so a re-run is safe. Step 5's clicks below are replaced by the "One-time setup" section in `docs/releasing.md`.
+
+- [x] **Step 4: Commit and push**
 
   ```bash
   git add .github/workflows/release-vscode.yml docs/releasing.md docs/why/releasing.md

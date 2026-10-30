@@ -1,0 +1,54 @@
+name: Release VS Code extension
+
+# A `vscode-vX.Y.Z` tag releases the VS Code extension (docs/releasing.md, "Releasing the VS Code extension"):
+# the same .vsix goes to the Visual Studio Marketplace, Open VSX and a GitHub release. It has its own version, so
+# `v*` tags (release.yml) never publish it, and this workflow never touches npm or GHCR.
+on:
+  push:
+    tags: ['vscode-v*']
+
+# Nothing by default; the job asks for only what it needs.
+permissions: {}
+
+jobs:
+  publish:
+    name: Publish the extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # The GitHub release with the .vsix attached.
+      contents: write
+      # Trusted publishing: the Marketplace and Open VSX check a short-lived token GitHub signs for this run.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      # The tag must match the extension's version, or nothing is published.
+      - name: Check the tag
+        run: |
+          version=$(node -p "require('./apps/vscode/package.json').version")
+          if [ "$version" != "${GITHUB_REF_NAME#vscode-v}" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but apps/vscode/package.json says $version"
+            exit 1
+          fi
+      # Built once; the same file goes everywhere below. --skip-duplicate makes re-running a failed job safe: a store
+      # that already has this version is skipped instead of failing the run.
+      - run: npm run package -w apps/vscode
+      - name: Visual Studio Marketplace
+        working-directory: apps/vscode
+        run: npx vsce publish --oidc --skip-duplicate --packagePath dist/nitpilot.vsix
+      # Open VSX only trusts this workflow once the extension exists there, so the very first version goes out with the
+      # OVSX_PAT secret; delete that secret after the first release and trusted publishing takes over.
+      - name: Open VSX
+        working-directory: apps/vscode
+        run: npx ovsx publish --skip-duplicate dist/nitpilot.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - name: GitHub release
+        run: gh release create "$GITHUB_REF_NAME" apps/vscode/dist/nitpilot.vsix --title "VS Code extension ${GITHUB_REF_NAME#vscode-v}" --notes "See apps/vscode/CHANGELOG.md."
+        env:
+          GH_TOKEN: ${{ github.token }}

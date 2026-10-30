@@ -150,15 +150,15 @@ Nothing is logged except to a "Nitpilot" Output channel, one line per state chan
 The extension has its own version, starting at `0.1.0`, independent of the CLI and server. It changes rarely and doesn't need a new server image; tying it to `vX.Y.Z` would publish an unchanged extension with every server release.
 
 - Tag `vscode-vX.Y.Z` releases it. A new workflow `.github/workflows/release-vscode.yml` runs on `vscode-v*` tags (the existing `release.yml` runs on `v*`, which `vscode-v…` doesn't match): check the tag equals `version` in `apps/vscode/package.json`, build, package the `.vsix` once with `@vscode/vsce`, publish that same file to the Marketplace (`vsce publish --packagePath`) and Open VSX (`ovsx publish`), and attach it to a GitHub release so people can install it by hand.
-- Secrets: `VSCE_PAT` (Marketplace) and `OVSX_PAT` (Open VSX), stored in the repo's Actions secrets.
+- Auth: trusted publishing (the store checks a token GitHub signs for this workflow run, as npm does), so no store password is stored. Marketplace personal access tokens are retired on 2026-12-01 anyway. Open VSX trusts a workflow only once the extension exists there, so the first release uses a one-time `OVSX_PAT` secret, deleted afterwards. Both publish steps use `--skip-duplicate`, so re-running a failed job is safe. (Changed while building Task 5, 2026-10-30.)
 - No release candidates: the Marketplace's own pre-release channel isn't worth the extra rules for v1. Try the `.vsix` locally before tagging (`npx vsce package`, then "Install from VSIX…").
 - CI (`ci.yml`) gains one step: package the `.vsix` on every push, so a broken manifest fails before release day.
 - `docs/releasing.md` gets a section "Releasing the VS Code extension" with the above. `docs/why/releasing.md` gets a short paragraph on why it has its own version.
 
 What the user must do once, by hand (the plan gives each click):
 
-1. Create the Marketplace publisher `nitpilot` and a personal access token allowed to publish (stored as `VSCE_PAT`).
-2. Create an Eclipse account, sign the Open VSX publisher agreement, create a token (stored as `OVSX_PAT`), and claim the `nitpilot` namespace.
+1. Create the Marketplace publisher `nitpilot` and add a Trusted Publishing policy for `NikosGkikas13/nitpilot`, workflow `release-vscode.yml`.
+2. Create an Eclipse account, sign the Open VSX publisher agreement, create and claim the `nitpilot` namespace, and store a one-time token as `OVSX_PAT` for the first release; after it, add the trusted publisher and delete the secret.
 
 Both listings use the same README (the docs page below, adapted), a 128 px PNG icon made from `icon-512.png`, MIT license, and the repository link.
 

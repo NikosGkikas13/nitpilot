@@ -31,3 +31,7 @@ Why the workflow says `id-token: write`: by default GitHub does not hand a job t
 ## Why the tag is checked against two version strings
 
 The CLI's version is written in two places: `version` in `apps/cli/package.json` (what npm publishes) and `CLI_VERSION` in `apps/cli/src/version.ts` (what the CLI reports about itself, for example in `nitpilot --version`). Forget one and you ship a CLI that says one thing and is labelled another. So the first job runs `scripts/check-release-version.mjs`, which refuses the tag unless it is `vX.Y.Z` or `vX.Y.Z-rc.N` and `X.Y.Z` matches both files. The check is a tiny pure function with its own tests (`scripts/check-release-version.test.mjs`), and it runs before anything is pushed, because a version on npm can never be published twice or taken back.
+
+## Why the VS Code extension has its own version
+
+The CLI and the server release together because they talk to each other: a new message in the protocol needs both. The extension only reads `/api/me` and `/api/me/chats`, which change rarely, and it changes rarely itself. Sharing `vX.Y.Z` would push an identical extension to two stores with every server fix, and every store version is permanent. So it gets its own number and its own tag, `vscode-vX.Y.Z`, and its own workflow (`release-vscode.yml`), which `v*` tags don't trigger. The Marketplace and Open VSX both offer the same trusted publishing as npm: they check a token GitHub signs for that one workflow run, so there's no store password in the repo's secrets.

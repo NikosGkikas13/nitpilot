@@ -41,3 +41,27 @@ You can try the package contents any time without publishing: `npm run build -w 
 - **A version on npm can never be published twice**, even after deleting it. A mistake means a new version number (`0.1.1`). That is why release candidates exist: put the real thing through `-rc` first.
 - `:latest` on GHCR moves with every release tag, and a pushed image tag can be overwritten, but treat released tags (`:0.1.0`) as final.
 - Trusted publishing is set up on npmjs.com on release day (package Settings, Trusted Publisher, GitHub Actions: organization `NikosGkikas13`, repository `nitpilot`, workflow `release.yml`, environment left empty, permission `npm publish`). npm expects a publish through it within 48 hours, or the connection expires; its fields can't be edited, so delete it and make it again. If the workflow file is renamed, redo it. If npm's staged publishing holds the version for approval, approve it with 2FA (the package's Staged Packages tab, or `npm stage approve <stage-id>`).
+
+## Releasing the VS Code extension
+
+The extension (`apps/vscode`) has its own version and its own tag, `vscode-vX.Y.Z`, released by `.github/workflows/release-vscode.yml`. A `v*` tag never publishes it, and a `vscode-v*` tag never touches npm or GHCR. Why: `docs/why/releasing.md`.
+
+1. Set the version in `apps/vscode/package.json` (the only place it's written). Add a section to `apps/vscode/CHANGELOG.md` (the Marketplace shows it) and an entry to the docs changelog page (`apps/web/src/routes/Docs/pages/changelog.md`).
+2. Try the package first: `npm run package -w apps/vscode`, then in VS Code **Extensions: Install from VSIX…** and pick `apps/vscode/dist/nitpilot.vsix`. CI also packages it on every push.
+3. Commit, push to `main`, let CI go green, then tag and push the tag:
+   ```bash
+   git tag vscode-v0.1.0
+   git push origin vscode-v0.1.0
+   ```
+4. Watch the **Release VS Code extension** run on GitHub Actions. One job: check the tag against `package.json`, package the `.vsix` once, publish that same file to the Marketplace (`vsce publish --oidc`) and Open VSX (`ovsx publish`), then attach it to a GitHub release (a re-run finds the release already made and fails there; that's harmless, the stores are done). The Marketplace can take a few minutes to verify a new version before it shows.
+
+If a step fails, open the run and **Re-run failed jobs**. Both publish steps use `--skip-duplicate`, so a store that already has this version is skipped, not an error. A wrong tag: fix the file, delete the tag (`git tag -d vscode-v0.1.0` and `git push origin :refs/tags/vscode-v0.1.0`), tag again.
+
+**One-way door:** neither store lets you publish the same version twice, even after unpublishing. A mistake means a new patch version.
+
+### One-time setup
+
+Both stores trust this workflow file the way npm does (trusted publishing), so there are no long-lived tokens, except one for Open VSX's very first upload.
+
+- **Visual Studio Marketplace:** a publisher with ID `nitpilot` (https://marketplace.visualstudio.com/manage, **Create publisher**). Then in that publisher, **Trusted Publishing** → **Create**: owner `NikosGkikas13`, repository `nitpilot`, workflow `release-vscode.yml`, no environment.
+- **Open VSX:** an Eclipse account linked to your open-vsx.org profile, the Publisher Agreement signed, the namespace `nitpilot` created and claimed as owner (trusted publishing needs an owner, not a contributor). Open VSX trusts a workflow only once the extension exists there, so the first release uses an access token stored as the repo secret `OVSX_PAT`. After that release: in open-vsx.org **Settings → Trusted Publishers** add namespace `nitpilot`, GitHub Actions, owner `NikosGkikas13`, repository `nitpilot`, workflow `release-vscode.yml`; then delete the `OVSX_PAT` secret and the token. With no secret, `ovsx` exchanges the run's token on its own.
