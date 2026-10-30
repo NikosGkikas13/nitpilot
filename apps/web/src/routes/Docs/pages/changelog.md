@@ -2,7 +2,9 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
-## Unreleased
+## v0.2.2
+
+2026-10-30
 
 - A docs site at nitpilot.dev/docs: quickstart, guides, CLI and `config.json` reference, troubleshooting, and the design behind it.
 
