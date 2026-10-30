@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.3.1
+
+2026-10-30
+
+- **Servers can change their `ENCRYPTION_KEY`.** Put the old key in `ENCRYPTION_KEY_PREVIOUS` and a new one in `ENCRYPTION_KEY`; the server moves every stored secret onto the new key as it starts. See [Rotating ENCRYPTION_KEY](/docs/self-hosting#rotating-encryption-key).
+
 ## v0.3.0
 
 2026-10-30
