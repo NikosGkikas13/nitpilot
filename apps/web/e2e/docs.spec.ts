@@ -9,6 +9,8 @@ test('the docs open signed out, page through, and fit a phone without calling th
     if (pathname.startsWith('/api/') || pathname.startsWith('/ws')) apiCalls.push(pathname);
   });
 
+  page.on('websocket', (ws) => apiCalls.push(`websocket ${ws.url()}`));
+
   await page.goto('/docs');
   await expect(page.getByRole('heading', { level: 1, name: 'Introduction' })).toBeVisible();
 

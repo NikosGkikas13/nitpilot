@@ -9,7 +9,7 @@ import { searchDocs } from './search';
 vi.mock('./pages', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./pages')>()),
   DOC_PAGES: [{ slug: 'stub', title: 'Stub', group: 'Guides' }],
-  pageSource: () => '# Stub\n\nSome **bold** words about the repo.\n\n```bash\ngit clone <repo> now\n```\n\n## One\n\nfoo\n\n## Two\n\nbar\n',
+  pageSource: () => '# Stub\n\nSome **bold** words about the repo.\n\n```bash\ngit clone <repo> now\n```\n\n## One\n\n<div role="img" aria-label="flow"><span>Zorp</span></div>\n\nfoo\n\n## Two\n\nbar\n',
 }));
 
 describe('snippets are plain text', () => {
@@ -29,6 +29,13 @@ describe('snippets are plain text', () => {
     await userEvent.type(screen.getByRole('combobox'), 'clone');
     expect(screen.getByRole('option')).toHaveTextContent('<repo>');
     expect(container.querySelector('repo')).toBeNull();
+  });
+});
+
+describe('diagrams', () => {
+  it('are not in the search index', () => {
+    expect(searchDocs('zorp')).toEqual([]);
+    expect(searchDocs('foo')).toHaveLength(1); // the text around the diagram still is
   });
 });
 

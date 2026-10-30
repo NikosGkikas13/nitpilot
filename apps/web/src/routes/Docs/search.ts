@@ -25,6 +25,7 @@ function getIndex(): Section[] {
         sections.push(current);
         continue;
       }
+      if (node.matches('[role=img]')) continue; // diagrams (role=img) are pictures, not text
       node.querySelectorAll('button').forEach((b) => b.remove()); // the code blocks' Copy buttons aren't content
       current.text += ` ${node.textContent}`;
     }

@@ -11,14 +11,14 @@ Nitpilot is four pieces. Once you know what each one does, the life of a PR make
 
 ## One PR's life
 
-<div role="img" aria-label="GitHub tells the server, the server hands a job to the CLI, and the CLI runs the agent." style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:20px 0"><span style="padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-control);background:var(--surface);color:var(--fg1);font-size:14px">GitHub</span><span aria-hidden="true" style="color:var(--fg3)">→</span><span style="padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-control);background:var(--surface);color:var(--fg1);font-size:14px">Server</span><span aria-hidden="true" style="color:var(--fg3)">→</span><span style="padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-control);background:var(--surface);color:var(--fg1);font-size:14px">CLI</span><span aria-hidden="true" style="color:var(--fg3)">→</span><span style="padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-control);background:var(--surface);color:var(--fg1);font-size:14px">Agent</span></div>
+<div class="flow" role="img" aria-label="GitHub tells the server, the server hands a job to the CLI, and the CLI runs the agent."><span class="flow-step">GitHub</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-step">Server</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-step">CLI</span><span class="flow-arrow" aria-hidden="true">→</span><span class="flow-step">Agent</span></div>
 
-1. **GitHub tells the server.** A PR opens or changes, and GitHub sends a webhook. The server checks it is genuine and keeps it.
+1. **GitHub tells the server.** A PR opens or changes, and GitHub sends a webhook. The server checks its signature and keeps it.
 2. **The server decides.** A pure function looks at the PR's state and the new event, and says what should happen next: queue a job, post a review, or ping a person.
-3. **A job goes to a computer.** The server picks a connected CLI that belongs to the right person, has the repo linked and has room. It sends the job over a WebSocket.
+3. **A job goes to a computer.** The server picks a connected CLI that belongs to the right person, has the repo linked and is not already at its limit of jobs. It sends the job over a WebSocket.
 4. **The CLI prepares a safe copy.** It fetches the PR into its own git worktree and deletes the files that could steer an agent, such as `CLAUDE.md` and `.mcp.json`.
-5. **The agent works through tools.** A reviewer reads the diff and raises points. It has no shell. Nothing reaches the server until the agent finishes.
-6. **The result goes back.** The server turns it into points, replies and the next step, and writes to GitHub: the review in your name, the summary comment as `nitpilot[bot]`.
+5. **The agent works through tools.** A reviewer reads the diff and raises points. It has no shell. The results are held on your computer and sent once, when the agent finishes.
+6. **The result goes back.** The server turns it into points, replies and the next step, and writes to GitHub. The summary comment comes from `nitpilot[bot]`. If the author is not on Nitpilot, your review is posted in your name. If the author is on it too, the points go to the chat and the summary comment instead of a GitHub review.
 7. **It repeats** until the PR is ready, the agents disagree, or a point needs a person. Approving and merging stay on GitHub.
 
 ## When both sides are on it

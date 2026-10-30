@@ -1,6 +1,6 @@
 # Quickstart
 
-This takes you from nothing to a PR reviewed by your own agent. It needs about ten minutes.
+This takes you from nothing to a PR reviewed by your own agent.
 
 ## Before you start
 
