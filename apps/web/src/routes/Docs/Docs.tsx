@@ -7,7 +7,10 @@ import { SIGN_IN_URL } from '../Landing/Landing';
 import styles from './Docs.module.css';
 import { renderMarkdown } from './markdown';
 import { OnThisPage } from './OnThisPage';
+import { Search } from './SearchDialog';
 import { DOC_GROUPS, DOC_PAGES, findPage, neighbours, pageSource } from './pages';
+
+const SEARCH_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
 
 const pagePath = (slug: string) => (slug === 'introduction' ? '/docs' : `/docs/${slug}`);
 
@@ -27,6 +30,7 @@ export function Docs() {
     setLastLocation(location);
     setMenuOpen(false);
   }
+  const [searchOpen, setSearchOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -39,6 +43,18 @@ export function Docs() {
       // A malformed hash like "#%" can't be decoded; just don't scroll.
     }
   }, [slug, hash]);
+
+  // ⌘K / Ctrl-K opens search from anywhere on the docs, even while typing in another field. Plain letters never do anything.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     const before = document.title;
@@ -93,6 +109,14 @@ export function Docs() {
           Docs
         </Link>
         <span className={styles.spacer} />
+        <button type="button" className={styles.searchButton} aria-label="Search docs" onClick={() => setSearchOpen(true)}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <circle cx="7" cy="7" r="4.5" />
+            <path d="M10.5 10.5 14 14" />
+          </svg>
+          <span className={styles.searchLabel}>Search docs…</span>
+          <kbd className={styles.searchKey}>{SEARCH_KEY}</kbd>
+        </button>
         <a className={`${styles.topLink} ${styles.repoLink}`} href={BRAND.repoUrl}>
           GitHub <span aria-hidden="true">↗</span>
         </a>
@@ -169,6 +193,7 @@ export function Docs() {
         </main>
         {rendered && <OnThisPage headings={rendered.headings} />}
       </div>
+      <Search open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

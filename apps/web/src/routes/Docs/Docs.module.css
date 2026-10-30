@@ -363,6 +363,15 @@
   .repoLink {
     display: none;
   }
+
+  /* The search icon needs room too, so tighten the pills a little. */
+  .menuButton {
+    padding: 3px 8px;
+  }
+
+  .searchButton {
+    padding: 6px 4px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -371,6 +380,52 @@
   }
 
   .tag {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .top {
+    gap: 4px; /* after the 480px rule so it wins */
+  }
+}
+
+.searchButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--fg3);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.searchButton:hover {
+  color: var(--fg1);
+}
+
+.searchKey {
+  padding: 0 6px;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-control);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* On narrow screens the search is just the icon. */
+@media (max-width: 800px) {
+  .searchButton {
+    padding: 6px;
+    border-color: transparent;
+    background: none;
+  }
+
+  .searchLabel,
+  .searchKey {
     display: none;
   }
 }

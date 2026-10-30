@@ -141,4 +141,29 @@ describe('Docs', () => {
     expect(menu).toHaveAttribute('aria-expanded', 'false');
     expect(menu).toHaveFocus();
   });
+
+  it('opens search with Cmd-K and gives focus back when it closes', () => {
+    renderAt('/docs');
+    const opener = screen.getByRole('button', { name: 'Search docs' });
+    opener.focus();
+    fireEvent.click(opener);
+    const input = screen.getByRole('combobox');
+    expect(input).toHaveFocus();
+    // Plain letters do nothing, even inside the dialog.
+    fireEvent.keyDown(input, { key: 'k' });
+    expect(screen.getByRole('dialog', { name: 'Search docs' })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(opener).toHaveFocus();
+    fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
+    expect(screen.getByRole('dialog', { name: 'Search docs' })).toBeInTheDocument();
+  });
+
+  it('opens search with Ctrl-K, and a plain k does nothing', () => {
+    renderAt('/docs');
+    fireEvent.keyDown(document.body, { key: 'k' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'K', ctrlKey: true });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
 });

@@ -1,0 +1,78 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 16px 16px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 560px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--b1);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
+}
+
+.input {
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--b1);
+  background: none;
+  color: var(--fg1);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--fg3);
+  font-size: 14px;
+}
+
+.results {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  color: var(--fg1);
+  text-decoration: none;
+}
+
+li[aria-selected='true'] > .hit {
+  background: var(--sel);
+}
+
+.hitTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hitHeading {
+  font-weight: 400;
+  color: var(--fg2);
+}
+
+.snippet {
+  font-size: 13px;
+  color: var(--fg3);
+  overflow-wrap: anywhere;
+}
