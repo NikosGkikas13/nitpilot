@@ -93,6 +93,12 @@ describe('Docs', () => {
     expect(screen.getByRole('button', { name: /theme/ })).toBeInTheDocument();
   });
 
+  it('has a GitHub link in the sidebar, for phones where the top bar hides it', () => {
+    renderAt('/docs');
+    const nav = screen.getByRole('navigation', { name: 'Docs pages' });
+    expect(within(nav).getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
+  });
+
   it('scrolls to the heading named in the URL hash', () => {
     renderAt('/docs/introduction#try-it');
     expect(scrollIntoView).toHaveBeenCalled();

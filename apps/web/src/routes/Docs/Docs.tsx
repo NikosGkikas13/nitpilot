@@ -155,6 +155,10 @@ export function Docs() {
               </div>
             );
           })}
+          {/* The top bar hides its GitHub link on phones; this one is reached through the Menu. */}
+          <a className={styles.sideRepoLink} href={BRAND.repoUrl}>
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
         </nav>
 
         <main className={styles.main} ref={mainRef} tabIndex={-1}>

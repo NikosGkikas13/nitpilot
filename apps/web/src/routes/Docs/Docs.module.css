@@ -341,6 +341,16 @@
   color: var(--fg3);
 }
 
+/* The sidebar's GitHub link: only where the top bar's is hidden (480px and below). */
+.sideRepoLink {
+  display: none;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg2);
+  text-decoration: none;
+}
+
 /* Narrow screens: stack the boxes, and the arrows point down. */
 @media (max-width: 600px) {
   .body :global(.flow) {
@@ -419,6 +429,10 @@
   /* Phones: the landing page has the GitHub link, so drop it here or the top bar is wider than 375px. */
   .repoLink {
     display: none;
+  }
+
+  .sideRepoLink {
+    display: block;
   }
 }
 
