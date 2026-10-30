@@ -318,7 +318,7 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
   git push origin main
   ```
 
-- [ ] **Step 5: One-time accounts (the user does these; give the clicks in chat, one account at a time, and check the current docs if a screen differs)**
+- [x] **Step 5: One-time accounts (the user does these; give the clicks in chat, one account at a time, and check the current docs if a screen differs)**
 
   VS Code Marketplace, signed in with the Microsoft account the user wants to own the listing:
   1. Open https://marketplace.visualstudio.com/manage → **Create publisher** → ID `nitpilot`, name `Nitpilot` → **Create**.
@@ -332,7 +332,7 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
   4. In a terminal: `npx ovsx create-namespace nitpilot -p <token>`.
   5. GitHub secret `OVSX_PAT` as above.
 
-- [ ] **Step 6: First release (only with the user's go-ahead in chat: publishing can't be undone)**
+- [x] **Step 6: First release (only with the user's go-ahead in chat: publishing can't be undone)**
 
   Add the `v0.1.0` VS Code entry to `apps/web/src/routes/Docs/pages/changelog.md` and commit it. Then:
   ```bash
@@ -340,3 +340,5 @@ Extra: zod's check for a `navigator` object makes VS Code log a harmless depreca
   git push origin vscode-v0.1.0
   ```
   Watch the **Release VS Code extension** run on GitHub Actions. Expected: green; the extension on both listing pages from Task 4 Step 3 within a few minutes (Marketplace can take up to ~10 min to verify); the `.vsix` attached to the GitHub release. Install from the Marketplace in a clean VS Code profile and repeat Task 3's checks 1–3.
+
+**Released (2026-10-30):** tag `vscode-v0.1.0` on 70e26ee, run 41078875729 green. Marketplace 0.1.0 listed at once and was installable (`code --install-extension nitpilot.nitpilot-vscode`, throwaway profile) after ~3.5 min. Open VSX listed it after ~2 min. The `.vsix` is on the GitHub release. Still open: claim the Open VSX namespace (Option 1 of the claim form, now that the Marketplace listing exists), then add the trusted publisher there and delete `OVSX_PAT`. The docs page and changelog entry reach nitpilot.dev with the next server deploy.
