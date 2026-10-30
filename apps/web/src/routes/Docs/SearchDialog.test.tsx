@@ -41,7 +41,7 @@ describe('Search', () => {
   it('opens the first hit with Enter, in-app, and closes', async () => {
     const onClose = setup();
     await userEvent.type(screen.getByRole('combobox'), 'try it{Enter}');
-    expect(screen.getByTestId('where').textContent).toBe('/docs/introduction#try-it');
+    expect(screen.getByTestId('where').textContent).toBe('/docs#try-it');
     expect(onClose).toHaveBeenCalled();
   });
 

@@ -23,3 +23,8 @@ export function neighbours(slug: string): { prev?: DocPage; next?: DocPage } {
   if (i === -1) return {};
   return { prev: DOC_PAGES[i - 1], next: DOC_PAGES[i + 1] };
 }
+
+/** The address of a page: the introduction lives at `/docs`, the rest at `/docs/<slug>`. */
+export function pagePath(slug: string): string {
+  return slug === 'introduction' ? '/docs' : `/docs/${slug}`;
+}

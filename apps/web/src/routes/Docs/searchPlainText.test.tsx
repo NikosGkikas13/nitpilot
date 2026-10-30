@@ -6,7 +6,8 @@ import { Search } from './SearchDialog';
 import { searchDocs } from './search';
 
 // A stub page with markup in it: bold text and a code block holding a literal <repo>.
-vi.mock('./pages', () => ({
+vi.mock('./pages', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./pages')>()),
   DOC_PAGES: [{ slug: 'stub', title: 'Stub', group: 'Guides' }],
   pageSource: () => '# Stub\n\nSome **bold** words about the repo.\n\n```bash\ngit clone <repo> now\n```\n',
 }));
@@ -28,5 +29,13 @@ describe('snippets are plain text', () => {
     await userEvent.type(screen.getByRole('combobox'), 'clone');
     expect(screen.getByRole('option')).toHaveTextContent('<repo>');
     expect(container.querySelector('repo')).toBeNull();
+  });
+});
+
+describe('multi-word queries', () => {
+  it('match when the words are spread over title and body', () => {
+    const hits = searchDocs('stub clone'); // "Stub" is only in the title, "clone" only in the code
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]!.slug).toBe('stub');
   });
 });

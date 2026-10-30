@@ -176,4 +176,15 @@ describe('Docs', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(opener).toHaveFocus();
   });
+
+  it('moves focus to the page after a search result is opened', () => {
+    renderAt('/docs/introduction');
+    fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: 'try it' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('where').textContent).toBe('/docs');
+    expect(document.querySelector('main')).toHaveFocus();
+  });
 });

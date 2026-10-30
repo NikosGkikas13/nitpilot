@@ -8,11 +8,9 @@ import styles from './Docs.module.css';
 import { renderMarkdown } from './markdown';
 import { OnThisPage } from './OnThisPage';
 import { Search } from './SearchDialog';
-import { DOC_GROUPS, DOC_PAGES, findPage, neighbours, pageSource } from './pages';
+import { DOC_GROUPS, DOC_PAGES, findPage, neighbours, pagePath, pageSource } from './pages';
 
 const SEARCH_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
-
-const pagePath = (slug: string) => (slug === 'introduction' ? '/docs' : `/docs/${slug}`);
 
 /** The public docs: `/docs` is the introduction, `/docs/<slug>` any other page. Needs no sign-in and makes no API call. */
 export function Docs() {
@@ -194,7 +192,7 @@ export function Docs() {
         </main>
         {rendered && <OnThisPage headings={rendered.headings} />}
       </div>
-      <Search open={searchOpen} onClose={() => setSearchOpen(false)} fallbackFocus={searchButtonRef} />
+      <Search open={searchOpen} onClose={() => setSearchOpen(false)} fallbackFocus={searchButtonRef} afterResultFocus={mainRef} />
     </div>
   );
 }

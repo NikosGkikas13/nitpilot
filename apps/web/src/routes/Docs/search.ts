@@ -51,7 +51,8 @@ export function searchDocs(query: string, limit = 8): SearchHit[] {
     // The section before the first heading stands for the page itself.
     if (!section.heading && matches(section.pageTitle)) ranked.push({ rank: 0, section });
     else if (section.heading && matches(section.heading.text)) ranked.push({ rank: 1, section });
-    else if (matches(section.text)) ranked.push({ rank: 2, section });
+    // The words may be spread over the page title, heading and text.
+    else if (matches(`${section.pageTitle} ${section.heading?.text ?? ''} ${section.text}`)) ranked.push({ rank: 2, section });
   }
   // Array.sort is stable, so equal ranks stay in sidebar order.
   ranked.sort((a, b) => a.rank - b.rank);
