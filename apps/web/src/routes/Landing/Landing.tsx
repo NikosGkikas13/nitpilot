@@ -113,7 +113,7 @@ function DemoClip() {
         className={styles.demoVideo}
         src={clip}
         poster={dark ? darkPoster : lightPoster}
-        width={1082}
+        width={1080}
         height={760}
         muted
         loop

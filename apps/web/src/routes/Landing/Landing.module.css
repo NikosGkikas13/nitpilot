@@ -243,7 +243,7 @@
 .demoVideo {
   display: block;
   width: 100%;
-  max-width: 1082px;
+  max-width: 1080px;
   height: auto;
   border-radius: 18px;
   border: 1px solid var(--b1);

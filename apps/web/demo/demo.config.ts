@@ -2,8 +2,14 @@ import { defineConfig } from '@playwright/test';
 import base from '../playwright.config';
 
 // The demo recordings: the e2e servers, a video of every page. `demo` is the captioned walkthrough; `hero-*` are the
-// landing page's clip, one per theme. (Playwright records CSS pixels, so a deviceScaleFactor of 2 wouldn't sharpen it.)
-const hero = { browserName: 'chromium' as const, viewport: { width: 1440, height: 760 }, video: { mode: 'on' as const, size: { width: 1440, height: 760 } } };
+// landing page's clip, one per theme, saved as 2x frames by hero.spec.ts itself (Playwright's video is 1x).
+// A real 2x window, not deviceScaleFactor: Chrome sends emulated-scale screencast frames at 1x. No trace, which would take the screencast at 800px.
+const hero = {
+  browserName: 'chromium' as const,
+  viewport: null,
+  launchOptions: { args: ['--window-size=1440,760', '--force-device-scale-factor=2'] },
+  trace: 'off' as const,
+};
 
 export default defineConfig({
   ...base,
