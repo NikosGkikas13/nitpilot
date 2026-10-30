@@ -1,0 +1,28 @@
+import { expect, test } from '@playwright/test';
+import { pageProblems } from './control';
+
+test('the docs open signed out, page through, and fit a phone without calling the API', async ({ page }) => {
+  const errors = pageProblems(page);
+  const apiCalls: string[] = [];
+  page.on('request', (req) => {
+    const { pathname } = new URL(req.url());
+    if (pathname.startsWith('/api/') || pathname.startsWith('/ws')) apiCalls.push(pathname);
+  });
+
+  await page.goto('/docs');
+  await expect(page.getByRole('heading', { level: 1, name: 'Introduction' })).toBeVisible();
+
+  await page.getByRole('link', { name: /Next/ }).click();
+  await expect(page).toHaveURL(/\/docs\/quickstart$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Quickstart' })).toBeVisible();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  for (const path of ['/docs', '/docs/quickstart', '/docs/how-it-works']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBeLessThanOrEqual(375);
+  }
+
+  expect(apiCalls).toEqual([]);
+  expect(errors).toEqual([]);
+});

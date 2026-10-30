@@ -1,5 +1,5 @@
 import { BRAND } from '@nitpilot/protocol';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIGN_IN_URL } from '../Landing/Landing';
@@ -63,7 +63,7 @@ describe('Docs', () => {
     const link = container.querySelector('main a[href^="/docs"]')!;
     const notPrevented = fireEvent.click(link);
     expect(notPrevented).toBe(false); // the page didn't reload
-    expect(screen.getByTestId('where').textContent).toBe('/docs/introduction');
+    expect(screen.getByTestId('where').textContent).toBe('/docs/quickstart');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -88,7 +88,7 @@ describe('Docs', () => {
   it('has the top bar links and the theme toggle', () => {
     renderAt('/docs');
     expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/docs');
-    expect(screen.getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
+    expect(within(screen.getByRole('banner')).getByRole('link', { name: /GitHub/ })).toHaveAttribute('href', BRAND.repoUrl);
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', SIGN_IN_URL);
     expect(screen.getByRole('button', { name: /theme/ })).toBeInTheDocument();
   });
@@ -126,7 +126,7 @@ describe('Docs', () => {
     const menu = screen.getByRole('button', { name: 'Menu' });
     fireEvent.click(menu);
     expect(menu).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(document.querySelector('main a[href^="/docs"]')!); // goes /docs -> /docs/introduction
+    fireEvent.click(document.querySelector('main a[href^="/docs"]')!); // goes /docs -> /docs/quickstart
     expect(menu).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(screen.getByText('test-back'));
     expect(screen.getByTestId('where').textContent).toBe('/docs');

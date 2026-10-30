@@ -9,6 +9,11 @@ describe('Landing', () => {
     expect(screen.getByRole('link', { name: /Sign in with GitHub/ })).toHaveAttribute('href', '/auth/github/login?next=%2F');
   });
 
+  it('links to the docs site', () => {
+    render(<Landing />);
+    expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/docs');
+  });
+
   it('explains how it works in three steps', () => {
     render(<Landing />);
     const steps = screen.getByRole('region', { name: 'How it works' });

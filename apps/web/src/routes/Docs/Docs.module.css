@@ -359,11 +359,6 @@
 }
 
 @media (max-width: 360px) {
-  /* 320px phones: the landing page has the GitHub link, so drop it here to keep the gutters. */
-  .repoLink {
-    display: none;
-  }
-
   /* The search icon needs room too, so tighten the pills a little. */
   .menuButton {
     padding: 3px 8px;
@@ -380,6 +375,11 @@
   }
 
   .tag {
+    display: none;
+  }
+
+  /* Phones: the landing page has the GitHub link, so drop it here or the top bar is wider than 375px. */
+  .repoLink {
     display: none;
   }
 }

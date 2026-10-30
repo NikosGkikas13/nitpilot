@@ -4,7 +4,11 @@ export type DocGroup = (typeof DOC_GROUPS)[number];
 export type DocPage = { slug: string; title: string; group: DocGroup };
 
 /** Every docs page in sidebar order. The Markdown for each lives in `pages/<slug>.md`. */
-export const DOC_PAGES: DocPage[] = [{ slug: 'introduction', title: 'Introduction', group: 'Get started' }];
+export const DOC_PAGES: DocPage[] = [
+  { slug: 'introduction', title: 'Introduction', group: 'Get started' },
+  { slug: 'quickstart', title: 'Quickstart', group: 'Get started' },
+  { slug: 'how-it-works', title: 'How it works', group: 'Get started' },
+];
 
 // Vite reads each Markdown file as text at build time, so the pages ship inside the docs chunk.
 const SOURCES = import.meta.glob('./pages/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;

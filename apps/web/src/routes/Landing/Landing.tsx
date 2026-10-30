@@ -34,7 +34,7 @@ export function Landing() {
       <nav className={styles.nav}>
         <Wordmark size={22} />
         <span className={styles.spacer} />
-        <a className={styles.navLink} href={`${BRAND.repoUrl}/tree/main/docs`}>
+        <a className={styles.navLink} href="/docs">
           Docs
         </a>
         <a className={styles.navLink} href={BRAND.repoUrl}>
