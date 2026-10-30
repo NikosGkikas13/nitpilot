@@ -52,8 +52,8 @@ export class ServerClient {
     return this.call('GET', '/api/me', MeResponse, { auth: true, signal: opts.signal });
   }
 
-  myChats() {
-    return this.call('GET', '/api/me/chats', MyChatsResponse, { auth: true });
+  myChats(opts: { signal?: AbortSignal } = {}) {
+    return this.call('GET', '/api/me/chats', MyChatsResponse, { auth: true, signal: opts.signal });
   }
 
   /** `nitpilot retry`: queue my failed job on this chat again. */

@@ -1,0 +1,16 @@
+{
+  "name": "nitpilot",
+  "owner": {
+    "name": "Nikos Gkikas"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for Nitpilot."
+  },
+  "plugins": [
+    {
+      "name": "nitpilot",
+      "source": "./plugins/nitpilot",
+      "description": "See your Nitpilot PRs and what they need from you, without leaving Claude Code."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "nitpilot",
+  "description": "See your Nitpilot PRs and what they need from you, without leaving Claude Code.",
+  "version": "0.1.0",
+  "author": { "name": "Nikos Gkikas" },
+  "homepage": "https://nitpilot.dev/docs/claude-code",
+  "repository": "https://github.com/NikosGkikas13/nitpilot",
+  "license": "MIT"
+}

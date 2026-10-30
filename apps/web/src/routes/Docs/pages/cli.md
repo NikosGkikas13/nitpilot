@@ -7,12 +7,12 @@ Nitpilot: your own AI agent reviews your teammates' pull requests, and theirs re
 
 Usage: nitpilot <command>
 
-  nitpilot login [--no-open]  Connect this device to your account
-  nitpilot start              Stay connected and run jobs (Ctrl-C stops)
-  nitpilot status             Your open PRs and what they need from you
-  nitpilot doctor             Check this machine is ready to run jobs
-  nitpilot repos add [path]   Link a local clone, so its jobs can come here
-  nitpilot retry <pr-url>     Run your failed job on that PR again
+  nitpilot login [--no-open]       Connect this device to your account
+  nitpilot start                   Stay connected and run jobs (Ctrl-C stops)
+  nitpilot status [--json|--line]  Your open PRs and what they need from you
+  nitpilot doctor                  Check this machine is ready to run jobs
+  nitpilot repos add [path]        Link a local clone, so its jobs can come here
+  nitpilot retry <pr-url>          Run your failed job on that PR again
 
   nitpilot --version
 ```
@@ -59,7 +59,7 @@ Common failures:
 ## nitpilot status
 
 ```bash
-nitpilot status
+nitpilot status [--json|--line]
 ```
 
 Shows who you are on the server, and your open PRs with Nitpilot as a table with the columns PR, ROLE, PHASE, ROUND, NEEDS YOU and TITLE. NEEDS YOU says `a decision`, `start review`, `agent failed` or `drafts`. For each failed job it adds the `nitpilot retry` command to run.
@@ -70,6 +70,9 @@ Other lines you may see:
 - `! GitHub access expired. Sign in again at <server> so Nitpilot can post in your name.`
 
 Common failures: `` Not logged in. Run `nitpilot login`. `` and `` The server didn't accept this device's token. Run `nitpilot login`. `` (the device was revoked in Settings).
+
+- `--json` prints the same as JSON, for scripts: `login`, `server`, `githubAuth` and `chats` (each with `repo`, `number`, `title`, `role`, `phase`, `round`, `attention` and `url`).
+- `--line` prints one short line for an editor's status line, like `Nitpilot: 2 need you · 5 open`. It asks the server at most every 30 seconds, and never fails: it prints `not logged in` or `can't reach the server` instead. See [Use Nitpilot in Claude Code](/docs/claude-code).
 
 ## nitpilot doctor
 

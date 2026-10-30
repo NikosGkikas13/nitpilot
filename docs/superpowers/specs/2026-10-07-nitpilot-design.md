@@ -341,7 +341,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 **Commands**
 - `nitpilot login [--no-open]`
 - `nitpilot start` (runs the daemon in the foreground)
-- `nitpilot status`
+- `nitpilot status [--json|--line]`: a table by default; `--json` for scripts; `--line` one line for an editor's status line (`Nitpilot: 2 need you · 5 open`), cached 30 s in `status-line.json` next to the config so a redraw doesn't call the server, with a 3 s timeout, and never an error (it prints `not logged in` or `can't reach the server`). The Claude Code plugin in `plugins/nitpilot` (marketplace: `.claude-plugin/marketplace.json` at the repo root) adds `/nitpilot:status` (`commands/status.md`), which runs `--json` and reports the PRs that need you first, with each chat's link; the docs page `claude-code` shows the status line setting.
 - `nitpilot doctor`: checks git, whether the agent is installed and logged in, the config, and linked repos
 - `nitpilot repos add [path]`: links a local clone to every GitHub repo its remotes point at (a fork's clone serves both the fork and the base repo)
 - `nitpilot retry <pr-url>`: runs your failed job on that PR again (or `owner/name#12`)
