@@ -75,7 +75,7 @@ Do this when the key may have leaked (it reached a chat, a log, someone who shou
    set_env ENCRYPTION_KEY "$(openssl rand -base64 32)"
    ls -l .env && awk -F= '/^ENCRYPTION_KEY/ { print $1, ($2 == "" ? "(empty)" : "(set)") }' .env
    docker compose up -d --force-recreate --wait
-   docker compose logs nitpilot-server | grep -E '\[keys\]|\[boot\]' | tail -n 2
+   docker compose logs nitpilot-server | grep -E '\[keys\]|\[boot\] GitHub App' | tail -n 2
    EOF
    ```
 
