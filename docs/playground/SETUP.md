@@ -48,6 +48,8 @@ These need the two bot accounts, which G4 Task 4 creates. Do it then.
 
 Write access matters: GitHub only asks a code owner for a review when they can write to the repo, and the author bot pushes its fixes to the PR branch.
 
+Then run the bots themselves on the box: [hosting.md, "Playground bots"](../hosting.md#playground-bots-plan-4-g4).
+
 ## Good to know
 
 - A demo PR's fixes are pushed to its branch, so the `demo/*` branches are templates: the "Run a demo" route (Task 3) should copy one to a fresh branch for each run, never open a PR straight from it.

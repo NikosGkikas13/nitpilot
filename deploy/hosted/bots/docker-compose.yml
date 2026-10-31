@@ -1,0 +1,65 @@
+# The playground's two demo bots (Plan 4 G4, docs/hosting.md "Playground bots"). Each is a Nitpilot CLI with the fake
+# agent, signed in as its own GitHub account: `nitpilot-demo-author` fixes, `nitpilot-demo-reviewer` reviews. They live
+# in /opt/nitpilot-bots on the Hetzner box, apart from /opt/nitpilot, so a server deploy and a bot restart never touch
+# each other.
+#
+#   cd /opt/nitpilot-bots
+#   docker compose up -d                             start both (after the once-only setup in docs/hosting.md)
+#   docker compose logs -f                           both logs
+#   docker compose run --rm demo-author doctor       any `nitpilot` command, as that bot
+#
+# Nothing is built or published: the fake agent only exists in a source checkout, so the CLI runs from one, in ./src
+# (a release tag, with `npm ci` done once), with plain Node. Each bot's own files are in ./author or ./reviewer:
+#   config/                its NITPILOT_CONFIG_DIR: config.json (the token, "agent": "fake"), today's job count, worktrees
+#   nitpilot-playground/   its linked clone of the playground repo
+#   .gitconfig             its git settings (HOME is this folder); the author's also has its git identity, and
+#   .git-credentials       the author's GitHub token for pushing fixes (mode 600)
+#
+# No top-level `name:`: Compose names the project after the folder, `nitpilot-bots` on the box.
+
+# The settings both bots share. A name starting with `x-` is ignored by Compose; `<<: *bot` below pastes it in.
+x-bot: &bot
+  # Full Debian Node 22: it ships git, which the CLI needs, and Node 22 has --experimental-strip-types, which runs the
+  # fake agent's TypeScript script directly (docs/why/docker-images.md, "Running from source").
+  image: node:22-bookworm
+  # The image's own non-root user (uid 1000). Its folders on the box belong to uid 1000 for that reason.
+  user: node
+  # `nitpilot …` from source. The service's `command` (or what follows `docker compose run --rm <bot>`) is the subcommand.
+  entrypoint: ["/src/node_modules/.bin/tsx", "/src/apps/cli/src/index.ts"]
+  command: ["start"]
+  working_dir: /bot
+  # A tiny init process in front of node, so `docker compose stop` (SIGTERM) reaches the CLI and it disconnects cleanly.
+  init: true
+  # Back after a crash or a reboot; also after the CLI exits because the server sent it away (a revoked token): then
+  # Docker keeps retrying, waiting longer each time, and the log says why. Only `docker compose stop` / `down` keep it down.
+  restart: unless-stopped
+  environment:
+    HOME: /bot
+    NITPILOT_CONFIG_DIR: /bot/config
+    NITPILOT_FAKE_SCENARIO: /src/apps/cli/src/agents/fake/scenarios/playground.json
+  # A cap, not a reservation. Idle, a bot is one Node process; during a job add git and the fake agent's own Node
+  # process for a few seconds. The box has 4 GB, already promised past its size (docs/hosting.md, "Memory"), so the
+  # cap keeps a stuck bot from taking the server or Odyhook down with it. `docker stats` shows the real use.
+  mem_limit: 256m
+  pids_limit: 128
+  # Keep the log from filling the disk: three files of 10 MB, the oldest dropped first. `docker compose logs` reads them.
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  # No `ports:` and no shared network: like any CLI, a bot only connects out, to https://nitpilot.dev and GitHub.
+
+services:
+  demo-author:
+    <<: *bot
+    volumes:
+      # Read-only: a job can't change the code that runs it.
+      - ./src:/src:ro
+      - ./author:/bot
+
+  demo-reviewer:
+    <<: *bot
+    volumes:
+      - ./src:/src:ro
+      - ./reviewer:/bot

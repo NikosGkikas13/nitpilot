@@ -6,7 +6,7 @@
 
 Everywhere else, the server acts on GitHub either as the Nitpilot GitHub App (posting reviews) or as you, with your own sign-in token (checking which repos you can read). A demo has neither: the visitor isn't signed in, and the GitHub App doesn't author PRs.
 
-The playground needs a PR author, so it has one: a GitHub account called `nitpilot-demo-author`, with a second one, `nitpilot-demo-reviewer`, to review. Each runs a Nitpilot CLI with the fake agent (Plan 4 G4 Task 4).
+The playground needs a PR author, so it has one: a GitHub account called `nitpilot-demo-author`, with a second one, `nitpilot-demo-reviewer`, to review. Each runs a Nitpilot CLI with the fake agent, on the same box as the server ([hosting.md, "Playground bots"](../hosting.md#playground-bots-plan-4-g4)).
 
 ## The idea
 
@@ -34,3 +34,4 @@ From there nothing is special: the repo's `CODEOWNERS` file asks the reviewer bo
 - `apps/server/src/lib/env.ts`: `DEMO_REPO`, `DEMO_AUTHOR_TOKEN`.
 - `apps/web/src/routes/Landing/Landing.tsx` and `apps/web/src/api/demo.ts`: the button.
 - `docs/playground/`: the repo's files and setup steps.
+- `deploy/hosted/bots/docker-compose.yml`: the two bots' containers.

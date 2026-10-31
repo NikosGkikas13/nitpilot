@@ -62,6 +62,17 @@ You've met the fix in npm: `esbuild` ships one package per platform (`@esbuild/d
 
 The release workflow builds both halves on GitHub's runners, which are amd64. The arm64 half is built under **QEMU**, a program that pretends to be an ARM processor; it's correct but slow, which is why the image job has a long timeout. CI's per-PR image check builds only amd64, to stay fast. `docker buildx imagetools inspect ghcr.io/nikosgkikas13/nitpilot:<tag>` lists the platforms a tag holds.
 
+## Running from source: the playground bots
+
+The playground's two demo bots ([acting-as-a-bot.md](acting-as-a-bot.md)) need the fake agent, which only exists in a source checkout: the npm package and the server image leave it out. So for them there is no image of our own at all. They run the stock `node:22-bookworm` image, and the code comes in through **mounted folders**:
+
+- `./src`, a checkout of Nitpilot at a release tag with `npm ci` done once, mounted **read-only** at `/src`. The container runs `tsx /src/apps/cli/src/index.ts start`: `tsx` turns TypeScript into JavaScript as it loads, like Vite's dev server does, so nothing is built first.
+- `./author` (or `./reviewer`), mounted **writable** at `/bot`: the bot's config, its clone of the playground and its git settings. Everything a bot remembers lives there, so the container itself can be thrown away and recreated at any time.
+
+React comparison: it's `npm run dev` instead of `vite build`. Handy when there's nothing to ship, slower to start and bigger in memory, which is fine for two small bots and wrong for the server. Updating is "put a newer checkout in `./src` and restart", not "pull a new image".
+
+`--experimental-strip-types` (Node 22's built-in way to run a `.ts` file by dropping its types) is how the fake agent's own script runs; the full `bookworm` image (not `slim`) is picked because it ships `git`, which the CLI needs. Setup steps: [hosting.md, "Playground bots"](../hosting.md#playground-bots-plan-4-g4).
+
 ## Where
 
-`Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh` at the repository root. The shutdown code is `shutdown()` in `apps/server/src/main.ts`; the CI job is `image` in `.github/workflows/ci.yml`. The two platforms are set in `.github/workflows/release.yml` (`platforms:` and the QEMU step).
+`Dockerfile`, `.dockerignore` and `scripts/image-smoke.sh` at the repository root. The shutdown code is `shutdown()` in `apps/server/src/main.ts`; the CI job is `image` in `.github/workflows/ci.yml`. The two platforms are set in `.github/workflows/release.yml` (`platforms:` and the QEMU step). The playground bots' compose file is `deploy/hosted/bots/docker-compose.yml`.
