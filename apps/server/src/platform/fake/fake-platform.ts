@@ -37,6 +37,8 @@ export class FakePlatform implements PlatformAdapter {
   readonly searches: string[] = [];
   /** `${repoFullName}#${number}` → that PR's changed files */
   readonly prFiles = new Map<string, PrFile[]>();
+  /** Repos GitHub says are private now (`isRepoPublic`); every other repo is public. */
+  readonly privateRepos = new Set<string>();
   /** Which PRs' files were listed, in order. */
   readonly fileLists: string[] = [];
   /** userId → the app's installations GitHub lists for them (the setup checklist's "installed" step) */
@@ -81,6 +83,10 @@ export class FakePlatform implements PlatformAdapter {
   async findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]> {
     this.searches.push(user.id);
     return this.openPrs.get(user.id) ?? [];
+  }
+
+  async isRepoPublic(repo: RepoRef): Promise<boolean> {
+    return !this.privateRepos.has(repo.repoFullName);
   }
 
   async listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {

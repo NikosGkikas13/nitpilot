@@ -34,6 +34,15 @@ The same question, everywhere a chat is read:
 
 **Why 401 `reauth` and not 401 `unauthorized`.** Both are "who are you?", but they mean different things to the web app: `unauthorized` is "you're not signed in to Nitpilot" (show the landing page), `reauth` is "you are, but your GitHub sign-in expired" (show the Reconnect banner).
 
+## Without signing in (public repos)
+
+A public repo's code and PRs are on GitHub for anyone to see, and any GitHub user who signs in already passes the check above. So a chat in a public repo can also be read with no sign-in at all, which is what makes a chat link worth sharing: `GET /api/public/chats/:owner/:repo/:number` (`publicChatAccessByPath` in `chats/access.ts`).
+
+- **Public twice over.** The repo must be public as we stored it *and* as GitHub says now. The second question uses the app's token this time (there's no person to ask with) and is kept 5 minutes per repo. Webhooks can be missed; without that check, a repo made private while the server missed `repository.privatized` would leave its chats open.
+- **The team can say no.** `public_chats: false` in `.nitpilot.yml` turns it off for the repo.
+- **Trimmed.** `loadPublicChatPage` (`chats/views.ts`) leaves out what is personal rather than public: people's own messages (a note to your own agent is written for it, not for the internet), waiting drafts, failure lines, and when each laptop was last online. A visitor can't act on anything.
+- **The same 404 for every no**, for the reason above.
+
 ## What the 5 minutes cost
 
 Asking GitHub on every read would make each chat open wait on GitHub, and spend the person's GitHub rate limit. So the answer is kept 5 minutes per person and repo (`lib/ttl-cache.ts`, at most 1,000 answers). The cost: someone removed from a repo can still read its chats for up to 5 minutes. An open socket asks again when its answer is that old, so it stops too.

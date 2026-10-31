@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { makeChat, makeCliToken, makeMessage, makeParticipant, makeRepo, makeUser } from '../../test/db';
 import { prisma } from '../lib/prisma';
 import type { LiveClis } from './activity';
-import { loadChatPage, loadChatView } from './views';
+import { loadChatPage, loadChatView, loadPublicChatPage } from './views';
 
 /** maya's PR, reviewed by leo, with an agent point escalated and a GitHub point answered. maya's CLI is connected. */
 async function scene() {
@@ -190,6 +190,38 @@ describe('loadChatView: Auto and drafts (spec §9 "Auto" and "Drafts")', () => {
     const view = await loadChatView(chat.id, leo, clis);
     expect(view.activity).toEqual({ kind: 'agent_working', who: 'maya', why: null, offlineSince: null });
     expect(view.participants.find((p) => p.login === 'maya')?.agent).toMatchObject({ online: true, working: false });
+  });
+
+  it('loadPublicChatPage: shows a visitor the points and what happened, not drafts, notes, failures or when laptops were last seen', async () => {
+    const { chat, clis } = await drafts();
+    const lines: [string, string, object | null][] = [
+      ['system', 'Pull request opened by maya', null],
+      ['human', 'Note to my agent: skip the tests folder', null],
+      ['point_raised', 'SQL built from input', null],
+      ['system', "leo's agent couldn't finish (quota)", { reason: 'quota', jobId: 'j1' }],
+      ["system", "Couldn't post the review on GitHub: reauth", { write: 'review', reason: 'reauth', pointNumbers: [1] }],
+      ['system', 'Ready for approval', null],
+    ];
+    for (const [i, [kind, body, data]] of lines.entries()) {
+      await prisma.message.create({ data: { chatId: chat.id, seq: i + 1, kind, body, ...(data ? { data } : {}) } });
+    }
+    await prisma.prChat.update({ where: { id: chat.id }, data: { lastSeq: lines.length } });
+
+    // A signed-in reader sees all of it: the drafts, every line, and when leo's laptop was last online.
+    const full = await loadChatPage(chat.id, await makeUser(), clis);
+    expect(full.view.drafts).toHaveLength(2);
+    expect(full.items).toHaveLength(6);
+    expect(full.view.participants.find((p) => p.login === 'leo')?.agent?.offlineSince).toBe('2026-10-16T18:04:00.000Z');
+
+    const page = await loadPublicChatPage(chat.id, clis);
+    expect(page.items.map((i) => i.body)).toEqual(['Pull request opened by maya', 'SQL built from input', 'Ready for approval']);
+    expect(page.view.drafts).toEqual([]);
+    expect(page.view.participants.find((p) => p.login === 'leo')?.agent).toEqual({ online: false, offlineSince: null, working: false });
+    expect(page.view.activity.offlineSince).toBeNull();
+    expect(page.view.points.map((p) => p.number)).toEqual([1, 2, 3]);
+    expect(page.view.viewer).toEqual({ role: null, attention: 'none', failure: null, failureReason: null });
+    expect(page.view.permissions).toEqual({ note: false, resolve: [], continue: [], review: false, retry: false, auto: [], drafts: [] });
+    expect(page.hasOlder).toBe(false);
   });
 });
 

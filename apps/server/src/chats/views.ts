@@ -1,7 +1,7 @@
 import {
   JobResult,
   type ActivityView, type AgentJobType, type Attention, type Category, type ChatResponse, type ChatView, type DraftView, type EscalationReason, type ParticipantView, type Phase,
-  type PointOrigin, type PointStatus, type PointView, type Resolution, type Role, type Severity, type Side, type Snippet,
+  type PointOrigin, type PointStatus, type PointView, type Resolution, type Role, type Severity, type Side, type Snippet, type TimelineItem,
 } from '@nitpilot/protocol';
 import type { Point, PrChat } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
@@ -117,6 +117,34 @@ export async function loadChatView(chatId: string, viewer: ChatViewer, clis: Liv
 export async function loadChatPage(chatId: string, viewer: ChatViewer, clis: LiveClis): Promise<ChatResponse> {
   const [view, page] = await Promise.all([loadChatView(chatId, viewer, clis), loadItemsBefore(chatId, null)]);
   return { view, ...page };
+}
+
+/** No participant has an empty GitHub id, so this reader has no role, nothing waiting on them and no permissions. */
+const NOBODY: ChatViewer = { githubId: '' };
+
+/**
+ * A chat for someone who isn't signed in (spec §16 "Who can see a chat"): what any reader sees, minus what is
+ * personal. Left out: people's own messages (notes to agents, and GitHub comments, which the PR shows anyway),
+ * waiting drafts, failures and waits with their reasons, and when each person's computer was last online.
+ */
+export async function loadPublicChatPage(chatId: string, clis: LiveClis): Promise<ChatResponse> {
+  const { view, items } = await loadChatPage(chatId, NOBODY, clis);
+  return {
+    view: {
+      ...view,
+      drafts: [],
+      participants: view.participants.map((p) => ({ ...p, agent: p.agent && { ...p.agent, offlineSince: null } })),
+      activity: { ...view.activity, offlineSince: null },
+    },
+    items: items.filter(isPublicItem),
+    // shortcut: a visitor gets the newest 200 items only (no public `before=` route); add one if long chats get shared.
+    hasOlder: false,
+  };
+}
+
+function isPublicItem(item: TimelineItem): boolean {
+  if (item.kind === 'human') return false;
+  return !(item.kind === 'system' && item.data && ('reason' in item.data || 'write' in item.data));
 }
 
 function activityView(a: Activity): ActivityView {

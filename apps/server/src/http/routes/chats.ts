@@ -3,11 +3,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { RepoAccess } from '../../auth/repo-access';
 import { requireUser, type UserVariables } from '../../auth/request-user';
-import { chatAccess, chatAccessByPath, type ChatAccess } from '../../chats/access';
+import { chatAccess, chatAccessByPath, publicChatAccessByPath, type ChatAccess } from '../../chats/access';
 import type { LiveClis } from '../../chats/activity';
 import { repoRef } from '../../chats/rules';
 import { loadItemsBefore } from '../../chats/timeline';
-import { loadChatPage } from '../../chats/views';
+import { loadChatPage, loadPublicChatPage } from '../../chats/views';
+import type { Repo } from '../../generated/prisma/client';
 import { prisma } from '../../lib/prisma';
 import { TtlCache } from '../../lib/ttl-cache';
 import { GithubError } from '../../platform/github/client';
@@ -18,6 +19,8 @@ import { HttpError } from '../errors';
 export const FILES_TTL_MS = 10 * 60_000;
 /** The most file lists kept at once. */
 export const MAX_FILE_LISTS = 500;
+/** How long GitHub's answer to "is this repo public?" is kept: the most a chat stays open after its repo goes private. */
+export const PUBLIC_REPO_TTL_MS = 5 * 60_000;
 
 const BeforeQuery = z.object({ before: z.coerce.number().int().positive().optional() });
 
@@ -29,6 +32,21 @@ export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; 
   const app = new Hono<{ Variables: UserVariables }>();
   const { access } = deps;
   const fileLists = new TtlCache<FilesResponse>(FILES_TTL_MS, MAX_FILE_LISTS);
+  const publicRepos = new TtlCache<boolean>(PUBLIC_REPO_TTL_MS, MAX_FILE_LISTS);
+  const isPublic = async (repo: Repo) => {
+    const kept = publicRepos.get(repo.id);
+    if (kept !== undefined) return kept;
+    const answer = await deps.platform.isRepoPublic(repoRef(repo));
+    publicRepos.set(repo.id, answer);
+    return answer;
+  };
+
+  // No sign-in: a public repo's chat, trimmed (spec §16 "Who can see a chat"). The same 404 for every chat it can't show.
+  app.get('/api/public/chats/:owner/:repo/:number', async (c) => {
+    const chat = readable(await askingGithub(() => publicChatAccessByPath({ owner: c.req.param('owner'), repo: c.req.param('repo'), number: c.req.param('number') }, isPublic)));
+    const body: ChatResponse = await loadPublicChatPage(chat.id, deps.clis);
+    return c.json(body);
+  });
 
   app.get('/api/chats/:owner/:repo/:number', requireUser, async (c) => {
     const user = c.get('user');

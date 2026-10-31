@@ -12,6 +12,7 @@ describe('TeamRulesSchema', () => {
       trusted_bots: ['coderabbitai[bot]'],
       debounce_seconds: 30,
       max_points_per_review: 20,
+      public_chats: true,
     });
   });
 

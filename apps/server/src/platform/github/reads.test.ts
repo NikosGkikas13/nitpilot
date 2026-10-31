@@ -160,3 +160,18 @@ describe('listPrFiles', () => {
     expect(truncated).toBe(true);
   });
 });
+
+describe('isRepoPublic', () => {
+  it("is GitHub's answer now, asked with the app's token", async () => {
+    for (const [isPrivate, expected] of [[false, true], [true, false]] as const) {
+      const { platform, fetch } = reads({ 'GET /repos/octo/sandbox': () => ({ id: 501, private: isPrivate }) });
+      expect(await platform.isRepoPublic(ref)).toBe(expected);
+      expect(fetch.calls.at(-1)!.headers.get('authorization')).toBe('Bearer ghs_x');
+    }
+  });
+
+  it("throws when GitHub won't say, so the chat isn't shown", async () => {
+    const { platform } = reads({ 'GET /repos/octo/sandbox': () => json({ message: 'Not Found' }, 404) });
+    await expect(platform.isRepoPublic(ref)).rejects.toThrow();
+  });
+});

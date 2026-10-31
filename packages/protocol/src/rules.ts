@@ -20,6 +20,8 @@ export const TeamRulesSchema = z.strictObject({
   trusted_bots: z.array(z.string().min(1)).default(['coderabbitai[bot]']),
   debounce_seconds: z.number().int().min(0).max(600).default(30),
   max_points_per_review: z.number().int().min(1).max(20).default(20),
+  /** A public repo's chats can be read without signing in, trimmed (spec §16 "Who can see a chat"). False turns that off. */
+  public_chats: z.boolean().default(true),
 });
 export type TeamRules = z.infer<typeof TeamRulesSchema>;
 

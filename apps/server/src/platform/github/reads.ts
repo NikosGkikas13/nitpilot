@@ -95,6 +95,12 @@ export class GithubReads implements PlatformReads {
   }
 
   /** Page by page, 100 at a time, with the installation token, up to MAX_PR_FILES. */
+  async isRepoPublic(repo: RepoRef): Promise<boolean> {
+    const token = await this.appAuth.installationToken(repo.installationId);
+    const { data } = await this.github.api<{ private: boolean }>('GET', `/repos/${repo.repoFullName}`, { token });
+    return data.private === false;
+  }
+
   async listPrFiles(ref: PrRef): Promise<{ files: PrFile[]; truncated: boolean }> {
     const token = await this.appAuth.installationToken(ref.installationId);
     const files: PrFile[] = [];

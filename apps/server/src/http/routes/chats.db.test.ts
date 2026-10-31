@@ -184,3 +184,61 @@ describe('the same access answers on messages and files', () => {
     expect(platform.listPrFiles).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('GET /api/public/chats/:owner/:repo/:number (spec §16 "Who can see a chat")', () => {
+  /** A chat in a repo, read with no session cookie at all. */
+  async function visitor(repoOver: Parameters<typeof makeRepo>[0] = {}) {
+    const repo = await makeRepo(repoOver);
+    const maya = await makeUser({ login: 'maya' });
+    const chat = await makeChat(repo.id, { authorGithubId: maya.githubId });
+    await makeParticipant(chat.id, maya, 'author');
+    await prisma.message.createMany({
+      data: [
+        { chatId: chat.id, seq: 1, kind: 'system', body: 'Pull request opened by maya' },
+        { chatId: chat.id, seq: 2, kind: 'human', body: 'A note to my agent', authorGithubId: maya.githubId, authorLogin: 'maya' },
+      ],
+    });
+    await prisma.prChat.update({ where: { id: chat.id }, data: { lastSeq: 2 } });
+    const platform = new FakePlatform();
+    const isRepoPublic = vi.spyOn(platform, 'isRepoPublic');
+    const app = testApp({ platform });
+    const get = (path = `/api/public/chats/${repo.fullName}/${chat.number}`) => app.request(path);
+    return { repo, chat, platform, isRepoPublic, get };
+  }
+
+  it("answers a public repo's chat without signing in, trimmed", async () => {
+    const { chat, get } = await visitor();
+    const res = await get();
+    expect(res.status).toBe(200);
+    const body = ChatResponse.parse(await res.json());
+    expect(body.view).toMatchObject({ id: chat.id, author: 'maya', viewer: { role: null } });
+    expect(body.items.map((i) => i.body)).toEqual(['Pull request opened by maya']);
+  });
+
+  it("is the same 404 for a private repo, one GitHub now says is private, one with public_chats: false, and a missing chat", async () => {
+    const stored = await visitor({ private: true });
+    const nowPrivate = await visitor();
+    nowPrivate.platform.privateRepos.add(nowPrivate.repo.fullName);
+    const optedOut = await visitor({ rulesJson: { public_chats: false } });
+    const missing = await visitor();
+    const answers = [await stored.get(), await nowPrivate.get(), await optedOut.get(), await missing.get(`/api/public/chats/${missing.repo.fullName}/9999`)];
+    expect(answers.map((r) => r.status)).toEqual([404, 404, 404, 404]);
+    const errors = await Promise.all(answers.map(errorOf));
+    expect(new Set(errors.map((e) => JSON.stringify(e))).size).toBe(1);
+    // A repo we already know is private, or opted out, never costs a GitHub call.
+    expect([stored.isRepoPublic.mock.calls.length, optedOut.isRepoPublic.mock.calls.length]).toEqual([0, 0]);
+  });
+
+  it('asks GitHub whether the repo is public at most once every 5 minutes', async () => {
+    const { get, isRepoPublic } = await visitor();
+    for (let i = 0; i < 3; i++) expect((await get()).status).toBe(200);
+    expect(isRepoPublic).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a 404 without a lookup when the owner or repo isn't a GitHub name", async () => {
+    const { get, isRepoPublic } = await visitor();
+    expect((await get('/api/public/chats/a%20b/repo/1')).status).toBe(404);
+    expect((await get('/api/public/chats/octo/repo/1e2')).status).toBe(404);
+    expect(isRepoPublic).not.toHaveBeenCalled();
+  });
+});

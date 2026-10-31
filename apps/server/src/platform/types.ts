@@ -77,6 +77,8 @@ export interface PlatformReads {
   findOpenPrsFor(user: { id: string; login: string }): Promise<FoundPr[]>;
   /** The PR's changed files, at most `MAX_PR_FILES`; `truncated` when there may be more. */
   listPrFiles(pr: PrRef): Promise<{ files: PrFile[]; truncated: boolean }>;
+  /** Is the repo public on GitHub right now? Asked with the app's token, so a missed `privatized` webhook can't leave a private repo's chats open. */
+  isRepoPublic(repo: RepoRef): Promise<boolean>;
   /** The installations of this app that the person can see, asked with their own token (the setup checklist, spec §16). */
   userInstallations(userId: string): Promise<UserInstallation[]>;
 }
