@@ -109,7 +109,7 @@ Verify: run it on a real repo with review history; paste the output into `.nitpi
 
 **Task 2: web card.** A small stats row on the Inbox (four numbers, no chart) using the existing tokens from the design handoff. Also `nitpilot status --stats` in the CLI. **Done 2026-10-31.** The row (`routes/Inbox/InboxStats.tsx`) shows raised, fixed, escalated and the median time to ready with a 7d / 30d toggle; zeros show, an error hides it. `--stats` replaces the PR list; a server without the route (404) says it's too old. `formatMsToReady` is shared in `packages/protocol`.
 
-Verify: sandbox account with a few finished PRs shows the right counts.
+Verify: sandbox account with a few finished PRs shows the right counts. **Done 2026-10-31**: released as 0.7.0 and deployed (server and both playground bots). Checked live on the playground instead of the sandbox: `nitpilot status --stats` as `nitpilot-demo-reviewer` showed 6 raised, 2 fixed, 0 declined, 1 escalated, median "–" (no chat ready yet), matching the `Point` rows; the author bot showed zeros. The Inbox row wasn't checked in a signed-in browser (same route, covered by its tests).
 
 ---
 
