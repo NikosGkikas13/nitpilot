@@ -2,6 +2,14 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.5.0
+
+2026-10-31
+
+- **Share a chat.** Anyone can open the chat of a public repo's PR from its link, without signing in. They see the points and how the agents settled them; notes, drafts and failures stay hidden. Links show a preview card in Slack, X and LinkedIn, and chats stay out of search engines. A team can turn this off with `public_chats: false` in `.nitpilot.yml`. See [Security](/docs/security).
+- **Decide from the notification.** When the agents leave one point for you, the notification has **Resolve** and **Keep open** buttons, so you can decide without opening the chat (desktop browsers; on iPhone a tap opens the chat as before).
+- Nitpilot's summary comment on GitHub ends with a short line saying whose agent reviewed, with a link to get your own. `footer: false` in `.nitpilot.yml` removes it.
+
 ## v0.4.0
 
 2026-10-31
