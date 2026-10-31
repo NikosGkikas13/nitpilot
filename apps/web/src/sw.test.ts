@@ -16,7 +16,7 @@ type WindowClient = { url: string; focus: ReturnType<typeof vi.fn> };
  * Runs sw.js the way a browser would start it, with a pretend `self`: it records the listeners the file adds, and
  * stands in for showing notifications and for the open windows. No real worker, no real notification.
  */
-function startWorker(windows: WindowClient[] = []) {
+function startWorker(windows: WindowClient[] = [], fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => new Response(null, { status: 204 }))) {
   const listeners = new Map<string, Listener[]>();
   const self = {
     location: { origin: ORIGIN },
@@ -28,7 +28,7 @@ function startWorker(windows: WindowClient[] = []) {
       openWindow: vi.fn(async () => null),
     },
   };
-  vm.runInNewContext(SOURCE, { self, URL });
+  vm.runInNewContext(SOURCE, { self, URL, fetch });
 
   /** Fire an event at the worker, and wait for everything it passed to `waitUntil`. */
   async function fire(type: string, event: object): Promise<void> {
@@ -36,7 +36,7 @@ function startWorker(windows: WindowClient[] = []) {
     for (const listener of listeners.get(type) ?? []) listener({ ...event, waitUntil: (p: Promise<unknown>) => waits.push(p) });
     await Promise.all(waits);
   }
-  return { self, listeners, fire };
+  return { self, listeners, fire, fetch };
 }
 
 /** A push as the push service delivers it: the server's JSON payload (Task 19's `PushPayload`). */
@@ -136,5 +136,97 @@ describe('the service worker (public/sw.js)', () => {
     const { self, fire } = startWorker();
     await fire('notificationclick', clickEvent(undefined));
     expect(self.clients.openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
+  });
+
+  describe('Resolve / Keep open buttons (one escalated point)', () => {
+    const decision = { ...payload, chatId: 'chat-142', point: 2, actions: ['resolve', 'continue'] };
+    const chatUrl = `${ORIGIN}/c/acme/shop-api/142`;
+
+    function buttonClick(action: string, data: object = { url: chatUrl, chatId: 'chat-142', point: 2 }) {
+      return { action, notification: { data, body: 'acme/shop-api#142', tag: 'chat-142', close: vi.fn() } };
+    }
+
+    it('shows the buttons the payload allows, "continue" as Keep open, and keeps what a click needs', async () => {
+      const { self, fire } = startWorker();
+      await fire('push', pushEvent(decision));
+      expect(self.registration.showNotification).toHaveBeenCalledWith('Ready for your approval', {
+        body: 'acme/shop-api#142',
+        tag: 'chat-142',
+        renotify: true,
+        icon: '/icons/icon-192.png',
+        actions: [
+          { action: 'resolve', title: 'Resolve' },
+          { action: 'continue', title: 'Keep open' },
+        ],
+        data: { url: chatUrl, chatId: 'chat-142', point: 2 },
+      });
+    });
+
+    it('shows only the one button a PR author gets', async () => {
+      const { self, fire } = startWorker();
+      await fire('push', pushEvent({ ...decision, actions: ['continue'] }));
+      expect(self.registration.showNotification).toHaveBeenCalledWith(
+        'Ready for your approval',
+        expect.objectContaining({ actions: [{ action: 'continue', title: 'Keep open' }] }),
+      );
+    });
+
+    it('shows no buttons without actions, with unknown ones, or without a chat and point', async () => {
+      const { self, fire } = startWorker();
+      await fire('push', pushEvent(payload));
+      await fire('push', pushEvent({ ...decision, actions: ['merge'] }));
+      await fire('push', pushEvent({ ...decision, point: undefined }));
+      await fire('push', pushEvent({ ...decision, chatId: 42 }));
+      for (const [, options] of self.registration.showNotification.mock.calls as unknown as [string, object][]) {
+        expect(options).not.toHaveProperty('actions');
+        expect(options).toEqual(expect.objectContaining({ data: { url: chatUrl } }));
+      }
+    });
+
+    it.each([
+      ['resolve', 'P2 resolved'],
+      ['continue', 'P2 kept open'],
+    ])('%s POSTs to its route with the cookie, then quietly replaces the notification', async (action, title) => {
+      const { self, fire, fetch } = startWorker();
+      const click = buttonClick(action);
+      await fire('notificationclick', click);
+      expect(click.notification.close).toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledWith(`${ORIGIN}/api/chats/chat-142/points/2/${action}`, { method: 'POST', credentials: 'include' });
+      expect(self.registration.showNotification).toHaveBeenCalledWith(title, {
+        body: 'acme/shop-api#142',
+        tag: 'chat-142',
+        icon: '/icons/icon-192.png',
+        data: { url: chatUrl },
+      });
+      expect(self.clients.openWindow).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['not signed in', async () => new Response(null, { status: 401 })],
+      ['not allowed', async () => new Response(null, { status: 403 })],
+      ['already decided', async () => new Response(null, { status: 409 })],
+      ['offline', async (): Promise<Response> => Promise.reject(new TypeError('Failed to fetch'))],
+    ])('opens the chat when the POST fails (%s)', async (_why, answer) => {
+      const { self, fire } = startWorker([], vi.fn(answer));
+      await fire('notificationclick', buttonClick('resolve'));
+      expect(self.registration.showNotification).not.toHaveBeenCalled();
+      expect(self.clients.openWindow).toHaveBeenCalledWith(chatUrl);
+    });
+
+    it('an unknown button, or one without a chat and point, opens the chat and posts nothing', async () => {
+      const { self, fire, fetch } = startWorker();
+      await fire('notificationclick', buttonClick('merge'));
+      await fire('notificationclick', buttonClick('resolve', { url: chatUrl }));
+      expect(fetch).not.toHaveBeenCalled();
+      expect(self.clients.openWindow).toHaveBeenCalledTimes(2);
+      expect(self.clients.openWindow).toHaveBeenCalledWith(chatUrl);
+    });
+
+    it('a tap on the body (no button) still just opens the chat', async () => {
+      const { self, fire, fetch } = startWorker();
+      await fire('notificationclick', buttonClick(''));
+      expect(fetch).not.toHaveBeenCalled();
+      expect(self.clients.openWindow).toHaveBeenCalledWith(chatUrl);
+    });
   });
 });
