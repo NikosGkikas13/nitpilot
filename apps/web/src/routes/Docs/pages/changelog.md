@@ -2,6 +2,13 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.7.0
+
+2026-10-31
+
+- **Stats.** A small row under your inbox shows how your agent's reviews went over the last 7 or 30 days: points it raised, how many got fixed, how many wait for a person, and the median time from the first review to "Ready for approval".
+- **`nitpilot status --stats`** prints the same numbers in the terminal (`--days 30` for a month). See [CLI](/docs/cli#nitpilot-status).
+
 ## v0.6.0
 
 2026-10-31
