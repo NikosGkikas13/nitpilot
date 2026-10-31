@@ -6,6 +6,10 @@ import { Category } from './enums';
  * `strictObject` rejects unknown keys, so a typo like `max_round` becomes a visible
  * error instead of being silently ignored.
  */
+/** One `.nitpilot.yml` guideline, and how many a repo may have. `nitpilot rules suggest` checks its proposals against these too. */
+export const Guideline = z.string().trim().min(1).max(300);
+export const MAX_GUIDELINES = 20;
+
 export const TeamRulesSchema = z.strictObject({
   version: z.literal(1).default(1),
   max_rounds: z.number().int().min(1).max(10).default(3),
@@ -34,7 +38,7 @@ export const TeamRulesSchema = z.strictObject({
    * Not wrapped as untrusted: like `CLAUDE.md`, they come from the default branch, so only people who can push
    * there can change them, never a PR's author.
    */
-  guidelines: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+  guidelines: z.array(Guideline).max(MAX_GUIDELINES).default([]),
 });
 export type TeamRules = z.infer<typeof TeamRulesSchema>;
 

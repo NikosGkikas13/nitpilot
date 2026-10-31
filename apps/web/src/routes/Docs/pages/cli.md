@@ -13,6 +13,7 @@ Usage: nitpilot <command>
   nitpilot doctor                            Check this machine is ready to run jobs
   nitpilot repos add [path]                  Link a local clone, so its jobs can come here
   nitpilot review <pr-url> [--post [--yes]]  Have your agent review one PR now, no account needed
+  nitpilot rules suggest [owner/name]        Draft .nitpilot.yml guidelines from the repo's past reviews
   nitpilot retry <pr-url>                    Run your failed job on that PR again
 
   nitpilot --version
@@ -123,6 +124,33 @@ Common failures:
 - `Can't find owner/name#12: the PR doesn't exist, or your token can't see that repo.`
 - `` <agent> isn't ready: <problem> Run `nitpilot doctor`. ``
 - `The review failed (<reason>): <detail>`, when the agent failed. The reasons are in [Troubleshooting](/docs/troubleshooting).
+
+## nitpilot rules suggest
+
+```bash
+nitpilot rules suggest [owner/name]
+```
+
+Your agent reads the repo's last 100 or so review comments written by people (bots, Nitpilot's own and one-word replies are skipped), finds the habits that keep coming up, and drafts them as `guidelines` for `.nitpilot.yml`. Without `owner/name`, it uses the GitHub remote of the clone you're in. Like `nitpilot review`, it needs no Nitpilot account: only your agent, signed in, and a GitHub token (`GITHUB_TOKEN`, else `gh auth login`).
+
+It prints `Read N review comments from owner/name.`, then a block to paste into `.nitpilot.yml` on your default branch:
+
+```yaml
+guidelines:
+  - Ask for a test with every bug fix.
+  - "Page sizes: use 25, like the other endpoints."
+```
+
+Nothing is written or committed: edit the list as you like before you paste it. Every agent that reviews or fixes a PR on the repo then follows it. When no habit repeats, it says `Your agent found no habit that comes up often enough to suggest.`
+
+Your agent sees only the comments, through two Nitpilot tools, in an empty folder: no code and no shell. The comments are marked as untrusted, since anyone who can comment on the repo wrote them, so a comment that says "ignore your instructions" stays just a comment.
+
+Common failures:
+
+- `Usage: nitpilot rules suggest [owner/name]`
+- `Can't read owner/name's review comments: the repo doesn't exist, or your token can't see it.`
+- `This clone points at owner/name and other/name. Say which: …`, in a fork's clone. Name the repo.
+- `Your agent's run failed (<reason>): <detail>`. The reasons are in [Troubleshooting](/docs/troubleshooting).
 
 ## nitpilot retry
 

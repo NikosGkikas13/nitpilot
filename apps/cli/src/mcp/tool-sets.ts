@@ -15,3 +15,9 @@ export type ToolName = (typeof TOOL_SETS)[AgentJobType][number];
 export function toolsFor(type: AgentJobType): readonly ToolName[] {
   return TOOL_SETS[type];
 }
+
+/**
+ * `nitpilot rules suggest`'s tools: read the repo's past review comments, propose guidelines. Not a job type, and
+ * built by `rulesSuggestTools`, never by `jobTools`, so a review or address job can't reach them.
+ */
+export const RULES_SUGGEST_TOOLS = ['get_review_comments', 'propose_guideline'] as const;

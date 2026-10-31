@@ -14,5 +14,10 @@
     { "decide": { "point": 1, "decision": "resolve", "comment": "Fixed." } },
     { "decide": { "point": 2, "decision": "resolve", "comment": "Fair enough." } },
     { "finish": "Both points settled." }
+  ],
+  "rules_suggest": [
+    { "propose_guideline": "Ask for a test with every bug fix." },
+    { "propose_guideline": "Page sizes: use 25, like the other endpoints." },
+    { "propose_guideline": "Name the \"why\" in a comment when code looks odd." }
   ]
 }

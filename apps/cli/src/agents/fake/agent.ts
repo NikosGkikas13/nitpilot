@@ -21,10 +21,11 @@ type Step =
   | { exit: number }
   | { rules_review: { max_points: number } }
   | { rules_address: true }
-  | { rules_re_review: true };
+  | { rules_re_review: true }
+  | { propose_guideline: string };
 
-/** What to do for each job type. A type that isn't listed does nothing (and so writes nothing). */
-type Scenario = { review?: Step[]; re_review?: Step[]; address?: Step[] };
+/** What to do for each job type, and for `nitpilot rules suggest`. A type that isn't listed does nothing (and so writes nothing). */
+type Scenario = { review?: Step[]; re_review?: Step[]; address?: Step[]; rules_suggest?: Step[] };
 
 const say = (event: object) => process.stdout.write(`${JSON.stringify(event)}\n`);
 
@@ -153,8 +154,13 @@ async function rulesReReview(job: Job): Promise<void> {
 }
 
 try {
-  const job = JSON.parse(await call('get_job')) as Job;
-  for (const step of scenario[job.type] ?? []) {
+  // `nitpilot rules suggest` has no get_job: its first tool is get_review_comments.
+  const { tools } = await client.listTools();
+  const rulesSuggest = tools.some((t) => t.name === 'get_review_comments');
+  const job = rulesSuggest ? null : (JSON.parse(await call('get_job')) as Job);
+  if (rulesSuggest) await call('get_review_comments');
+  const type = job?.type ?? 'rules_suggest';
+  for (const step of scenario[type] ?? []) {
     if ('add_point' in step) await call('add_point', step.add_point);
     else if ('decide' in step) await call('decide_point', step.decide);
     else if ('reply' in step) await call('reply_to_point', step.reply);
@@ -163,8 +169,9 @@ try {
     else if ('sleep' in step) await sleep(step.sleep);
     else if ('exit' in step) process.exit(step.exit);
     else if ('rules_review' in step) await rulesReview(step.rules_review.max_points);
-    else if ('rules_address' in step) await rulesAddress(job);
-    else if ('rules_re_review' in step) await rulesReReview(job);
+    else if ('rules_address' in step) await rulesAddress(job!);
+    else if ('rules_re_review' in step) await rulesReReview(job!);
+    else if ('propose_guideline' in step) await call('propose_guideline', { text: step.propose_guideline });
     else if ('edit' in step) {
       const file = inFolder(step.edit.path);
       mkdirSync(dirname(file), { recursive: true });
@@ -172,7 +179,7 @@ try {
       say({ type: 'progress', text: `edited ${step.edit.path}` });
     }
   }
-  say({ type: 'result', ok: true, text: `followed the ${job.type} scenario` });
+  say({ type: 'result', ok: true, text: `followed the ${type} scenario` });
 } catch (err) {
   say({ type: 'result', ok: false, text: (err as Error).message });
   process.exitCode = 1;

@@ -3,6 +3,7 @@ import { doctor } from './commands/doctor';
 import { login, loginOptions } from './commands/login';
 import { reposAdd } from './commands/repos';
 import { retry } from './commands/retry';
+import { RULES_USAGE, rulesSuggest } from './commands/rules';
 import { review, reviewOptions } from './commands/review';
 import { start } from './commands/start';
 import { status, statusOptions } from './commands/status';
@@ -33,6 +34,14 @@ export const COMMANDS: Record<string, Command> = {
     run: (args, out) => {
       const { ref, ...flags } = reviewOptions(args);
       return review(ref, { out, ...flags });
+    },
+  },
+  rules: {
+    usage: `${BRAND.cli} rules suggest [owner/name]`,
+    summary: "Draft .nitpilot.yml guidelines from the repo's past reviews",
+    run: ([sub, repo, ...rest], out) => {
+      if (sub !== 'suggest' || rest.length > 0 || repo?.startsWith('-')) throw new CliError(RULES_USAGE);
+      return rulesSuggest(repo, { out });
     },
   },
   retry: { usage: `${BRAND.cli} retry <pr-url>`, summary: 'Run your failed job on that PR again', run: ([ref], out) => retry(ref, { out }) },

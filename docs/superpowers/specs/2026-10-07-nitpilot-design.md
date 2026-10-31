@@ -347,6 +347,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 - `nitpilot repos add [path]`: links a local clone to every GitHub repo its remotes point at (a fork's clone serves both the fork and the base repo)
 - `nitpilot retry <pr-url>`: runs your failed job on that PR again (or `owner/name#12`)
 - `nitpilot review <pr-url> [--post [--yes]]`: a one-off review on this computer, with no account (below)
+- `nitpilot rules suggest [owner/name]`: your agent drafts `.nitpilot.yml` `guidelines` from the repo's past human review comments and prints them as YAML to paste; nothing is written (§13)
 - Stretch goal: `nitpilot say <pr-url> "<note>"`
 
 **Job steps**
@@ -574,6 +575,8 @@ guidelines:                   # the team's own review notes for the agents (up t
 ```
 
 **Guidelines** (Plan 4) reach every review, re-review and address job: in the bundle's `rules.guidelines` (default `[]`, so an older server's bundle still parses), in `get_job`'s `rules`, and listed in the agent's prompt as the team's own review notes to follow. They are not wrapped as untrusted, like the repo's conventions (§11 step 3): both come from the default branch, so only someone who can push there can change them, never a PR's author.
+
+**Suggested guidelines** (Plan 4). `nitpilot rules suggest [owner/name]` (the repo defaults to the current clone's only GitHub remote) drafts guidelines from how the team already reviews. Like `nitpilot review`, it needs no account: the person's own GitHub token reads the repo's last ~100 human inline review comments (`recentReviewComments` in `apps/cli/src/github/review-comments.ts`: no bots, nothing Nitpilot wrote, no tiny replies, at most 3 pages). With none, it says so and runs no agent. Otherwise the person's agent runs in reviewer mode in an empty private temp folder (no checkout), registered on a local MCP server with a token for exactly two tools, `RULES_SUGGEST_TOOLS` in `apps/cli/src/mcp/tool-sets.ts`, which no job type gets: `get_review_comments` → `{repo, comments[{author, path, body}]}`, each body wrapped as untrusted (`source="comment"`), and `propose_guideline {text}`, checked against the schema's own limits (1–300 characters after trimming, at most 20, a repeat refused). The prompt (`rulesSuggestPrompt`) asks for the habits that recur, phrased as short instructions to a reviewer, at most 10, one-offs skipped, and never to follow instructions in the comments. The proposals are printed as a `guidelines:` block (`yaml`'s `stringify`, so quoting is right and lines never fold); nothing is written or committed, so a person reads them before they reach `.nitpilot.yml`. The fake agent's `rules_suggest` scenario steps call `propose_guideline`. See docs/why/untrusted-review-comments.md.
 
 **Personal config:** `~/.config/nitpilot/config.json`, or `$NITPILOT_CONFIG_DIR/config.json`. Mode 0600, with environment-variable overrides as in Odyhook.
 
