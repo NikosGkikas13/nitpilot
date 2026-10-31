@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 export type StubReply = { status?: number; body?: unknown };
-export type StubRequest = { method: string; path: string; authorization: string | undefined; body: unknown };
+/** `search` is the query string, "?days=7" or "". */
+export type StubRequest = { method: string; path: string; search: string; authorization: string | undefined; body: unknown };
 /** What a route answers: always the same reply, or a function of the request. */
 export type StubRoute = StubReply | ((req: StubRequest) => StubReply);
 /** Keyed `METHOD /path`, e.g. `'POST /api/cli/login'`. */
@@ -19,6 +20,7 @@ export async function startStubServer(routes: StubRoutes) {
       const request: StubRequest = {
         method: req.method ?? 'GET',
         path: new URL(req.url ?? '/', 'http://stub').pathname,
+        search: new URL(req.url ?? '/', 'http://stub').search,
         authorization: req.headers.authorization,
         body: text ? JSON.parse(text) : undefined,
       };

@@ -63,6 +63,16 @@ export const StatsResponse = z.object({
 });
 export type StatsResponse = z.infer<typeof StatsResponse>;
 
+/** `medianMsToReady` for people, in the web app and `nitpilot status --stats`: "<1 min", "12 min", "1 h 5 min", "3 h"; "–" for null. */
+export function formatMsToReady(ms: number | null): string {
+  if (ms === null) return '–';
+  const min = Math.round(ms / 60_000);
+  if (min < 1) return '<1 min';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  return min % 60 === 0 ? `${h} h` : `${h} h ${min % 60} min`;
+}
+
 /**
  * One of your computers on the Settings page (`GET /api/devices`): a CLI token that `nitpilot login` made and nobody
  * revoked. `name` is the one the CLI gave when it logged in. `online` while its `nitpilot start` is connected;

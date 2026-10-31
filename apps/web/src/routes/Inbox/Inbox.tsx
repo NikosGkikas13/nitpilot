@@ -15,6 +15,7 @@ import { ExpiredStrip, OfflineBanner } from './InboxBanners';
 import { InboxFilter } from './InboxFilter';
 import { InboxHeader } from './InboxHeader';
 import { InboxRowItem } from './InboxRow';
+import { InboxStats } from './InboxStats';
 import { InboxTabs } from './InboxTabs';
 
 /** The inbox (spec §16, handoff §1): the sidebar on a desktop, the whole screen on a phone. */
@@ -132,6 +133,8 @@ export function Inbox({ me }: { me: WebMe }) {
           </div>
         )}
       </div>
+
+      <InboxStats />
 
       <footer className={styles.footer}>
         <span>

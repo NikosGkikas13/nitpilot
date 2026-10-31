@@ -26,7 +26,7 @@ nitpilot start
 |---|---|
 | `nitpilot login [--no-open]` | Connect this computer to your account (`--no-open` only prints the link) |
 | `nitpilot start` | Stay connected and run jobs (Ctrl-C stops) |
-| `nitpilot status` | Your open PRs and what they need from you |
+| `nitpilot status` | Your open PRs and what they need from you (`--stats`: how your agent's reviews went) |
 | `nitpilot doctor` | Check this machine is ready to run jobs |
 | `nitpilot repos add [path]` | Link a local clone, so its jobs can come here |
 | `nitpilot retry <pr-url>` | Run your failed job on that PR again |

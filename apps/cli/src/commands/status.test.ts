@@ -111,10 +111,44 @@ describe('nitpilot status --line', () => {
   });
 });
 
+describe('nitpilot status --stats', () => {
+  async function runStats(days: 7 | 30, reply: { status?: number; body?: unknown }) {
+    const stub = await startStubServer({ 'GET /api/me/stats': reply });
+    onTestFinished(() => stub.close());
+    const out = recordOut();
+    await status({ env: { NITPILOT_CONFIG_DIR: tempDir(), NITPILOT_SERVER: stub.url, NITPILOT_TOKEN: 'nit_abc' }, out, stats: days });
+    return { out, stub };
+  }
+
+  it('prints the numbers, one per line', async () => {
+    const { out, stub } = await runStats(30, { body: { days: 30, raised: 12, fixed: 8, declined: 2, escalated: 1, medianMsToReady: 65 * 60_000 } });
+    expect(stub.requests[0]).toMatchObject({ search: '?days=30', authorization: 'Bearer nit_abc' });
+    expect(out.lines[0]).toBe('Your agent, last 30 days');
+    expect(out.text()).toMatch(/Raised\s+12\n\s+Fixed\s+8\n\s+Declined\s+2\n\s+Escalated\s+1\n\s+Median time to ready\s+1 h 5 min/);
+  });
+
+  it('shows a dash when nothing became ready', async () => {
+    const { out } = await runStats(7, { body: { days: 7, raised: 0, fixed: 0, declined: 0, escalated: 0, medianMsToReady: null } });
+    expect(out.text()).toMatch(/Median time to ready\s+–/);
+  });
+
+  it('says the server is too old when it has no stats route', async () => {
+    const { out, stub } = await runStats(7, { status: 404, body: { error: { code: 'not_found', message: 'no such route' } } });
+    expect(out.lines).toEqual([`${stub.url} is too old for stats. Update the server to see them.`]);
+  });
+});
+
 describe('statusOptions', () => {
+  it('takes --stats with an optional --days 7 or 30', () => {
+    expect(statusOptions(['--stats'])).toEqual({ format: 'table', stats: 7 });
+    expect(statusOptions(['--stats', '--days', '30'])).toEqual({ format: 'table', stats: 30 });
+    expect(() => statusOptions(['--stats', '--days', '14'])).toThrow('Usage: nitpilot status');
+    expect(() => statusOptions(['--days', '30'])).toThrow('Usage: nitpilot status');
+  });
+
   it('takes at most one of --json and --line', () => {
     expect(statusOptions([])).toEqual({ format: 'table' });
     expect(statusOptions(['--line'])).toEqual({ format: 'line' });
-    expect(() => statusOptions(['--json', '--line'])).toThrow('Usage: nitpilot status [--json|--line]');
+    expect(() => statusOptions(['--json', '--line'])).toThrow('Usage: nitpilot status [--json|--line|--stats [--days 7|30]]');
   });
 });

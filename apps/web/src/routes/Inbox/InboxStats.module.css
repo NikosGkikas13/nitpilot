@@ -1,0 +1,75 @@
+.stats {
+  flex: none;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--b2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg3);
+}
+
+.toggle {
+  display: flex;
+  gap: 2px;
+}
+
+.window {
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.window[aria-pressed='true'] {
+  background: var(--muted);
+  color: var(--fg1);
+}
+
+.grid {
+  display: grid;
+  /* The median ("1 h 45 min") is the widest value. */
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.5fr);
+  gap: 8px;
+  margin: 0;
+}
+
+/* The label comes first for a screen reader ("Raised, 12"), the number shows on top. */
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  min-width: 0;
+}
+
+.label {
+  font-size: 11.5px;
+  color: var(--fg3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.value {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--fg1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

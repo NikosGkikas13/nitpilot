@@ -4,7 +4,7 @@ import { jobResult, settings } from './test-samples';
 import {
   ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, FirstRunManifestRequest, FirstRunManifestResponse,
   FirstRunStatus, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
-  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, StatsResponse, WebMe, ChatView, type DeviceView, type InboxRow,
+  formatMsToReady, Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, StatsResponse, WebMe, ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
@@ -201,5 +201,15 @@ describe('first-run bodies', () => {
     const stats = { days: 30, raised: 6, fixed: 3, declined: 1, escalated: 1, medianMsToReady: null };
     expect(StatsResponse.parse(stats)).toEqual(stats);
     expect(StatsResponse.safeParse({ ...stats, days: 14 }).success).toBe(false);
+  });
+});
+
+describe('formatMsToReady', () => {
+  it('reads in minutes and hours', () => {
+    expect(formatMsToReady(null)).toBe('–');
+    expect(formatMsToReady(20_000)).toBe('<1 min');
+    expect(formatMsToReady(12 * 60_000)).toBe('12 min');
+    expect(formatMsToReady(65 * 60_000)).toBe('1 h 5 min');
+    expect(formatMsToReady(3 * 3_600_000)).toBe('3 h');
   });
 });

@@ -1,25 +1,31 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BRAND, type Attention, type MyChat } from '@nitpilot/protocol';
+import { BRAND, formatMsToReady, type Attention, type MyChat, type StatsDays } from '@nitpilot/protocol';
 import { configDir, loadConfig } from '../config/config';
 import { CliError } from '../errors';
-import { joinServerUrl, ServerClient } from '../http';
+import { joinServerUrl, ServerClient, ServerError } from '../http';
 import { terminal, type Out } from '../out';
 
 /** `table` for people, `json` for scripts and the Claude Code plugin, `line` for a status line. */
 export type StatusFormat = 'table' | 'json' | 'line';
-export type StatusDeps = { env?: Record<string, string | undefined>; out?: Out; fetch?: typeof fetch; format?: StatusFormat; now?: () => number };
+/** `stats` set: print how your agent's reviews went over that many days instead of the PR list. */
+export type StatusDeps = { env?: Record<string, string | undefined>; out?: Out; fetch?: typeof fetch; format?: StatusFormat; stats?: StatsDays; now?: () => number };
 
 /** A status line runs on every redraw, so `--line` reuses its last answer for this long instead of asking the server again. */
 export const LINE_CACHE_MS = 30_000;
 /** A status line must never hang its editor. */
 const LINE_TIMEOUT_MS = 3_000;
 
-export function statusOptions(args: string[]): { format: StatusFormat } {
+export const STATUS_USAGE = `${BRAND.cli} status [--json|--line|--stats [--days 7|30]]`;
+
+export function statusOptions(args: string[]): { format: StatusFormat; stats?: StatsDays } {
+  const [first, ...rest] = args;
   if (args.length === 0) return { format: 'table' };
-  if (args.length === 1 && args[0] === '--json') return { format: 'json' };
-  if (args.length === 1 && args[0] === '--line') return { format: 'line' };
-  throw new CliError(`Usage: ${BRAND.cli} status [--json|--line]`);
+  if (args.length === 1 && first === '--json') return { format: 'json' };
+  if (args.length === 1 && first === '--line') return { format: 'line' };
+  if (first === '--stats' && rest.length === 0) return { format: 'table', stats: 7 };
+  if (first === '--stats' && rest.length === 2 && rest[0] === '--days' && (rest[1] === '7' || rest[1] === '30')) return { format: 'table', stats: Number(rest[1]) as StatsDays };
+  throw new CliError(`Usage: ${STATUS_USAGE}`);
 }
 
 /** What the NEEDS YOU column says for each attention flag. */
@@ -37,6 +43,7 @@ export async function status(deps: StatusDeps = {}): Promise<void> {
   if (deps.format === 'line') return out.log(await cachedLine(deps));
   const cfg = loadConfig({ env: deps.env });
   const client = new ServerClient(cfg.server, cfg.token, deps.fetch);
+  if (deps.stats) return printStats(client, deps.stats, out);
   const [me, { chats }] = await Promise.all([client.me(), client.myChats()]);
 
   if (deps.format === 'json') {
@@ -57,6 +64,27 @@ export async function status(deps: StatusDeps = {}): Promise<void> {
     out.log('');
     out.log(`Your agent couldn't finish on ${chat.repo}#${chat.number}. To run it again: ${BRAND.cli} retry ${prUrl(chat)}`);
   }
+}
+
+/** `--stats`: the same numbers as the Inbox's stats row (spec §10 "Stats"), one per line. */
+async function printStats(client: ServerClient, days: StatsDays, out: Out): Promise<void> {
+  let stats;
+  try {
+    stats = await client.stats(days);
+  } catch (err) {
+    if (err instanceof ServerError && err.status === 404) return out.log(`${client.server} is too old for stats. Update the server to see them.`);
+    throw err;
+  }
+  out.log(`Your agent, last ${stats.days} days`);
+  out.log(
+    table([
+      ['  Raised', String(stats.raised)],
+      ['  Fixed', String(stats.fixed)],
+      ['  Declined', String(stats.declined)],
+      ['  Escalated', String(stats.escalated)],
+      ['  Median time to ready', formatMsToReady(stats.medianMsToReady)],
+    ]),
+  );
 }
 
 /** The `--line` text, from a cache file next to config.json while it is fresh. */

@@ -107,7 +107,7 @@ Verify: run it on a real repo with review history; paste the output into `.nitpi
 
 **Task 1: query and route.** `GET /api/me/stats?days=7|30`: points your agent raised, how many the author's agent fixed, declined, escalated, and the median time from first review to "ready". Read from the existing point and job tables in `apps/server/src/chats/`, no new tables. Test: a `.db.test.ts` with seeded chats. **Done 2026-10-31.** No new column: `chats/stats.ts`, "ready" found by the `READY_LINE` timeline message, escalated points count only as escalated; shape is `StatsResponse` in `packages/protocol`.
 
-**Task 2: web card.** A small stats row on the Inbox (four numbers, no chart) using the existing tokens from the design handoff. Also `nitpilot status --stats` in the CLI.
+**Task 2: web card.** A small stats row on the Inbox (four numbers, no chart) using the existing tokens from the design handoff. Also `nitpilot status --stats` in the CLI. **Done 2026-10-31.** The row (`routes/Inbox/InboxStats.tsx`) shows raised, fixed, escalated and the median time to ready with a 7d / 30d toggle; zeros show, an error hides it. `--stats` replaces the PR list; a server without the route (404) says it's too old. `formatMsToReady` is shared in `packages/protocol`.
 
 Verify: sandbox account with a few finished PRs shows the right counts.
 

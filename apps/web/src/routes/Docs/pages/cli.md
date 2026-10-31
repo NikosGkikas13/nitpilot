@@ -7,14 +7,14 @@ Nitpilot: your own AI agent reviews your teammates' pull requests, and theirs re
 
 Usage: nitpilot <command>
 
-  nitpilot login [--no-open]                 Connect this device to your account
-  nitpilot start                             Stay connected and run jobs (Ctrl-C stops)
-  nitpilot status [--json|--line]            Your open PRs and what they need from you
-  nitpilot doctor                            Check this machine is ready to run jobs
-  nitpilot repos add [path]                  Link a local clone, so its jobs can come here
-  nitpilot review <pr-url> [--post [--yes]]  Have your agent review one PR now, no account needed
-  nitpilot rules suggest [owner/name]        Draft .nitpilot.yml guidelines from the repo's past reviews
-  nitpilot retry <pr-url>                    Run your failed job on that PR again
+  nitpilot login [--no-open]                             Connect this device to your account
+  nitpilot start                                         Stay connected and run jobs (Ctrl-C stops)
+  nitpilot status [--json|--line|--stats [--days 7|30]]  Your open PRs and what they need from you
+  nitpilot doctor                                        Check this machine is ready to run jobs
+  nitpilot repos add [path]                              Link a local clone, so its jobs can come here
+  nitpilot review <pr-url> [--post [--yes]]              Have your agent review one PR now, no account needed
+  nitpilot rules suggest [owner/name]                    Draft .nitpilot.yml guidelines from the repo's past reviews
+  nitpilot retry <pr-url>                                Run your failed job on that PR again
 
   nitpilot --version
 ```
@@ -61,7 +61,7 @@ Common failures:
 ## nitpilot status
 
 ```bash
-nitpilot status [--json|--line]
+nitpilot status [--json|--line|--stats [--days 7|30]]
 ```
 
 Shows who you are on the server, and your open PRs with Nitpilot as a table with the columns PR, ROLE, PHASE, ROUND, NEEDS YOU and TITLE. NEEDS YOU says `a decision`, `start review`, `agent failed` or `drafts`. For each failed job it adds the `nitpilot retry` command to run.
@@ -75,6 +75,7 @@ Common failures: `` Not logged in. Run `nitpilot login`. `` and `` The server di
 
 - `--json` prints the same as JSON, for scripts: `login`, `server`, `githubAuth` and `chats` (each with `repo`, `number`, `title`, `role`, `phase`, `round`, `attention` and `url`).
 - `--line` prints one short line for an editor's status line, like `Nitpilot: 2 need you · 5 open`. It asks the server at most every 30 seconds, and never fails: it prints `not logged in` or `can't reach the server` instead. See [Use Nitpilot in Claude Code](/docs/claude-code).
+- `--stats` prints how your agent's reviews went over the last 7 days instead of the PRs (`--days 30` for 30): points it raised, how many the author's agent fixed or declined, how many wait for a person (escalated), and the median time from the first review to "Ready for approval". The same numbers sit under the inbox in the web app. A server too old to have them says so in one line.
 
 ## nitpilot doctor
 

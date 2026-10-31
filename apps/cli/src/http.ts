@@ -1,4 +1,4 @@
-import { BRAND, CliLoginPollResponse, CliLoginStartResponse, HealthResponse, MeResponse, MyChatsResponse, RetryResponse } from '@nitpilot/protocol';
+import { BRAND, CliLoginPollResponse, CliLoginStartResponse, HealthResponse, MeResponse, MyChatsResponse, RetryResponse, StatsResponse, type StatsDays } from '@nitpilot/protocol';
 import type { z } from 'zod';
 import { CliError } from './errors';
 import { CLI_VERSION } from './version';
@@ -54,6 +54,11 @@ export class ServerClient {
 
   myChats(opts: { signal?: AbortSignal } = {}) {
     return this.call('GET', '/api/me/chats', MyChatsResponse, { auth: true, signal: opts.signal });
+  }
+
+  /** `nitpilot status --stats`: how my agent's reviews went over the last `days` days. Older servers answer 404. */
+  stats(days: StatsDays) {
+    return this.call('GET', `/api/me/stats?days=${days}`, StatsResponse, { auth: true });
   }
 
   /** `nitpilot retry`: queue my failed job on this chat again. */
