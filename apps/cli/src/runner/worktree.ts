@@ -81,8 +81,8 @@ export async function prepareWorktree(bundle: AgentJobBundle, repoPath: string, 
   }
 }
 
-/** Letters, digits, `.`, `_` and `-`: what a job id or a repo's owner and name may be made of. */
-const FOLDER_NAME = /^[A-Za-z0-9._-]+$/;
+/** Letters, digits, `.`, `_` and `-`, and not `.` or `..`: what a job id or a repo's owner and name may be made of. */
+export const isFolderName = (name: string) => /^[A-Za-z0-9._-]+$/.test(name) && name !== '.' && name !== '..';
 
 /**
  * What the bundle names becomes folders, refs and a git command line, so check it before any git runs:
@@ -98,7 +98,7 @@ function checkBundle(bundle: AgentJobBundle): void {
 function checkFolderNames(bundle: AgentJobBundle): void {
   const repoParts = bundle.pr.repoFullName.split('/');
   const names = [bundle.jobId, ...repoParts];
-  if (repoParts.length === 2 && names.every((name) => FOLDER_NAME.test(name) && name !== '.' && name !== '..')) return;
+  if (repoParts.length === 2 && names.every(isFolderName)) return;
   const shown = JSON.stringify({ jobId: bundle.jobId, repo: bundle.pr.repoFullName }).slice(0, 300);
   throw new JobFailure('setup_failed', false, `This job's ids can't be used as folder names: ${shown}`);
 }
