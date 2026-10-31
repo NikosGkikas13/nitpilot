@@ -41,7 +41,7 @@ What already does the work: `createExecutor` in `apps/cli/src/runner/execute.ts`
 
 **Task 4: `--post`.** Post one GitHub review (`POST /pulls/:n/reviews`, `event: COMMENT`) with the points as inline comments, using the user's token. Ask "Post 3 comments to acme/api#12 as @you? [y/N]" first (skip the question with `--yes`). Copy the point → comment format from the server's GitHub adapter (`apps/server/src/platform/`), don't import it. Add a footer line (see G2 Task 4). Test: the request body for `jobResult()`'s points. **Done 2026-10-31.** `sanitizeForGithub` moved to `packages/protocol/src/sanitize.ts` so the CLI cleans agent text exactly as the server does; `--post` without a terminal needs `--yes`.
 
-**Task 5: docs and release.** README "Try it in 30 seconds" (`npx nitpilot review <url>`), a docs-site CLI page entry, spec §11 new subsection "One-off reviews", changelog. Release 0.4.0.
+**Task 5: docs and release.** README "Try it in 30 seconds" (`npx nitpilot review <url>`), a docs-site CLI page entry, spec §11 new subsection "One-off reviews", changelog. Release 0.4.0. **Done 2026-10-31** (live run: `docs/acceptance/plan-4-g1.md`).
 
 Verify: on the sandbox repo, `npx nitpilot review <sandbox PR>` with Claude Code prints points; `--post` puts a review on GitHub with inline comments; it works on a machine that never ran `nitpilot login`.
 

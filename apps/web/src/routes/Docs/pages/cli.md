@@ -7,12 +7,13 @@ Nitpilot: your own AI agent reviews your teammates' pull requests, and theirs re
 
 Usage: nitpilot <command>
 
-  nitpilot login [--no-open]       Connect this device to your account
-  nitpilot start                   Stay connected and run jobs (Ctrl-C stops)
-  nitpilot status [--json|--line]  Your open PRs and what they need from you
-  nitpilot doctor                  Check this machine is ready to run jobs
-  nitpilot repos add [path]        Link a local clone, so its jobs can come here
-  nitpilot retry <pr-url>          Run your failed job on that PR again
+  nitpilot login [--no-open]                 Connect this device to your account
+  nitpilot start                             Stay connected and run jobs (Ctrl-C stops)
+  nitpilot status [--json|--line]            Your open PRs and what they need from you
+  nitpilot doctor                            Check this machine is ready to run jobs
+  nitpilot repos add [path]                  Link a local clone, so its jobs can come here
+  nitpilot review <pr-url> [--post [--yes]]  Have your agent review one PR now, no account needed
+  nitpilot retry <pr-url>                    Run your failed job on that PR again
 
   nitpilot --version
 ```
@@ -96,6 +97,32 @@ Common failures:
 
 - `<path> has no GitHub remote. Add one (git remote add origin <url>) and try again.`
 - `Usage: nitpilot repos add [path]`, when the subcommand is anything but `add`.
+
+## nitpilot review
+
+```bash
+nitpilot review <pr-url> [--post [--yes]]
+```
+
+Your agent reviews one PR right now, on this computer, and prints its points. It needs no Nitpilot account, server or GitHub App: only your agent, signed in, and a GitHub token. That is `GITHUB_TOKEN` if it's set, else the GitHub CLI's (`gh auth login` once). Give the PR's link, or `owner/name#12`. Try it without installing anything:
+
+```bash
+npx nitpilot review https://github.com/octo/sandbox/pull/12
+```
+
+It follows the repo's `.nitpilot.yml` (ignored paths, the most points) and checks the PR out the same safe way as `nitpilot start`. If you linked a clone of the repo with `nitpilot repos add`, it uses that one; otherwise it keeps a small copy in your config folder, under `cache/`.
+
+The output starts with `<agent> is reviewing owner/name#12: <title>`, then each point: its severity and category, the file and line (or `the whole PR`), its title and the agent's explanation. A clean review says `No points: your agent found nothing to raise.` It exits with 0 when the review finished, with or without points.
+
+- `--post` asks `Post N points to owner/name#12 as your review (@you)? [y/N]` and, on yes, posts them as one comment review in your name: points on a line as inline comments, the rest in the review's text. It never approves. Then it prints `Posted your review: <link>`.
+- `--yes` posts without asking. Scripts need it, since there is no terminal to ask in.
+
+Common failures:
+
+- `No GitHub token found. Set GITHUB_TOKEN, or sign in with the GitHub CLI: gh auth login`
+- `Can't find owner/name#12: the PR doesn't exist, or your token can't see that repo.`
+- `` <agent> isn't ready: <problem> Run `nitpilot doctor`. ``
+- `The review failed (<reason>): <detail>`, when the agent failed. The reasons are in [Troubleshooting](/docs/troubleshooting).
 
 ## nitpilot retry
 

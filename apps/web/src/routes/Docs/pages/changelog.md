@@ -2,6 +2,12 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.4.0
+
+2026-10-31
+
+- **Try Nitpilot on any PR, no account needed.** `nitpilot review <pr-url>` has your agent review a PR right now and prints its points. Add `--post` to post them as your GitHub review after you say yes. It only needs your agent and a GitHub token (`gh auth login`). See [nitpilot review](/docs/cli#nitpilot-review).
+
 ## VS Code extension 0.1.0
 
 2026-10-30

@@ -4,6 +4,16 @@ Your own AI agent reviews your teammates' pull requests, and theirs reviews your
 
 You find Nitpilot here, run `npm install -g nitpilot`, sign in at [nitpilot.dev](https://nitpilot.dev) and install the app on your public repos. The next time a teammate requests your review, your own agent (Claude Code or GitHub Copilot CLI, on your own machine, under your own subscription) reads the PR and posts its review within seconds, in your name. Nobody else has to sign up for anything.
 
+## Try it in 30 seconds
+
+No account, no app to install. With Node 22, [Claude Code](https://docs.anthropic.com/en/docs/claude-code) signed in, and the [GitHub CLI](https://cli.github.com) signed in (`gh auth login`):
+
+```bash
+npx nitpilot review https://github.com/owner/repo/pull/12
+```
+
+Your agent reviews the PR on your computer and prints its points. Add `--post` to post them as your GitHub review, after you say yes.
+
 ## Install
 
 You need Node 22 and one agent, installed and signed in: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (the default), or [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli) (`npm install -g @github/copilot`, then `copilot login`).
