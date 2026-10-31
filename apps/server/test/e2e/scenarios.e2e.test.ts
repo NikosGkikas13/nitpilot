@@ -34,8 +34,13 @@ describe('Plan 1 end to end: when things go differently', () => {
     await e2e.startCli('leo', 'security.json');
     await e2e.openPr();
     await waitFor(async () => (await e2e.chat()).phase === 'escalated', 'the chat to escalate');
-    await waitFor(() => e2e.notified.some((n) => n.kind === 'escalated'), 'the escalation notice');
-    expect(e2e.notified.find((n) => n.kind === 'escalated')!.userIds.sort()).toEqual([e2e.users.leo.id, e2e.users.maya.id].sort());
+    // One escalated point: each person's notice carries the buttons they may use (Plan 4 G3), so leo (who raised it:
+    // Resolve and Keep open) and maya (the author: Keep open only) get separate notices.
+    const escalated = () => e2e.notified.filter((n) => n.kind === 'escalated');
+    await waitFor(() => escalated().flatMap((n) => n.userIds).length === 2, 'the escalation notices');
+    expect(escalated().flatMap((n) => n.userIds).sort()).toEqual([e2e.users.leo.id, e2e.users.maya.id].sort());
+    const buttonsOf = (userId: string) => escalated().find((n) => n.userIds.includes(userId))!.decision?.actions;
+    expect([buttonsOf(e2e.users.leo.id), buttonsOf(e2e.users.maya.id)]).toEqual([['resolve', 'continue'], ['continue']]);
     expect(await jobOf('address')).toEqual([]); // a person decides now, not an agent
   });
 
