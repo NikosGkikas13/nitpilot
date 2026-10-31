@@ -43,6 +43,26 @@ export const WebMe = MeResponse.extend({
 });
 export type WebMe = z.infer<typeof WebMe>;
 
+/** The windows `GET /api/me/stats?days=` takes, in days. */
+export const StatsDays = z.union([z.literal(7), z.literal(30)]);
+export type StatsDays = z.infer<typeof StatsDays>;
+
+/**
+ * `GET /api/me/stats` (spec §10): how your agent's reviews went over the last `days` days. `raised`: points your agent
+ * raised then. Of those, by where each point is now: `escalated` waits for a person, `fixed` and `declined` are what the
+ * author's agent last answered (an escalated point counts only as escalated). `medianMsToReady`: in the chats you're in
+ * that first became ready in the window, the median time from the first review job to "Ready for approval" (null: none).
+ */
+export const StatsResponse = z.object({
+  days: StatsDays,
+  raised: z.number().int().nonnegative(),
+  fixed: z.number().int().nonnegative(),
+  declined: z.number().int().nonnegative(),
+  escalated: z.number().int().nonnegative(),
+  medianMsToReady: z.number().nonnegative().nullable(),
+});
+export type StatsResponse = z.infer<typeof StatsResponse>;
+
 /**
  * One of your computers on the Settings page (`GET /api/devices`): a CLI token that `nitpilot login` made and nobody
  * revoked. `name` is the one the CLI gave when it logged in. `online` while its `nitpilot start` is connected;

@@ -1,4 +1,4 @@
-import { WebMe } from '@nitpilot/protocol';
+import { StatsResponse, WebMe } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { testApp } from '../../../test/app';
 import { makeCliToken, makeUser } from '../../../test/db';
@@ -39,6 +39,32 @@ describe('GET /api/me', () => {
 
   it('is a 401 for a browser that is not signed in', async () => {
     const res = await testApp().request('/api/me');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/me/stats', () => {
+  it('answers for 7 days when no window is given, and for 30 when asked', async () => {
+    const user = await makeUser();
+    const cookie = await sessionCookieFor(user.id);
+    const week = await testApp().request('/api/me/stats', { headers: { cookie } });
+    expect(week.status).toBe(200);
+    expect(StatsResponse.parse(await week.json())).toEqual({ days: 7, raised: 0, fixed: 0, declined: 0, escalated: 0, medianMsToReady: null });
+    const month = await testApp().request('/api/me/stats?days=30', { headers: { cookie } });
+    expect(await month.json()).toMatchObject({ days: 30 });
+  });
+
+  it('is a 400 for any other window', async () => {
+    const user = await makeUser();
+    const cookie = await sessionCookieFor(user.id);
+    for (const days of ['14', '7.0', 'week', '']) {
+      const res = await testApp().request(`/api/me/stats?days=${days}`, { headers: { cookie } });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('is a 401 for a browser that is not signed in', async () => {
+    const res = await testApp().request('/api/me/stats');
     expect(res.status).toBe(401);
   });
 });

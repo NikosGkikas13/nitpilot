@@ -95,11 +95,14 @@ function reviewersBehind(chat: ChatState): ParticipantState[] {
   return reviewers(chat).filter((r) => r.requested && onNitpilot(r) && (r.lastReviewedSha !== chat.headSha || r.attention === 'manual_review'));
 }
 
+/** The timeline line a chat gets each time it becomes ready. Stats find that moment by it (chats/stats.ts). */
+export const READY_LINE = 'Ready for approval';
+
 function enterReady(ctx: Ctx): void {
   const chat = ctx.chat;
   if (chat.phase === 'ready') return;
   chat.phase = 'ready';
-  system(ctx, 'Ready for approval');
+  system(ctx, READY_LINE);
   // The requested reviewers are told, except one whose own click made it ready (their Resolve or Discard, say):
   // they are looking at the Ready banner already.
   const userIds = reviewers(chat).filter((r) => r.requested && onNitpilot(r) && r.githubId !== ctx.actor).map((r) => r.userId!);

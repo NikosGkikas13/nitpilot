@@ -4,7 +4,7 @@ import { jobResult, settings } from './test-samples';
 import {
   ActionResponse, AutoRequest, ChatResponse, CliRequestDecision, CliRequestView, DevicesResponse, DraftView, FilesResponse, FirstRunManifestRequest, FirstRunManifestResponse,
   FirstRunStatus, InboxResponse, InboxStatus, MarkReadRequest, NoteRequest,
-  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, WebMe, ChatView, type DeviceView, type InboxRow,
+  Onboarding, PushSubscriptionRequest, PushUnsubscribeRequest, Settings, StatsResponse, WebMe, ChatView, type DeviceView, type InboxRow,
 } from './web-api';
 
 describe('web API bodies', () => {
@@ -195,5 +195,11 @@ describe('first-run bodies', () => {
   it('round-trips the answer the page posts as a form', () => {
     const answer = { action: 'https://github.com/settings/apps/new?state=abc', manifest: { name: 'Nitpilot', public: false } };
     expect(FirstRunManifestResponse.parse(answer)).toEqual(answer);
+  });
+
+  it('round-trips the stats, with no median, and takes only a 7 or 30 day window', () => {
+    const stats = { days: 30, raised: 6, fixed: 3, declined: 1, escalated: 1, medianMsToReady: null };
+    expect(StatsResponse.parse(stats)).toEqual(stats);
+    expect(StatsResponse.safeParse({ ...stats, days: 14 }).success).toBe(false);
   });
 });
