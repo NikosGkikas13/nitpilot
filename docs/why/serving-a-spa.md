@@ -22,6 +22,8 @@ Two rules keep the fallback honest:
 - **The server's own paths never fall back.** A typo under `/api/…`, `/auth/…`, `/github/…`, `/webhooks/…` or `/ws/…` gets a JSON 404. Otherwise a broken API call would get a 200 with a web page in it, and the app would choke on it in a confusing way.
 - **Files come only from `dist`.** A path such as `/..%2f..%2f.env` is resolved and refused if it would leave the folder, however it's spelled.
 
+A chat's page (`/c/...`) gets a little more in its `index.html`: a `noindex` tag, and a link preview card when the chat is public. See `link-previews.md`.
+
 Every page and file is also sent with a Content-Security-Policy that limits what the app may load and run: see `content-security-policy.md`.
 
 ## Caching

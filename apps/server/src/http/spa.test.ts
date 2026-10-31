@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { testApp } from '../../test/app';
-import { BUILD_HINT, contentSecurityPolicy, spaRoutes } from './spa';
+import { BUILD_HINT, chatPageHtml, contentSecurityPolicy, spaRoutes } from './spa';
 
 // A pretend build: dist/ with an index, a hashed asset and a service worker, and a secret next to it.
 let outer: string;
@@ -13,7 +13,7 @@ beforeAll(() => {
   outer = mkdtempSync(path.join(tmpdir(), 'nitpilot-spa-'));
   dist = path.join(outer, 'dist');
   mkdirSync(path.join(dist, 'assets'), { recursive: true });
-  writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>app</title>');
+  writeFileSync(path.join(dist, 'index.html'), '<!doctype html><html><head><title>app</title></head></html>');
   writeFileSync(path.join(dist, 'assets', 'index-abc123.js'), 'console.log(1)');
   writeFileSync(path.join(dist, 'assets', 'clip-abc123.mp4'), '0123456789');
   writeFileSync(path.join(dist, 'sw.js'), 'self.addEventListener("push", () => {})');
@@ -150,5 +150,51 @@ describe('the Content-Security-Policy', () => {
   it('is sent with those origins by the web app routes that were given them', async () => {
     const res = await spaRoutes({ distDir: dist, publicUrl: 'https://nitpilot.dev', formActions: ['https://github.com'] }).request('/first-run');
     expect(res.headers.get('content-security-policy')).toContain("form-action 'self' https://github.com;");
+  });
+});
+
+describe("a chat's page (/c/...)", () => {
+  const card = { title: 'Fix "login" <script>alert(1)</script> & more · acme/api#12', description: "3 points · 2 rounds · ready to approve", path: '/c/acme/api/12' };
+  const app = (preview: () => Promise<typeof card | null>) => spaRoutes({ distDir: dist, publicUrl: 'https://nitpilot.example', preview });
+
+  it('is always noindex, and has no card when the chat is not public', async () => {
+    const res = await app(async () => null).request('/c/acme/api/12');
+    const html = await res.text();
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).not.toContain('og:');
+  });
+
+  it('has the card for a public chat, every value escaped', async () => {
+    const html = await (await app(async () => card).request('/c/acme/api/12')).text();
+    expect(html).toContain('<meta property="og:title" content="Fix &quot;login&quot; &lt;script&gt;alert(1)&lt;/script&gt; &amp; more · acme/api#12">');
+    expect(html).toContain('<meta property="og:description" content="3 points · 2 rounds · ready to approve">');
+    expect(html).toContain('<meta property="og:url" content="https://nitpilot.example/c/acme/api/12">');
+    expect(html).toContain('<meta property="og:site_name" content="Nitpilot">');
+    expect(html).toContain('<meta property="og:type" content="website">');
+    expect(html).toContain('<meta name="twitter:card" content="summary">');
+    expect(html).not.toContain('<script>');
+    expect(html.indexOf('og:title')).toBeLessThan(html.indexOf('</head>'));
+  });
+
+  it('still serves the page, without a card, when building the card fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await app(async () => { throw new Error('GitHub is down'); }).request('/c/acme/api/12');
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain('og:');
+  });
+
+  it('leaves other pages alone: no noindex, no card, the card never asked for', async () => {
+    const preview = vi.fn(async () => card);
+    for (const url of ['/inbox', '/', '/c/acme/api', '/c/acme/api/12/extra']) {
+      const res = await app(preview).request(url);
+      expect(res.headers.get('x-robots-tag')).toBeNull();
+      expect(await res.text()).not.toContain('<meta');
+    }
+    expect(preview).not.toHaveBeenCalled();
+  });
+
+  it('escapes a single quote too', () => {
+    expect(chatPageHtml('<head></head>', { ...card, title: "it's" }, 'https://x.example')).toContain('content="it&#39;s"');
   });
 });

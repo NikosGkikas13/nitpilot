@@ -1,7 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BRAND } from '@nitpilot/protocol';
 import { Hono } from 'hono';
+import type { ChatPath } from '../chats/access';
+import type { ChatPreview } from '../chats/preview';
 
 /** apps/web/dist, next to this package. WEB_DIST_DIR overrides it (the Playwright server, a container). */
 export const DEFAULT_WEB_DIST = fileURLToPath(new URL('../../../web/dist', import.meta.url));
@@ -74,15 +77,57 @@ async function fileIn(root: string, pathname: string): Promise<string | null> {
   return info?.isFile() ? full : null;
 }
 
+/** A chat's address: `/c/:owner/:repo/:number`. */
+const CHAT_PAGE = /^\/c\/([^/]+)\/([^/]+)\/([^/]+)\/?$/;
+
+/** Text made safe to put inside an HTML attribute: a PR title is anyone's text and could hold `"><script>`. */
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+}
+
+/**
+ * index.html with `noindex` (chats stay out of search engines) and, for a chat anyone may read, the Open Graph
+ * tags a link preview reads (docs/why/link-previews.md). Crawlers don't run JavaScript, so the tags must be in
+ * the HTML itself.
+ * shortcut: text only, no og:image; generate one per chat if shared links look bare.
+ */
+export function chatPageHtml(index: string, preview: ChatPreview | null, publicUrl: string): string {
+  const tags = ['<meta name="robots" content="noindex">'];
+  if (preview) {
+    const meta = (attr: string, key: string, value: string) => `<meta ${attr}="${key}" content="${escapeHtml(value)}">`;
+    tags.push(
+      meta('property', 'og:title', preview.title),
+      meta('property', 'og:description', preview.description),
+      meta('property', 'og:url', new URL(preview.path, publicUrl).href),
+      meta('property', 'og:site_name', BRAND.name),
+      meta('property', 'og:type', 'website'),
+      meta('name', 'twitter:card', 'summary'),
+    );
+  }
+  return index.replace('</head>', `${tags.join('\n    ')}\n  </head>`);
+}
+
 /**
  * Serves the built web app (spec §7): its files, and its index.html for every other GET that isn't one of
  * the server's own paths, so a link like /c/octo/sandbox/42 opens the app, which then shows that chat.
+ * A chat's page (/c/...) also gets `noindex`, and `preview`'s card when that chat is public (chatPageHtml).
  * Mounted after every other route. See docs/why/serving-a-spa.md.
  */
-export function spaRoutes(opts: { distDir: string; publicUrl: string; formActions?: string[] }): Hono {
+export function spaRoutes(opts: { distDir: string; publicUrl: string; formActions?: string[]; preview?: (path: ChatPath) => Promise<ChatPreview | null> }): Hono {
   const app = new Hono();
   const root = path.resolve(opts.distDir);
   const csp = contentSecurityPolicy(opts.publicUrl, { formActions: opts.formActions });
+
+  // A card is a nice-to-have: GitHub or the database failing must still serve the page, just without one.
+  const previewFor = async (path: ChatPath) => {
+    if (!opts.preview) return null;
+    try {
+      return await opts.preview(path);
+    } catch (err) {
+      console.error('[spa] no preview card:', err instanceof Error ? err.message : err);
+      return null;
+    }
+  };
 
   app.get('*', async (c, next) => {
     if (isServerPath(c.req.path)) return next();
@@ -118,7 +163,11 @@ export function spaRoutes(opts: { distDir: string; publicUrl: string; formAction
     const index = await readFile(path.join(root, 'index.html')).catch(() => null);
     if (!index) return c.text(BUILD_HINT, 503);
     c.header('Cache-Control', 'no-cache');
-    return c.html(index.toString('utf8'));
+    const chat = CHAT_PAGE.exec(c.req.path);
+    if (!chat) return c.html(index.toString('utf8'));
+    c.header('X-Robots-Tag', 'noindex');
+    const preview = await previewFor({ owner: chat[1]!, repo: chat[2]!, number: chat[3]! });
+    return c.html(chatPageHtml(index.toString('utf8'), preview, opts.publicUrl));
   });
 
   return app;

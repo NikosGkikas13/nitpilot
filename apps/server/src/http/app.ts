@@ -3,6 +3,7 @@ import { Hono, type Context } from 'hono';
 import type { RepoAccess } from '../auth/repo-access';
 import type { LiveClis } from '../chats/activity';
 import type { Dispatch } from '../chats/dispatch';
+import { chatPreview } from '../chats/preview';
 import type { Ingest } from '../ingest/process';
 import { getEnv } from '../lib/env';
 import type { AppAuth } from '../platform/github/app-auth';
@@ -15,7 +16,7 @@ import { errorBody, onError } from './errors';
 import { authRoutes } from './routes/auth';
 import { chatActionRoutes } from './routes/chat-actions';
 import { chatDraftRoutes } from './routes/chat-drafts';
-import { chatRoutes } from './routes/chats';
+import { cachedIsRepoPublic, chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
 import { cliRequestRoutes } from './routes/cli-requests';
 import { deviceRoutes, type DeviceClis } from './routes/devices';
@@ -61,6 +62,8 @@ function health(c: Context): Response {
 export function createApp(deps: AppDeps): Hono {
   const env = getEnv();
   const app = new Hono();
+  // One cache for "is this repo public?": the no-sign-in chat route and the preview card must agree.
+  const isPublic = cachedIsRepoPublic(deps.platform);
   app.onError(onError);
   app.get('/healthz', health);
   app.route('/', readyRoutes(deps));
@@ -71,7 +74,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', deviceRoutes(deps));
   app.route('/', onboardingRoutes(deps));
   app.route('/', inboxRoutes(deps));
-  app.route('/', chatRoutes(deps));
+  app.route('/', chatRoutes({ ...deps, isPublic }));
   app.route('/', chatActionRoutes(deps));
   app.route('/', chatDraftRoutes(deps));
   app.route('/', cliRoutes({ ...deps, trustProxy: deps.trustProxy ?? env.TRUST_PROXY }));
@@ -79,7 +82,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', setupRoutes(deps));
   app.route('/', webhookRoutes(deps));
   // Last: everything else is the web app's (spec §7).
-  app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: env.PUBLIC_URL }));
+  app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: env.PUBLIC_URL, preview: (path) => chatPreview(path, isPublic) }));
   app.notFound((c) => c.json(errorBody('not_found', 'no such route'), 404));
   return app;
 }

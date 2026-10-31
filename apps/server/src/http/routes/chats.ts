@@ -28,18 +28,10 @@ const BeforeQuery = z.object({ before: z.coerce.number().int().positive().option
  * The chat screen's reads (spec §10 "REST endpoints in Plan 2"): the chat, older timeline items, and the PR's
  * changed files. Each one first asks whether you can read the chat (chats/access.ts, docs/why/chat-access-rules.md).
  */
-export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; clis: LiveClis }): Hono<{ Variables: UserVariables }> {
+export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; clis: LiveClis; isPublic: IsRepoPublic }): Hono<{ Variables: UserVariables }> {
   const app = new Hono<{ Variables: UserVariables }>();
-  const { access } = deps;
+  const { access, isPublic } = deps;
   const fileLists = new TtlCache<FilesResponse>(FILES_TTL_MS, MAX_FILE_LISTS);
-  const publicRepos = new TtlCache<boolean>(PUBLIC_REPO_TTL_MS, MAX_FILE_LISTS);
-  const isPublic = async (repo: Repo) => {
-    const kept = publicRepos.get(repo.id);
-    if (kept !== undefined) return kept;
-    const answer = await deps.platform.isRepoPublic(repoRef(repo));
-    publicRepos.set(repo.id, answer);
-    return answer;
-  };
 
   // No sign-in: a public repo's chat, trimmed (spec §16 "Who can see a chat"). The same 404 for every chat it can't show.
   app.get('/api/public/chats/:owner/:repo/:number', async (c) => {
@@ -76,6 +68,23 @@ export function chatRoutes(deps: { access: RepoAccess; platform: PlatformReads; 
   });
 
   return app;
+}
+
+export type IsRepoPublic = (repo: Repo) => Promise<boolean>;
+
+/**
+ * "Is this repo public?" as GitHub says now, kept 5 minutes per repo. createApp makes one and shares it between the
+ * no-sign-in chat route and the shared link's preview card (http/spa.ts), so both always give the same answer.
+ */
+export function cachedIsRepoPublic(platform: PlatformReads): IsRepoPublic {
+  const publicRepos = new TtlCache<boolean>(PUBLIC_REPO_TTL_MS, MAX_FILE_LISTS);
+  return async (repo) => {
+    const kept = publicRepos.get(repo.id);
+    if (kept !== undefined) return kept;
+    const answer = await platform.isRepoPublic(repoRef(repo));
+    publicRepos.set(repo.id, answer);
+    return answer;
+  };
 }
 
 /** The chat you may read, or the answer for one you can't: the same 404 for "no such chat" and "not yours to see". */
