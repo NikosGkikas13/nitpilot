@@ -5,13 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./test-samples": "./src/test-samples.ts"
+    "./test-samples": "./src/test-samples.ts",
+    "./rules-file": "./src/rules-file.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "yaml": "^2.9.1",
     "zod": "^4.6.5"
   }
 }

@@ -1,6 +1,6 @@
-import { DEFAULT_RULES } from '@nitpilot/protocol';
+import { DEFAULT_RULES } from './rules';
 import { describe, expect, it } from 'vitest';
-import { parseTeamRules } from './rules';
+import { parseTeamRules } from './rules-file';
 
 describe('parseTeamRules', () => {
   it('uses the defaults when the file is missing', () => {

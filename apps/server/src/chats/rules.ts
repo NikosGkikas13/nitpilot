@@ -1,5 +1,5 @@
 import { BRAND, DEFAULT_RULES, TeamRulesSchema, type TeamRules } from '@nitpilot/protocol';
-import { parseTeamRules } from '../engine/rules';
+import { parseTeamRules } from '@nitpilot/protocol/rules-file';
 import { Prisma, type Repo } from '../generated/prisma/client';
 import { prisma } from '../lib/prisma';
 import type { PlatformReads, RepoRef } from '../platform/types';

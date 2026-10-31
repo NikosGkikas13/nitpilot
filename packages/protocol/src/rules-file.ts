@@ -1,4 +1,5 @@
-import { BRAND, DEFAULT_RULES, TeamRulesSchema, type TeamRules } from '@nitpilot/protocol';
+import { BRAND } from './brand';
+import { DEFAULT_RULES, TeamRulesSchema, type TeamRules } from './rules';
 import { parse as parseYaml } from 'yaml';
 
 export type ParsedRules = { rules: TeamRules; error: string | null };
