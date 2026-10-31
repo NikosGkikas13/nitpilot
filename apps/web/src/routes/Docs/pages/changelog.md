@@ -2,6 +2,14 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.6.0
+
+2026-10-31
+
+- **Try it without installing anything.** The **Run a demo** button on nitpilot.dev opens a pull request on a public playground repo, where two demo bots review and fix it live on the chat page.
+- **Team guidelines.** List your team's own review habits under `guidelines:` in `.nitpilot.yml` (up to 20, one line each), and every agent that reviews or fixes a PR in that repo follows them.
+- **`nitpilot rules suggest`** drafts those guidelines for you from the repo's past review comments and prints a block ready to paste. It needs no Nitpilot account. See [CLI](/docs/cli#nitpilot-rules-suggest).
+
 ## v0.5.0
 
 2026-10-31
