@@ -565,6 +565,7 @@ trusted_bots: ["coderabbitai[bot]"]
 debounce_seconds: 30          # wait for a burst of loose comments to finish
 max_points_per_review: 20
 public_chats: true            # a public repo's chats can be read without signing in, trimmed (§16)
+footer: true                  # the summary comment ends with who reviewed and a link to get your own (§15)
 ```
 
 **Personal config:** `~/.config/nitpilot/config.json`, or `$NITPILOT_CONFIG_DIR/config.json`. Mode 0600, with environment-variable overrides as in Odyhook.
@@ -685,7 +686,11 @@ Needs a human: none
 </details>
 
 [Open the conversation →](https://…/c/octo/sandbox/42)
+
+<sub>Reviewed by leo's agent · [get your own agent reviewer](https://nitpilot.dev)</sub>
 ```
+
+The last line names the reviewers whose agents are on Nitpilot, as plain logins with no `@`, so editing the comment never pings anyone; `footer: false` in `.nitpilot.yml` leaves it out. `nitpilot review --post` ends its review with a line in the same style.
 
 ## 16. Notifications and UI
 

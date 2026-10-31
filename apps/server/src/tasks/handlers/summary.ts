@@ -1,5 +1,6 @@
 import type { EscalationReason, Phase, PointStatus, Resolution } from '@nitpilot/protocol';
 import { prRefOf } from '../../chats/refs';
+import { rulesFromJson } from '../../chats/rules';
 import { renderSummary } from '../../engine/summary';
 import { summaryMarker } from '../../lib/markers';
 import { prisma } from '../../lib/prisma';
@@ -26,6 +27,8 @@ export function summaryHandler(deps: { platform: PlatformWrites }): TaskHandler 
         merged: chat.merged,
         round: chat.round,
         transcriptUrl: transcriptUrl(chat.repo.fullName, chat.number),
+        reviewers: chat.participants.filter((p) => p.role === 'reviewer' && p.userId && !p.isBot).map((p) => p.login),
+        footer: rulesFromJson(chat.repo.rulesJson).footer,
         points: points.map((p) => ({
           number: p.number,
           title: p.title,

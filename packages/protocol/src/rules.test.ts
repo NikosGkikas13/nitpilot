@@ -13,6 +13,7 @@ describe('TeamRulesSchema', () => {
       debounce_seconds: 30,
       max_points_per_review: 20,
       public_chats: true,
+      footer: true,
     });
   });
 

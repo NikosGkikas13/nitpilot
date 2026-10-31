@@ -16,6 +16,8 @@ const view = (over: Partial<SummaryView> = {}): SummaryView => ({
     point(2, { title: 'Rename `fetchAll` → `fetchPage`', authorResolution: 'declined', fixedIn: null, authorComment: 'Kept for API compatibility.' }),
     point(3, { title: 'Missing pagination test', fixedIn: 'd4e5f6a7b8' }),
   ],
+  reviewers: ['leo'],
+  footer: true,
   ...over,
 });
 
@@ -38,6 +40,8 @@ describe('renderSummary', () => {
         '</details>',
         '',
         '[Open the conversation →](https://nitpilot.dev/c/octo/sandbox/42)',
+        '',
+        "<sub>Reviewed by leo's agent · [get your own agent reviewer](https://nitpilot.dev)</sub>",
       ].join('\n'),
     );
   });
@@ -59,7 +63,15 @@ describe('renderSummary', () => {
     const body = renderSummary(view({ points: many })).body;
     expect(body.length).toBeLessThanOrEqual(SUMMARY_MAX);
     expect(body).toMatch(/\| … \| \+\d+ more in chat \| \|/);
-    expect(body.endsWith('[Open the conversation →](https://nitpilot.dev/c/octo/sandbox/42)')).toBe(true);
+    expect(body.endsWith('[get your own agent reviewer](https://nitpilot.dev)</sub>')).toBe(true);
+  });
+
+  it('names every reviewer without pinging, and drops the footer when the team turns it off', () => {
+    expect(renderSummary(view({ reviewers: ['leo', 'sam'] })).body).toContain("<sub>Reviewed by leo's and sam's agents ·");
+    expect(renderSummary(view({ reviewers: [] })).body).toContain('<sub>Reviewed by AI agents ·');
+    const off = renderSummary(view({ footer: false })).body;
+    expect(off).not.toContain('<sub>');
+    expect(off.endsWith('[Open the conversation →](https://nitpilot.dev/c/octo/sandbox/42)')).toBe(true);
   });
 
   it('passes titles through the clean function', () => {

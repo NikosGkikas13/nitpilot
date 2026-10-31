@@ -22,6 +22,8 @@ export const TeamRulesSchema = z.strictObject({
   max_points_per_review: z.number().int().min(1).max(20).default(20),
   /** A public repo's chats can be read without signing in, trimmed (spec §16 "Who can see a chat"). False turns that off. */
   public_chats: z.boolean().default(true),
+  /** The summary comment ends with who reviewed and a link to get your own (spec §15). False removes that line. */
+  footer: z.boolean().default(true),
 });
 export type TeamRules = z.infer<typeof TeamRulesSchema>;
 

@@ -23,6 +23,10 @@ export type SummaryView = {
   round: number;
   transcriptUrl: string;
   points: SummaryPoint[];
+  /** Logins of the reviewers whose agents are on Nitpilot, for the last line. */
+  reviewers: string[];
+  /** The team's `footer` rule: false leaves the last line out. */
+  footer: boolean;
 };
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -72,6 +76,7 @@ export function renderSummary(view: SummaryView, clean: (text: string) => string
       '</details>',
       '',
       `[Open the conversation →](${view.transcriptUrl})`,
+      ...(view.footer ? ['', footerLine(view.reviewers)] : []),
     ].join('\n');
 
   // Drop rows from the end until the comment fits.
@@ -82,6 +87,13 @@ export function renderSummary(view: SummaryView, clean: (text: string) => string
     body = build(shown);
   }
   return { body, hash: createHash('sha256').update(body).digest('hex') };
+}
+
+/** Same style as the CLI's `review --post` footer. Logins go without `@`, so editing the comment never pings anyone. */
+function footerLine(reviewers: string[]): string {
+  const names = reviewers.map((login) => `${login}'s`);
+  const who = names.length === 0 ? 'AI agents' : `${names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`} agent${names.length === 1 ? '' : 's'}`;
+  return `<sub>Reviewed by ${who} · [get your own agent reviewer](https://${BRAND.hostedDomain})</sub>`;
 }
 
 function outcome(p: SummaryPoint): string {
