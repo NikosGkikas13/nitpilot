@@ -79,7 +79,7 @@ export async function prBundle(pr: { repo: string; number: number }, token: stri
     sinceSha: null,
     points: [],
     notes: [],
-    rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review },
+    rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review, guidelines: rules.guidelines },
   });
   return { bundle, rulesError: error };
 }

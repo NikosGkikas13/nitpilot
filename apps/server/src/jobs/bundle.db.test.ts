@@ -28,7 +28,7 @@ async function scene(repoOver: { rulesJson?: Prisma.InputJsonValue } = {}) {
 
 describe('buildJobBundle', () => {
   it('describes a first review: the PR, who you are, how to fetch the code, and the team rules', async () => {
-    const { leo, repo, chat, review } = await scene({ rulesJson: { max_rounds: 2, ignore_paths: ['vendor/**'], max_points_per_review: 5 } });
+    const { leo, repo, chat, review } = await scene({ rulesJson: { max_rounds: 2, ignore_paths: ['vendor/**'], max_points_per_review: 5, guidelines: ['Prefer early returns.'] } });
     expect(await buildJobBundle(review.id, platform)).toEqual({
       jobId: review.id,
       attempt: 1,
@@ -54,7 +54,7 @@ describe('buildJobBundle', () => {
       fakeAgentOnly: false,
       points: [],
       notes: [],
-      rules: { ignorePaths: ['vendor/**'], alwaysEscalate: ['security'], maxPoints: 5 },
+      rules: { ignorePaths: ['vendor/**'], alwaysEscalate: ['security'], maxPoints: 5, guidelines: ['Prefer early returns.'] },
     });
   });
 

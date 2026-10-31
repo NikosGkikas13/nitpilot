@@ -381,7 +381,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 
 | Tool | Job types | Input → output |
 |---|---|---|
-| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes (each with `fromYou`: the person the agent works for wrote it), points with their replies and whether each is trusted (§6.1: an outsider's point is for information only), rules (ignored paths, categories, max points) |
+| `get_job` | all | → type, round, PR title and body (wrapped as untrusted), repo conventions (from the base branch), human notes (each with `fromYou`: the person the agent works for wrote it), points with their replies and whether each is trusted (§6.1: an outsider's point is for information only), rules (ignored paths, categories, max points, the team's `guidelines` from `.nitpilot.yml`, not wrapped: §13) |
 | `list_changed_files` | all | `{since?}` → `[{path, oldPath?, status, adds, dels, binary, ignored}]`. `since` is a full commit sha; if it's no longer in head's history (a force-push), the whole PR, with a note saying so |
 | `get_diff` | all | `{path, since?}` → a unified diff of one changed file (merge-base..head, or since..head), capped at 100 KB |
 | `get_file` | all | `{path, ref: base\|head, from?, to?}` → the content with line numbers, read with `git cat-file blob`, never from the filesystem, capped at 100 KB |
@@ -568,7 +568,12 @@ max_points_per_review: 20
 public_chats: true            # a public repo's chats can be read without signing in, trimmed (§16)
 footer: true                  # the summary comment ends with who reviewed and a link to get your own (§15)
 trust_all_authors: false      # reviews start on their own for every PR author, on the fake agent only (§14)
+guidelines:                   # the team's own review notes for the agents (up to 20, each up to 300 characters)
+  - Prefer early returns over nested ifs.
+  - Every new API route needs a test.
 ```
+
+**Guidelines** (Plan 4) reach every review, re-review and address job: in the bundle's `rules.guidelines` (default `[]`, so an older server's bundle still parses), in `get_job`'s `rules`, and listed in the agent's prompt as the team's own review notes to follow. They are not wrapped as untrusted, like the repo's conventions (§11 step 3): both come from the default branch, so only someone who can push there can change them, never a PR's author.
 
 **Personal config:** `~/.config/nitpilot/config.json`, or `$NITPILOT_CONFIG_DIR/config.json`. Mode 0600, with environment-variable overrides as in Odyhook.
 

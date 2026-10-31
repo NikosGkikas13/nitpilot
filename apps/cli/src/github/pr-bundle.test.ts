@@ -42,7 +42,7 @@ describe('prBundle', () => {
   });
 
   it("uses the repo's .nitpilot.yml, and reports a broken one", async () => {
-    const yml = 'max_rounds: 5\nmax_points_per_review: 4\nignore_paths: ["docs/**"]\n';
+    const yml = 'max_rounds: 5\nmax_points_per_review: 4\nignore_paths: ["docs/**"]\nguidelines: ["Prefer early returns."]\n';
     const gh = fakeGithub({
       '/repos/acme/shop-api/pulls/142': json(pull),
       '/user': json({ login: 'leo', id: 1 }),
@@ -50,7 +50,7 @@ describe('prBundle', () => {
     });
     const { bundle } = await prBundle(pr, 'tok', gh.impl);
     expect(bundle.maxRounds).toBe(5);
-    expect(bundle.rules).toEqual({ ignorePaths: ['docs/**'], alwaysEscalate: ['security'], maxPoints: 4 });
+    expect(bundle.rules).toEqual({ ignorePaths: ['docs/**'], alwaysEscalate: ['security'], maxPoints: 4, guidelines: ['Prefer early returns.'] });
 
     const broken = fakeGithub({
       '/repos/acme/shop-api/pulls/142': json(pull),

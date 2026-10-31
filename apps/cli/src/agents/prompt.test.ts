@@ -17,6 +17,15 @@ describe('jobPrompt', () => {
     }
   });
 
+  it("gives every job the team's guidelines, and says nothing about them when there are none", () => {
+    const bundle = jobBundle();
+    expect(jobPrompt(bundle)).not.toContain("team's own review notes");
+    for (const type of ['review', 're_review', 'address'] as const) {
+      const prompt = jobPrompt({ ...bundle, type, rules: { ...bundle.rules, guidelines: ['Prefer early returns.', 'No default exports.'] } });
+      expect(prompt).toContain("The team's own review notes (from .nitpilot.yml on the default branch). Follow them:\n- Prefer early returns.\n- No default exports.");
+    }
+  });
+
   it('asks an address job to work only on trusted points', () => {
     expect(jobPrompt({ ...jobBundle(), type: 'address' })).toContain('every open point marked trusted');
     expect(jobPrompt({ ...jobBundle(), type: 'address' })).toContain('trusted: false');

@@ -15,7 +15,12 @@ describe('TeamRulesSchema', () => {
       public_chats: true,
       footer: true,
       trust_all_authors: false,
+      guidelines: [],
     });
+  });
+
+  it('trims guidelines', () => {
+    expect(TeamRulesSchema.parse({ guidelines: ['  Prefer early returns.  '] }).guidelines).toEqual(['Prefer early returns.']);
   });
 
   it('keeps defaults for the keys a team leaves out', () => {
@@ -32,6 +37,9 @@ describe('TeamRulesSchema', () => {
     [{ max_points_per_review: 21 }],
     [{ max_round: 3 }],
     [{ version: 2 }],
+    [{ guidelines: Array.from({ length: 21 }, (_, i) => `Rule ${i}`) }],
+    [{ guidelines: ['x'.repeat(301)] }],
+    [{ guidelines: ['   '] }],
   ])('rejects %j', (input) => {
     expect(TeamRulesSchema.safeParse(input).success).toBe(false);
   });

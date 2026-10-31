@@ -29,6 +29,12 @@ export const TeamRulesSchema = z.strictObject({
    * public playground: a review job this starts for an outside contributor may only run on the fake agent.
    */
   trust_all_authors: z.boolean().default(false),
+  /**
+   * The team's own review notes, in plain words, given to every agent that reviews or fixes a PR here (spec §13).
+   * Not wrapped as untrusted: like `CLAUDE.md`, they come from the default branch, so only people who can push
+   * there can change them, never a PR's author.
+   */
+  guidelines: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
 });
 export type TeamRules = z.infer<typeof TeamRulesSchema>;
 

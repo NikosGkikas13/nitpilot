@@ -84,6 +84,8 @@ export const AgentJobBundle = z.object({
     ignorePaths: z.array(z.string()),
     alwaysEscalate: z.array(Category),
     maxPoints: z.number().int().positive(),
+    /** `.nitpilot.yml` `guidelines`. Defaults to none, so a bundle from an older server still parses. */
+    guidelines: z.array(z.string()).default([]),
   }),
 });
 export type AgentJobBundle = z.infer<typeof AgentJobBundle>;

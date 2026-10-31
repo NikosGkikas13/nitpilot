@@ -93,7 +93,7 @@ Verify: click Run a demo on nitpilot.dev, watch the chat go through review → f
 
 ## G5: Team guidelines + `nitpilot rules suggest`
 
-**Task 1: `guidelines` in `.nitpilot.yml`.** `guidelines: string[]` (at most 20, each ≤ 300 characters) in `TeamRulesSchema`, passed in the bundle's `rules`, and put into `jobPrompt` (`apps/cli/src/agents/prompt.ts`) as the team's own review notes. Spec §13. Tests: schema limits, prompt snapshot.
+**Task 1: `guidelines` in `.nitpilot.yml`.** `guidelines: string[]` (at most 20, each ≤ 300 characters) in `TeamRulesSchema`, passed in the bundle's `rules`, and put into `jobPrompt` (`apps/cli/src/agents/prompt.ts`) as the team's own review notes. Spec §13. Tests: schema limits, prompt snapshot. **Done 2026-10-31.** Deviations: guidelines also reach `get_job` (through `rules`) and one-off `nitpilot review` bundles; they're not wrapped as untrusted, like `CLAUDE.md` conventions, since both come from the default branch; the prompt test checks the exact lines rather than a snapshot; no docs-site page documents `.nitpilot.yml` yet, so only the spec changed.
 
 **Task 2: gather past reviews.** In the CLI (reusing G1's GitHub reader), fetch the repo's last ~100 human review comments (`GET /repos/:o/:r/pulls/comments`, skipping bots and Nitpilot's own).
 

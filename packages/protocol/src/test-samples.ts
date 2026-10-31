@@ -57,7 +57,7 @@ export function jobBundle(): AgentJobBundle {
     fakeAgentOnly: false,
     points: [],
     notes: [],
-    rules: { ignorePaths: ['**/*.lock'], alwaysEscalate: ['security'], maxPoints: 20 },
+    rules: { ignorePaths: ['**/*.lock'], alwaysEscalate: ['security'], maxPoints: 20, guidelines: [] },
   };
 }
 

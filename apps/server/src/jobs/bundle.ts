@@ -95,7 +95,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
         body: m.body,
         at: m.createdAt.toISOString(),
       })),
-    rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review },
+    rules: { ignorePaths: rules.ignore_paths, alwaysEscalate: rules.always_escalate, maxPoints: rules.max_points_per_review, guidelines: rules.guidelines },
   });
 }
 
