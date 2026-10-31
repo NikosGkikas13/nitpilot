@@ -84,7 +84,7 @@ export async function prBundle(pr: { repo: string; number: number }, token: stri
   return { bundle, rulesError: error };
 }
 
-async function githubGet(url: string, token: string, accept: string, fetchImpl: typeof fetch): Promise<Response> {
+export async function githubGet(url: string, token: string, accept: string, fetchImpl: typeof fetch): Promise<Response> {
   try {
     return await fetchImpl(url, {
       headers: { authorization: `Bearer ${token}`, accept, 'user-agent': BRAND.userAgent, 'x-github-api-version': '2022-11-28' },
