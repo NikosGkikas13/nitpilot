@@ -67,7 +67,7 @@ Verify: open a public sandbox chat in a private window, check that it's read-onl
 
 When the agents disagree on one point, the push has **Resolve** and **Keep open** buttons, and tapping one does what the chat's buttons do (`point_resolve` / `point_continue` in `apps/server/src/http/routes/chat-actions.ts`).
 
-**Task 1: payload.** In `notificationText` / the notify handler (`apps/server/src/tasks/handlers/notify.ts`), when exactly one point is escalated, add `{ chatId, pointId, actions: ['resolve', 'continue'] }` to the push data. Test: the notify handler's tests.
+**Task 1: payload.** In `notificationText` / the notify handler (`apps/server/src/tasks/handlers/notify.ts`), when exactly one point is escalated, add `{ chatId, pointId, actions: ['resolve', 'continue'] }` to the push data. Test: the notify handler's tests. **Done 2026-10-31.** The push data is `{ chatId, point, actions }` (`point` is the point's number, as in the route's `:n`). Each person gets only the buttons `can` allows them (chats/permissions.ts): the raiser's owner gets both, the PR's author only `continue`, anyone else none, so the handler sends one push per group of people with the same buttons. The push payload type lives in `push-notifier.ts` (no protocol schema), so `packages/protocol` is unchanged.
 
 **Task 2: service worker.** In `apps/web/public/sw.js`, `showNotification` gets `actions`; `notificationclick` with `event.action` POSTs to the chat-actions route (same origin, cookies), then shows "Done" or opens the chat if the POST fails. Check that `isAllowedOrigin` accepts the service worker's request. iPhone shows no action buttons, so tapping just opens the chat as it does now. Test: `sw.test.ts`.
 

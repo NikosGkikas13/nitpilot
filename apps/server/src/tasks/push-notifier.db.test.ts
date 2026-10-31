@@ -49,6 +49,14 @@ const ready = (userIds: string[]): Notification => ({
 });
 
 describe('PushNotifier', () => {
+  it('adds the chat, the point and the buttons when the notification offers a decision (Plan 4 G3)', async () => {
+    const maya = await makeUser();
+    await subscribe(maya.id);
+    const push = fakePush();
+    await new PushNotifier(push.send).notify({ ...ready([maya.id]), kind: 'escalated', decision: { point: 2, actions: ['resolve', 'continue'] } });
+    expect(push.sent[0]!.payload).toMatchObject({ tag: 'chat_1', chatId: 'chat_1', point: 2, actions: ['resolve', 'continue'] });
+  });
+
   it("sends the notification to each of a person's subscriptions, and one that arrives reaches them", async () => {
     const maya = await makeUser();
     const [laptop, phone] = [await subscribe(maya.id), await subscribe(maya.id)];

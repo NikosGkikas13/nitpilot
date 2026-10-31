@@ -1,5 +1,8 @@
 import type { NotifyKind } from '@nitpilot/protocol';
 
+/** A button on a push about one escalated point: the chat's Resolve or Continue ("Keep open"), by its route's name. */
+export type DecisionAction = 'resolve' | 'continue';
+
 export type Notification = {
   userIds: string[];
   kind: NotifyKind;
@@ -15,6 +18,11 @@ export type Notification = {
    * notification (spec §16). Left out, it alerts.
    */
   alert?: boolean;
+  /**
+   * Set when the push is about exactly one escalated point and these people may decide it: the buttons it can offer
+   * (Plan 4 G3). Each posts to `/api/chats/:chatId/points/:point/<action>`. Left out, the push only opens the chat.
+   */
+  decision?: { point: number; actions: DecisionAction[] };
 };
 
 /** A notification as one line: what the CLI prints (and Plan 1 showed), "Ready for your approval: acme/shop-api#142". */

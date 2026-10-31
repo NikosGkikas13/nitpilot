@@ -1,12 +1,16 @@
 import { prisma } from '../lib/prisma';
-import type { Notification, Notifier } from './notifier';
+import type { DecisionAction, Notification, Notifier } from './notifier';
 import type { PushResult, PushSend } from './web-push-send';
 
 /** A subscription that failed this many times in a row (without a 404 or 410) is deleted. */
 export const MAX_PUSH_FAILURES = 5;
 
-/** What the service worker gets (Task 20 shows it): heading, detail, where a click goes, and the chat as the tag. */
-export type PushPayload = { title: string; body: string; url: string; tag: string };
+/**
+ * What the service worker gets (Task 20 shows it): heading, detail, where a click goes, and the chat as the tag. A push
+ * about one escalated point that this person may decide also carries the chat, the point and the buttons to offer
+ * (Plan 4 G3); an older service worker ignores them and just opens the chat.
+ */
+export type PushPayload = { title: string; body: string; url: string; tag: string; chatId?: string; point?: number; actions?: DecisionAction[] };
 
 type Subscription = { id: string; userId: string; endpoint: string; p256dh: string; auth: string; failCount: number };
 
@@ -26,6 +30,7 @@ export class PushNotifier implements Notifier {
   async notify(n: Notification): Promise<{ reached: string[] }> {
     if (!this.send || n.userIds.length === 0) return { reached: [] };
     const payload: PushPayload = { title: n.title, body: n.body, url: n.url, tag: n.chatId };
+    if (n.decision) Object.assign(payload, { chatId: n.chatId, point: n.decision.point, actions: n.decision.actions });
     const message = JSON.stringify(payload);
     // Everyone's subscriptions in one query, oldest first.
     const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: { in: n.userIds } }, orderBy: { createdAt: 'asc' } });

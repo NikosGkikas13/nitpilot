@@ -184,6 +184,36 @@ describe('notify', () => {
     expect(s.sent[0]).toMatchObject({ title: 'Needs you', body: `${s.repo.fullName}#${s.chat.number}: P1, P3 need a human decision` });
   });
 
+  // Plan 4 G3: a push about one escalated point offers the buttons each person may tap, by the chat's own rules.
+  it('offers Resolve and Continue to the agent owner who raised the one point, and Continue to the author', async () => {
+    const s = await scene({ authorOnNitpilot: true });
+    await s.point(2, { status: 'escalated' });
+    await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id, s.maya!.id], kind: 'escalated', pointNumbers: [2] }));
+    expect(s.sent).toEqual([
+      expect.objectContaining({ userIds: [s.leo.id], chatId: s.chat.id, decision: { point: 2, actions: ['resolve', 'continue'] } }),
+      expect.objectContaining({ userIds: [s.maya!.id], chatId: s.chat.id, decision: { point: 2, actions: ['continue'] } }),
+    ]);
+  });
+
+  it('offers no buttons for several points', async () => {
+    const s = await scene({ authorOnNitpilot: true });
+    await s.point(1, { status: 'escalated' });
+    await s.point(3, { status: 'escalated' });
+    await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id, s.maya!.id], kind: 'escalated', pointNumbers: [1, 3] }));
+    expect(s.sent).toHaveLength(1);
+    expect(s.sent[0]!.userIds).toEqual([s.leo.id, s.maya!.id]);
+    expect(s.sent[0]).not.toHaveProperty('decision');
+  });
+
+  it('offers no buttons to someone who may not decide the point', async () => {
+    const s = await scene({ authorOnNitpilot: true });
+    // Raised by someone else's agent: Leo is neither its raiser nor the PR's author.
+    await s.point(1, { status: 'escalated', raisedByGithubId: ghId() });
+    await s.handlers.notify!(await s.task('notify', { userIds: [s.leo.id], kind: 'escalated', pointNumbers: [1] }));
+    expect(s.sent).toHaveLength(1);
+    expect(s.sent[0]).not.toHaveProperty('decision');
+  });
+
   // The handoff's push copy (§8): a heading, and the detail under it. The CLI prints both on one line, as in Plan 1.
   it.each([
     ['ready', [], 'Ready for your approval', 'acme/shop-api#142'],
