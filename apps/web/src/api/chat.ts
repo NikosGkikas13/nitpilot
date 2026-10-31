@@ -33,6 +33,17 @@ function mergeWithCached(cached: ChatResponse | undefined, fresh: ChatResponse):
   return { view: fresh.view, items: mergeItems(cached.items, fresh.items), hasOlder: cachedFirst < freshFirst ? cached.hasOlder : fresh.hasOlder };
 }
 
+/**
+ * A public repo's chat for someone who isn't signed in (spec §16 "Who can see a chat"): trimmed by the server, the
+ * newest items only, and no live updates, so it's read once. A 404 means it isn't public (or doesn't exist).
+ */
+export function usePublicChat(owner: string, repo: string, number: string) {
+  return useQuery({
+    queryKey: ['public-chat', owner, repo, number],
+    queryFn: () => api.get(`/api/public/chats/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(number)}`, ChatResponse),
+  });
+}
+
 /** The page of items before `beforeSeq`, for "Load earlier". */
 export function fetchOlderItems(chatId: string, beforeSeq: number): Promise<MessagesResponse> {
   return api.get(`/api/chats/${chatId}/messages?before=${beforeSeq}`, MessagesResponse);

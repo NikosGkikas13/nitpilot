@@ -94,3 +94,11 @@
   font-weight: 600;
   text-decoration: none;
 }
+
+/* A visitor's public chat fills the page: the invite banner, then the chat under it. */
+.publicPage {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}

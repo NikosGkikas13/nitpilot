@@ -5,11 +5,14 @@ import { Avatar } from '../../components/Avatar/Avatar';
 import { itemTime } from '../../lib/time';
 import styles from './DetailsPanel.module.css';
 
-/** The PR beside the chat (handoff §2 "Details panel", desktop at 1180 px and wider): its files, its people, the team's rules. */
-export function DetailsPanel({ view }: { view: ChatView }) {
+/**
+ * The PR beside the chat (handoff §2 "Details panel", desktop at 1180 px and wider): its files, its people, the team's
+ * rules. A visitor who isn't signed in gets no file list (`files` false): that route needs a session.
+ */
+export function DetailsPanel({ view, files = true }: { view: ChatView; files?: boolean }) {
   return (
     <aside className={styles.panel} aria-label="PR details">
-      <Files chatId={view.id} />
+      {files && <Files chatId={view.id} />}
       <section className={styles.section}>
         <h2 className={styles.heading}>Participants</h2>
         <ul className={styles.people}>

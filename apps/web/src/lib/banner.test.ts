@@ -1,7 +1,7 @@
 import { FailureReason, type ChatView, type PointView, type WebMe } from '@nitpilot/protocol';
 import { describe, expect, it } from 'vitest';
 import { authorDraft, chatView, point } from '../test/chat';
-import { chatBanner, escalationNote, failureText } from './banner';
+import { chatBanner, escalationNote, failureText, visitorTitle } from './banner';
 
 const me: WebMe = { id: 'u1', githubId: '1001', login: 'maya', avatarUrl: null, githubAuth: 'ok', agentOnline: true, settings: { autoReview: true, autoAddress: true, dailyJobCap: 40 }, usedToday: 0, push: { vapidPublicKey: null, subscribed: false }, onboarded: true };
 const view = (over: Partial<ChatView> = {}) => chatView(over);
@@ -95,5 +95,18 @@ describe('escalationNote', () => {
     expect(escalationNote([escalated({ escalationReason: 'disagreement' })], 3)).toBe("The agents don't agree.");
     expect(escalationNote([escalated({ escalationReason: 'round_limit' })], 3)).toBe('The agents used all 3 rounds.');
     expect(escalationNote([escalated(), escalated({ number: 2, escalationReason: 'disagreement' })], 3)).toBe('These points need a person.');
+  });
+});
+
+describe('visitorTitle', () => {
+  const [maya, leo] = chatView().participants as [ChatView['participants'][number], ChatView['participants'][number]];
+  it('names the author first, then the reviewers, each only once', () => {
+    expect(visitorTitle(chatView({ participants: [leo, maya, { ...leo, role: 'reviewer' }] }))).toBe("maya's and leo's agents reviewing this PR");
+    expect(visitorTitle(chatView({ participants: [maya, leo, { ...leo, githubId: '3', login: 'sam' }] }))).toBe("maya's, leo's and sam's agents reviewing this PR");
+  });
+
+  it('leaves out bots and people not on Nitpilot', () => {
+    expect(visitorTitle(chatView({ participants: [maya, { ...leo, onNitpilot: false }] }))).toBe("maya's agent reviewing this PR");
+    expect(visitorTitle(chatView({ participants: [{ ...maya, isBot: true }] }))).toBe('AI agents reviewing this PR');
   });
 });

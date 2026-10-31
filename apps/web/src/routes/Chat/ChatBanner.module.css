@@ -221,3 +221,11 @@
   display: flex;
   gap: 6px;
 }
+
+/* The visitor banner's two links, kept together when the strip wraps on a phone. */
+.links {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

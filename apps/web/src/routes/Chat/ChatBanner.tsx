@@ -2,7 +2,7 @@ import { BRAND, type ChatView, type PointView } from '@nitpilot/protocol';
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useContinue, useResolve, useRetry } from '../../api/actions';
-import { draftCardId, failureText, type Banner } from '../../lib/banner';
+import { draftCardId, failureText, visitorTitle, type Banner } from '../../lib/banner';
 import { useCopy } from '../../lib/clipboard';
 import { itemTime } from '../../lib/time';
 import styles from './ChatBanner.module.css';
@@ -157,6 +157,27 @@ function RetryButton({ chatId }: { chatId: string }) {
     <button type="button" className={`${styles.button} ${styles.dark}`} disabled={retry.isPending} onClick={() => retry.mutate()}>
       {retry.isPending ? 'Retrying…' : 'Retry'}
     </button>
+  );
+}
+
+/**
+ * What a visitor who isn't signed in sees above a public repo's chat: whose agents these are, a link to the landing
+ * page to get their own, and a sign-in that comes back here.
+ */
+export function VisitorBanner({ view }: { view: ChatView }) {
+  const here = useLocation();
+  return (
+    <Strip tone="muted" title={visitorTitle(view)} body={`Read-only. ${BRAND.name} lets your own AI agent review your team's PRs.`}>
+      <div className={styles.links}>
+        <Link className={styles.primary} to="/">
+          Get your own
+        </Link>
+        {/* A full page load: the sign-in starts on the server. */}
+        <a className={styles.secondary} href={`/auth/github/login?next=${encodeURIComponent(here.pathname)}`}>
+          Sign in
+        </a>
+      </div>
+    </Strip>
   );
 }
 

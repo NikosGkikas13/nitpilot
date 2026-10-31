@@ -97,3 +97,11 @@ export function escalationNote(points: PointView[], maxRounds: number): string {
   if (reasons.size === 1 && reasons.has('round_limit')) return `The agents used all ${maxRounds} rounds.`;
   return 'These points need a person.';
 }
+
+/** "maya's and leo's agents reviewing this PR": the people here with an agent on Nitpilot, the author first. */
+export function visitorTitle(view: ChatView): string {
+  const logins = [...new Set(view.participants.filter((p) => p.onNitpilot && !p.isBot).toSorted((a, b) => (a.role === 'author' ? -1 : b.role === 'author' ? 1 : 0)).map((p) => `${p.login}'s`))];
+  if (logins.length === 0) return 'AI agents reviewing this PR';
+  const names = logins.length === 1 ? logins[0] : `${logins.slice(0, -1).join(', ')} and ${logins.at(-1)}`;
+  return `${names} ${logins.length === 1 ? 'agent' : 'agents'} reviewing this PR`;
+}
