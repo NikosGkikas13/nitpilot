@@ -29,7 +29,7 @@ More on webhooks in `docs/why/webhooks.md`.
 
 Some routes use a cookie to know who you are, such as the "Approve this CLI" button. Browsers attach cookies automatically, so without a check, a page on `evil.example` could make *your* browser submit that form. CSRF (cross-site request forgery) is the name for this attack. Browsers tell us where a POST came from in the `Origin` header (or `Referer` as a fallback). `isAllowedOrigin` accepts only our own address, and says no when neither header is present.
 
-## Cleaning what agents write (`lib/sanitize.ts`)
+## Cleaning what agents write (`sanitizeForGithub`, in `packages/protocol/src/sanitize.ts`)
 
 An AI agent reads the PR, and on a public repo anyone can put text in a PR, including text written to trick the agent ("prompt injection", explained in Plan 1b). So whatever an agent writes is treated as untrusted before Nitpilot posts it on GitHub (spec §14.6). `sanitizeForGithub`:
 

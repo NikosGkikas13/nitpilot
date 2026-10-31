@@ -1,9 +1,11 @@
+import { createInterface } from 'node:readline/promises';
 import { BRAND, type JobResult } from '@nitpilot/protocol';
 import { adapterFor } from '../agents/registry';
 import type { AgentAdapter } from '../agents/types';
 import { configDir, loadConfig } from '../config/config';
 import { CliError } from '../errors';
 import { githubToken, prBundle } from '../github/pr-bundle';
+import { postReview } from '../github/post-review';
 import { startMcpServer } from '../mcp/server';
 import { terminal, type Out } from '../out';
 import type { RunProgram } from '../run-program';
@@ -22,7 +24,34 @@ export type ReviewDeps = {
   adapter?: AgentAdapter | null;
   /** Stops the review, like Ctrl-C (tests). */
   stop?: AbortSignal;
+  /** `--post`: offer to post the points as your GitHub review. `--yes`: post without asking. */
+  post?: boolean;
+  yes?: boolean;
+  /** Asks a yes/no question (tests answer it). Default: the terminal, when there is one. */
+  confirm?: (question: string) => Promise<boolean>;
 };
+
+const USAGE = `Usage: ${BRAND.cli} review <pr-url> [--post [--yes]]`;
+
+/** `review`'s arguments: the PR, and the flags in any order. */
+export function reviewOptions(args: string[]): { ref: string | undefined; post: boolean; yes: boolean } {
+  const flags = args.filter((a) => a.startsWith('--'));
+  const refs = args.filter((a) => !a.startsWith('--'));
+  const post = flags.includes('--post');
+  const yes = flags.includes('--yes');
+  if (refs.length > 1 || flags.some((f) => f !== '--post' && f !== '--yes') || (yes && !post)) throw new CliError(USAGE);
+  return { ref: refs[0], post, yes };
+}
+
+/** "Post …? [y/N]" in the terminal. Anything but y or yes is a no. */
+async function askInTerminal(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim());
+  } finally {
+    rl.close();
+  }
+}
 
 /**
  * `nitpilot review <pr-url>` (spec §11 "One-off reviews"): your agent reviews one PR on this computer and prints
@@ -33,7 +62,10 @@ export async function review(ref: string | undefined, deps: ReviewDeps = {}): Pr
   const env = deps.env ?? process.env;
   const out = deps.out ?? terminal;
   const pr = ref ? parsePrRef(ref) : null;
-  if (!pr) throw new CliError(`Usage: ${BRAND.cli} review <pr-url>, for example ${BRAND.cli} review https://github.com/octo/sandbox/pull/12`);
+  if (!pr) throw new CliError(`${USAGE}, for example ${BRAND.cli} review https://github.com/octo/sandbox/pull/12`);
+  // Asked now, not after the agent's run: with no terminal to answer in, --post needs --yes.
+  const confirm = deps.yes ? async () => true : (deps.confirm ?? (process.stdin.isTTY ? askInTerminal : null));
+  if (deps.post && !confirm) throw new CliError('There is no terminal to ask in, so add --yes to post the review without asking.');
 
   const dir = configDir(env);
   const config = loadConfig({ env, dir });
@@ -70,6 +102,15 @@ export async function review(ref: string | undefined, deps: ReviewDeps = {}): Pr
     });
     if (outcome.kind === 'complete') {
       printReview(outcome.result, out);
+      const points = outcome.result.points;
+      if (!deps.post || !confirm || points.length === 0) return 0;
+      out.log('');
+      const what = `${points.length} point${points.length === 1 ? '' : 's'}`;
+      if (!(await confirm(`Post ${what} to ${repo}#${pr.number} as your review (@${bundle.you.login})?`))) {
+        out.log('Not posted.');
+        return 0;
+      }
+      out.log(`Posted your review: ${await postReview(bundle, points, token, deps.fetch)}`);
       return 0;
     }
     out.error(outcome.kind === 'fail' ? `The review failed (${outcome.reason}): ${outcome.detail}` : `The review couldn't start (${outcome.reason}).`);

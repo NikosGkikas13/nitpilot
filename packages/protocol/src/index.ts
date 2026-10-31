@@ -9,3 +9,4 @@ export * from './close-codes';
 export * from './api';
 export * from './web-api';
 export * from './web-messages';
+export * from './sanitize';

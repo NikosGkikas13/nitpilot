@@ -24,7 +24,7 @@ Say the engine decides "Leo's review is done; post a summary comment". If we cal
 | `notify` | tell people they're needed: sent to each of their connected CLIs (`tasks/cli-notifier.ts`), or logged when none is online | — |
 | `timer` | a debounce came due: tell the engine | — |
 
-Everything an agent wrote is cleaned first (`lib/sanitize.ts`). Writes "as" someone use their own GitHub token. If they have to sign in again, the task stops for good instead of retrying, and nothing is posted as the bot in their place.
+Everything an agent wrote is cleaned first (`sanitizeForGithub`, in `packages/protocol/src/sanitize.ts`, shared with the CLI's `nitpilot review --post`). Writes "as" someone use their own GitHub token. If they have to sign in again, the task stops for good instead of retrying, and nothing is posted as the bot in their place.
 
 ## When a write never reaches GitHub
 

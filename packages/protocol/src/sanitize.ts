@@ -1,4 +1,4 @@
-import { BRAND } from '@nitpilot/protocol';
+import { BRAND } from './brand';
 
 const SECRETS: RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,

@@ -1,6 +1,6 @@
 import { NeedsReauthError } from '../../auth/user-tokens';
 import { prisma } from '../../lib/prisma';
-import { sanitizeForGithub } from '../../lib/sanitize';
+import { sanitizeForGithub } from '@nitpilot/protocol';
 import { PermanentTaskError } from '../runner';
 
 /** The chat a task belongs to, with what writes need. Null if it was deleted meanwhile. */

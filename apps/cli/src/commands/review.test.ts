@@ -5,7 +5,7 @@ import { prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
 import { FAKE_SCENARIOS, fakeAdapter } from '../agents/fake/adapter';
 import type { Out } from '../out';
-import { printReview, review } from './review';
+import { printReview, review, reviewOptions } from './review';
 
 function recorder() {
   const lines: string[] = [];
@@ -31,12 +31,18 @@ function scene() {
     base: { ref: 'main', sha: pr.baseSha },
     head: { ref: 'feature/cursor-pagination', sha: pr.headSha, repo: { full_name: 'acme/shop-api' } },
   };
-  const fetch = (async (url: string) => {
+  /** Reviews posted to GitHub: their request bodies. */
+  const posted: { comments: unknown[]; body: string }[] = [];
+  const fetch = (async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && url.endsWith('/pulls/142/reviews')) {
+      posted.push(JSON.parse(init.body as string));
+      return new Response(JSON.stringify({ html_url: 'https://github.com/acme/shop-api/pull/142#pullrequestreview-9' }));
+    }
     if (url.endsWith('/pulls/142')) return new Response(JSON.stringify(pull));
     if (url.endsWith('/user')) return new Response(JSON.stringify({ login: 'leo', id: 1 }));
     return new Response('not found', { status: 404 });
   }) as typeof globalThis.fetch;
-  return { pr, configDir, env, fetch };
+  return { pr, configDir, env, fetch, posted };
 }
 
 describe('nitpilot review', () => {
@@ -77,6 +83,50 @@ describe('nitpilot review', () => {
   it('explains the usage for a missing or bad PR link', async () => {
     await expect(review(undefined, { env: {} })).rejects.toThrow(/Usage: nitpilot review <pr-url>/);
     await expect(review('not a pr', { env: {} })).rejects.toThrow(/Usage/);
+  });
+});
+
+describe('nitpilot review --post', () => {
+  it('asks first, then posts the points as your review', async () => {
+    const { env, fetch, posted } = scene();
+    const rec = recorder();
+    const questions: string[] = [];
+    const confirm = async (q: string) => (questions.push(q), true);
+    expect(await review('acme/shop-api#142', { env, fetch, out: rec.out, adapter: fakeAdapter(), post: true, confirm })).toBe(0);
+    expect(questions).toEqual(['Post 2 points to acme/shop-api#142 as your review (@leo)?']);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]!.comments).toHaveLength(1); // the page-size point; the README one has no line, so it's in the body
+    expect(rec.text()).toContain('Posted your review: https://github.com/acme/shop-api/pull/142#pullrequestreview-9');
+  });
+
+  it('posts nothing when you say no', async () => {
+    const { env, fetch, posted } = scene();
+    const rec = recorder();
+    expect(await review('acme/shop-api#142', { env, fetch, out: rec.out, adapter: fakeAdapter(), post: true, confirm: async () => false })).toBe(0);
+    expect(posted).toEqual([]);
+    expect(rec.text()).toContain('Not posted.');
+  });
+
+  it('--yes posts without asking', async () => {
+    const { env, fetch, posted } = scene();
+    const confirm = async () => {
+      throw new Error('should not ask');
+    };
+    expect(await review('acme/shop-api#142', { env, fetch, out: recorder().out, adapter: fakeAdapter(), post: true, yes: true, confirm })).toBe(0);
+    expect(posted).toHaveLength(1);
+  });
+});
+
+describe('reviewOptions', () => {
+  it('reads the PR and the flags in any order', () => {
+    expect(reviewOptions(['acme/api#1'])).toEqual({ ref: 'acme/api#1', post: false, yes: false });
+    expect(reviewOptions(['--post', 'acme/api#1', '--yes'])).toEqual({ ref: 'acme/api#1', post: true, yes: true });
+  });
+
+  it('refuses unknown flags, two PRs, and --yes without --post', () => {
+    for (const args of [['acme/api#1', '--force'], ['acme/api#1', 'acme/api#2'], ['acme/api#1', '--yes']]) {
+      expect(() => reviewOptions(args), args.join(' ')).toThrow(/Usage: nitpilot review <pr-url> \[--post \[--yes\]\]/);
+    }
   });
 });
 

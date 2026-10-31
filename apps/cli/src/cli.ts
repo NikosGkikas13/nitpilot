@@ -3,7 +3,7 @@ import { doctor } from './commands/doctor';
 import { login, loginOptions } from './commands/login';
 import { reposAdd } from './commands/repos';
 import { retry } from './commands/retry';
-import { review } from './commands/review';
+import { review, reviewOptions } from './commands/review';
 import { start } from './commands/start';
 import { status, statusOptions } from './commands/status';
 import { CliError } from './errors';
@@ -27,7 +27,14 @@ export const COMMANDS: Record<string, Command> = {
       await reposAdd(path, { out });
     },
   },
-  review: { usage: `${BRAND.cli} review <pr-url>`, summary: 'Have your agent review one PR now, no account needed', run: ([ref], out) => review(ref, { out }) },
+  review: {
+    usage: `${BRAND.cli} review <pr-url> [--post [--yes]]`,
+    summary: 'Have your agent review one PR now, no account needed',
+    run: (args, out) => {
+      const { ref, ...flags } = reviewOptions(args);
+      return review(ref, { out, ...flags });
+    },
+  },
   retry: { usage: `${BRAND.cli} retry <pr-url>`, summary: 'Run your failed job on that PR again', run: ([ref], out) => retry(ref, { out }) },
 };
 
