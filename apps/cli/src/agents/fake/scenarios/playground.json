@@ -1,0 +1,5 @@
+{
+  "review": [{ "rules_review": { "max_points": 4 } }],
+  "address": [{ "rules_address": true }],
+  "re_review": [{ "rules_re_review": true }]
+}

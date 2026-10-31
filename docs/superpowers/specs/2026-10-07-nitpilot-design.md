@@ -515,7 +515,7 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
   - One small run used one premium request.
 - **Business/Enterprise:** an admin must leave the Copilot CLI policy enabled.
 
-**Fake agent.** A small Node script (`apps/cli/src/agents/fake/agent.ts`, run with Node's type stripping) that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and answer P2; on re-review, resolve both". It talks to the MCP server exactly like a real agent, reads its token from a 0600 file, and is used in CI. It only runs from a source checkout.
+**Fake agent.** A small Node script (`apps/cli/src/agents/fake/agent.ts`, run with Node's type stripping) that follows a scenario file, for example: "raise P1 and P2; when addressing, fix P1 and answer P2; on re-review, resolve both". It talks to the MCP server exactly like a real agent, reads its token from a 0600 file, and is used in CI. It only runs from a source checkout. The `playground` scenario (the public demo, Plan 4 G4) reacts to the PR instead of following a fixed list: its reviewer reads the diff through `list_changed_files` and `get_diff` and raises at most 4 points from text rules (an `i <= x.length` loop, a leftover `console.log`, a `TODO`/`FIXME`, and once per review a new function with no test file in the PR); its author fixes the loop and the `console.log` in the file, answers the TODO and declines the test; its re-reviewer resolves the rest and keeps the declined point open, so the chat ends on one escalated point for a human. Same diff, same points, every time. It is a demo, not a reviewer.
 
 ### 12.3 Conformance suite (every adapter must pass)
 
