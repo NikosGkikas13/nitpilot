@@ -194,6 +194,14 @@ describe("a chat's page (/c/...)", () => {
     expect(preview).not.toHaveBeenCalled();
   });
 
+  it("puts a title with $ patterns in as written, not as replacement patterns", () => {
+    const index = '<!doctype html><html><head><title>app</title></head><body>BODY</body></html>';
+    const html = chatPageHtml(index, { ...card, title: "a $' b $& c $` d $$ e" }, 'https://x.example');
+    expect(html).toContain('<meta property="og:title" content="a $&#39; b $&amp; c $` d $$ e">');
+    expect(html.split('BODY')).toHaveLength(2);
+    expect(html.split('<title>app</title>')).toHaveLength(2);
+  });
+
   it('escapes a single quote too', () => {
     expect(chatPageHtml('<head></head>', { ...card, title: "it's" }, 'https://x.example')).toContain('content="it&#39;s"');
   });

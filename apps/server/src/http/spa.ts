@@ -104,7 +104,8 @@ export function chatPageHtml(index: string, preview: ChatPreview | null, publicU
       meta('name', 'twitter:card', 'summary'),
     );
   }
-  return index.replace('</head>', `${tags.join('\n    ')}\n  </head>`);
+  // A function, not a string: a string replacement would expand `$'`, `$&` … in a PR title.
+  return index.replace('</head>', () => `${tags.join('\n    ')}\n  </head>`);
 }
 
 /**
