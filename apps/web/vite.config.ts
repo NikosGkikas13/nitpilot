@@ -19,6 +19,8 @@ export default defineConfig({
       // Keep the browser's Host: sign-in starts over on PUBLIC_URL when a request arrives on another address (auth.ts).
       '/auth': { target: SERVER, changeOrigin: false },
       '/github': SERVER,
+      // The landing page reads `demo` from it (Run a demo).
+      '/healthz': SERVER,
       '/ws': { target: SERVER, ws: true },
     },
   },

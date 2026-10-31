@@ -86,6 +86,13 @@ const EnvSchema = z.object({
   VAPID_PUBLIC_KEY: optionalText,
   VAPID_PRIVATE_KEY: optionalText,
   VAPID_SUBJECT: optionalText.refine((s) => s === undefined || /^(mailto|https):/.test(s), 'must start with mailto: or https:'),
+  /**
+   * The public playground's "Run a demo" button (http/routes/demo.ts, docs/why/acting-as-a-bot.md): the playground
+   * repo (`owner/name`) and the author bot's GitHub token, which opens the demo PRs. Optional, but both or none:
+   * without them the button and its route are off. The token is a secret: never log it.
+   */
+  DEMO_REPO: optionalText.refine((s) => s === undefined || /^[\w.-]+\/[\w.-]+$/.test(s), 'must look like owner/name'),
+  DEMO_AUTHOR_TOKEN: optionalText,
 }).superRefine(
   (env, ctx) => {
     const missing = missingGithubAppVariables(env);
@@ -107,6 +114,9 @@ const EnvSchema = z.object({
 ).refine(
   (env) => !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT || isVapidKeyPair(env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY),
   { path: ['VAPID_PUBLIC_KEY'], message: "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY aren't one key pair (npm run vapid:keys makes a pair)" },
+).refine(
+  (env) => !env.DEMO_REPO === !env.DEMO_AUTHOR_TOKEN,
+  { path: ['DEMO_AUTHOR_TOKEN'], message: 'set both DEMO_REPO and DEMO_AUTHOR_TOKEN, or neither (the demo is off)' },
 );
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -128,4 +138,12 @@ export type VapidDetails = { subject: string; publicKey: string; privateKey: str
 export function vapidDetails(env: Env): VapidDetails | null {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) return null;
   return { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY };
+}
+
+/** The playground's demo settings: its repo and the author bot's token. Null when the demo is off. */
+export type DemoConfig = { repo: string; token: string };
+
+export function demoConfig(env: Env): DemoConfig | null {
+  if (!env.DEMO_REPO || !env.DEMO_AUTHOR_TOKEN) return null;
+  return { repo: env.DEMO_REPO, token: env.DEMO_AUTHOR_TOKEN };
 }

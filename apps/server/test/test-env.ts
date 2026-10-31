@@ -20,4 +20,7 @@ export const TEST_ENV = {
   VAPID_PUBLIC_KEY: '',
   VAPID_PRIVATE_KEY: '',
   VAPID_SUBJECT: '',
+  // The demo is off unless a test turns it on (http/routes/demo.test.ts).
+  DEMO_REPO: '',
+  DEMO_AUTHOR_TOKEN: '',
 };

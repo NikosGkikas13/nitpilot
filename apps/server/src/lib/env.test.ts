@@ -1,6 +1,6 @@
 import webpush from 'web-push';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getEnv, vapidDetails } from './env';
+import { demoConfig, getEnv, vapidDetails } from './env';
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -50,6 +50,16 @@ describe('getEnv', () => {
     expect(getEnv().CLOSED_CHAT_RETENTION_DAYS).toBeUndefined();
     vi.stubEnv('CLOSED_CHAT_RETENTION_DAYS', '0');
     expect(() => getEnv()).toThrow(/CLOSED_CHAT_RETENTION_DAYS/);
+  });
+
+  it('turns the demo on only with both DEMO_ variables', () => {
+    expect(demoConfig(getEnv())).toBeNull();
+    vi.stubEnv('DEMO_REPO', 'acme/playground');
+    expect(() => getEnv()).toThrow(/DEMO_AUTHOR_TOKEN/);
+    vi.stubEnv('DEMO_AUTHOR_TOKEN', 'ghp_test');
+    expect(demoConfig(getEnv())).toEqual({ repo: 'acme/playground', token: 'ghp_test' });
+    vi.stubEnv('DEMO_REPO', 'not a repo');
+    expect(() => getEnv()).toThrow(/DEMO_REPO/);
   });
 
   it('names every missing variable', () => {

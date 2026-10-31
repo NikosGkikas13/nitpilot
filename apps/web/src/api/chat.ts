@@ -1,8 +1,8 @@
-import { ChatResponse, FilesResponse, MessagesResponse, type InboxRow } from '@nitpilot/protocol';
+import { ChatResponse, FilesResponse, MessagesResponse, type InboxRow, type Phase } from '@nitpilot/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { mergeItems } from '../live/apply';
-import { api } from './client';
+import { api, ApiError } from './client';
 
 /** Where a chat lives in the data cache: by its address, as the screen opens it. `/ws/web` finds it by its id (live/apply.ts). */
 export const chatKey = (owner: string, repo: string, number: string) => ['chat', owner, repo, number] as const;
@@ -33,15 +33,34 @@ function mergeWithCached(cached: ChatResponse | undefined, fresh: ChatResponse):
   return { view: fresh.view, items: mergeItems(cached.items, fresh.items), hasOlder: cachedFirst < freshFirst ? cached.hasOlder : fresh.hasOlder };
 }
 
+/** How often a visitor's open public chat is read again, while the tab is visible. */
+export const PUBLIC_CHAT_POLL_MS = 5_000;
+
+/** Phases where the chat waits for a person (or is over), so nothing changes by itself: no need to keep asking. */
+const SETTLED_PHASES: readonly Phase[] = ['ready', 'escalated', 'closed'];
+
 /**
  * A public repo's chat for someone who isn't signed in (spec §16 "Who can see a chat"): trimmed by the server, the
- * newest items only, and no live updates, so it's read once. A 404 means it isn't public (or doesn't exist).
+ * newest items only. Visitors get no socket, so it's read again every 5 seconds while the tab is visible (TanStack
+ * Query pauses the timer in a hidden tab) until the chat settles. A 404 means it isn't public (or doesn't exist).
  */
 export function usePublicChat(owner: string, repo: string, number: string) {
   return useQuery({
+    ...publicChatQuery(owner, repo, number),
+    refetchInterval: (query) => {
+      const { data, error } = query.state;
+      if (error instanceof ApiError && error.status === 404) return false;
+      return data && SETTLED_PHASES.includes(data.view.phase) ? false : PUBLIC_CHAT_POLL_MS;
+    },
+  });
+}
+
+/** The query `usePublicChat` runs, for reading the same chat into the cache from elsewhere (api/demo.ts). */
+export function publicChatQuery(owner: string, repo: string, number: string) {
+  return {
     queryKey: ['public-chat', owner, repo, number],
     queryFn: () => api.get(`/api/public/chats/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(number)}`, ChatResponse),
-  });
+  };
 }
 
 /** The page of items before `beforeSeq`, for "Load earlier". */

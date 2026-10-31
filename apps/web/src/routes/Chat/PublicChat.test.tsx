@@ -70,6 +70,30 @@ describe('a public chat, signed out (spec §16 "Who can see a chat")', () => {
     const fetch = serveSignedOut();
     renderApp('/settings');
     expect(await screen.findByRole('link', { name: /Sign in with GitHub/ })).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    // No chat read; the landing page only asks /healthz whether the demo is on.
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual(['/api/me', '/healthz']);
+  });
+
+  it('reads the chat again every 5 seconds until it settles, since a visitor has no socket', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const working = chatResponse({ view: { ...PUBLIC.view, phase: 'reviewing' }, items: [item(1, { body: 'Pull request opened by maya' })] });
+      const answers: Answer[] = [
+        [200, working],
+        [200, { ...PUBLIC, view: { ...PUBLIC.view, phase: 'ready' } }],
+      ];
+      const fetch = serveSignedOut(() => answers.shift() ?? [500, {}]);
+      renderApp(PATH);
+      await screen.findByText('Pull request opened by maya');
+      expect(screen.queryByText('Reviewed 6 files and raised 2 points.')).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await screen.findByText('Reviewed 6 files and raised 2 points.')).toBeInTheDocument();
+      // Ready: nothing changes on its own now, so it stops asking.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/public/'))).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -13,7 +13,8 @@ import { createIngest } from './ingest/process';
 import { purgeClosedChats, purgeOldRows } from './ingest/record';
 import { recoverOnBoot } from './ingest/recovery';
 import { acquireSingletonLock, type SingletonLock } from './lib/advisory-lock';
-import { getEnv, vapidDetails, type Env } from './lib/env';
+import { closeOldDemos } from './http/routes/demo';
+import { demoConfig, getEnv, vapidDetails, type Env } from './lib/env';
 import { AppAuth } from './platform/github/app-auth';
 import { GithubClient } from './platform/github/client';
 import { GithubPlatform } from './platform/github/platform';
@@ -168,6 +169,11 @@ async function runNormally(env: Env, lock: SingletonLock, creds: GithubAppCreden
     // Deliveries that failed (a GitHub hiccup, say) get another try once their wait is over.
     setInterval(() => void ingest.retryDue().catch((err) => console.error('[ingest] retry sweep failed:', err)), 30_000),
   ];
+  // The playground (http/routes/demo.ts): demo PRs close an hour after they opened.
+  const demo = demoConfig(env);
+  if (demo) {
+    timers.push(setInterval(() => void closeOldDemos(github, demo).catch((err) => console.error('[demo] cleanup failed:', err instanceof Error ? err.message : err)), 5 * 60_000));
+  }
 }
 
 main().catch((err) => {

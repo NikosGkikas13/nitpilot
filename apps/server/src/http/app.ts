@@ -5,7 +5,7 @@ import type { LiveClis } from '../chats/activity';
 import type { Dispatch } from '../chats/dispatch';
 import { chatPreview } from '../chats/preview';
 import type { Ingest } from '../ingest/process';
-import { getEnv } from '../lib/env';
+import { demoConfig, getEnv } from '../lib/env';
 import type { AppAuth } from '../platform/github/app-auth';
 import type { GithubClient } from '../platform/github/client';
 import type { PlatformReads } from '../platform/types';
@@ -19,6 +19,7 @@ import { chatDraftRoutes } from './routes/chat-drafts';
 import { cachedIsRepoPublic, chatRoutes } from './routes/chats';
 import { cliRoutes } from './routes/cli';
 import { cliRequestRoutes } from './routes/cli-requests';
+import { demoRoutes } from './routes/demo';
 import { deviceRoutes, type DeviceClis } from './routes/devices';
 import { inboxRoutes } from './routes/inbox';
 import { meRoutes } from './routes/me';
@@ -53,10 +54,12 @@ export type AppDeps = {
   webDistDir?: string;
 };
 
-/** `GET /healthz`: Docker's HEALTHCHECK and uptime checks ask it, in both modes. */
-function health(c: Context): Response {
-  const body: HealthResponse = { ok: true, version: SERVER_VERSION };
-  return c.json(body);
+/** `GET /healthz`: Docker's HEALTHCHECK and uptime checks ask it, in both modes; the landing page reads `demo` from it. */
+function health(demo: boolean) {
+  return (c: Context): Response => {
+    const body: HealthResponse = { ok: true, version: SERVER_VERSION, demo };
+    return c.json(body);
+  };
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -64,8 +67,9 @@ export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   // One cache for "is this repo public?": the no-sign-in chat route and the preview card must agree.
   const isPublic = cachedIsRepoPublic(deps.platform);
+  const demo = demoConfig(env);
   app.onError(onError);
-  app.get('/healthz', health);
+  app.get('/healthz', health(demo !== null));
   app.route('/', readyRoutes(deps));
   app.route('/', authRoutes(deps));
   app.route('/', meRoutes(deps));
@@ -80,6 +84,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route('/', cliRoutes({ ...deps, trustProxy: deps.trustProxy ?? env.TRUST_PROXY }));
   app.route('/', cliRequestRoutes());
   app.route('/', setupRoutes(deps));
+  app.route('/', demoRoutes({ github: deps.github, demo, trustProxy: deps.trustProxy ?? env.TRUST_PROXY }));
   app.route('/', webhookRoutes(deps));
   // Last: everything else is the web app's (spec §7).
   app.route('/', spaRoutes({ distDir: deps.webDistDir ?? env.WEB_DIST_DIR ?? DEFAULT_WEB_DIST, publicUrl: env.PUBLIC_URL, preview: (path) => chatPreview(path, isPublic) }));
@@ -97,7 +102,7 @@ export function createFirstRunApp(deps: FirstRunDeps & { webDistDir?: string }):
   const env = getEnv();
   const app = new Hono();
   app.onError(onError);
-  app.get('/healthz', health);
+  app.get('/healthz', health(false));
   app.route('/', firstRunRoutes(deps));
   app.all('*', async (c, next) => {
     if (!isServerPath(c.req.path)) return next();

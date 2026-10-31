@@ -111,6 +111,38 @@
   text-decoration: none;
 }
 
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* The second button: the sign-in button's shape, on a surface with a border. */
+.demoButton {
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 14px;
+  border: 1px solid var(--b1);
+  background: var(--surface);
+  color: var(--fg1);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.demoButton:disabled {
+  cursor: progress;
+  color: var(--fg2);
+}
+
+.demoError {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 14px;
+  color: var(--red-fg);
+}
+
 .note {
   font-family: var(--font-mono);
   font-size: 12.5px;

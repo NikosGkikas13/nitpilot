@@ -1,4 +1,7 @@
 import { BRAND, type InboxStatus } from '@nitpilot/protocol';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useDemoAvailable, useRunDemo } from '../../api/demo';
 import { StatusPill } from '../../components/StatusPill/StatusPill';
 import { Wordmark } from '../../components/Wordmark/Wordmark';
 import { useIsDesktop, useMediaQuery } from '../../lib/viewport';
@@ -52,9 +55,12 @@ export function Landing() {
             <h1 className={styles.title}>Your agents review each other's PRs the moment they open.</h1>
             <p className={styles.sub}>You only hear about it when there's a decision to make.</p>
             <div className={styles.action}>
-              <a className={styles.signIn} href={SIGN_IN_URL}>
-                Sign in with GitHub <span aria-hidden="true">→</span>
-              </a>
+              <div className={styles.buttons}>
+                <a className={styles.signIn} href={SIGN_IN_URL}>
+                  Sign in with GitHub <span aria-hidden="true">→</span>
+                </a>
+                <RunDemo />
+              </div>
               <span className={styles.note}>Free for public repos · Open source · Self-host for private repos</span>
             </div>
           </div>
@@ -95,6 +101,40 @@ export function Landing() {
         </section>
       </main>
     </div>
+  );
+}
+
+/**
+ * "Run a demo", on a server that runs the public playground: two bots review, fix and re-review a fresh PR, and the
+ * button opens its chat to watch. While the server opens the PR and its chat starts, the button says so.
+ */
+function RunDemo() {
+  const available = useDemoAvailable();
+  // The PR is open and we wait for its chat to start.
+  const [opened, setOpened] = useState(false);
+  const run = useRunDemo(() => setOpened(true));
+  const navigate = useNavigate();
+  if (!available) return null;
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.demoButton}
+        disabled={run.isPending}
+        aria-busy={run.isPending}
+        onClick={() => {
+          setOpened(false);
+          run.mutate(undefined, { onSuccess: (path) => void navigate(path) });
+        }}
+      >
+        {!run.isPending ? 'Run a demo' : opened ? 'Starting the demo…' : 'Opening a demo PR…'}
+      </button>
+      {run.isError && (
+        <p className={styles.demoError} role="alert">
+          Couldn't start the demo. {run.error.message}
+        </p>
+      )}
+    </>
   );
 }
 

@@ -48,6 +48,11 @@ export type MyChatsResponse = z.infer<typeof MyChatsResponse>;
 export const RetryResponse = z.object({ status: z.enum(['queued', 'waiting']) });
 export type RetryResponse = z.infer<typeof RetryResponse>;
 
-// `GET /healthz` (`nitpilot doctor`)
-export const HealthResponse = z.object({ ok: z.boolean(), version: z.string() });
+// `GET /healthz` (`nitpilot doctor`, and the landing page's "Run a demo" button). `demo`: is `POST /api/demo` on
+// (optional: older servers don't say).
+export const HealthResponse = z.object({ ok: z.boolean(), version: z.string(), demo: z.boolean().optional() });
 export type HealthResponse = z.infer<typeof HealthResponse>;
+
+// `POST /api/demo`: the public chat page of the playground's demo PR, a fresh one or the one already running.
+export const DemoResponse = z.object({ url: z.string() });
+export type DemoResponse = z.infer<typeof DemoResponse>;
