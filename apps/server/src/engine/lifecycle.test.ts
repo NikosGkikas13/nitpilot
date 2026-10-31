@@ -42,6 +42,13 @@ describe('pr_opened', () => {
     expect(commandsOf(out, 'notify')).toEqual([{ type: 'notify', userIds: ['user-leo'], kind: 'manual_review', pointNumbers: [] }]);
   });
 
+  it("starts an outside contributor's review on its own when the team trusts all authors, keeping the author untrusted", () => {
+    const out = run(chatState({ trusted: false }), { type: 'pr_opened', author: maya, reviewers: [leo] }, { rules: { trust_all_authors: true } });
+    expect(commandsOf(out, 'enqueue_job')).toEqual([expect.objectContaining({ jobType: 'review', applyState: 'pending' })]);
+    expect(out.chat.trusted).toBe(false);
+    expect(out.chat.participants.find((p) => p.login === 'leo')!.attention).toBe('none');
+  });
+
   it('queues a draft-mode review when the team turned auto-review off', () => {
     const out = run(chatState(), { type: 'pr_opened', author: maya, reviewers: [leo] }, { rules: { auto: { review: false, address: true } } });
     expect(commandsOf(out, 'enqueue_job')[0]!.applyState).toBe('draft');

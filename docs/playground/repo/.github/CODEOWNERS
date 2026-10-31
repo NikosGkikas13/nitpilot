@@ -1,0 +1,2 @@
+# Asks the reviewer bot to review every PR, including ones from forks (their authors can't request reviewers).
+* @nitpilot-demo-reviewer

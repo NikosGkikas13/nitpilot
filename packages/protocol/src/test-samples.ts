@@ -54,6 +54,7 @@ export function jobBundle(): AgentJobBundle {
       headBranch: 'feature/cursor-pagination',
     },
     sinceSha: null,
+    fakeAgentOnly: false,
     points: [],
     notes: [],
     rules: { ignorePaths: ['**/*.lock'], alwaysEscalate: ['security'], maxPoints: 20 },

@@ -256,6 +256,16 @@ describe('createExecutor', () => {
     expect(await execute({ ...publishBundle(), pr: { ...publishBundle().pr, repoFullName: 'acme/other' } }, jobIo().io)).toEqual({ kind: 'reject', reason: 'repo_not_linked' });
   });
 
+  it("runs an outsider's PR that only trust_all_authors let through on the fake agent, and fails it on a real one (spec §14)", async () => {
+    const pr = prRepo();
+    const job = { ...pr.bundle, fakeAgentOnly: true };
+    const { execute: fake } = await executorFor(pr);
+    expect(await fake(job, jobIo().io)).toMatchObject({ kind: 'complete' });
+    const { execute: claude, leftovers } = await executorFor(pr, { adapter: { ...fakeAdapter(), id: 'claude-code' } });
+    expect(await claude(job, jobIo().io)).toMatchObject({ kind: 'fail', reason: 'unsupported_mode', retryable: false, detail: expect.stringContaining('trust_all_authors') });
+    expect(leftovers()).toEqual([]); // turned down before any checkout
+  });
+
   it("runs an address job with Auto off as a draft: commits, pushes nothing, and describes the commit in the result", async () => {
     const pr = prRepo();
     const { execute } = await executorFor(pr); // no overSsh: a draft needs no remote

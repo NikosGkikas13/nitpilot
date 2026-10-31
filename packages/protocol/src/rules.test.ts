@@ -14,6 +14,7 @@ describe('TeamRulesSchema', () => {
       max_points_per_review: 20,
       public_chats: true,
       footer: true,
+      trust_all_authors: false,
     });
   });
 

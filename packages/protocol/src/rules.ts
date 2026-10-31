@@ -24,6 +24,11 @@ export const TeamRulesSchema = z.strictObject({
   public_chats: z.boolean().default(true),
   /** The summary comment ends with who reviewed and a link to get your own (spec §15). False removes that line. */
   footer: z.boolean().default(true),
+  /**
+   * Jobs start on their own for every PR author, not only trusted ones (spec §14 "Trust all authors"). Meant for the
+   * public playground: a review job this starts for an outside contributor may only run on the fake agent.
+   */
+  trust_all_authors: z.boolean().default(false),
 });
 export type TeamRules = z.infer<typeof TeamRulesSchema>;
 

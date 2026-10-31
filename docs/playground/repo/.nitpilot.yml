@@ -1,0 +1,4 @@
+# The Nitpilot playground: two bots review each other's PRs with the scripted fake agent.
+version: 1
+# Strangers' PRs get a review on their own too. Only the fake agent ever runs these (spec §14).
+trust_all_authors: true

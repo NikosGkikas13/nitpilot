@@ -79,7 +79,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 
 **The Auto switch** is set per person per chat. On the reviewer's side it means auto-review; on the author's side it means auto-address. New chats take their defaults from the person's settings (Auto-review, Auto-fix), which live on the server and are edited on the web app's Settings page, and a team can forbid auto modes in `.nitpilot.yml`. **With Auto off, the agent still runs when its job is due, and the result waits as a draft** for the person to Send or Discard (§9 "Drafts"); the daily job cap bounds what that spends. In Plan 1 Auto was always on, since there was no UI yet.
 
-**Trusted** means the PR or comment author is an `OWNER`, `MEMBER` or `COLLABORATOR` of the repo, or a bot listed in `trusted_bots`. Automatic jobs only start from trusted content. Anything else shows up in the inbox and waits for a manual "Review", and on a PR from an outside contributor a reviewer's result always waits as a draft for them to Send, whatever their Auto switch (Plan 2, §9 "Auto").
+**Trusted** means the PR or comment author is an `OWNER`, `MEMBER` or `COLLABORATOR` of the repo, or a bot listed in `trusted_bots`. Automatic jobs only start from trusted content. Anything else shows up in the inbox and waits for a manual "Review", and on a PR from an outside contributor a reviewer's result always waits as a draft for them to Send, whatever their Auto switch (Plan 2, §9 "Auto"). A team can set `trust_all_authors: true` (Plan 4, the public playground) so reviews of every PR start on their own like a trusted one's, but only on the fake agent (§14 "Trust all authors").
 
 ### 6.2 A PR's life (agent-to-agent, happy path)
 
@@ -273,7 +273,7 @@ The message envelope is `{ v: 1, t: "<type>", id?, re?, d: {…} }`, a zod discr
 | CLI→S | `job.progress {jobId, attempt, stage, text}` | Live status, at most once every 2 seconds, except that a change of stage is sent at once. Not stored; forwarded to the web app (`/ws/web`) |
 | CLI→S | `job.pushing {jobId, attempt, from, to}` | Must be acknowledged before `git push`. The server records `expectedPushSha` so it recognizes its own push |
 | CLI→S | `job.complete {result}` · `job.fail {reason, retryable}` · `job.reject {reason}` | The server replies `ack {re, status: applied\|stale}` |
-| S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha`. A `publish` bundle instead names the draft (`draft{jobId, sha, from}`) and where to push |
+| S→CLI | `job.assign {bundle}` | Self-contained: PR metadata, how to fetch the code, points, human notes, the relevant rules, round, `sinceSha`, and `fakeAgentOnly` (§14 "Trust all authors"). A `publish` bundle instead names the draft (`draft{jobId, sha, from}`) and where to push |
 | S→CLI | `job.cancel {jobId, attempt, reason}` | |
 | S→CLI | `settings {autoReview, autoAddress, dailyJobCap}` | Sent to every connected CLI of a person who changed their settings in the web app. The CLI enforces `dailyJobCap` itself, counting from its own midnight |
 | S→CLI | `notify {kind, chatId, title, url, alert}` | Always printed in the terminal. `alert` (Plan 2; a message without it alerts) says whether the CLI also shows an OS notification: false when a Web Push of this notification reached the person, so nobody gets it twice (§16) |
@@ -566,6 +566,7 @@ debounce_seconds: 30          # wait for a burst of loose comments to finish
 max_points_per_review: 20
 public_chats: true            # a public repo's chats can be read without signing in, trimmed (§16)
 footer: true                  # the summary comment ends with who reviewed and a link to get your own (§15)
+trust_all_authors: false      # reviews start on their own for every PR author, on the fake agent only (§14)
 ```
 
 **Personal config:** `~/.config/nitpilot/config.json`, or `$NITPILOT_CONFIG_DIR/config.json`. Mode 0600, with environment-variable overrides as in Odyhook.
@@ -597,6 +598,7 @@ In Plan 1 this file also held `auto` (the Auto defaults for new chats) and `dail
 
 **Controls**
 1. **Trust gate.** Automatic jobs start only for trusted PRs and comments (§6.1). Everything else waits for a manual "Review", and a review of an outside contributor's PR waits as a draft until the reviewer sends it (§9 "Auto").
+   - **Trust all authors** (Plan 4, for the public playground repo, where strangers' PRs should get a review on their own). With `trust_all_authors: true` in `.nitpilot.yml`, the trust gate (item 1) lets a review or re-review of an outside contributor's PR start on its own and post without a draft. Only the auto-start changes: the chat's `trusted` stays the author's real trust, so the outsider's own comments and points stay for information only, the Review card still shows, and the author's side never depended on trust. Such a job's bundle says `fakeAgentOnly: true` (`fakeAgentOnly` in `apps/server/src/engine/jobs.ts`): the assigner hands it only to a CLI whose hello names the `fake` agent, and the CLI's executor fails it (`unsupported_mode`, not retryable) on any other adapter, so an older CLI that doesn't know the flag never gets one either. Why that's safe: a review job runs no `setup` command (only address jobs do, §11 step 4); the checkout runs with git hooks emptied and no symlinks (item 3); the fake agent is a script that reads the diff and answers with canned points, so it runs none of the PR's code and no instructions in the PR reach a model; and a real agent never gets such a job. The worst a stranger can do is get the fake review they asked for.
 2. **No shell for agents.**
    - A reviewer agent can only read.
    - An editor agent can read and edit inside the worktree.

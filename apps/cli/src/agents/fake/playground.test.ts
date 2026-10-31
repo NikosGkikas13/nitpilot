@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentJobBundle, BundlePoint, JobResult } from '@nitpilot/protocol';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -90,6 +90,14 @@ describe('the playground scenario', () => {
     const pr = prRepo({ head: { 'src/cart.js': CART, 'src/cart.test.js': 'test("cartTotal", () => {});\n' } });
     const { points } = (await runPlayground(pr)).result;
     expect(points.map((p) => p.category)).toEqual(['bug', 'style', 'other']);
+  });
+
+  // The playground repo's demo branches (docs/playground/branches, pushed by docs/playground/seed.sh) must tell the whole story.
+  const BRANCHES = join(import.meta.dirname, '../../../../../docs/playground/branches');
+  it.each(readdirSync(BRANCHES))('raises all four kinds of point on the seeded demo/%s branch', async (branch) => {
+    const [file] = readdirSync(join(BRANCHES, branch, 'src'));
+    const { points } = (await runPlayground(prRepo({ head: { [`src/${file}`]: readFileSync(join(BRANCHES, branch, 'src', file!), 'utf8') } }))).result;
+    expect(points.map((p) => p.category).sort()).toEqual(['bug', 'other', 'style', 'tests']);
   });
 
   it('finishes with nothing to raise on a clean diff', async () => {

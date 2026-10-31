@@ -1,6 +1,7 @@
 import { AgentJobBundle, JobResult, PublishBundle, type JobBundle, type JobType } from '@nitpilot/protocol';
 import { prRefOf } from '../chats/refs';
 import { rulesFromJson } from '../chats/rules';
+import { fakeAgentOnly } from '../engine/jobs';
 import { prisma } from '../lib/prisma';
 import type { PlatformReads } from '../platform/types';
 
@@ -64,6 +65,7 @@ export async function buildJobBundle(jobId: string, platform: Pick<PlatformReads
     },
     git: platform.gitSpec({ ref: prRefOf(chat), headRef: chat.headRef, headRepoFullName: chat.headRepoFullName }),
     sinceSha: job.sinceSha,
+    fakeAgentOnly: fakeAgentOnly(job.type as JobType, chat.trusted, rules),
     points: chat.points.map((p) => ({
       number: p.number,
       origin: p.origin,

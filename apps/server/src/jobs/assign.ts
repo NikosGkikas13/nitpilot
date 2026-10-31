@@ -1,4 +1,6 @@
 import { LEASE_SEC, type AgentMode, type JobBundle, type JobType } from '@nitpilot/protocol';
+import { rulesFromJson } from '../chats/rules';
+import { fakeAgentOnly } from '../engine/jobs';
 import { prisma } from '../lib/prisma';
 import type { CliConnection, CliHub } from '../ws/cli-hub';
 
@@ -78,7 +80,7 @@ export class JobAssigner {
       where: { status: 'queued', runAfter: { lte: now }, userId: { in: [...new Set(clis.map((c) => c.userId))] } },
       // No cap: only users with a CLI online are looked at, and a participant has at most one active job.
       orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
-      include: { chat: { select: { headSha: true, repo: { select: { fullName: true } } } } },
+      include: { chat: { select: { headSha: true, trusted: true, repo: { select: { fullName: true, rulesJson: true } } } } },
     });
     const load = await runningPerCli(clis);
     const devices = await draftDevices(jobs);
@@ -89,7 +91,10 @@ export class JobAssigner {
       // whose clone holds the draft commit (spec §9.4). A publish job whose draft has no device can go nowhere.
       const mode = MODE_FOR[job.type as JobType];
       const device = job.draftOfId ? devices.get(job.draftOfId) : undefined;
-      const fits = (c: CliConnection) => (mode ? c.agent.modes.includes(mode) : c.tokenId === device);
+      // A stranger's PR on a trust_all_authors repo goes only to a fake agent (spec §14), even for an older CLI that
+      // doesn't know the bundle's `fakeAgentOnly`.
+      const fakeOnly = fakeAgentOnly(job.type as JobType, job.chat.trusted, rulesFromJson(job.chat.repo.rulesJson));
+      const fits = (c: CliConnection) => (mode ? c.agent.modes.includes(mode) && (!fakeOnly || c.agent.id === 'fake') : c.tokenId === device);
       // Pick from `clis`, the snapshot `load` was counted for, not from the hub's live list: a CLI that
       // connected mid-pass has no count here (its hello wakes the assigner, so the next pass has it). A
       // snapshot connection that was replaced or dropped since is skipped: it has a dead socket.
@@ -101,7 +106,7 @@ export class JobAssigner {
           fits(c) &&
           (load.get(c.tokenId) ?? 0) < c.concurrency,
       );
-      // No CLI can take it now (offline, repo not linked there, agent can't, not the draft's device, or busy): it waits.
+      // No CLI can take it now (offline, repo not linked there, agent can't or isn't the fake one, not the draft's device, or busy): it waits.
       if (!cli) continue;
       // Compare-and-swap: only a job that is still queued can be taken, so it goes out once. A queued
       // job follows the PR's latest head; once running it stays on that commit (spec §9.4).

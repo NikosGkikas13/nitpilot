@@ -51,6 +51,7 @@ describe('buildJobBundle', () => {
       },
       git: { baseCloneUrl: `https://github.com/${repo.fullName}.git`, fetchRef: `refs/pull/${chat.number}/head`, headRepoPath: repo.fullName, headBranch: chat.headRef },
       sinceSha: null,
+      fakeAgentOnly: false,
       points: [],
       notes: [],
       rules: { ignorePaths: ['vendor/**'], alwaysEscalate: ['security'], maxPoints: 5 },
@@ -113,6 +114,13 @@ describe('buildJobBundle', () => {
       { number: 1, raisedBy: 'leo', trusted: true },
       { number: 2, raisedBy: 'stranger', trusted: false },
     ]);
+  });
+
+  it("marks an outside contributor's review that runs only because the repo trusts all authors as fake-agent-only", async () => {
+    const { chat, review } = await scene({ rulesJson: { trust_all_authors: true } });
+    expect((await buildJobBundle(review.id, platform)).fakeAgentOnly).toBe(false); // the author is trusted
+    await prisma.prChat.update({ where: { id: chat.id }, data: { trusted: false } });
+    expect((await buildJobBundle(review.id, platform)).fakeAgentOnly).toBe(true);
   });
 
   it('marks a job whose result must wait as drafts', async () => {

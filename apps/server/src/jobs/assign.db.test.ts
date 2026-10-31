@@ -143,6 +143,20 @@ describe('JobAssigner', () => {
     expect(await statusOf(job.id)).toBe('queued');
   });
 
+  it("gives an outside contributor's review on a trust_all_authors repo only to a fake agent (spec §14)", async () => {
+    const leo = await makeUser({ login: 'leo' });
+    const repo = await makeRepo({ rulesJson: { trust_all_authors: true } });
+    const chat = await makeChat(repo.id, { trusted: false });
+    const job = await queueJob(chat.id, leo, 'reviewer', 'review');
+    const claude = await online(leo, { repos: [repo.fullName], agent: { id: 'claude-code', version: null, modes: ['reviewer', 'editor'] } });
+    await s.settle();
+    await claude.nothing('job.assign');
+    expect(await statusOf(job.id)).toBe('queued');
+
+    const fake = await online(leo, { repos: [repo.fullName] });
+    expect((await fake.next('job.assign')).d.bundle).toMatchObject({ jobId: job.id, fakeAgentOnly: true });
+  });
+
   it('never gives a CLI more jobs than its concurrency, and sends the next one when a slot frees up', async () => {
     const leo = await makeUser({ login: 'leo' });
     const repo = await makeRepo();

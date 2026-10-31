@@ -75,6 +75,11 @@ export const AgentJobBundle = z.object({
   points: z.array(BundlePoint),
   /** `authorGithubId` is what the CLI compares with `you.githubId` to tell your own notes from anyone else's. Empty means "nobody" (no author id), and `you.githubId` can't be empty, so it never matches. */
   notes: z.array(z.object({ author: z.string(), authorGithubId: z.string(), body: z.string(), at: z.string() })),
+  /**
+   * The PR's author isn't trusted, and this review started only because the repo trusts all authors (spec §14
+   * "Trust all authors"). Only the fake agent, which runs no code and reads nothing, may take it: a real agent turns it down.
+   */
+  fakeAgentOnly: z.boolean().default(false),
   rules: z.object({
     ignorePaths: z.array(z.string()),
     alwaysEscalate: z.array(Category),

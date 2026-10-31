@@ -51,6 +51,11 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
     if (bundle.type === 'publish') return publish(bundle, repo.path, io);
     const mode: AgentMode = bundle.type === 'address' ? 'editor' : 'reviewer';
     if (!adapter.modes.includes(mode)) return { kind: 'reject', reason: 'unsupported_mode' };
+    // An outside contributor's PR that runs only because the repo trusts all authors: never for a real agent (spec §14).
+    if (bundle.fakeAgentOnly && adapter.id !== 'fake') {
+      const detail = `${bundle.pr.repoFullName} trusts all PR authors (trust_all_authors), so a review of an outside contributor's PR runs only on the fake agent, not ${adapter.id}.`;
+      return { kind: 'fail', reason: 'unsupported_mode', retryable: false, detail };
+    }
 
     let worktree: Worktree | null = null;
     try {

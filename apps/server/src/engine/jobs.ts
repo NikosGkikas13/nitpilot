@@ -1,4 +1,4 @@
-import type { JobType } from '@nitpilot/protocol';
+import type { JobType, TeamRules } from '@nitpilot/protocol';
 import { emit, system, type Ctx } from './context';
 import { activeJobFor, activeJobs, isAuthorJob, onNitpilot, participant, waitingDraftFor } from './state';
 import type { Command, DraftState, JobView, ParticipantState } from './types';
@@ -11,7 +11,24 @@ import type { Command, DraftState, JobView, ParticipantState } from './types';
  */
 export function autoFor(ctx: Ctx, p: ParticipantState, jobType: JobType): boolean {
   if (jobType === 'address') return ctx.rules.auto.address && p.auto;
-  return ctx.chat.trusted && ctx.rules.auto.review && p.auto;
+  return startsOnItsOwn(ctx.chat.trusted, ctx.rules) && ctx.rules.auto.review && p.auto;
+}
+
+/**
+ * Reviews start on their own when the PR's author is trusted (spec §6.1), or when the team trusts every author
+ * (`trust_all_authors`, the public playground). `chat.trusted` stays the author's real trust either way: points and
+ * comments from an outside contributor are still for information only.
+ */
+export function startsOnItsOwn(chatTrusted: boolean, rules: TeamRules): boolean {
+  return chatTrusted || rules.trust_all_authors;
+}
+
+/**
+ * A review of an outside contributor's PR that only `trust_all_authors` lets run: the CLI takes it only with the fake
+ * agent (spec §14 "Trust all authors"). Author-side jobs run on the PR author's own computer, so trust doesn't apply.
+ */
+export function fakeAgentOnly(jobType: JobType, chatTrusted: boolean, rules: TeamRules): boolean {
+  return (jobType === 'review' || jobType === 're_review') && !chatTrusted && rules.trust_all_authors;
 }
 
 /**
@@ -75,7 +92,7 @@ export function startReview(ctx: Ctx, reviewer: ParticipantState, opts: { manual
   // While the author's agent is fixing (or her drafted fixes are being pushed), wait: reviews start after that pass (results.ts).
   if (activeJobs(chat).some(isAuthorJob)) return false;
 
-  if (!chat.trusted && !opts.manual) {
+  if (!startsOnItsOwn(chat.trusted, ctx.rules) && !opts.manual) {
     if (reviewer.attention !== 'manual_review') {
       reviewer.attention = 'manual_review';
       emit(ctx, { type: 'notify', userIds: [reviewer.userId!], kind: 'manual_review', pointNumbers: [] });
