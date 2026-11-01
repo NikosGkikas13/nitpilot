@@ -13,6 +13,7 @@ import { emptyHooksDir } from '../../runner/safe-git';
 import { scrubPathsFor } from '../../runner/scrub';
 import { prepareWorktree } from '../../runner/worktree';
 import { claudeCodeAdapter } from '../claude-code/adapter';
+import { codexAdapter } from '../codex/adapter';
 import { copilotAdapter } from '../copilot/adapter';
 import { jobPrompt } from '../prompt';
 import { agentBaseEnv, KILL_GRACE_MS, runAgent, type AgentRun } from '../runner';
@@ -25,7 +26,7 @@ import { canaries, INSTRUCTION_FILES, injectedTitle, trapFiles, trapOf, type Can
  * An adapter that fails a mode must not declare that mode (spec §22). Gemini CLI joins when Task 20 lands.
  * NITPILOT_LIVE_AGENT=<id> runs one agent only, so checking one doesn't spend the other's plan.
  */
-const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter(), copilotAdapter()].filter((a) => !process.env.NITPILOT_LIVE_AGENT || a.id === process.env.NITPILOT_LIVE_AGENT);
+const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter(), copilotAdapter(), codexAdapter()].filter((a) => !process.env.NITPILOT_LIVE_AGENT || a.id === process.env.NITPILOT_LIVE_AGENT);
 const LIVE = process.env.NITPILOT_LIVE === '1';
 /** Plenty for a small PR; a run that needs more is a failure worth seeing. */
 const TIMEOUT_MS = 5 * 60_000;
@@ -87,8 +88,8 @@ const injected = (job: LiveJob) => {
 
 /**
  * Print which tools the agent called and which were refused (never asserted), so a green L3/L4 run shows
- * whether the attempt was blocked or the model just declined. Reads Claude Code's stream-json and Copilot
- * CLI's json events.
+ * whether the attempt was blocked or the model just declined. Reads Claude Code's stream-json, Copilot
+ * CLI's json events and Codex's JSONL items.
  */
 function report(label: string, job: LiveJob): void {
   const called: string[] = [];
@@ -102,7 +103,15 @@ function report(label: string, job: LiveJob): void {
       continue;
     }
     if (typeof event !== 'object' || event === null) continue;
-    const { type, message, permission_denials, data } = event as { type?: unknown; message?: { content?: unknown }; permission_denials?: unknown; data?: { toolName?: unknown; success?: unknown; toolCallId?: unknown } };
+    const { type, message, permission_denials, data, item } = event as {
+      type?: unknown; message?: { content?: unknown }; permission_denials?: unknown; data?: { toolName?: unknown; success?: unknown; toolCallId?: unknown };
+      item?: { type?: unknown; tool?: unknown };
+    };
+    // Codex: MCP calls and shell commands start as items, an applied patch completes as a file_change. A patch the
+    // sandbox refuses leaves no item (the model only sees "patch rejected"), so it isn't counted.
+    if (type === 'item.started' && item?.type === 'mcp_tool_call' && typeof item.tool === 'string') called.push(item.tool);
+    if (type === 'item.started' && item?.type === 'command_execution') called.push('shell');
+    if (type === 'item.completed' && item?.type === 'file_change') called.push('apply_patch');
     if (type === 'tool.execution_start' && typeof data?.toolName === 'string') {
       called.push(data.toolName);
       toolOfCall.set(data.toolCallId, data.toolName);

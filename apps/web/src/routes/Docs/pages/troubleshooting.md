@@ -25,7 +25,7 @@ The PR's author is on Nitpilot too, so the points go to the chat and the summary
 
 The banner says why, and offers **Retry**. You can also run `nitpilot retry <pr-url>`. What the banner can say:
 
-- "Your agent isn't signed in on that computer. Sign it in, then Retry." For Claude Code, run `claude auth login`. For Copilot CLI, run `copilot login`. **`nitpilot doctor` can't see a missing Copilot login**, because Copilot has no login-status command, so it shows up as the first job failing this way.
+- "Your agent isn't signed in on that computer. Sign it in, then Retry." For Claude Code, run `claude auth login`. For Copilot CLI, run `copilot login`. For Codex CLI, run `codex login`. **`nitpilot doctor` can't see a missing Copilot login**, because Copilot has no login-status command, so it shows up as the first job failing this way.
 - "Your agent ran out of usage for now. Retry once your plan resets."
 - "Your agent used up all its steps before it finished."
 - "Your agent stopped unexpectedly."
@@ -62,7 +62,7 @@ The web app shows "GitHub sign-in expired", and `nitpilot status` shows `! GitHu
 | **Server** | The address and its version. If it fails, the message is why: usually `Can't reach <server>: …`. |
 | **Account** | `logged in as <you>`. Or `` Not logged in. Run `nitpilot login`. `` |
 | **GitHub access** | `Nitpilot can post in your name`. Or a warning, `expired: sign in again at <server> so Nitpilot can post in your name`. |
-| **Agent** | The agent and its version. Failures: `` `claude` is not installed (or not on your PATH) ``, `` Claude Code is not logged in: run `claude auth login` ``, `` `copilot` is not installed (or not on your PATH) ``, or `apiBilling is on, but ANTHROPIC_API_KEY is not set: set it, or turn apiBilling off to use your Claude login`. |
+| **Agent** | The agent and its version. Failures: `` `claude` is not installed (or not on your PATH) ``, `` Claude Code is not logged in: run `claude auth login` ``, `` `copilot` is not installed (or not on your PATH) ``, `` `codex` is not installed (or not on your PATH) ``, `` Codex is not logged in: run `codex login` ``, or `apiBilling is on, but ANTHROPIC_API_KEY is not set: set it, or turn apiBilling off to use your Claude login`. |
 | **Repo owner/name** | One line per linked repo. Failures: `<path> doesn't exist or isn't a folder. Link the clone again: nitpilot repos add <path>`, or `no remote in <path> points at owner/name`. A warning, `commit.gpgsign is on: a passphrase prompt would stall address jobs until they time out`, means signing needs a passphrase the agent can't type. |
 
 It ends with `All good.`, `Ready, with warnings above.` or `N problem(s) to fix.`

@@ -36,7 +36,7 @@ Every field has a default, so a missing or empty file is valid.
 | --- | --- | --- | --- |
 | `server` | text | `https://nitpilot.dev` | you, for another server; `nitpilot login` keeps it |
 | `token` | text starting with `nit_` | none | `nitpilot login` |
-| `agent` | `claude-code` or `copilot` | `claude-code` | you |
+| `agent` | `claude-code`, `copilot` or `codex` | `claude-code` | you |
 | `model` | text | none: the agent's default | you |
 | `concurrency` | whole number, 1 to 4 | `1` | you |
 | `jobTimeoutMinutes` | whole number, 1 to 120 | `15` | you |
@@ -45,7 +45,7 @@ Every field has a default, so a missing or empty file is valid.
 
 - **`server`** is the address of the Nitpilot server. It must start with `https://`. `http://` is accepted only for a server on your own computer, because http would send your token in the clear. It can't have a `?query` or `#fragment`.
 - **`token`** is your device's token, from `nitpilot login`.
-- **`agent`** picks the coding agent that runs your jobs. See [Use GitHub Copilot CLI](/docs/copilot-cli).
+- **`agent`** picks the coding agent that runs your jobs. See [Use GitHub Copilot CLI](/docs/copilot-cli); `codex` runs OpenAI Codex CLI (`codex login` first).
 - **`model`** picks the model in the agent's own naming, such as `claude-sonnet-5.5`. Without it the agent uses its default.
 - **`concurrency`** is how many jobs run at once on this computer.
 - **`jobTimeoutMinutes`** is how long one job may run before it times out.

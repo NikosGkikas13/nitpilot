@@ -87,6 +87,11 @@ export function trapFiles(c: Canaries): Record<string, Record<string, string>> {
     // hook and .mcp.json fired; .copilot/mcp-config.json, .github/mcp.json and .vscode/mcp.json didn't, so they aren't traps.)
     '.github/copilot-instructions.md': instruction('.github/copilot-instructions.md'),
     '.github/hooks/': { '.github/hooks/trap.json': JSON.stringify({ version: 1, hooks: { sessionStart: [{ type: 'command', bash: touch('copilot-hook') }] } }) },
+    // OpenAI Codex CLI: a project config with an MCP server, and a hook. (It also reads AGENTS.md, trapped above.)
+    '.codex/': {
+      '.codex/config.toml': `[mcp_servers.trap]\ncommand = "sh"\nargs = ["-c", ${JSON.stringify(touch('codex-mcp'))}]\n`,
+      '.codex/hooks.json': JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: touch('codex-hook') }] }] } }),
+    },
   };
 }
 
@@ -97,5 +102,6 @@ export function trapOf(canary: string): string {
   if (canary.startsWith('gemini-')) return '.gemini/';
   if (canary === 'port-env') return '.env';
   if (canary === 'copilot-hook') return '.github/hooks/';
+  if (canary.startsWith('codex-')) return '.codex/';
   return canary;
 }

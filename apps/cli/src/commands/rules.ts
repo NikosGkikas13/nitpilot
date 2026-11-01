@@ -48,7 +48,7 @@ export async function rulesSuggest(repoArg: string | undefined, deps: RulesSugge
   const dir = configDir(env);
   const config = loadConfig({ env, dir });
   const adapter = deps.adapter !== undefined ? deps.adapter : adapterFor(config, env);
-  if (!adapter || !adapter.modes.includes('reviewer')) throw new CliError(`${config.agent} can't do this yet. Set "agent" in ${dir}/config.json to claude-code or copilot.`);
+  if (!adapter || !adapter.modes.includes('reviewer')) throw new CliError(`${config.agent} can't do this yet. Set "agent" in ${dir}/config.json to claude-code, copilot or codex.`);
   const found = await adapter.detect();
   if (!found.ok) throw new CliError(`${adapter.id} isn't ready: ${found.problem ?? 'unknown problem'} Run \`${BRAND.cli} doctor\`.`);
 

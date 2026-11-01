@@ -2,7 +2,7 @@
 
 Nitpilot talks to two kinds of outside thing through two small interfaces, so neither the engine nor the rest of the server knows which one it is using:
 
-- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, GitHub Copilot CLI, Gemini CLI (on hold), or the scripted fake agent;
+- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, GitHub Copilot CLI, OpenAI Codex CLI, Gemini CLI (on hold), or the scripted fake agent;
 - a **platform adapter** (in the server) knows one code host: GitHub today. [Spec §12.1](superpowers/specs/2026-10-07-nitpilot-design.md) checks the interface against GitLab's concepts.
 
 Both are held to the same rule: **an adapter may only declare what it has proven.** An agent adapter lists only the modes that pass the conformance suite; a platform adapter's parsing is tested against recorded real payloads.
@@ -29,8 +29,8 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 
 1. **Read the agent's own documentation and check its flags against the installed version.** Write the version in the adapter (`CLAUDE_CODE_CHECKED_VERSION`). Flags change fast; this is what the suite will catch later.
 2. **Pick the tools per mode.** A reviewer gets read tools only. An editor adds edit tools. No shell, no web, for either. Everything else the agent needs goes through Nitpilot's MCP tools.
-3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`; for Copilot CLI: `--no-custom-instructions`, `--disable-builtin-mcps`, a tool whitelist in `--available-tools`, and never `--trust-folder`).
-4. **Put the MCP token in a file, never on the command line.** Return it in `files`; `runAgent` writes it with mode 0600 inside the run's private folder and the executor deletes the folder afterwards.
+3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`; for Copilot CLI: `--no-custom-instructions`, `--disable-builtin-mcps`, a tool whitelist in `--available-tools`, and never `--trust-folder`; for Codex CLI: `--ignore-user-config`, `--ignore-rules`, `--disable hooks`, and `-c project_doc_max_bytes=0`).
+4. **Put the MCP token in a file, never on the command line.** Return it in `files`; `runAgent` writes it with mode 0600 inside the run's private folder and the executor deletes the folder afterwards. If the agent only reads MCP settings from its own config folder, look for a setting that runs a command or names a file: Codex takes the server with `-c` and its headers from `http_headers_helper`, a command (`/bin/cat <tmp>/mcp-headers.json`) whose JSON output it sends as headers.
 5. **Build the environment from `input.baseEnv`.** It is an allowlist. Add only what your agent needs. `ANTHROPIC_API_KEY` only when the user opted into API billing; `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `AWS_*` never.
 6. **Record real runs** of every way the agent can end (success, out of turns, logged out, rate limit, crash, killed by a signal) into `fixtures/*.jsonl`, with paths and ids replaced. Write what `outcome` must make of each. Read the agent's *error output*, never its own words: a model can say "I hit my limit" about anything.
 7. **Run the static suite** from a test file next to the adapter (`claude-code/conformance.test.ts` is the example):
@@ -50,6 +50,15 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 8. **Register it** in `registry.ts` (`getAdapter`), and give `detect()` a real check so `nitpilot doctor` can say what is wrong.
 9. **Run the live suite** by hand: add the adapter to `ADAPTERS` in `conformance/live.test.ts`, make sure the agent is logged in, then `npm run test:live -w apps/cli`. It runs the real agent against booby-trapped checkouts (L1 to L6) and uses a little of the user's plan, about five minutes and 14 runs for Claude Code. [why/agent-conformance.md](why/agent-conformance.md) explains the canaries.
 10. **Declare only the modes that passed.** If the editor mode fails a live check, `modes` is `['reviewer']` until it is fixed.
+
+### Codex CLI's quirks
+
+`agents/codex/` drives `codex exec --json`. Its flags were read from Codex's source at `rust-v0.166.0` and passed the live suite with 0.166.0 (2026-11-01).
+
+- **No tool allowlist.** The shell is switched off (`--disable shell_tool`, also `view_image`, `multi_agent`, `apps`, `hooks`, and `web_search="disabled"`). That leaves `apply_patch`, which no setting removes, so the **sandbox** decides: `--sandbox read-only` refuses every write for a reviewer (with `approval_policy="never"` it can't ask), `workspace-write` lets an editor write in the worktree only, with `/tmp` and `$TMPDIR` excluded and no network. With no shell, the agent reads code through Nitpilot's `get_file` and `get_diff`.
+- **Your config.toml is not loaded** (`--ignore-user-config`): your own MCP servers, hooks and trusted projects never reach a job, and neither does a model you set there. Your login still comes from `CODEX_HOME` (default `~/.codex`), which is the one extra variable in the agent's environment. `OPENAI_API_KEY` and `CODEX_API_KEY` never reach it.
+- **Endings:** exit 0 and a `turn.completed` line is success. A `turn.failed` or `error` line carries Codex's message: "hit your usage limit", "quota exceeded" or a 429 is `quota`; a 401, "Not logged in" or a failed token refresh is `auth`. No max-turns setting: the job timeout covers it.
+- **detect():** `codex --version`, then `codex login status`, which exits 0 only when signed in.
 
 ### The fake agent
 

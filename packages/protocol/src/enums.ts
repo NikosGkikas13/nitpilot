@@ -58,7 +58,7 @@ export type EscalationReason = z.infer<typeof EscalationReason>;
 export const Side = z.enum(['LEFT', 'RIGHT']);
 export type Side = z.infer<typeof Side>;
 
-export const AgentId = z.enum(['claude-code', 'gemini-cli', 'copilot', 'fake']);
+export const AgentId = z.enum(['claude-code', 'gemini-cli', 'copilot', 'codex', 'fake']);
 export type AgentId = z.infer<typeof AgentId>;
 
 export const AgentMode = z.enum(['reviewer', 'editor']);

@@ -72,7 +72,7 @@ One Docker image, Postgres and Caddy, started with Docker Compose. The first tim
 A pull request is untrusted input, and the agent reading it runs on your computer. So:
 
 - **The agent gets tools, not a shell.** Each job starts a small local server (MCP) on `127.0.0.1` with a token that works for that job only. A reviewer can read the code and raise points, nothing else. An author's agent can also edit files and run the checks your repo allows (`npm test`, say), without a shell. Neither gets web access or a GitHub token.
-- **The repo can't configure the agent.** Before the agent starts, the CLI deletes the files an agent would load by itself: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, and Copilot's `.copilot/` and `.github/` instructions, agents, skills, prompts and hooks, at any depth and in any letter case. Git runs with hooks, symlinks and submodules off.
+- **The repo can't configure the agent.** Before the agent starts, the CLI deletes the files an agent would load by itself: `.claude/`, `.gemini/`, `.mcp.json`, `.env`, `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, Copilot's `.copilot/` and `.github/` instructions, agents, skills, prompts and hooks, and Codex's `.codex/`, `.agents/` and `AGENTS.override.md`, at any depth and in any letter case. Git runs with hooks, symlinks and submodules off.
 - **Text from the PR is marked as untrusted.** The title, body and comments reach the agent wrapped as data from an outside source, and the agent is told what that means.
 - **Your credentials stay yours.** Nitpilot never sees your Anthropic or Copilot login. Your GitHub token is stored encrypted on the server and used only to post your reviews and replies.
 

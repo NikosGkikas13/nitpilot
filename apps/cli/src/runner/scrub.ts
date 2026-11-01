@@ -12,6 +12,8 @@ export const SCRUB_PATHS: readonly string[] = [
   // GitHub Copilot CLI
   '.copilot/', '.github/copilot-instructions.md', '.github/instructions/', '.github/agents/', '.github/skills/', '.github/prompts/', '.github/hooks/',
   '.github/mcp.json', '.vscode/mcp.json',
+  // OpenAI Codex CLI
+  'AGENTS.override.md', '.codex/', '.agents/',
 ];
 
 /**
