@@ -17,6 +17,7 @@ Anything else (`0.1.0`, `v0.1`, `v0.1.0-beta.1`) is refused by the first job and
    - `version` in `apps/cli/package.json`
    - `CLI_VERSION` in `apps/cli/src/version.ts`
    - `SERVER_VERSION` in `apps/server/src/version.ts` (what `/healthz` and `nitpilot doctor` report)
+   - Also bump the `version` input's default in `.github/actions/review/action.yml` (the npm version the GitHub Action runs; people pin the Action to this tag, so it should run this release). Check its pinned agent CLI versions while you're there.
 2. Commit that change, then open a PR (or push to `main`) and let CI go green before tagging.
 3. Tag the commit and push the tag (from the repo folder):
    ```bash

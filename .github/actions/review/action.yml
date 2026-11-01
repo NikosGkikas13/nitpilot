@@ -1,0 +1,47 @@
+name: Nitpilot review
+description: Reviews the pull request with your team's own AI agent (Claude Code or Gemini CLI) when nobody's laptop is running Nitpilot.
+author: NikosGkikas13
+branding:
+  icon: eye
+  color: purple
+
+# The API key is NOT an input: the workflow sets ANTHROPIC_API_KEY or GEMINI_API_KEY as an env var on this step,
+# straight from a secret. Env vars never show in the step's "with:" log block, and the key only ever lives in env.
+inputs:
+  agent:
+    description: 'Which agent reviews: `claude-code` (needs ANTHROPIC_API_KEY) or `gemini-cli` (needs GEMINI_API_KEY).'
+    default: claude-code
+  version:
+    # Bump on every release (docs/releasing.md).
+    description: The nitpilot npm version to run.
+    default: 0.8.0
+  github-token:
+    description: 'Token that reads the PR and posts the review. Needs `pull-requests: write`.'
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 22.x
+
+    # Inputs go in through env, never pasted into the script, so an odd value can't run as shell code.
+    - name: Install the agent CLI
+      shell: bash
+      env:
+        AGENT: ${{ inputs.agent }}
+      run: |
+        case "$AGENT" in
+          claude-code) npm install --global --no-fund --no-audit @anthropic-ai/claude-code@2.1.316 ;;
+          gemini-cli) npm install --global --no-fund --no-audit @google/gemini-cli@0.66.0 ;;
+          *) echo "::error::agent must be claude-code or gemini-cli, not $AGENT"; exit 1 ;;
+        esac
+
+    - name: Review the pull request
+      shell: bash
+      env:
+        NITPILOT_AGENT: ${{ inputs.agent }}
+        NITPILOT_VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: npx --yes "nitpilot@$NITPILOT_VERSION" review --ci
