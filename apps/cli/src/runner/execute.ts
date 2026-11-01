@@ -31,6 +31,8 @@ export type ExecutorDeps = {
   adapter: AgentAdapter;
   /** Where git, the setup command and the agent take their (allowlisted) variables from. Default: this process's. */
   env?: Record<string, string | undefined>;
+  /** `nitpilot review` only: the GitHub token, for the PR's fetch and nothing else (see PrepareOptions.githubToken). */
+  githubToken?: string;
 };
 
 /**
@@ -60,7 +62,7 @@ export function createExecutor(deps: ExecutorDeps): JobExecutor {
     let worktree: Worktree | null = null;
     try {
       io.progress('preparing', 'Checking out the PR');
-      worktree = await prepareWorktree(bundle, repo.path, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths, signal: io.signal, env });
+      worktree = await prepareWorktree(bundle, repo.path, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths, signal: io.signal, env, githubToken: deps.githubToken });
       // Where fixes will go, asked before the agent runs: a deleted fork or a missing remote fails now, not after the work.
       const remote = bundle.type === 'address' && bundle.apply === 'auto' ? await pushTarget(bundle, worktree.git) : null;
       if (bundle.type === 'address' && repo.setup) await runSetup(repo.setup, worktree, env, io.signal);

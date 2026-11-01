@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentJobBundle } from '@nitpilot/protocol';
@@ -5,7 +6,7 @@ import { describe, expect, it, onTestFinished } from 'vitest';
 import { prRepo } from '../../test/git-fixtures';
 import { tempDir } from '../../test/temp';
 import { JobFailure } from './job-failure';
-import { emptyHooksDir, safeGit } from './safe-git';
+import { emptyHooksDir, githubAuthEnv, safeGit } from './safe-git';
 import { SCRUB_PATHS } from './scrub';
 import { cleanUpWorktrees, prepareWorktree } from './worktree';
 
@@ -225,6 +226,82 @@ describe('prepareWorktree', () => {
     expect(existsSync(wt.dir)).toBe(false);
     expect(worktreesOf(pr)).toHaveLength(1);
     expect(nitpilotRefs(pr)).toBe('');
+  });
+});
+
+const GITHUB_URL = 'https://github.com/acme/shop-api.git';
+
+/**
+ * A stand-in `git` first on PATH: it logs each call safeGit makes (git's own child processes have GIT_CONFIG_PARAMETERS) with its arguments and GIT_CONFIG_COUNT/KEY/VALUE variables, then runs the
+ * real git (or, with `failFetch`, fails every fetch the way GitHub turns a token away). The clone maps
+ * GITHUB_URL to the sandbox's bare repo, so a "GitHub" fetch never leaves this computer.
+ */
+function loggingGit(pr: Pr, opts: { failFetch?: boolean } = {}) {
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  const log = join(pr.root, 'git.log');
+  const fail = opts.failFetch
+    ? `case " $* " in *" fetch "*) echo "fatal: could not read Username for 'https://github.com': terminal prompts disabled" >&2; exit 128;; esac\n`
+    : '';
+  pr.write(pr.root, { 'bin/git': { script: `#!/bin/sh\n[ -n "$GIT_CONFIG_PARAMETERS" ] || { echo "ARGS $*"; env | grep -E '^GIT_CONFIG_(COUNT|KEY|VALUE)' ; echo END; } >> '${log}'\n${fail}exec '${realGit}' "$@"\n` } });
+  pr.git(pr.clone, 'config', `url.${pr.base}.insteadOf`, GITHUB_URL);
+  const env = { ...pr.env, PATH: `${join(pr.root, 'bin')}:${pr.env.PATH}` };
+  /** One entry per git call: its arguments and the GIT_CONFIG_* lines it got. */
+  const calls = () => readFileSync(log, 'utf8').split('END\n').filter(Boolean).map((block) => {
+    const [args, ...config] = block.trim().split('\n');
+    return { args: args!, config };
+  });
+  return { env, calls, log };
+}
+
+describe('prepareWorktree with a GitHub token (nitpilot review)', () => {
+  const fromGitHub = (pr: Pr) => ({ ...pr.bundle, git: { ...pr.bundle.git, baseCloneUrl: GITHUB_URL } });
+  const run = async (pr: Pr, env: Record<string, string | undefined>, githubToken?: string) => {
+    const configDir = tempDir();
+    const wt = await prepareWorktree(fromGitHub(pr), pr.clone, { configDir, hooksDir: emptyHooksDir(configDir), scrubPaths: SCRUB_PATHS, env, githubToken });
+    onTestFinished(() => wt.cleanup());
+    return wt;
+  };
+
+  it('sends the token as a github.com-only header on the fetch, and on nothing else, never in the arguments', async () => {
+    const pr = prRepo();
+    const git = loggingGit(pr);
+    const wt = await run(pr, git.env, 'tok-1');
+    expect(wt.headSha).toBe(pr.headSha);
+    const expected = Object.entries(githubAuthEnv('tok-1')).map(([k, v]) => `${k}=${v}`).sort();
+    expect(expected).toContain(`GIT_CONFIG_VALUE_1=AUTHORIZATION: basic ${Buffer.from('x-access-token:tok-1').toString('base64')}`);
+    expect(expected).toContain('GIT_CONFIG_KEY_1=http.https://github.com/.extraheader');
+    const withConfig = git.calls().filter((call) => call.config.length > 0);
+    expect(withConfig).toHaveLength(1);
+    expect(withConfig[0]!.args).toMatch(/ fetch .* -- https:\/\/github\.com\/acme\/shop-api\.git /);
+    expect(withConfig[0]!.config.sort()).toEqual(expected);
+    expect(readFileSync(git.log, 'utf8')).not.toContain('tok-1'); // the raw token is in no argument and no variable
+  });
+
+  it('sends no header without a token (nitpilot start), and never passes your own GIT_CONFIG_* to git', async () => {
+    const pr = prRepo();
+    const git = loggingGit(pr);
+    await run(pr, { ...git.env, GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'evil' });
+    expect(git.calls().every((call) => call.config.length === 0)).toBe(true);
+  });
+
+  it("keeps an ssh remote on your own keys: the token doesn't go with it", async () => {
+    const pr = prRepo();
+    const git = loggingGit(pr);
+    pr.write(pr.root, { 'fake-ssh': { script: `#!/bin/sh\nexec git upload-pack '${pr.base}'\n` } });
+    pr.git(pr.clone, 'remote', 'set-url', 'origin', 'git@github.com:acme/shop-api.git');
+    const wt = await run(pr, { ...git.env, GIT_SSH_COMMAND: join(pr.root, 'fake-ssh') }, 'tok-1');
+    expect(wt.headSha).toBe(pr.headSha);
+    expect(git.calls().every((call) => call.config.length === 0)).toBe(true);
+  });
+
+  it("says in one plain line when GitHub won't let the token fetch the repo", async () => {
+    const pr = prRepo();
+    const git = loggingGit(pr, { failFetch: true });
+    const failed = await run(pr, git.env, 'tok-1').catch((err: unknown) => err);
+    expect(failed).toBeInstanceOf(JobFailure);
+    expect(failed).toMatchObject({ reason: 'setup_failed', retryable: false });
+    expect((failed as Error).message).toMatch(/^GitHub wouldn't let the token fetch acme\/shop-api's code/);
+    expect((failed as Error).message).not.toContain('Username');
   });
 });
 

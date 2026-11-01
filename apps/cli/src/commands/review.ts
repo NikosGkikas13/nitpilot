@@ -114,7 +114,7 @@ export async function review(ref: string | undefined, deps: ReviewDeps = {}): Pr
   deps.stop?.addEventListener('abort', stop, { once: true });
   const mcp = await startMcpServer({ onError: (err) => out.error(`[mcp] ${err.message}`) });
   try {
-    const execute = createExecutor({ config: runConfig, configDir: dir, mcp, adapter, env });
+    const execute = createExecutor({ config: runConfig, configDir: dir, mcp, adapter, env, githubToken: token });
     let last = '';
     const outcome = await execute(bundle, {
       progress: (_stage, text) => {

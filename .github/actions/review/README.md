@@ -60,7 +60,7 @@ Every run calls the agent with **your** API key, so every reviewed push is bille
 
 ## What to know
 
-- **Public repos only for now:** the review fetches the PR's code without credentials, so on a private repo the fetch fails.
+- **Private repos work:** the workflow's token (with `contents: read`) fetches the PR's code. It goes to that one `git fetch` only, as a header in git's environment, never on a command line and never to the agent.
 - **Fork PRs:** GitHub gives no secrets to PRs from forks, so the run fails with a line saying the API key is not set. That is on purpose; review fork PRs from a laptop.
 - **The laptop daemon got there first:** if the PR already has a Nitpilot review at its latest commit, the Action exits without running the agent, so there's no duplicate.
 - **Not a PR, or a closed one:** the run exits successfully and does nothing.

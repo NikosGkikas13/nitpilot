@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync, symlinkSync, writeFileSync } from '
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { tempDir } from '../../test/temp';
+import { githubAuthEnv } from '../runner/safe-git';
 import { agentBaseEnv, KILL_GRACE_MS, runAgent } from './runner';
 import type { AgentAdapter, AgentEvent, AgentInvocation } from './types';
 
@@ -116,8 +117,8 @@ describe('runAgent', () => {
 
 describe('agentBaseEnv', () => {
   it('passes only an allowlist: no tokens or keys reach an agent (spec §12.3 S3)', () => {
-    const env = agentBaseEnv({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'x', NPM_TOKEN: 'x', AWS_SECRET_ACCESS_KEY: 'x', ANTHROPIC_API_KEY: 'sk-ant-x', NITPILOT_TOKEN: 'nit_x' });
-    expect(env).toEqual({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8' });
+    const env = agentBaseEnv({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'x', NPM_TOKEN: 'x', AWS_SECRET_ACCESS_KEY: 'x', ANTHROPIC_API_KEY: 'sk-ant-x', NITPILOT_TOKEN: 'nit_x', ...githubAuthEnv('tok-1') });
+    expect(env).toEqual({ PATH: '/bin', HOME: '/home/maya', LANG: 'el_GR.UTF-8' }); // nor the review fetch's GitHub header
   });
 
   it('keeps where Claude Code keeps its login, and how you reach the network: none of them is a secret', () => {

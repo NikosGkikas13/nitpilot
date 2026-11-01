@@ -3,7 +3,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { BRAND, type AgentJobBundle } from '@nitpilot/protocol';
 import { remoteFor } from '../git/remotes';
 import { JobFailure } from './job-failure';
-import { linkedGitDir, safeGit, type GitPlace } from './safe-git';
+import { linkedGitDir, safeGit, SafeGitError, type GitPlace } from './safe-git';
 import { scrub } from './scrub';
 
 /** Where repos keep conventions for agents. Read from the base branch, so a PR can't rewrite its own rules (spec §11 step 3). */
@@ -32,6 +32,8 @@ export type PrepareOptions = {
   scrubPaths: readonly string[];
   signal?: AbortSignal;
   env?: Record<string, string | undefined>;
+  /** `nitpilot review`'s GitHub token: used for the PR's fetch from https://github.com/ only (private repos). `nitpilot start` has none. */
+  githubToken?: string;
 };
 
 /**
@@ -56,10 +58,18 @@ export async function prepareWorktree(bundle: AgentJobBundle, repoPath: string, 
     const source = remoteFor(remotes, bundle.pr.repoFullName, 'fetch') ?? bundle.git.baseCloneUrl;
     // `--refmap=` and `--no-write-fetch-head`: a fetch through a remote would otherwise move your `origin/<base>` and write FETCH_HEAD.
     // `--`: whatever `source` is, git reads it as a repository, never as an option.
+    // An ssh remote (git@github.com:…) uses your own keys, so the token only goes with an https fetch from GitHub.
+    const githubToken = source.startsWith('https://github.com/') ? opts.githubToken : undefined;
     await safeGit(repo, [
       'fetch', '--no-tags', '--no-recurse-submodules', '--refmap=', '--no-write-fetch-head', '--',
       source, `+${bundle.git.fetchRef}:${headRef}`, `+refs/heads/${bundle.pr.baseRef}:${baseRef}`,
-    ]);
+    ], { githubToken }).catch((err: unknown) => {
+      if (githubToken && err instanceof SafeGitError && isAuthFailure(err.stderr)) {
+        const detail = `GitHub wouldn't let the token fetch ${bundle.pr.repoFullName}'s code: it needs read access to the repo's contents (in a workflow, \`contents: read\`).`;
+        throw new JobFailure('setup_failed', false, detail);
+      }
+      throw err;
+    });
     const headSha = await commitOf(repo, headRef);
     if (headSha !== bundle.pr.headSha) {
       throw new JobFailure('stale_head', true, `The PR's head is ${headSha.slice(0, 7)} now, not ${bundle.pr.headSha.slice(0, 7)}.`);
@@ -80,6 +90,9 @@ export async function prepareWorktree(bundle: AgentJobBundle, repoPath: string, 
     throw new JobFailure('setup_failed', true, `Couldn't check out the PR: ${(err as Error).message}`);
   }
 }
+
+/** What git prints when GitHub turns a fetch away: no credentials it accepts, or a repo the token can't see. */
+const isAuthFailure = (stderr: string) => /could not read Username|Authentication failed|Repository not found|returned error: 40[134]/i.test(stderr);
 
 /** Letters, digits, `.`, `_` and `-`, and not `.` or `..`: what a job id or a repo's owner and name may be made of. */
 export const isFolderName = (name: string) => /^[A-Za-z0-9._-]+$/.test(name) && name !== '.' && name !== '..';

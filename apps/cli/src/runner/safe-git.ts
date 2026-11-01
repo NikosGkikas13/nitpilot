@@ -49,6 +49,11 @@ const ENV_ALLOWLIST = [
 export type SafeGitOptions = {
   /** The most git may print (bytes). Past it, git is stopped and the call rejects with `outputTooLarge`. Default: MAX_OUTPUT_BYTES. */
   maxOutputBytes?: number;
+  /**
+   * A GitHub token for this one command (`nitpilot review`'s fetch of a private repo). It reaches git only as an
+   * env-only config (githubAuthEnv): never on the command line, never in a file, never in the agent's environment.
+   */
+  githubToken?: string;
 };
 
 /** A slow fetch of a big repo is fine; a git that hangs forever is not. */
@@ -105,7 +110,24 @@ export async function safeGit(place: GitPlace, args: string[], opts: SafeGitOpti
   }
   const env = safeGitEnv(place);
   if (env.GIT_SSH_COMMAND === undefined && env.GIT_SSH === undefined) env.GIT_SSH_COMMAND = await sshCommandWithBatchMode(place, env, args);
+  if (opts.githubToken) Object.assign(env, githubAuthEnv(opts.githubToken));
   return runGit(place, args, env, args, opts.maxOutputBytes ?? MAX_OUTPUT_BYTES);
+}
+
+/**
+ * Git config set through the environment (GIT_CONFIG_COUNT/KEY_n/VALUE_n, git 2.31+), the way actions/checkout
+ * does it: an Authorization header for https://github.com/ only. The first entry clears any extraheader the
+ * person's own config sets there, so GitHub never gets two. Our allowlist never lets a person's own GIT_CONFIG_* through.
+ */
+export function githubAuthEnv(token: string): Record<string, string> {
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return {
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_0: '',
+    GIT_CONFIG_KEY_1: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_1: `AUTHORIZATION: basic ${basic}`,
+  };
 }
 
 /**
