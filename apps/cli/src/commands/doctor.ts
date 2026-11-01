@@ -143,8 +143,8 @@ export function printChecks(checks: Check[], out: Out): number {
 const AGENT_BINARIES: Record<AgentId, string | null> = { 'claude-code': 'claude', 'gemini-cli': 'gemini', copilot: 'copilot', codex: 'codex', fake: null };
 
 /**
- * Is the agent installed? For an agent without an adapter yet (Gemini CLI, Task 20) this only asks the
- * binary for its version; an adapter's detect() also checks the login.
+ * Is the agent installed? This only asks the binary for its version; an adapter's detect() also checks the
+ * login or key. Used for an agent that has no adapter.
  */
 export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<AgentCheck> {
   const binary = AGENT_BINARIES[id];
@@ -154,7 +154,7 @@ export async function probeAgent(id: AgentId, run: DoctorDeps['run']): Promise<A
   return { ok: false, problem: `\`${binary}\` is not installed (or not on your PATH)` };
 }
 
-/** The agent check for your config: its adapter's detect() (installed and logged in), or for an agent without an adapter yet (Gemini CLI) only its version. */
+/** The agent check for your config: its adapter's detect() (installed, and logged in or holding a key), or for an agent without an adapter only its version. */
 export function detectAgentFor(config: PersonalConfig, env: Record<string, string | undefined>, run: RunProgram = runProgram): Promise<AgentCheck> {
   return adapterFor(config, env, { run })?.detect() ?? probeAgent(config.agent, run);
 }

@@ -63,7 +63,7 @@ describe('Setup (handoff §5): the checklist', () => {
     expect(start).toHaveTextContent('Claude Code · detected automatically');
     expect(start).toHaveTextContent('GitHub Copilot CLI · set "agent": "copilot" in the config');
     expect(start).toHaveTextContent('Codex CLI · set "agent": "codex" in the config');
-    expect(start).not.toHaveTextContent('Gemini');
+    expect(start).toHaveTextContent('Gemini CLI · set "agent": "gemini-cli" and "apiBilling": true (bills your API key)');
 
     expect(screen.getByRole('link', { name: 'Skip for now' })).toHaveAttribute('href', '/');
     expect(screen.queryByRole('link', { name: 'Open your inbox' })).not.toBeInTheDocument();

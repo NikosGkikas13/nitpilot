@@ -28,6 +28,15 @@ describe('runAgent', () => {
     expect(statSync(config).mode & 0o777).toBe(0o600);
   });
 
+  it('creates the folder of a file that sits below the private folder (private, 0700), like a .gemini/settings.json', async () => {
+    const home = tempDir();
+    const settings = join(home, '.gemini', 'settings.json');
+    const run = await runAgent(lines, node("console.log('done:ok')", [{ path: settings, content: '{}' }]), { cwd: tempDir(), timeoutMs: 10_000 });
+    expect(run.outcome).toEqual({ ok: true });
+    expect(readFileSync(settings, 'utf8')).toBe('{}');
+    expect(statSync(join(home, '.gemini')).mode & 0o777).toBe(0o700);
+  });
+
   it('keeps the end of stderr, and lets the adapter judge a failed run', async () => {
     const run = await runAgent(lines, node('console.error("not logged in"); process.exit(1)'), { cwd: tempDir(), timeoutMs: 10_000 });
     expect(run).toEqual({ outcome: { ok: false, reason: 'crash', retryable: true }, stderrTail: 'not logged in\n' });

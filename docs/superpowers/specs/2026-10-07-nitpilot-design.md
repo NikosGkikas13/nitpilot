@@ -27,7 +27,7 @@ Nitpilot sends pull-request events instantly to each developer's **own** AI agen
 3. **Useful alone, better together.** It works when only one side uses Nitpilot. When both sides do, agents can run review rounds with each other.
 4. **Clean PRs.** In agent-to-agent mode the PR gets one summary comment, with a collapsed log and a link to the chat.
 5. **Humans decide.** Approving and merging stay human actions on GitHub, and team rules put a limit on loops.
-6. **Works with any platform and any agent.** Platform adapters (GitHub first) and agent adapters (Claude Code and GitHub Copilot CLI first; Gemini CLI on hold, §22).
+6. **Works with any platform and any agent.** Platform adapters (GitHub first) and agent adapters (Claude Code, GitHub Copilot CLI, Codex CLI, and Gemini CLI by API key, §22).
 7. **Readable.** A frontend developer can open any backend file and follow it. The tech is boring, there's one server process, and the docs are written for learning.
 8. **Open source and self-hostable,** with a public hosted instance for public repos.
 
@@ -51,7 +51,7 @@ Nitpilot is the combination: **instant routing to your own local agent (any agen
 |---|---|
 | Purpose | An open-source portfolio product. Polish and a strong demo come before breadth |
 | Where agents run | On each developer's machine, launched by the Nitpilot CLI daemon |
-| Agents (v1) | Claude Code, GitHub Copilot CLI, and a scripted fake agent for tests (Gemini CLI on hold, §22) |
+| Agents (v1) | Claude Code, GitHub Copilot CLI, Codex CLI, Gemini CLI (by your own API key, §22), and a scripted fake agent for tests |
 | Platforms (v1) | GitHub. The adapter interface is checked against GitLab's concepts |
 | Modes | Single-player (the other side isn't on Nitpilot) and agent-to-agent (both sides are) |
 | Clean PRs | The agent-to-agent conversation lives in Nitpilot. The PR gets one summary comment |
@@ -461,17 +461,24 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
   ```
 - **Editor:** the same, plus `Edit,Write` in `--tools`, and `--permission-mode acceptEdits`.
 - **MCP config:** `{"mcpServers":{"nitpilot":{"type":"http","url":…,"headers":{"Authorization":"Bearer …"},"alwaysLoad":true}}}`, written to a 0600 file. The token never appears in the command-line arguments.
-- **Environment:** built from an allowlist: `PATH`, `HOME`, the user and shell, the locale, `TMPDIR`, `TERM`, `CLAUDE_CONFIG_DIR` (where Claude Code keeps its login, for people with two accounts), `CODEX_HOME` (the same for Codex CLI), the proxy variables and `NODE_EXTRA_CA_CERTS`. None of them is a secret. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing. `detect()` (and so `nitpilot doctor` and `start`) checks the login with this same environment, so it can't pass while every job fails `auth`.
+- **Environment:** built from an allowlist: `PATH`, `HOME`, the user and shell, the locale, `TMPDIR`, `TERM`, `CLAUDE_CONFIG_DIR` (where Claude Code keeps its login, for people with two accounts), `CODEX_HOME` (the same for Codex CLI), the proxy variables and `NODE_EXTRA_CA_CERTS`. None of them is a secret. `ANTHROPIC_API_KEY` is removed unless the user opts into API billing (`GEMINI_API_KEY` the same for Gemini CLI, which needs it). `detect()` (and so `nitpilot doctor` and `start`) checks the login with this same environment, so it can't pass while every job fails `auth`.
 - **"Your setup" still applies:** user-level settings and the personal `~/.claude/CLAUDE.md`. Project-level files from the PR are scrubbed.
 - **Outcome:** a `result` line that isn't an error is success. Otherwise Nitpilot reads the failed `result` line and stderr, never the agent's own words: `error_max_turns` is `max_turns`; a 401 status, "Failed to authenticate", "Invalid API key" or "/login" is `auth`; a 429 status or "You've hit your limit" is `quota`. None is retried at once, because the same run would fail the same way. Anything else, a crash or a signal included, is a retryable `crash`.
 - **detect():** `claude --version`, then `claude auth status`, whose JSON must say `"loggedIn": true`. With API billing the login isn't needed, but `ANTHROPIC_API_KEY` must be set.
 
-**Gemini CLI** (verified against v0.63; **on hold**, see §22)
-- **Command:** `gemini -p <prompt> -o stream-json --skip-trust -e none --allowed-mcp-server-names nitpilot --policy <tmp>/policy.toml`
-- **Settings:** `GEMINI_CLI_SYSTEM_SETTINGS_PATH=<tmp>/settings.json`, containing:
-  - `mcpServers.nitpilot`: `{httpUrl, headers, trust: true}`
+**Gemini CLI** (flags and settings read from v0.63.0's own docs and source; live suite passed with v0.66.0 on 2026-11-01, free-tier key, `gemini-3.5-flash-lite`; id `gemini-cli`)
+- **Billing:** only with `apiBilling` on. Google refuses a personal Google login for tools like this one (§22), so the agent bills your `GEMINI_API_KEY` (Google AI Studio). That key is the only one added to its environment; `GOOGLE_API_KEY` never is. `detect()` says in one line when `apiBilling` is off or the key is missing.
+- **Command:** `gemini -p <prompt> -o stream-json --skip-trust -e none --allowed-mcp-server-names nitpilot --approval-mode <default|auto_edit> --policy <tmp>/policy.toml [-m <model>]`
+  - `--skip-trust`: headless, an untrusted folder exits (`FatalUntrustedWorkspaceError`) or connects no MCP server. The scrub keeps the PR's `.gemini/` out.
+- **Home:** `GEMINI_CLI_HOME=<tmp>`, so Gemini CLI's "home" is the run's private folder: your `~/.gemini` (settings, policies, MCP servers, extensions, GEMINI.md) and `~/.env` are never read. A system settings file outranks ours but is ignored unless owned by root.
+- **Settings:** `<tmp>/.gemini/settings.json` (0600, its folder 0700), containing:
+  - `mcpServers.nitpilot`: `{httpUrl, headers: {Authorization: "Bearer …"}, trust: true}`. The token is only in this file.
   - a `tools.core` allowlist. Reviewer: `read_file, read_many_files, list_directory, glob, grep_search`. Editor adds `replace, write_file`.
-- **Policy:** denies `run_shell_command`, `web_fetch` and `google_web_search` at priority 999.
+  - `hooksConfig.enabled: false`, `experimental.enableAgents: false` (no subagents), `advanced.ignoreLocalEnv: true`, `model.maxSessionTurns`, `security.auth.selectedType: "gemini-api-key"`.
+- **Policy** (its policy engine, user tier; the highest matching rule wins): `*` denied at priority 1; the mode's tools and `mcpName = "nitpilot"` (with `toolName = "*"`, which 0.63 requires) allowed at 900; `run_shell_command`, `web_fetch` and `google_web_search` denied at 999. Gemini CLI only warns about a policy file it can't parse and runs on, so `tools.core` is kept as a second lock.
+- **Scrub:** `.gemini/` (settings, commands, agents, skills, `.env`), `.agents/` (skills), `GEMINI.md`, `.env`.
+- **Output:** JSONL. `tool_use` (`tool_name`, MCP tools as `mcp_nitpilot_<tool>`) becomes progress; `message` chunks (`delta: true`) are ignored, being half sentences; the last `result` has `status: "success"` or `"error"` with `error: {type, message}`.
+- **Endings:** exit 0 and a success `result`. Exit 53 with `FatalTurnLimitedError` is `max_turns`; `RESOURCE_EXHAUSTED` or a 429 is `quota`; an invalid key (recorded: `API key not valid`) or a missing one (recorded: exit 41, "you must specify the GEMINI_API_KEY environment variable" on stderr) is `auth`. Anything else is a retryable `crash`.
 
 **GitHub Copilot CLI** (verified against v1.0.105 on 2026-10-29; id `copilot`)
 - **Reviewer:**
@@ -548,7 +555,7 @@ A shared `AgentRunner` (`runAgent`) handles spawning (in a separate process grou
 - **Static (in CI):**
   - **S1:** reviewer mode exposes no shell, write or web tools; editor mode adds only edit tools.
   - **S2:** the MCP token exists only inside a 0600 file, and the temp dir is removed afterwards.
-  - **S3:** the environment has no `ANTHROPIC_API_KEY` (unless opted in), `OPENAI_API_KEY`, `CODEX_API_KEY`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` or `AWS_*`.
+  - **S3:** the environment has no `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` (unless opted in, and then only that one), `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` or `AWS_*`.
   - **S4:** the isolation flags are present.
   - **S5:** `parseLine` and `outcome` handle recorded fixtures: success, max_turns, auth, quota, crash, signal.
   - **S6:** asking for an unsupported mode throws.
@@ -609,11 +616,11 @@ guidelines:                   # the team's own review notes for the agents (up t
 {
   "server": "https://nitpilot.dev",           // hosted instance (domain to register)
   "token": "nit_…",
-  "agent": "claude-code",                     // claude-code | copilot | gemini-cli | fake
+  "agent": "claude-code",                     // claude-code | copilot | codex | gemini-cli | fake
   "model": "claude-sonnet-5.5",               // optional, in the agent's own naming; unset = the agent's default
   "concurrency": 1,
   "jobTimeoutMinutes": 15,
-  "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY (§12.2)
+  "apiBilling": false,                        // true lets Claude Code use ANTHROPIC_API_KEY, Gemini CLI GEMINI_API_KEY (§12.2)
   "repos": {
     "octo/sandbox": {
       "path": "/Users/me/code/sandbox",
@@ -946,7 +953,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
      - `docker stats` after the run shows `nitpilot-server` under its limit, and Odyhook still answers.
    - D5 repeats the single-player run once with the CLI installed from npm.
 
-   **Not in Plan 3:** automatic deploys, error tracking (Sentry), a marketing site beyond the web app's landing page, the Gemini CLI adapter (still on hold, §22), private repos on the hosted instance (§18).
+   **Not in Plan 3:** automatic deploys, error tracking (Sentry), a marketing site beyond the web app's landing page, private repos on the hosted instance (§18).
 
 ## 21. Docs
 
@@ -967,7 +974,7 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
   - Which `model` ids work depends on the plan; the developer's plan only allowed auto.
   - There is no login-status command, so `nitpilot doctor` can't see a missing login.
   - The `auth` and `quota` stderr wording is from the docs until a real run hits one.
-- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`).
+- **Gemini CLI's sign-in (2026-10-14).** With Gemini CLI 0.63.0, a personal Google sign-in is refused (`IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`); only a Gemini API key (AI Studio) or Vertex AI works. Supporting that means passing `GEMINI_API_KEY` to the agent, an opt-in like `apiBilling`. Until it's decided, the Gemini CLI adapter (Plan 1b Task 20) is on hold, `nitpilot start` takes no jobs with it, and the Plan 1 acceptance run puts CLI B on the fake agent (`docs/acceptance/plan-1.md`). **Decided 2026-11-01 (Plan 4 G7 Task 2):** the adapter is back, by API key only, behind `apiBilling` (the same key as Claude Code's API billing: one agent per config, so one switch reads well). Runs bill the user's own Google AI Studio / Gemini API account. First live try (2026-11-01, Gemini CLI 0.66.0, free-tier key): the free tier's 20 requests a day per model ran out inside L1, and Gemini CLI retried (503 "high demand", then fetch failures) without output until the job timeout; the quota error is now recorded. Then, on `gemini-3.5-flash-lite` (its own, larger free allowance), the live suite passed all 14 (L6 on a second try: the first time the small model called tools when told not to). Turns took 15–40 s each on the free tier, so a live run needs `NITPILOT_LIVE_TIMEOUT_MINUTES=15`. Open: a recorded success fixture (the success/max_turns/signal ones are still hand-written).
 - **Re-requested reviews (checked in the sandbox, 2026-10).** Re-requesting a review from someone who had already reviewed fires `pull_request.review_requested` again, with that reviewer in `requested_reviewer`. So it starts a new review as a first request does. The `synchronize` and thread-reply triggers for single-player reviewers (§15) stay, for the reviewers who never get re-requested.
 - **A submitted review doesn't remove the request.** Submitting a review, even as a requested reviewer, sends no `review_request_removed`, so `requested` stays true after a review and the re-review rules (§9.3) keep working.
 - **Replies made on GitHub's pages** arrive as `pull_request_review_comment.created` and also as a `pull_request_review.submitted` carrying the same comment, whether sent from the Conversation tab or from Files changed. `SeenComment` makes the comment count once (§8). Our own agent's thread replies come back the same way, wrapped in a review with no body: the router treats a review that holds nothing but our own comments as our own write (§15).

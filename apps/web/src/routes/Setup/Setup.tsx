@@ -145,6 +145,7 @@ function Checklist({ me, facts }: { me: WebMe; facts: Onboarding }) {
                 <span className={styles.chip}>Claude Code · detected automatically</span>
                 <span className={styles.chip}>GitHub Copilot CLI · set "agent": "copilot" in the config</span>
                 <span className={styles.chip}>Codex CLI · set "agent": "codex" in the config</span>
+                <span className={styles.chip}>Gemini CLI · set "agent": "gemini-cli" and "apiBilling": true (bills your API key)</span>
               </div>
             </>
           )}

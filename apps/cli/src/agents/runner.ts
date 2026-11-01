@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { decodeTail } from '../utf8';
 import type { AgentAdapter, AgentEvent, AgentInvocation, AgentOutcome } from './types';
 
@@ -57,8 +58,11 @@ export function runAgent(adapter: Pick<AgentAdapter, 'parseLine' | 'outcome'>, i
       done({ outcome: CANCELLED, stderrTail: '[stopped: the job was cancelled]' });
       return;
     }
-    // `wx`: never write through a file (or a link) that is already there.
-    for (const file of invocation.files) writeFileSync(file.path, file.content, { mode: 0o600, flag: 'wx' });
+    // `wx`: never write through a file (or a link) that is already there. A file may sit in a folder of the run's private folder (Gemini CLI's `.gemini/`).
+    for (const file of invocation.files) {
+      mkdirSync(dirname(file.path), { recursive: true, mode: 0o700 });
+      writeFileSync(file.path, file.content, { mode: 0o600, flag: 'wx' });
+    }
     let pending = ''; // stdout after the last line break
     let stderr = Buffer.alloc(0);
     let last: AgentEvent | undefined;

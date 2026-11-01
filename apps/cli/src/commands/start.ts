@@ -20,7 +20,7 @@ export type StartDeps = {
   adapter?: AgentAdapter | null;
 };
 
-/** An agent that isn't wired in yet (M11 adds Claude Code and Gemini CLI): the daemon declares no modes, so the server sends it no jobs. */
+/** An agent with no adapter: the daemon declares no modes, so the server sends it no jobs. */
 const noAgentYet: JobExecutor = async () => ({ kind: 'reject', reason: 'unsupported_mode' });
 
 /**

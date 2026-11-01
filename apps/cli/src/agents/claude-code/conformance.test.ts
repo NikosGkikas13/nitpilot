@@ -19,6 +19,7 @@ staticConformance({
   toolsOf: (invocation) => flagValue(invocation, '--tools').split(','),
   readTools: ['Read', 'Glob', 'Grep'],
   editTools: ['Edit', 'Write'],
+  optIn: { key: 'ANTHROPIC_API_KEY', adapter: (env) => adapterFor({ agent: 'claude-code', apiBilling: true }, env)! },
   isolation: {
     reviewer: [['--permission-mode', 'dontAsk'], ['--strict-mcp-config'], ['--setting-sources', 'user'], ['--settings', '{"disableAllHooks":true}'], ['--disable-slash-commands'], ['--allowedTools', 'mcp__nitpilot']],
     editor: [['--permission-mode', 'acceptEdits'], ['--strict-mcp-config'], ['--setting-sources', 'user'], ['--settings', '{"disableAllHooks":true}'], ['--disable-slash-commands'], ['--allowedTools', 'mcp__nitpilot']],

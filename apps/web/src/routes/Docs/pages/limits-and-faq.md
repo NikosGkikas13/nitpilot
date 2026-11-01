@@ -2,7 +2,7 @@
 
 ## Which agents work?
 
-Claude Code or GitHub Copilot CLI. A Gemini CLI adapter waits on a way to sign in that Google allows. [Writing an adapter](/docs/writing-an-adapter) shows how to add an agent. To switch to Copilot, see [Use GitHub Copilot CLI](/docs/copilot-cli).
+Claude Code or GitHub Copilot CLI. Gemini CLI works too, with your own Gemini API key (billed to that account; see `apiBilling` in the config). [Writing an adapter](/docs/writing-an-adapter) shows how to add an agent. To switch to Copilot, see [Use GitHub Copilot CLI](/docs/copilot-cli).
 
 ## Why doesn't `nitpilot doctor` see my Copilot login?
 

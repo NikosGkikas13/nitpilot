@@ -206,9 +206,11 @@ describe('detectAgentFor', () => {
     expect(await detectAgentFor(config({ apiBilling: true }), {}, run)).toMatchObject({ ok: false, problem: expect.stringContaining('ANTHROPIC_API_KEY') });
   });
 
-  it('checks only the version of Gemini CLI, which has no adapter yet', async () => {
+  it("asks Gemini CLI's adapter: it needs apiBilling on and GEMINI_API_KEY (Google's login is not allowed)", async () => {
     const run = fakeRun({ 'gemini --version': ok('0.63.0\n') });
-    expect(await detectAgentFor(config({ agent: 'gemini-cli' }), {}, run)).toEqual({ ok: true, version: '0.63.0' });
+    expect(await detectAgentFor(config({ agent: 'gemini-cli' }), { GEMINI_API_KEY: 'AIza-x' }, run)).toMatchObject({ ok: false, problem: expect.stringContaining('turn apiBilling on') });
+    expect(await detectAgentFor(config({ agent: 'gemini-cli', apiBilling: true }), {}, run)).toMatchObject({ ok: false, problem: expect.stringContaining('GEMINI_API_KEY is not set') });
+    expect(await detectAgentFor(config({ agent: 'gemini-cli', apiBilling: true }), { GEMINI_API_KEY: 'AIza-x' }, run)).toEqual({ ok: true, version: '0.63.0' });
   });
 });
 

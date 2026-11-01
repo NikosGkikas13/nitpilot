@@ -68,7 +68,7 @@ export const PersonalConfigSchema = z.preprocess(
     jobTimeoutMinutes: z.number().int().min(1).max(120).default(15),
     /** The model your agent uses, in its own naming (e.g. `claude-sonnet-5.5`). Unset: the agent's default. */
     model: z.string().min(1).optional(),
-    /** Claude Code only: let it bill your API key. Off: ANTHROPIC_API_KEY never reaches the agent (spec §12.2). */
+    /** Let your agent bill your own API key: ANTHROPIC_API_KEY for Claude Code, GEMINI_API_KEY for Gemini CLI (which needs it). Off: neither ever reaches the agent (spec §12.2). */
     apiBilling: z.boolean().default(false),
     /** Linked clones, keyed `owner/name`. */
     repos: z.record(z.string(), RepoConfig).default({}),

@@ -15,6 +15,7 @@ import { prepareWorktree } from '../../runner/worktree';
 import { claudeCodeAdapter } from '../claude-code/adapter';
 import { codexAdapter } from '../codex/adapter';
 import { copilotAdapter } from '../copilot/adapter';
+import { geminiCliAdapter } from '../gemini-cli/adapter';
 import { jobPrompt } from '../prompt';
 import { agentBaseEnv, KILL_GRACE_MS, runAgent, type AgentRun } from '../runner';
 import type { AgentAdapter, AgentMode } from '../types';
@@ -23,13 +24,16 @@ import { canaries, INSTRUCTION_FILES, injectedTitle, trapFiles, trapOf, type Can
 /**
  * The live conformance suite (spec §12.3 L1–L6): the real agent CLIs, logged in, on a test PR over real
  * MCP. It costs a few agent runs, so it only runs with NITPILOT_LIVE=1 (`npm run test:live -w apps/cli`).
- * An adapter that fails a mode must not declare that mode (spec §22). Gemini CLI joins when Task 20 lands.
- * NITPILOT_LIVE_AGENT=<id> runs one agent only, so checking one doesn't spend the other's plan.
+ * An adapter that fails a mode must not declare that mode (spec §22). Gemini CLI runs only when GEMINI_API_KEY is set
+ * (Google doesn't allow its login for tools like this one, so a key is the only way in; it bills that key).
+ * NITPILOT_LIVE_AGENT=<id> runs one agent only, so checking one doesn't spend the other's plan. NITPILOT_LIVE_MODEL=<model>
+ * picks the agent's model (e.g. a Gemini model with free-tier quota left).
  */
-const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter(), copilotAdapter(), codexAdapter()].filter((a) => !process.env.NITPILOT_LIVE_AGENT || a.id === process.env.NITPILOT_LIVE_AGENT);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter(), copilotAdapter(), codexAdapter(), ...(GEMINI_API_KEY ? [geminiCliAdapter({ apiBilling: true, apiKey: GEMINI_API_KEY })] : [])].filter((a) => !process.env.NITPILOT_LIVE_AGENT || a.id === process.env.NITPILOT_LIVE_AGENT);
 const LIVE = process.env.NITPILOT_LIVE === '1';
-/** Plenty for a small PR; a run that needs more is a failure worth seeing. */
-const TIMEOUT_MS = 5 * 60_000;
+/** Plenty for a small PR; a run that needs more is a failure worth seeing. NITPILOT_LIVE_TIMEOUT_MINUTES raises it for a slow agent (Gemini's free tier takes about 40 s a turn). */
+const TIMEOUT_MS = (Number(process.env.NITPILOT_LIVE_TIMEOUT_MINUTES) || 5) * 60_000;
 const MAX_TURNS = 20;
 
 let mcp: LocalMcpServer;
@@ -57,7 +61,7 @@ async function runLive(adapter: AgentAdapter, mode: AgentMode, opts: { head?: Re
   onTestFinished(() => job.unregister());
   const prompt = opts.prompt?.(ctx) ?? jobPrompt(bundle);
   const tmpDir = tempDir();
-  const invocation = adapter.buildInvocation({ mode, cwd: worktree.dir, prompt, mcp: job, tmpDir, baseEnv: agentBaseEnv(), maxTurns: MAX_TURNS });
+  const invocation = adapter.buildInvocation({ mode, cwd: worktree.dir, prompt, mcp: job, tmpDir, baseEnv: agentBaseEnv(), maxTurns: MAX_TURNS, model: process.env.NITPILOT_LIVE_MODEL || undefined });
   const lines: string[] = [];
   const started = Date.now();
   // Keep every line the agent printed, to look for leaks in it.
@@ -89,7 +93,7 @@ const injected = (job: LiveJob) => {
 /**
  * Print which tools the agent called and which were refused (never asserted), so a green L3/L4 run shows
  * whether the attempt was blocked or the model just declined. Reads Claude Code's stream-json, Copilot
- * CLI's json events and Codex's JSONL items.
+ * CLI's json events, Codex's JSONL items and Gemini CLI's stream-json.
  */
 function report(label: string, job: LiveJob): void {
   const called: string[] = [];
@@ -103,10 +107,16 @@ function report(label: string, job: LiveJob): void {
       continue;
     }
     if (typeof event !== 'object' || event === null) continue;
-    const { type, message, permission_denials, data, item } = event as {
+    const { type, message, permission_denials, data, item, tool_name, tool_id, status } = event as {
       type?: unknown; message?: { content?: unknown }; permission_denials?: unknown; data?: { toolName?: unknown; success?: unknown; toolCallId?: unknown };
-      item?: { type?: unknown; tool?: unknown };
+      item?: { type?: unknown; tool?: unknown }; tool_name?: unknown; tool_id?: unknown; status?: unknown;
     };
+    // Gemini CLI: a tool_use names the tool, its tool_result says whether it ran (a policy refusal is an error).
+    if (type === 'tool_use' && typeof tool_name === 'string') {
+      called.push(tool_name);
+      toolOfCall.set(tool_id, tool_name);
+    }
+    if (type === 'tool_result' && status === 'error') refused.push(toolOfCall.get(tool_id) ?? '?');
     // Codex: MCP calls and shell commands start as items, an applied patch completes as a file_change. A patch the
     // sandbox refuses leaves no item (the model only sees "patch rejected"), so it isn't counted.
     if (type === 'item.started' && item?.type === 'mcp_tool_call' && typeof item.tool === 'string') called.push(item.tool);

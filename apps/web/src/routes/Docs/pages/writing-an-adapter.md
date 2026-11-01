@@ -2,7 +2,7 @@
 
 Nitpilot talks to two kinds of outside thing through two small interfaces, so neither the engine nor the rest of the server knows which one it is using:
 
-- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, GitHub Copilot CLI, OpenAI Codex CLI, Gemini CLI (on hold), or the scripted fake agent;
+- an **agent adapter** (in the CLI) knows how to drive one agent program: Claude Code, GitHub Copilot CLI, OpenAI Codex CLI, Gemini CLI, or the scripted fake agent;
 - a **platform adapter** (in the server) knows one code host: GitHub today.
 
 Both are held to the same rule: **an adapter may only declare what it has proven.** An agent adapter lists only the modes that pass the conformance suite; a platform adapter's parsing is tested against recorded real payloads.
@@ -29,7 +29,7 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 2. **Pick the tools per mode.** A reviewer gets read tools only. An editor adds edit tools. No shell, no web, for either. Everything else the agent needs goes through Nitpilot's MCP tools.
 3. **Keep the agent away from the repository's own configuration.** Turn off project settings, hooks, slash commands and any MCP server except ours (for Claude Code: `--strict-mcp-config`, `--setting-sources user`, `--settings '{"disableAllHooks":true}'`, `--disable-slash-commands`; for Copilot CLI: `--no-custom-instructions`, `--disable-builtin-mcps`, a tool whitelist in `--available-tools`, and never `--trust-folder`; for Codex CLI: `--ignore-user-config`, `--ignore-rules`, `--disable hooks`, and `-c project_doc_max_bytes=0`).
 4. **Put the MCP token in a file, never on the command line.** Return it in `files`; `runAgent` writes it with mode 0600 inside the run's private folder and the executor deletes the folder afterwards. If the agent only reads MCP settings from its own config folder, look for a setting that runs a command or names a file: Codex takes the server with `-c` and its headers from `http_headers_helper`, a command (`/bin/cat <tmp>/mcp-headers.json`) whose JSON output it sends as headers.
-5. **Build the environment from `input.baseEnv`.** It is an allowlist. Add only what your agent needs. `ANTHROPIC_API_KEY` only when the user opted into API billing; `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `AWS_*` never.
+5. **Build the environment from `input.baseEnv`.** It is an allowlist. Add only what your agent needs. `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` only when the user opted into API billing (the static suite's `optIn` checks both states); `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` and `AWS_*` never.
 6. **Record real runs** of every way the agent can end (success, out of turns, logged out, rate limit, crash, killed by a signal) into `fixtures/*.jsonl`, with paths and ids replaced. Write what `outcome` must make of each. Read the agent's *error output*, never its own words: a model can say "I hit my limit" about anything.
 7. **Run the static suite** from a test file next to the adapter (`claude-code/conformance.test.ts` is the example):
 
@@ -57,6 +57,17 @@ An adapter only *builds a command and reads output*. Spawning, timeouts and kill
 - **Your config.toml is not loaded** (`--ignore-user-config`): your own MCP servers, hooks and trusted projects never reach a job, and neither does a model you set there. Your login still comes from `CODEX_HOME` (default `~/.codex`), which is the one extra variable in the agent's environment. `OPENAI_API_KEY` and `CODEX_API_KEY` never reach it.
 - **Endings:** exit 0 and a `turn.completed` line is success. A `turn.failed` or `error` line carries Codex's message: "hit your usage limit", "quota exceeded" or a 429 is `quota`; a 401, "Not logged in" or a failed token refresh is `auth`. No max-turns setting: the job timeout covers it.
 - **detect():** `codex --version`, then `codex login status`, which exits 0 only when signed in.
+
+### Gemini CLI's quirks
+
+`agents/gemini-cli/` drives `gemini -p … -o stream-json`. Its flags and settings were read from Gemini CLI 0.63.0's own docs and source, and it passed the live suite with 0.66.0 on a free-tier key (`gemini-3.5-flash-lite`, 2026-11-01).
+
+- **It bills your API key.** Google no longer lets a personal Google login drive Gemini CLI from a tool like this, so it needs `GEMINI_API_KEY` (a Google AI Studio key) and `"apiBilling": true`. That key is the only one let through; `GOOGLE_API_KEY` never is. On the free tier, pick a model with room in its daily allowance: `gemini-3.8-flash` (the default pick) allows only 20 requests a day, which one review uses up, after which Gemini CLI retries in silence until the job times out. `"model": "gemini-3.5-flash-lite"` passed the live suite for free.
+- **Its own home.** `GEMINI_CLI_HOME` is the run's private folder, so your `~/.gemini` (settings, MCP servers, extensions, GEMINI.md) and `~/.env` are never read. Nitpilot writes `.gemini/settings.json` there with the MCP server and token, a `tools.core` allowlist, hooks and subagents off, and `advanced.ignoreLocalEnv`.
+- **A policy file as the lock** (`--policy`): every tool refused, then the mode's own tools and the `nitpilot` MCP server allowed, and the shell and web refused above all. Gemini CLI only warns about a policy file it can't read, so `tools.core` stays as a second lock.
+- **`--skip-trust`:** headless, an untrusted folder exits or connects no MCP server. The scrub (`.gemini/`, `.agents/`, `GEMINI.md`, `.env`) keeps the PR's own settings out.
+- **Endings:** exit 0 and a `result` line with `status: "success"`. A failed `result` carries Gemini CLI's error: `FatalTurnLimitedError` (exit 53) is `max_turns`; `RESOURCE_EXHAUSTED` or a 429 is `quota`; an invalid or missing key is `auth`. Progress comes from tool calls only, since its own words stream in small pieces.
+- **detect():** `gemini --version`, then whether `apiBilling` is on and the key is set. It can't check the key without calling the API.
 
 ### The fake agent
 

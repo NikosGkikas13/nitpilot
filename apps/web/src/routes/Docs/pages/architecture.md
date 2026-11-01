@@ -115,7 +115,7 @@ Three programs, one shared package:
 
 ### 4.11 Adapters, fakes and a conformance suite
 
-- **Chosen:** two interfaces. `PlatformAdapter` (GitHub today) and `AgentAdapter` (Claude Code, GitHub Copilot CLI, a scripted fake; Gemini CLI on hold). Every adapter passes one shared conformance suite for the modes it declares: static checks in CI, live checks run by hand. [Writing an adapter](/docs/writing-an-adapter) shows how to write one.
+- **Chosen:** two interfaces. `PlatformAdapter` (GitHub today) and `AgentAdapter` (Claude Code, GitHub Copilot CLI, Codex CLI, Gemini CLI by API key, a scripted fake). Every adapter passes one shared conformance suite for the modes it declares: static checks in CI, live checks run by hand. [Writing an adapter](/docs/writing-an-adapter) shows how to write one.
 - **Alternatives:** call GitHub and `claude` directly; mock them per test.
 - **Why:** agent CLIs change flags quickly. A suite that checks the *command we would run* (no shell tool for a reviewer, the token only in a 0600 file, the isolation flags present) catches drift in CI. A `FakePlatform` and a fake agent make the whole loop testable without a network or a subscription.
 
@@ -153,4 +153,4 @@ Three programs, one shared package:
 
 ## 6. Not built yet
 
-Automatic deploys, error tracking and private repos on nitpilot.dev. Gemini CLI is waiting on a way to sign in that Google allows.
+Automatic deploys, error tracking and private repos on nitpilot.dev.

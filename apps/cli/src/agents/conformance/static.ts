@@ -19,10 +19,12 @@ export type StaticSuite = {
   isolation: Record<AgentMode, readonly (readonly string[])[]>;
   /** The folder of recorded runs, and each one's expected outcome (S5): success, max_turns, auth, quota, crash, signal. */
   fixtures: { dir: string; cases: FixtureCase[] };
+  /** An agent with an API-billing opt-in (`apiBilling`): the adapter your config builds with it on, and the one key it may then pass (S3). */
+  optIn?: { key: keyof typeof SECRETS; adapter(env: Record<string, string | undefined>): AgentAdapter };
 };
 
 /** Variables that must never reach an agent (spec §12.3 S3). */
-const SECRETS = { ANTHROPIC_API_KEY: 'sk-ant-x', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'gho_x', COPILOT_GITHUB_TOKEN: 'github_pat_x', OPENAI_API_KEY: 'sk-proj-x', CODEX_API_KEY: 'sk-x', NPM_TOKEN: 'npm_x', AWS_SECRET_ACCESS_KEY: 'aws-x', AWS_PROFILE: 'prod' };
+const SECRETS = { ANTHROPIC_API_KEY: 'sk-ant-x', GEMINI_API_KEY: 'AIza-x', GOOGLE_API_KEY: 'AIza-y', GITHUB_TOKEN: 'ghp_x', GH_TOKEN: 'gho_x', COPILOT_GITHUB_TOKEN: 'github_pat_x', OPENAI_API_KEY: 'sk-proj-x', CODEX_API_KEY: 'sk-x', NPM_TOKEN: 'npm_x', AWS_SECRET_ACCESS_KEY: 'aws-x', AWS_PROFILE: 'prod' };
 /** Lines that aren't the agent's events: parseLine must shrug at every one (S5). */
 const GARBAGE = ['', 'not json', 'null', '42', '[]', '"text"', '{}', '{"type":"assistant","message":{"content":[null,1,"x"]}}', '{"type":"result"}', '{"type":"result","errors":"x"}'];
 
@@ -70,6 +72,16 @@ export function staticConformance(suite: StaticSuite): void {
         const invocation = adapter.buildInvocation(input(mode, { baseEnv: agentBaseEnv(process.env) }));
         expect(Object.keys(invocation.env).filter((name) => name in SECRETS || name.startsWith('AWS_'))).toEqual([]);
       });
+
+      const { optIn } = suite;
+      if (optIn) {
+        it(`S3: with apiBilling on, only ${optIn.key} gets through (${mode})`, () => {
+          const env = { ...process.env, ...SECRETS };
+          const invocation = optIn.adapter(env).buildInvocation(input(mode, { baseEnv: agentBaseEnv(env) }));
+          expect(Object.keys(invocation.env).filter((name) => name in SECRETS || name.startsWith('AWS_'))).toEqual([optIn.key]);
+          expect(invocation.env[optIn.key]).toBe(SECRETS[optIn.key]);
+        });
+      }
 
       it(`S4: the isolation flags are there (${mode})`, () => {
         const { args } = adapter.buildInvocation(input(mode));

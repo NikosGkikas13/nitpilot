@@ -36,7 +36,7 @@ Every field has a default, so a missing or empty file is valid.
 | --- | --- | --- | --- |
 | `server` | text | `https://nitpilot.dev` | you, for another server; `nitpilot login` keeps it |
 | `token` | text starting with `nit_` | none | `nitpilot login` |
-| `agent` | `claude-code`, `copilot` or `codex` | `claude-code` | you |
+| `agent` | `claude-code`, `copilot`, `codex` or `gemini-cli` | `claude-code` | you |
 | `model` | text | none: the agent's default | you |
 | `concurrency` | whole number, 1 to 4 | `1` | you |
 | `jobTimeoutMinutes` | whole number, 1 to 120 | `15` | you |
@@ -45,11 +45,11 @@ Every field has a default, so a missing or empty file is valid.
 
 - **`server`** is the address of the Nitpilot server. It must start with `https://`. `http://` is accepted only for a server on your own computer, because http would send your token in the clear. It can't have a `?query` or `#fragment`.
 - **`token`** is your device's token, from `nitpilot login`.
-- **`agent`** picks the coding agent that runs your jobs. See [Use GitHub Copilot CLI](/docs/copilot-cli); `codex` runs OpenAI Codex CLI (`codex login` first).
+- **`agent`** picks the coding agent that runs your jobs. See [Use GitHub Copilot CLI](/docs/copilot-cli); `codex` runs OpenAI Codex CLI (`codex login` first); `gemini-cli` runs Gemini CLI, which needs `apiBilling`.
 - **`model`** picks the model in the agent's own naming, such as `claude-sonnet-5.5`. Without it the agent uses its default.
 - **`concurrency`** is how many jobs run at once on this computer.
 - **`jobTimeoutMinutes`** is how long one job may run before it times out.
-- **`apiBilling`** is for Claude Code only. On, it may bill your `ANTHROPIC_API_KEY`. Off, that key never reaches the agent.
+- **`apiBilling`** lets your agent bill your own API account. For Claude Code, on means it may use your `ANTHROPIC_API_KEY` instead of your Claude login. For Gemini CLI it must be on: Google doesn't let its login work with Nitpilot, so the agent uses your `GEMINI_API_KEY` (a [Google AI Studio](https://aistudio.google.com/apikey) key) and the runs are billed to that key's account (the free tier works, but each model has its own daily allowance: the default `gemini-3.8-flash` allows only 20 requests a day, so set `"model": "gemini-3.5-flash-lite"`). Off, neither key ever reaches the agent. Set the key in your shell profile, never in this file.
 
 ### Each entry in `repos`
 

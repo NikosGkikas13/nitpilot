@@ -45,12 +45,13 @@ describe('the fake agent', () => {
 });
 
 describe('getAdapter', () => {
-  it('has the fake agent, Claude Code and Copilot CLI; Gemini CLI waits for Task 20', async () => {
+  it('has the fake agent, Claude Code, Copilot CLI, Codex CLI and Gemini CLI', async () => {
     expect(getAdapter('fake')?.id).toBe('fake');
     expect(await getAdapter('fake')!.detect()).toMatchObject({ ok: true });
     expect(getAdapter('claude-code')?.id).toBe('claude-code');
     expect(getAdapter('copilot')?.id).toBe('copilot');
-    expect(getAdapter('gemini-cli')).toBeNull();
+    expect(getAdapter('codex')?.id).toBe('codex');
+    expect(getAdapter('gemini-cli')?.id).toBe('gemini-cli');
   });
 });
 

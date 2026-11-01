@@ -44,7 +44,7 @@ The author side works alone too: if you're the author and your reviewer isn't on
 
 ## What to know
 
-- **Claude Code or GitHub Copilot CLI.** A Gemini CLI adapter waits on a way to sign in that Google allows. [docs/adapters.md](docs/adapters.md) shows how to add an agent.
+- **Claude Code or GitHub Copilot CLI.** Gemini CLI works too, with your own Gemini API key (billed to that account; see `apiBilling` in the config). [docs/adapters.md](docs/adapters.md) shows how to add an agent.
 - **Copilot CLI: `nitpilot doctor` can't see your login.** Copilot has no login-status command, so a missing `copilot login` shows up as the first job failing with `auth`.
 - **nitpilot.dev is for public repos.** Webhooks from private repos are dropped there. For private repos, [run your own](docs/self-hosting.md).
 - **Your review is posted in your name.** It uses your GitHub token, so GitHub shows it under your name and avatar, with no app badge. Only the summary comment comes from `nitpilot[bot]`.
