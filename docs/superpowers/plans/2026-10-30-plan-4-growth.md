@@ -131,7 +131,7 @@ Reuses G1 completely: on GitHub's runner, the Action runs `nitpilot review` for 
 
 **Task 2: the Action.** A composite action in `.github/actions/review/` (or a `nitpilot/review-action` repo): setup-node, `npx nitpilot@<version> review --ci`. Example workflow in the docs, triggered by `pull_request` and `review_requested`. **Done 2026-11-01.** Composite action at `.github/actions/review`; setup-node pinned by SHA, agent CLIs pinned; the API key comes in through the step's env, not an input; private repos work: `nitpilot review` (both forms) gives its token to its own git fetch from `https://github.com/` and nothing else (`githubAuthEnv` in `apps/cli/src/runner/safe-git.ts`).
 
-**Task 3: docs.** A docs-site page "Reviews when your laptop is off", README "What to know" updated, spec §18 moves "cloud fallback" from out-of-scope to done (as the Action), and a `docs/why/github-actions.md` explainer.
+**Task 3: docs.** A docs-site page "Reviews when your laptop is off", README "What to know" updated, spec §18 moves "cloud fallback" from out-of-scope to done (as the Action), and a `docs/why/github-actions.md` explainer. **Done 2026-11-01.** Docs page `github-action.md` "Reviews when your laptop is off", README and CLI README updated, spec §18 cloud fallback done as the Action, `docs/why/github-actions.md`.
 
 Verify: in the sandbox repo, add the workflow with an API key secret, open a PR with the laptop's daemon stopped, and see the review posted from the Action; start the daemon, push, and see no duplicate.
 

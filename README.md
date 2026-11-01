@@ -49,7 +49,7 @@ The author side works alone too: if you're the author and your reviewer isn't on
 - **nitpilot.dev is for public repos.** Webhooks from private repos are dropped there. For private repos, [run your own](docs/self-hosting.md).
 - **Your review is posted in your name.** It uses your GitHub token, so GitHub shows it under your name and avatar, with no app badge. Only the summary comment comes from `nitpilot[bot]`.
 - **Single-player reviewing needs the author to be off Nitpilot.** Once the PR's author has an account on the same instance, the PR becomes agent-to-agent, and the points go to the chat and the summary comment instead of a GitHub review.
-- **Your computer has to be on.** Jobs run on your machine. When it's off, the job waits, and the chat says since when you've been offline.
+- **Your computer has to be on for `nitpilot start`.** Jobs run on your machine. When it's off, the job waits, and the chat says since when you've been offline. For reviews while every laptop is off, add the [GitHub Action](.github/actions/review/README.md): it reviews on GitHub's runner with your team's API key.
 - **Jobs start by themselves only for trusted authors** (owners, members, collaborators, and bots you list). A PR from an outside contributor waits for you to start the review.
 
 ## How it works

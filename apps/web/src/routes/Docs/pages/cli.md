@@ -118,7 +118,7 @@ The output starts with `<agent> is reviewing owner/name#12: <title>`, then each 
 
 - `--post` asks `Post N points to owner/name#12 as your review (@you)? [y/N]` and, on yes, posts them as one comment review in your name: points on a line as inline comments, the rest in the review's text. It never approves. Then it prints `Posted your review: <link>`.
 - `--yes` posts without asking. Scripts need it, since there is no terminal to ask in.
-- `--ci` is for a GitHub Actions workflow: it reviews the workflow's PR (no link) with the workflow's `GITHUB_TOKEN` and posts without asking. The agent is `NITPILOT_AGENT`, `claude-code` (the default) or `gemini-cli`, and bills the repo secret `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`. If Nitpilot already reviewed the PR's latest commit, it says so and does nothing. PRs from forks get no secrets on GitHub, so they aren't reviewed this way.
+- `--ci` is for a GitHub Actions workflow: it reviews the workflow's PR (no link) with the workflow's `GITHUB_TOKEN` and posts without asking. The agent is `NITPILOT_AGENT`, `claude-code` (the default) or `gemini-cli`, and bills the repo secret `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`. If Nitpilot already reviewed the PR's latest commit, it says so and does nothing. PRs from forks get no secrets on GitHub, so they aren't reviewed this way. The ready-made workflow is in [Reviews when your laptop is off](/docs/github-action).
 
 Common failures:
 

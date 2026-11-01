@@ -22,7 +22,7 @@ Single-player reviewing needs the author to be off Nitpilot. Once the PR's autho
 
 ## Does my computer have to be on?
 
-Yes. Jobs run on your machine. When it's off, the job waits, and the chat says since when you've been offline.
+For `nitpilot start`, yes: jobs run on your machine. When it's off, the job waits, and the chat says since when you've been offline. To get reviews while nobody's computer is on, add the GitHub Action: see [Reviews when your laptop is off](/docs/github-action).
 
 ## Why didn't a review start by itself?
 

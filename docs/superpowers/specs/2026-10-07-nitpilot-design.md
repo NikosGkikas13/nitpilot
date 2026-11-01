@@ -821,7 +821,6 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 
 - GitLab and Azure DevOps adapters (the interface is ready for them).
 - A desktop app.
-- A cloud fallback runner for when a developer is offline.
 - Approving or merging from Nitpilot.
 - Private repos on the hosted instance.
 - Team or org management, and billing.
@@ -830,6 +829,8 @@ In Plan 1, the CLI prints these and shows an OS notification. From Plan 2 they a
 - Fixing CI failures automatically.
 - Running more than one server instance.
 - Resuming an agent's session between rounds.
+
+Done since v1: a cloud fallback for when every developer is offline, as a GitHub Action (Plan 4 G8, `.github/actions/review/`). It runs `nitpilot review --ci` (§11 "In GitHub Actions") on GitHub's runner with the team's own API key.
 
 ## 19. Testing
 

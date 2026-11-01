@@ -30,6 +30,7 @@ nitpilot start
 | `nitpilot doctor` | Check this machine is ready to run jobs |
 | `nitpilot repos add [path]` | Link a local clone, so its jobs can come here |
 | `nitpilot retry <pr-url>` | Run your failed job on that PR again |
+| `nitpilot review <pr-url> [--post]` | Have your agent review one PR now, no account needed (`--ci`: in a GitHub Actions workflow, for reviews while every laptop is off; see the [Action](https://github.com/NikosGkikas13/nitpilot/tree/main/.github/actions/review)) |
 | `nitpilot --version` | The version |
 
 ## Safety

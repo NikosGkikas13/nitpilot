@@ -13,6 +13,7 @@ export const DOC_PAGES: DocPage[] = [
   { slug: 'vscode', title: 'Use Nitpilot in VS Code', group: 'Guides' },
   { slug: 'teammate-on-nitpilot', title: 'When your teammate is on it too', group: 'Guides' },
   { slug: 'settings', title: 'Settings & Auto-review', group: 'Guides' },
+  { slug: 'github-action', title: 'Reviews when your laptop is off', group: 'Guides' },
   { slug: 'self-hosting', title: 'Self-hosting', group: 'Guides' },
   { slug: 'cli', title: 'CLI commands', group: 'Reference' },
   { slug: 'config-json', title: 'config.json', group: 'Reference' },
