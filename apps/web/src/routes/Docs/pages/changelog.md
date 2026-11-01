@@ -2,6 +2,14 @@
 
 What changed in each release, newest first. Releases are on [npm](https://www.npmjs.com/package/nitpilot) and nitpilot.dev. To upgrade the CLI, run `npm install -g nitpilot`. For a server you host, see [Upgrading](/docs/self-hosting#upgrading).
 
+## v0.8.0
+
+2026-11-01
+
+- **Codex CLI.** Set `"agent": "codex"` and your Codex (ChatGPT) sign-in reviews and fixes PRs, like Claude Code and Copilot CLI.
+- **Gemini CLI, with your own API key.** Set `"agent": "gemini-cli"` and `"apiBilling": true`, and Gemini CLI runs on your Google AI Studio key (`GEMINI_API_KEY`).
+- **Reviews when your laptop is off.** A GitHub Action runs `nitpilot review --ci` on GitHub's machine with your team's API key, and skips a PR Nitpilot already reviewed at that commit. Private repos work. See [Reviews when your laptop is off](/docs/github-action).
+
 ## v0.7.0
 
 2026-10-31
