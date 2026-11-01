@@ -1,0 +1,28 @@
+{
+  "action": "opened",
+  "number": 142,
+  "pull_request": {
+    "url": "https://api.github.com/repos/acme/shop-api/pulls/142",
+    "html_url": "https://github.com/acme/shop-api/pull/142",
+    "number": 142,
+    "state": "open",
+    "title": "Cursor pagination for orders",
+    "user": { "login": "maya", "id": 1001, "type": "User" },
+    "body": null,
+    "draft": false,
+    "head": {
+      "label": "acme:feature/cursor-pagination",
+      "ref": "feature/cursor-pagination",
+      "sha": "1111111111111111111111111111111111111111",
+      "repo": { "full_name": "acme/shop-api", "fork": false }
+    },
+    "base": {
+      "label": "acme:main",
+      "ref": "main",
+      "sha": "2222222222222222222222222222222222222222",
+      "repo": { "full_name": "acme/shop-api", "fork": false }
+    }
+  },
+  "repository": { "full_name": "acme/shop-api", "private": false },
+  "sender": { "login": "maya", "id": 1001, "type": "User" }
+}

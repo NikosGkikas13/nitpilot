@@ -67,6 +67,12 @@ describe('the Claude Code adapter', () => {
     expect(withoutKey.env).not.toHaveProperty('ANTHROPIC_API_KEY');
   });
 
+  it('passes ANTHROPIC_API_KEY with the ci option (nitpilot review --ci), which is off unless asked for', () => {
+    const env = { ...process.env, ANTHROPIC_API_KEY: 'sk-ant-mine' };
+    expect(adapterFor({ agent: 'claude-code', apiBilling: false }, env, { ci: true })!.buildInvocation(input()).env.ANTHROPIC_API_KEY).toBe('sk-ant-mine');
+    expect(adapterFor({ agent: 'claude-code', apiBilling: false }, env, {})!.buildInvocation(input()).env).not.toHaveProperty('ANTHROPIC_API_KEY');
+  });
+
   it('turns tool calls and its own words into progress, and drops the rest', () => {
     const events = readFileSync(`${FIXTURES}success.jsonl`, 'utf8').split('\n').map((line) => claudeCodeAdapter().parseLine(line)).filter((e): e is AgentEvent => e !== null);
     expect(events.slice(0, 3)).toEqual([

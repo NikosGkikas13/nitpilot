@@ -127,7 +127,7 @@ Verify: the conformance suite passes live for each, then one real review on the 
 
 Reuses G1 completely: on GitHub's runner, the Action runs `nitpilot review` for the PR.
 
-**Task 1: `nitpilot review --ci`.** Reads the PR from `GITHUB_EVENT_PATH`, the token from `GITHUB_TOKEN`, posts without asking, and lets `ANTHROPIC_API_KEY` reach the agent only in this mode (an `agentBaseEnv` option, off everywhere else). It skips if the PR already has a review from Nitpilot at this head SHA (look for the footer line or `BRAND.commentMarker` with the GitHub API), so it doesn't duplicate the daemon's review. Test: event fixture → bundle; the skip check.
+**Task 1: `nitpilot review --ci`.** Reads the PR from `GITHUB_EVENT_PATH`, the token from `GITHUB_TOKEN`, posts without asking, and lets `ANTHROPIC_API_KEY` reach the agent only in this mode (an `agentBaseEnv` option, off everywhere else). It skips if the PR already has a review from Nitpilot at this head SHA (look for the footer line or `BRAND.commentMarker` with the GitHub API), so it doesn't duplicate the daemon's review. Test: event fixture → bundle; the skip check. **Done 2026-11-01.** Agent from `NITPILOT_AGENT`, `claude-code` or `gemini-cli` only; posts as `github-actions[bot]`; skips a PR with a Nitpilot review at the head SHA before the agent runs; non-PR or closed events exit 0; fork PRs fail with the "no secrets" line.
 
 **Task 2: the Action.** A composite action in `.github/actions/review/` (or a `nitpilot/review-action` repo): setup-node, `npx nitpilot@<version> review --ci`. Example workflow in the docs, triggered by `pull_request` and `review_requested`.
 

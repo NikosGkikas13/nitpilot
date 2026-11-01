@@ -12,7 +12,7 @@ Usage: nitpilot <command>
   nitpilot status [--json|--line|--stats [--days 7|30]]  Your open PRs and what they need from you
   nitpilot doctor                                        Check this machine is ready to run jobs
   nitpilot repos add [path]                              Link a local clone, so its jobs can come here
-  nitpilot review <pr-url> [--post [--yes]]              Have your agent review one PR now, no account needed
+  nitpilot review <pr-url> [--post [--yes]] | --ci       Have your agent review one PR now, no account needed
   nitpilot rules suggest [owner/name]                    Draft .nitpilot.yml guidelines from the repo's past reviews
   nitpilot retry <pr-url>                                Run your failed job on that PR again
 
@@ -118,6 +118,7 @@ The output starts with `<agent> is reviewing owner/name#12: <title>`, then each 
 
 - `--post` asks `Post N points to owner/name#12 as your review (@you)? [y/N]` and, on yes, posts them as one comment review in your name: points on a line as inline comments, the rest in the review's text. It never approves. Then it prints `Posted your review: <link>`.
 - `--yes` posts without asking. Scripts need it, since there is no terminal to ask in.
+- `--ci` is for a GitHub Actions workflow: it reviews the workflow's PR (no link) with the workflow's `GITHUB_TOKEN` and posts without asking. The agent is `NITPILOT_AGENT`, `claude-code` (the default) or `gemini-cli`, and bills the repo secret `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`. If Nitpilot already reviewed the PR's latest commit, it says so and does nothing. PRs from forks get no secrets on GitHub, so they aren't reviewed this way.
 
 Common failures:
 

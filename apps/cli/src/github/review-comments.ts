@@ -56,7 +56,7 @@ function isHumanReview(c: GhReviewComment): boolean {
 }
 
 /** The marker the server puts in everything it writes, and the shapes `nitpilot review` posts (apps/cli/src/github/post-review.ts). */
-function isNitpilots(body: string): boolean {
+export function isNitpilots(body: string): boolean {
   return (
     body.includes(`<!-- ${BRAND.commentMarker}`) ||
     body.startsWith('🤖 Review by ') ||

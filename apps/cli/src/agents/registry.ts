@@ -30,11 +30,18 @@ export function getAdapter(id: AgentId, opts: { apiKey?: string; apiBilling?: bo
   }
 }
 
+/** The agent's own API key: what API billing (and `nitpilot review --ci`) lets through to it. */
+export function apiKeyName(agent: AgentId): 'GEMINI_API_KEY' | 'ANTHROPIC_API_KEY' {
+  return agent === 'gemini-cli' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
+}
+
 /**
  * The adapter your config names. Claude Code gets your ANTHROPIC_API_KEY, and Gemini CLI your GEMINI_API_KEY, only when
- * you opted into API billing (spec §12.2); no other key ever reaches either. The fake agent follows the scenario file named by NITPILOT_FAKE_SCENARIO. `run` is for tests (a pretend program).
+ * you opted into API billing (spec §12.2); no other key ever reaches either. `ci` turns API billing on for this run only:
+ * `nitpilot review --ci` on a GitHub runner, which has no personal config; nothing else passes it. The fake agent follows
+ * the scenario file named by NITPILOT_FAKE_SCENARIO. `run` is for tests (a pretend program).
  */
-export function adapterFor(config: Pick<PersonalConfig, 'agent' | 'apiBilling'>, env: Record<string, string | undefined>, opts: { run?: RunProgram } = {}): AgentAdapter | null {
-  const keyName = config.agent === 'gemini-cli' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
-  return getAdapter(config.agent, { apiBilling: config.apiBilling, apiKey: config.apiBilling ? env[keyName] || undefined : undefined, env, run: opts.run, scenario: env[FAKE_SCENARIO_ENV] || undefined });
+export function adapterFor(config: Pick<PersonalConfig, 'agent' | 'apiBilling'>, env: Record<string, string | undefined>, opts: { run?: RunProgram; ci?: boolean } = {}): AgentAdapter | null {
+  const apiBilling = config.apiBilling || opts.ci === true;
+  return getAdapter(config.agent, { apiBilling, apiKey: apiBilling ? env[apiKeyName(config.agent)] || undefined : undefined, env, run: opts.run, scenario: env[FAKE_SCENARIO_ENV] || undefined });
 }

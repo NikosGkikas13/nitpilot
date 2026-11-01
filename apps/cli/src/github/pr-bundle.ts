@@ -16,7 +16,7 @@ type GhPull = {
   /** `repo` is null when the PR came from a fork that has since been deleted. */
   head: { ref: string; sha: string; repo: { full_name: string } | null };
 };
-type GhUser = { login: string; id: number };
+export type GhUser = { login: string; id: number };
 
 /** Your GitHub token for one-off reviews: `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`). */
 export async function githubToken(env: Record<string, string | undefined> = process.env, run: RunProgram = runProgram): Promise<string> {
@@ -31,21 +31,22 @@ export type PrBundle = { bundle: AgentJobBundle; rulesError: string | null };
 
 /**
  * The job the server would send for a review of this PR (spec §10 `job.assign`), built on this computer from
- * GitHub's API with your own token. Used by `nitpilot review`, which runs without a server.
+ * GitHub's API with your own token. Used by `nitpilot review`, which runs without a server. `you` skips `GET /user`:
+ * a GitHub Actions token can't read it, so `--ci` says who posts.
  */
-export async function prBundle(pr: { repo: string; number: number }, token: string, fetchImpl: typeof fetch = fetch): Promise<PrBundle> {
+export async function prBundle(pr: { repo: string; number: number }, token: string, fetchImpl: typeof fetch = fetch, opts: { you?: GhUser } = {}): Promise<PrBundle> {
   const get = (path: string, accept = 'application/vnd.github+json') => githubGet(`${API}${path}`, token, accept, fetchImpl);
   const where = `${pr.repo}#${pr.number}`;
   const [pullRes, meRes, rulesRes] = await Promise.all([
     get(`/repos/${pr.repo}/pulls/${pr.number}`),
-    get('/user'),
+    opts.you ? null : get('/user'),
     // No `ref`: GitHub reads the default branch, as the server does (spec §13).
     get(`/repos/${pr.repo}/contents/${BRAND.teamConfigFile}`, 'application/vnd.github.raw+json'),
   ]);
-  if (meRes.status === 401) throw new CliError('GitHub turned down your token. Check GITHUB_TOKEN, or run: gh auth login');
+  if (meRes?.status === 401) throw new CliError('GitHub turned down your token. Check GITHUB_TOKEN, or run: gh auth login');
   if (pullRes.status === 404) throw new CliError(`Can't find ${where}: the PR doesn't exist, or your token can't see that repo.`);
   const pull = (await ok(pullRes, where)) as GhPull;
-  const me = (await ok(meRes, 'your GitHub account')) as GhUser;
+  const me = opts.you ?? ((await ok(meRes!, 'your GitHub account')) as GhUser);
   const { rules, error } = parseTeamRules(rulesRes.status === 404 ? null : ((await ok(rulesRes, BRAND.teamConfigFile, 'text')) as string));
 
   // Parsed, so anything odd in GitHub's answer stops here and not halfway through the agent's run.

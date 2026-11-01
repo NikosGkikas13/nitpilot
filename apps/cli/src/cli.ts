@@ -29,7 +29,7 @@ export const COMMANDS: Record<string, Command> = {
     },
   },
   review: {
-    usage: `${BRAND.cli} review <pr-url> [--post [--yes]]`,
+    usage: `${BRAND.cli} review <pr-url> [--post [--yes]] | --ci`,
     summary: 'Have your agent review one PR now, no account needed',
     run: (args, out) => {
       const { ref, ...flags } = reviewOptions(args);
