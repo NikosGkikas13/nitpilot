@@ -133,7 +133,7 @@ Reuses G1 completely: on GitHub's runner, the Action runs `nitpilot review` for 
 
 **Task 3: docs.** A docs-site page "Reviews when your laptop is off", README "What to know" updated, spec §18 moves "cloud fallback" from out-of-scope to done (as the Action), and a `docs/why/github-actions.md` explainer. **Done 2026-11-01.** Docs page `github-action.md` "Reviews when your laptop is off", README and CLI README updated, spec §18 cloud fallback done as the Action, `docs/why/github-actions.md`.
 
-Verify: in the sandbox repo, add the workflow with an API key secret, open a PR with the laptop's daemon stopped, and see the review posted from the Action; start the daemon, push, and see no duplicate.
+Verify: in the sandbox repo, add the workflow with an API key secret, open a PR with the laptop's daemon stopped, and see the review posted from the Action; start the daemon, push, and see no duplicate. **Done 2026-11-03** (`docs/acceptance/plan-4-g8.md`): with Gemini CLI on a free key and its lighter model; the review posted on sandbox #24 as `github-actions[bot]`, and a re-run at the same commit skipped. The duplicate check re-ran the Action rather than starting the daemon (same `reviewedAtHead` check).
 
 ---
 
