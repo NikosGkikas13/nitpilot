@@ -14,7 +14,7 @@ inputs:
   version:
     # Bump on every release (docs/releasing.md).
     description: The nitpilot npm version to run.
-    default: 0.8.0
+    default: 0.8.1
   github-token:
     description: 'Token that reads the PR and posts the review. Needs `pull-requests: write`.'
     default: ${{ github.token }}
