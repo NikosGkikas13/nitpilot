@@ -1,10 +1,11 @@
-/* The ring around the badge is the colour of what's behind the avatar: --side in the sidebar, set to --bg in the chat. */
+/* The ring around the badge is the colour of what's behind the avatar: --side in the sidebar, set to --bg in the chat.
+   --badge-bg turns your own agent's badge to the accent in the chat. */
 .badge {
   position: absolute;
   right: -3px;
   bottom: -3px;
   border-radius: 4px;
-  background: var(--fg1);
+  background: var(--badge-bg, var(--fg1));
   box-shadow: 0 0 0 2px var(--badge-ring, var(--side));
   display: flex;
   align-items: center;

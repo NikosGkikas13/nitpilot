@@ -335,6 +335,15 @@
   padding: 8px 0;
 }
 
+/* Your agent's (or your own) reply: your colour on the badge and the name, like your side of the feed. */
+.mine {
+  --badge-bg: var(--acc);
+}
+
+.mine .replyName {
+  color: var(--acc-text);
+}
+
 .replyMain {
   flex: 1;
   min-width: 0;

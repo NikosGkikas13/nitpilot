@@ -1,5 +1,7 @@
 /**
  * The landing page's looping clip (src/routes/Landing/clip/): maya's chat while the two agents work a PR out, no captions.
+ * Her Auto-fix is off, so her agent's fix waits as a draft with its diff (the only place the chat shows the fix as code)
+ * until she presses Send: viewers see the code leo's agent flags and the code hers changes.
  * Recorded once per theme by demo.config.ts's hero-light and hero-dark projects; see demo.spec.ts for how to run, and
  * `demo/clip.sh` for cropping the recordings into the files the landing page plays.
  *
@@ -19,6 +21,13 @@ test('hero clip', async ({ page, context }, testInfo) => {
   await openPr({ number: 42, title: 'Cursor pagination for orders', author: 'maya', reviewer: 'leo' });
   await page.goto('/c/octo/sandbox/42');
   await expect(page.getByRole('heading', { level: 1, name: 'Cursor pagination for orders' })).toBeVisible();
+  // Auto-fix off before recording: the clip opens on the line that says so.
+  const autoFix = page.getByRole('switch', { name: 'Auto-fix' });
+  await autoFix.click();
+  await expect(autoFix).toHaveAttribute('aria-checked', 'false');
+  // Off the switch, so its tooltip doesn't stay on screen for the whole clip.
+  await autoFix.blur();
+  await page.mouse.move(900, 600);
   // Where the chat starts, for clip.sh's crop (the inbox column is left of it).
   const chat = (await page.getByRole('region', { name: 'Timeline' }).boundingBox())!;
   console.log(`CHAT_LEFT=${Math.round(chat.x)}`);
@@ -41,6 +50,13 @@ test('hero clip', async ({ page, context }, testInfo) => {
   await startCli('leo', SCENARIO);
   await startCli('maya', SCENARIO);
   try {
+    // maya's agent's fix waits as a draft: hold on its diff long enough to read, then she sends it.
+    const draft = page.getByRole('region', { name: /^Draft: Your agent wants to push fixes/ });
+    const added = draft.locator('[data-kind="add"]');
+    await expect(added).toContainText('export const pageSize = 25;', { timeout: 60_000 });
+    await added.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(3500);
+    await draft.getByRole('button', { name: 'Send' }).click();
     await expect(page.getByText('Both points settled.')).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText(/Waiting for leo's approval/)).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(4000);

@@ -13,9 +13,9 @@ import { PointCard, type People } from './PointCard';
 import styles from './Timeline.module.css';
 
 /**
- * The chat's feed (handoff §2 "Timeline", the single-column layout): everyone left-aligned like an activity log,
- * point cards full width under the summary that raised them, waiting drafts under the line that says so, and the
- * live progress line at the end.
+ * The chat's feed (handoff §2 "Timeline", the prototype's bubbles layout, spec §16): you and your agent on the right,
+ * everyone else on the left, system lines centred. Point cards sit on the raiser's side under the summary that raised
+ * them, waiting drafts under the line that says so, and the live progress line at the end.
  */
 export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlder: boolean; you: string; loadingEarlier: boolean; onLoadEarlier: () => void }) {
   const { view, items, you } = props;
@@ -33,14 +33,14 @@ export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlde
         {timelineRows(items, view.points, view.drafts).map((row) => {
           if (row.kind === 'draft') {
             return (
-              <li key={`draft ${row.draft.jobId}`} className={styles.pointRow}>
+              <li key={`draft ${row.draft.jobId}`} className={side(styles.pointRow, row.draft.owner === you)}>
                 <DraftCard draft={row.draft} view={view} you={you} canAct={view.permissions.drafts.includes(row.draft.jobId)} />
               </li>
             );
           }
           if (row.kind === 'point') {
             return (
-              <li key={`P${row.point.number}`} className={styles.pointRow}>
+              <li key={`P${row.point.number}`} className={side(styles.pointRow, row.point.raisedBy.login === you)}>
                 <PointCard point={row.point} thread={row.thread} you={you} people={people} repoUrl={repoUrl} />
               </li>
             );
@@ -61,6 +61,11 @@ export function Timeline(props: { view: ChatView; items: TimelineItem[]; hasOlde
       <ProgressLine chatId={view.id} you={you} />
     </div>
   );
+}
+
+/** The row's class, plus `mine` on your side (the right). */
+function side(className: string, mine: boolean): string {
+  return mine ? `${className} ${styles.mine}` : className;
 }
 
 /** A system event: a glyph, the line in muted text, the time (handoff §2). */
@@ -88,7 +93,7 @@ function SystemLine({ item, glyph }: { item: TimelineItem; glyph: Glyph }) {
   );
 }
 
-/** An agent's summary ("leo's agent", with severity counts) or a person's note (in a box; yours in your colour). */
+/** An agent's summary ("leo's agent", with severity counts) or a person's note, as a bubble; yours on the right in your colour. */
 function Message({ item, you, avatar, agent }: { item: TimelineItem; you: string; avatar: string | null; agent: boolean }) {
   const login = item.author?.login ?? '';
   const mine = login === you;
@@ -96,7 +101,7 @@ function Message({ item, you, avatar, agent }: { item: TimelineItem; you: string
   // A person's comment that came from GitHub carries the thread it was in; a note sent from Nitpilot doesn't.
   const fromGithub = item.data !== null && 'threadRootId' in item.data;
   return (
-    <div className={styles.message}>
+    <div className={side(styles.message, mine)}>
       <Avatar login={login} src={avatar} size={28}>
         {agent && <AgentBadge login={login} size="small" decorative />}
       </Avatar>
@@ -110,12 +115,12 @@ function Message({ item, you, avatar, agent }: { item: TimelineItem; you: string
           </time>
         </div>
         {agent ? (
-          <p className={styles.summary}>
+          <p className={styles.bubble}>
             {item.body}
             {counts && <span className={styles.counts}> {counts}</span>}
           </p>
         ) : (
-          <p className={`${styles.note} ${mine ? styles.mine : ''}`}>{item.body}</p>
+          <p className={styles.bubble}>{item.body}</p>
         )}
       </div>
     </div>
@@ -128,7 +133,7 @@ const STAGE: Record<string, string> = { preparing: 'getting the code', running_a
 function ProgressLine({ chatId, you }: { chatId: string; you: string }) {
   const progress = useProgress(chatId);
   return (
-    <div className={styles.progress} role="status" aria-live="polite">
+    <div className={side(styles.progress, progress?.who === you)} role="status" aria-live="polite">
       {progress && (
         <>
           <span className={styles.glyphColumn}>

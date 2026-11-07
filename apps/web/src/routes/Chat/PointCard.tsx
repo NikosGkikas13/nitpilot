@@ -156,7 +156,7 @@ function Reply({ reply, you, people, repoUrl }: { reply: TimelineItem; you: stri
   const tag = replyTag(reply);
   const commit = typeof reply.data?.commit === 'string' ? reply.data.commit : null;
   return (
-    <li className={styles.reply}>
+    <li className={login === you ? `${styles.reply} ${styles.mine}` : styles.reply}>
       <Avatar login={login} src={people.get(reply.author?.githubId ?? '')?.avatarUrl ?? null} size={22}>
         {byAgent && <AgentBadge login={login} size="tiny" decorative />}
       </Avatar>
